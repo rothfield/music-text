@@ -1,0 +1,50 @@
+# Build outputs
+target/
+Cargo.lock
+
+# Dependencies
+node_modules/
+
+# Test data and artifacts
+my_test_data/
+attic/
+test_*.123
+test_*.flattener.clr
+test_*.flattener.yaml
+test_*.lexer.json
+test_*.tokenizer.clr
+test_*.ly
+test_*.png
+test_*.svg
+test_output.txt
+
+# Generated files
+output.ly
+happy_birthday.ly
+*.png
+*.svg
+x.svg
+z
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Archives
+*.tgz
+*.tar
