@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::pitch::PitchCode;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChunkInfo {
@@ -60,6 +61,40 @@ pub struct Node {
     pub divisions: usize,
     pub dash_consumed: bool,
     pub nodes: Vec<Node>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pitch_code: Option<PitchCode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub octave: Option<i8>, // 0 = middle, 1 = upper, -1 = lower, etc.
+}
+
+impl Node {
+    pub fn new(node_type: String, value: String, row: usize, col: usize) -> Self {
+        Self {
+            node_type,
+            value,
+            row,
+            col,
+            divisions: 0,
+            dash_consumed: false,
+            nodes: Vec::new(),
+            pitch_code: None,
+            octave: None,
+        }
+    }
+    
+    pub fn with_children(node_type: String, value: String, row: usize, col: usize, nodes: Vec<Node>) -> Self {
+        Self {
+            node_type,
+            value,
+            row,
+            col,
+            divisions: 0,
+            dash_consumed: false,
+            nodes,
+            pitch_code: None,
+            octave: None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]

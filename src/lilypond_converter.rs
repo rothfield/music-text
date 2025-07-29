@@ -1,4 +1,5 @@
-use crate::structs::Document;
+use crate::models::Document;
+use crate::pitch::PitchCode;
 use fraction::Fraction;
 use std::fs;
 
@@ -51,32 +52,45 @@ fn fraction_to_lilypond_proper(frac: Fraction) -> Vec<String> {
     }
 }
 
-fn pitch_to_lilypond(pitch: &str) -> String {
-    match pitch {
-        "S" => "c'".to_string(),    // Sa = C
-        "r" => "df'".to_string(),   // komal Re = Db
-        "R" => "d'".to_string(),    // shuddha Re = D
-        "g" => "ef'".to_string(),   // komal Ga = Eb
-        "G" => "e'".to_string(),    // shuddha Ga = E
-        "m" => "f'".to_string(),    // shuddha Ma = F
-        "M" => "fs'".to_string(),   // tivra Ma = F#
-        "P" => "g'".to_string(),    // Pa = G
-        "P#" => "gs'".to_string(),  // P# = G#
-        "d" => "af'".to_string(),   // komal Dha = Ab
-        "D" => "a'".to_string(),    // shuddha Dha = A
-        "n" => "bf'".to_string(),   // komal Ni = Bb
-        "N" => "b'".to_string(),    // shuddha Ni = B
-        "s" => "c".to_string(),     // lower Sa = C
-        "--" => "r".to_string(),    // rest
-        _ => "c'".to_string(),      // fallback
-    }
+fn pitchcode_to_lilypond(pitch_code: PitchCode, octave: Option<i8>) -> String {
+    let base_note = match pitch_code {
+        PitchCode::C => "c",
+        PitchCode::Db => "df",
+        PitchCode::D => "d",
+        PitchCode::Eb => "ef",
+        PitchCode::E => "e",
+        PitchCode::F => "f",
+        PitchCode::Fs => "fs",
+        PitchCode::G => "g",
+        PitchCode::Ab => "af",
+        PitchCode::A => "a",
+        PitchCode::Bb => "bf",
+        PitchCode::B => "b",
+    };
+    
+    // Convert octave to LilyPond notation (shifted down one octave)
+    // 0 = middle octave (c) - one octave lower than before
+    // 1 = upper octave (c')
+    // -1 = lower octave (c,)
+    // -2 = lowest octave (c,,)
+    let octave_suffix = match octave.unwrap_or(0) {
+        -2 => ",,,",   // triple comma for lowest octave
+        -1 => ",,",    // double comma for lower octave
+        0 => "",       // no suffix for middle octave (middle C, one octave lower)
+        1 => "'",      // single quote for upper octave
+        2 => "''",     // double quote for highest octave
+        _ => "",       // fallback to middle octave
+    };
+    
+    format!("{}{}", base_note, octave_suffix)
 }
+
 
 fn is_dash(value: &str) -> bool {
     value.chars().all(|c| c == '-')
 }
 
-pub fn convert_to_lilypond(document: &Document) -> String {
+pub fn convert_to_lilypond(document: &Document) -> Result<String, String> {
     let template = fs::read_to_string("src/lilypond_template.ly")
         .or_else(|_| fs::read_to_string("lilypond_template.ly"))
         .unwrap_or_else(|_| include_str!("lilypond_template.ly").to_string());
@@ -103,6 +117,9 @@ pub fn convert_to_lilypond(document: &Document) -> String {
                         all_pitches.push(beat_element);
                     }
                 }
+            } else if node.node_type == "PITCH" {
+                // Handle individual PITCH nodes (when no barlines/beats)
+                all_pitches.push(node);
             }
         }
     }
@@ -211,7 +228,9 @@ pub fn convert_to_lilypond(document: &Document) -> String {
                             beat_lyrics.push("_".to_string());
                         } else {
                             // This is a regular note
-                            let lily_note = pitch_to_lilypond(&beat_element.value);
+                            let pitch_code = beat_element.pitch_code
+                                .ok_or_else(|| format!("Missing pitch_code for PITCH node with value '{}'", beat_element.value))?;
+                            let lily_note = pitchcode_to_lilypond(pitch_code, beat_element.octave);
                             last_note_pitch = Some(lily_note.clone());
                             
                             if !durations.is_empty() {
@@ -275,6 +294,19 @@ pub fn convert_to_lilypond(document: &Document) -> String {
                     }
                     measure_lyrics.extend(beat_lyrics);
                 }
+            } else if node.node_type == "PITCH" {
+                // Handle individual PITCH nodes (when no barlines/beats)
+                if !is_dash(&node.value) {
+                    let pitch_code = node.pitch_code
+                        .ok_or_else(|| format!("Missing pitch_code for PITCH node with value '{}'", node.value))?;
+                    let lily_note = pitchcode_to_lilypond(pitch_code, node.octave);
+                    last_note_pitch = Some(lily_note.clone());
+                    
+                    // Default to quarter notes for individual pitches
+                    let note_str = format!("{}4", lily_note);
+                    measure_notes.push(note_str);
+                    measure_lyrics.push("_".to_string());
+                }
             } else if node.node_type == "BARLINE" {
                 if !measure_notes.is_empty() {
                     let barline_type = match node.value.as_str() {
@@ -305,8 +337,8 @@ pub fn convert_to_lilypond(document: &Document) -> String {
     }
 
     // Substitute into template
-    template
+    Ok(template
         .replace("{{header}}", &header)
         .replace("{{notes}}", &all_notes.join(" "))
-        .replace("{{lyrics}}", &all_lyrics.join(" "))
+        .replace("{{lyrics}}", &all_lyrics.join(" ")))
 }
