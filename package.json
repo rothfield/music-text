@@ -1,0 +1,20 @@
+{
+  "name": "notation-parser-web",
+  "version": "1.0.0",
+  "description": "Web interface for multi-system music notation parser",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@hufe921/canvas-editor": "^0.9.113",
+    "ansi-to-svg": "^1.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "fs-extra": "^11.1.0"
+  },
+  "devDependencies": {
+    "node-fetch": "^2.7.0"
+  }
+}

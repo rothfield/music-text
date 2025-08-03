@@ -5,6 +5,10 @@ Cargo.lock
 # Dependencies
 node_modules/
 
+# Reference folders
+doremi-script/
+vexflow/
+
 # Test data and artifacts
 my_test_data/
 attic/
@@ -17,6 +21,35 @@ test_*.ly
 test_*.png
 test_*.svg
 test_output.txt
+
+# Test outputs and generated files
+*.flattener.*
+*.lexer.json
+*.tokenizer.*
+*.ly
+*.outline
+synthetic_image_*.json
+.server.pid
+
+# Test executables and debug files
+debug_*
+test_*
+simple_test
+keystroke_test
+quick_test
+test_complex_rhythm
+test_fsm_*
+test_vexflow_*
+test_notation_detection
+
+# Temporary and scratch files
+simple_space_test.txt
+chatgpt_spacial.txt
+stdin.*
+simple.*
+simple_key.*
+test2.*
+test.outline
 
 # Generated files
 output.ly
