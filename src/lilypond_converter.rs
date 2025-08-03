@@ -1,7 +1,65 @@
 use crate::models::Document;
-use crate::pitch::PitchCode;
+use crate::rhythmic_converter::LilyPondNoteNames;
+use crate::pitch::{PitchCode, pitchcode_to_dutch_lilypond, pitchcode_to_english_lilypond};
 use fraction::Fraction;
-use std::fs;
+use std::str::FromStr;
+use std::collections::HashMap;
+
+fn transpose_snippet(key: Option<&String>) -> String {
+    match key {
+        None => String::new(),
+        Some(k) if k.to_lowercase() == "c" => String::new(),
+        Some(key_str) => {
+            // Map all common keys to LilyPond pitch names (20+ mappings for comprehensive coverage)
+            let pitch_map: HashMap<&str, &str> = [
+                // Natural keys
+                ("C", "c"), ("D", "d"), ("E", "e"), ("F", "f"), ("G", "g"), ("A", "a"), ("B", "b"),
+                // Sharp keys
+                ("C#", "cs"), ("D#", "ds"), ("F#", "fs"), ("G#", "gs"), ("A#", "as"),
+                // Flat keys  
+                ("Db", "df"), ("Eb", "ef"), ("Gb", "gf"), ("Ab", "af"), ("Bb", "bf"),
+                // Less common enharmonics
+                ("Cb", "cf"), ("E#", "es"), ("Fb", "ff"), ("B#", "bs"),
+                // Lowercase variants (user convenience)
+                ("c", "c"), ("d", "d"), ("e", "e"), ("f", "f"), ("g", "g"), ("a", "a"), ("b", "b"),
+                ("c#", "cs"), ("d#", "ds"), ("f#", "fs"), ("g#", "gs"), ("a#", "as"),
+                ("db", "df"), ("eb", "ef"), ("gb", "gf"), ("ab", "af"), ("bb", "bf")
+            ].iter().cloned().collect();
+            
+            if let Some(&lily_pitch) = pitch_map.get(key_str.as_str()) {
+                format!("\\transpose c' {}'", lily_pitch)
+            } else {
+                String::new()
+            }
+        }
+    }
+}
+
+fn key_signature_snippet(key: Option<&String>) -> String {
+    match key {
+        None => String::new(),
+        Some(k) if k.to_lowercase() == "c" => "\\key c \\major".to_string(),
+        Some(key_str) => {
+            // Map keys to LilyPond key signatures
+            let key_map: HashMap<&str, &str> = [
+                // Major keys
+                ("C", "c \\major"), ("G", "g \\major"), ("D", "d \\major"), ("A", "a \\major"), ("E", "e \\major"), ("B", "b \\major"),
+                ("F#", "fs \\major"), ("C#", "cs \\major"), ("F", "f \\major"), ("Bb", "bf \\major"), ("Eb", "ef \\major"),
+                ("Ab", "af \\major"), ("Db", "df \\major"), ("Gb", "gf \\major"), ("Cb", "cf \\major"),
+                // Lowercase variants
+                ("c", "c \\major"), ("g", "g \\major"), ("d", "d \\major"), ("a", "a \\major"), ("e", "e \\major"), ("b", "b \\major"),
+                ("f#", "fs \\major"), ("c#", "cs \\major"), ("f", "f \\major"), ("bb", "bf \\major"), ("eb", "ef \\major"),
+                ("ab", "af \\major"), ("db", "df \\major"), ("gb", "gf \\major")
+            ].iter().cloned().collect();
+            
+            if let Some(&key_sig) = key_map.get(key_str.as_str()) {
+                format!("\\key {}", key_sig)
+            } else {
+                "\\key c \\major".to_string() // Default to C major
+            }
+        }
+    }
+}
 
 fn fraction_to_lilypond_proper(frac: Fraction) -> Vec<String> {
     // Create a lookup table for common fractions to LilyPond durations
@@ -24,48 +82,27 @@ fn fraction_to_lilypond_proper(frac: Fraction) -> Vec<String> {
         }
     }
     
-    // For complex fractions, decompose into tied notes
-    // Start with largest possible note and work down
-    let mut remaining = frac;
-    let mut result = Vec::new();
+    // Use shared rhythm decomposition logic
+    let fraction_parts = crate::rhythm::RhythmConverter::decompose_fraction_to_standard_durations(frac);
     
-    let standard_durations = [
-        (Fraction::new(1u64, 1u64), "1"),
-        (Fraction::new(1u64, 2u64), "2"), 
-        (Fraction::new(1u64, 4u64), "4"),
-        (Fraction::new(1u64, 8u64), "8"),
-        (Fraction::new(1u64, 16u64), "16"),
-        (Fraction::new(1u64, 32u64), "32"),
-    ];
-    
-    for (dur_frac, dur_str) in &standard_durations {
-        while remaining >= *dur_frac {
-            result.push(dur_str.to_string());
-            remaining = remaining - *dur_frac;
+    // Convert each fraction to LilyPond duration string
+    fraction_parts.iter().map(|f| {
+        match *f {
+            f if f == Fraction::new(1u64, 1u64) => "1".to_string(),
+            f if f == Fraction::new(1u64, 2u64) => "2".to_string(),
+            f if f == Fraction::new(1u64, 4u64) => "4".to_string(),
+            f if f == Fraction::new(1u64, 8u64) => "8".to_string(),
+            f if f == Fraction::new(1u64, 16u64) => "16".to_string(),
+            f if f == Fraction::new(1u64, 32u64) => "32".to_string(),
+            _ => "32".to_string(), // Fallback
         }
-    }
-    
-    if result.is_empty() {
-        vec!["32".to_string()] // Fallback to thirty-second note
-    } else {
-        result
-    }
+    }).collect()
 }
 
-fn pitchcode_to_lilypond(pitch_code: PitchCode, octave: Option<i8>) -> String {
-    let base_note = match pitch_code {
-        PitchCode::C => "c",
-        PitchCode::Db => "df",
-        PitchCode::D => "d",
-        PitchCode::Eb => "ef",
-        PitchCode::E => "e",
-        PitchCode::F => "f",
-        PitchCode::Fs => "fs",
-        PitchCode::G => "g",
-        PitchCode::Ab => "af",
-        PitchCode::A => "a",
-        PitchCode::Bb => "bf",
-        PitchCode::B => "b",
+fn pitchcode_to_lilypond(pitch_code: PitchCode, octave: Option<i8>, note_names: LilyPondNoteNames) -> String {
+    let base_note = match note_names {
+        LilyPondNoteNames::Dutch => pitchcode_to_dutch_lilypond(pitch_code),
+        LilyPondNoteNames::English => pitchcode_to_english_lilypond(pitch_code),
     };
     
     // Convert octave to LilyPond notation (shifted down one octave)
@@ -85,17 +122,136 @@ fn pitchcode_to_lilypond(pitch_code: PitchCode, octave: Option<i8>) -> String {
     format!("{}{}", base_note, octave_suffix)
 }
 
-
-fn is_dash(value: &str) -> bool {
-    value.chars().all(|c| c == '-')
+fn convert_fsm_document_to_lilypond(document: &Document, note_names: LilyPondNoteNames) -> Result<String, String> {
+    let mut all_notes = Vec::new();
+    
+    // Process each line
+    for line_node in &document.nodes {
+        if line_node.node_type == "LINE" {
+            let mut line_notes = Vec::new();
+            
+            // Process each element in the line
+            for element in &line_node.nodes {
+                match element.node_type.as_str() {
+                    "BEAT" => {
+                        // Process notes in the beat
+                        for note_node in &element.nodes {
+                            if note_node.node_type == "PITCH" {
+                                // Extract duration from the value (e.g., "S[1/1]" -> "1/1")
+                                let duration_str = if let Some(start) = note_node.value.find('[') {
+                                    if let Some(end) = note_node.value.find(']') {
+                                        &note_node.value[start+1..end]
+                                    } else {
+                                        "1/1"
+                                    }
+                                } else {
+                                    "1/1"
+                                };
+                                
+                                // Convert fraction to LilyPond duration
+                                let lily_durations = if let Ok(frac) = fraction::Fraction::from_str(duration_str) {
+                                    fraction_to_lilypond_proper(frac)
+                                } else {
+                                    vec!["4".to_string()]
+                                };
+                                
+                                // Convert pitch code to note
+                                if let Some(pitch_code) = note_node.pitch_code {
+                                    let pitch_str = pitchcode_to_lilypond(pitch_code, note_node.octave, note_names);
+                                    
+                                    // Add each duration (for tied notes)
+                                    for duration in lily_durations {
+                                        line_notes.push(format!("{}{}", pitch_str, duration));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "BARLINE" => {
+                        line_notes.push("|".to_string());
+                    }
+                    "BREATHMARK" => {
+                        line_notes.push("\\breathe".to_string());
+                    }
+                    _ => {}
+                }
+            }
+            
+            if !line_notes.is_empty() {
+                all_notes.extend(line_notes);
+            }
+        }
+    }
+    
+    // If no notes found, return a rest
+    if all_notes.is_empty() {
+        Ok("r1".to_string())
+    } else {
+        Ok(all_notes.join(" "))
+    }
 }
 
 pub fn convert_to_lilypond(document: &Document) -> Result<String, String> {
-    let template = fs::read_to_string("src/lilypond_template.ly")
-        .or_else(|_| fs::read_to_string("lilypond_template.ly"))
-        .unwrap_or_else(|_| include_str!("lilypond_template.ly").to_string());
+    convert_to_lilypond_with_names(document, LilyPondNoteNames::English)
+}
 
-    // Build header
+pub fn convert_to_lilypond_with_names(document: &Document, note_names: LilyPondNoteNames) -> Result<String, String> {
+    // Convert the FSM-structured document to LilyPond notation
+    let rhythmic_notation = convert_fsm_document_to_lilypond(document, note_names)?;
+    
+    // Wrap in LilyPond template (embedded to work in WASM)
+    let template = r#"\version "2.24.0"
+\language "english"
+
+{{header}}
+
+\paper {
+  tagline = ##f
+  print-page-number = ##f
+  oddHeaderMarkup = ##f
+  evenHeaderMarkup = ##f
+  oddFooterMarkup = ##f
+  evenFooterMarkup = ##f
+  indent = 0\mm
+  top-margin = 1\mm
+  bottom-margin = 1\mm
+  left-margin = 3\mm
+  right-margin = 3\mm
+  ragged-right = ##t
+  system-system-spacing = #'((basic-distance . 2) (minimum-distance . 2) (padding . 0) (stretchability . 0))
+  markup-system-spacing = #'((basic-distance . 0) (minimum-distance . 0) (padding . 0) (stretchability . 0))
+  score-system-spacing = #'((basic-distance . 0) (minimum-distance . 0) (padding . 0) (stretchability . 0))
+  top-system-spacing = #'((basic-distance . 2) (minimum-distance . 2) (padding . 0) (stretchability . 0))
+  last-bottom-spacing = #'((basic-distance . 2) (minimum-distance . 2) (padding . 0) (stretchability . 0))
+}
+\score {
+  \new Staff {
+    {{transpose}}
+    \fixed c' {
+      \clef treble
+      {{key_signature}}
+      \set Score.barCheckSynchronize = ##f
+      \set Timing.defaultBarType = #""
+      {{notes}}
+    }
+  }
+  \layout {
+    \context {
+      \Staff
+      \remove "Time_signature_engraver"
+      \override StaffSymbol.staff-space = #0.7
+    }
+    \context {
+      \Score
+      \override SpacingSpanner.base-shortest-duration = #(ly:make-moment 1/32)
+      \override SpacingSpanner.shortest-duration-space = #1.0
+    }
+  }
+}
+
+"#;
+    
+    // Build header for metadata
     let mut header = String::new();
     if let Some(title) = &document.metadata.title {
         header.push_str(&format!(r#"\header {{ title = "{}" "#, title.text));
@@ -104,241 +260,16 @@ pub fn convert_to_lilypond(document: &Document) -> Result<String, String> {
         }
         header.push_str("}");
     }
-
-    // First pass: collect all pitch elements in order
-    let mut all_pitches = Vec::new();
-    for line_node in document.nodes.iter()
-        .filter(|n| n.node_type == "LINE" && n.value.starts_with("music-line-")) {
-        
-        for node in &line_node.nodes {
-            if node.node_type == "BEAT" {
-                for beat_element in &node.nodes {
-                    if beat_element.node_type == "PITCH" {
-                        all_pitches.push(beat_element);
-                    }
-                }
-            } else if node.node_type == "PITCH" {
-                // Handle individual PITCH nodes (when no barlines/beats)
-                all_pitches.push(node);
-            }
-        }
-    }
-
-    // Build notes and lyrics with tie tracking
-    let mut all_notes = Vec::new();
-    let mut all_lyrics = Vec::new();
-    let mut last_note_pitch: Option<String> = None;
-    let mut needs_tie = false;
-    let mut pitch_index = 0;
-
-    for (line_index, line_node) in document.nodes.iter()
-        .filter(|n| n.node_type == "LINE" && n.value.starts_with("music-line-"))
-        .enumerate() {
-        
-        let mut measure_notes = Vec::new();
-        let mut measure_lyrics = Vec::new();
-
-        for node in &line_node.nodes {
-            if node.node_type == "BEAT" {
-                let total_subdivisions = node.divisions;
-                let is_tuplet = total_subdivisions > 1 && (total_subdivisions & (total_subdivisions - 1)) != 0;
-
-                let (tuplet_ratio_num, tuplet_ratio_den) = if is_tuplet {
-                    let den = 1 << ((total_subdivisions as f64).log2().floor() as u64);
-                    (total_subdivisions, den)
-                } else {
-                    (0, 0) // Not a tuplet
-                };
-
-                let mut beat_notes = Vec::new();
-                let mut beat_lyrics = Vec::new();
-                
-                for beat_element in &node.nodes {
-                    if beat_element.node_type == "PITCH" {
-                        if is_dash(&beat_element.value) && beat_element.dash_consumed {
-                            pitch_index += 1;
-                            continue;
-                        }
-                        
-                        let subdivisions = beat_element.divisions;
-                        
-                        let element_fraction = if is_tuplet {
-                            let beat_duration_in_whole_notes = Fraction::new(1u64, 4u64);
-                            let note_duration_in_beat = Fraction::new(subdivisions as u64, tuplet_ratio_den as u64);
-                            note_duration_in_beat * beat_duration_in_whole_notes
-                        } else {
-                            Fraction::new(subdivisions as u64, total_subdivisions as u64) * Fraction::new(1u64, 4u64)
-                        };
-
-                        let durations = fraction_to_lilypond_proper(element_fraction);
-                        
-                        // Check if next pitch is a dash
-                        let next_is_dash = pitch_index + 1 < all_pitches.len() 
-                            && is_dash(&all_pitches[pitch_index + 1].value);
-                        
-                        if is_dash(&beat_element.value) {
-                            // This is a dash - tie it to the previous note if we have one
-                            if let Some(ref prev_pitch) = last_note_pitch {
-                                if !durations.is_empty() {
-                                    let note_str = if durations.len() == 1 {
-                                        format!("{}{}", prev_pitch, durations[0])
-                                    } else {
-                                        durations.iter()
-                                            .map(|dur| format!("{}{}", prev_pitch, dur))
-                                            .collect::<Vec<_>>()
-                                            .join("~ ")
-                                    };
-                                    
-                                    if needs_tie {
-                                        beat_notes.push(format!("~ {}", note_str));
-                                    } else {
-                                        beat_notes.push(note_str);
-                                    }
-                                    
-                                    // Add tie if next is also dash
-                                    if next_is_dash {
-                                        if let Some(last) = beat_notes.last_mut() {
-                                            last.push('~');
-                                        }
-                                    }
-                                    needs_tie = next_is_dash;
-                                } else {
-                                    let note_str = format!("{}8", prev_pitch);
-                                    if needs_tie {
-                                        beat_notes.push(format!("~ {}", note_str));
-                                    } else {
-                                        beat_notes.push(note_str);
-                                    }
-                                    if next_is_dash {
-                                        if let Some(last) = beat_notes.last_mut() {
-                                            last.push('~');
-                                        }
-                                    }
-                                    needs_tie = next_is_dash;
-                                }
-                            } else {
-                                // No previous note, treat as rest
-                                if !durations.is_empty() {
-                                    beat_notes.push(format!("r{}", durations[0]));
-                                } else {
-                                    beat_notes.push("r8".to_string());
-                                }
-                                needs_tie = false;
-                            }
-                            beat_lyrics.push("_".to_string());
-                        } else {
-                            // This is a regular note
-                            let pitch_code = beat_element.pitch_code
-                                .ok_or_else(|| format!("Missing pitch_code for PITCH node with value '{}'", beat_element.value))?;
-                            let lily_note = pitchcode_to_lilypond(pitch_code, beat_element.octave);
-                            last_note_pitch = Some(lily_note.clone());
-                            
-                            if !durations.is_empty() {
-                                let note_str = if durations.len() == 1 {
-                                    format!("{}{}", lily_note, durations[0])
-                                } else {
-                                    durations.iter()
-                                        .map(|dur| format!("{}{}", lily_note, dur))
-                                        .collect::<Vec<_>>()
-                                        .join("~ ")
-                                };
-                                
-                                let mut final_note = if needs_tie {
-                                    format!("~ {}", note_str)
-                                } else {
-                                    note_str
-                                };
-                                
-                                // Add tie if next is dash
-                                if next_is_dash {
-                                    final_note.push('~');
-                                }
-                                
-                                beat_notes.push(final_note);
-                            } else {
-                                let mut note_str = format!("{}8", lily_note);
-                                if needs_tie {
-                                    note_str = format!("~ {}", note_str);
-                                }
-                                if next_is_dash {
-                                    note_str.push('~');
-                                }
-                                beat_notes.push(note_str);
-                            }
-                            needs_tie = false;
-                            
-                            // Handle lyrics
-                            let mut has_lyrics = false;
-                            for child in &beat_element.nodes {
-                                if child.node_type == "WORD" && !child.value.contains(")") && !child.value.contains(":") {
-                                    let clean_lyric = child.value.replace("/", r"\/");
-                                    beat_lyrics.push(format!("\"{}\"", clean_lyric));
-                                    has_lyrics = true;
-                                    break;
-                                }
-                            }
-                            if !has_lyrics {
-                                beat_lyrics.push("_".to_string());
-                            }
-                        }
-                        pitch_index += 1;
-                    }
-                }
-                
-                if !beat_notes.is_empty() {
-                    let final_beat_notes = beat_notes.join(" ");
-                    if is_tuplet {
-                        measure_notes.push(format!(r#"\tuplet {}/{} {{ {} }}"#, tuplet_ratio_num, tuplet_ratio_den, final_beat_notes));
-                    } else {
-                        measure_notes.push(final_beat_notes);
-                    }
-                    measure_lyrics.extend(beat_lyrics);
-                }
-            } else if node.node_type == "PITCH" {
-                // Handle individual PITCH nodes (when no barlines/beats)
-                if !is_dash(&node.value) {
-                    let pitch_code = node.pitch_code
-                        .ok_or_else(|| format!("Missing pitch_code for PITCH node with value '{}'", node.value))?;
-                    let lily_note = pitchcode_to_lilypond(pitch_code, node.octave);
-                    last_note_pitch = Some(lily_note.clone());
-                    
-                    // Default to quarter notes for individual pitches
-                    let note_str = format!("{}4", lily_note);
-                    measure_notes.push(note_str);
-                    measure_lyrics.push("_".to_string());
-                }
-            } else if node.node_type == "BARLINE" {
-                if !measure_notes.is_empty() {
-                    let barline_type = match node.value.as_str() {
-                        "|:" => ".|:",
-                        ":|" => ":|.",
-                        "||" => "||",
-                        "|." => "|.",
-                        ":|:" => ":|:",
-                        _ => "|",
-                    };
-                    all_notes.push(measure_notes.join(" "));
-                    all_lyrics.push(measure_lyrics.join(" "));
-                    all_notes.push(format!(r#"\bar "{}""#, barline_type));
-                    measure_notes.clear();
-                    measure_lyrics.clear();
-                }
-            }
-        }
-        
-        if !measure_notes.is_empty() {
-            all_notes.push(measure_notes.join(" "));
-            all_lyrics.push(measure_lyrics.join(" "));
-        }
-
-        if line_index < document.nodes.len() - 1 {
-            all_notes.push(r"\break".to_string());
-        }
-    }
-
-    // Substitute into template
-    Ok(template
+    
+    // Generate transpose directive and key signature
+    let transpose_directive = transpose_snippet(document.metadata.attributes.get("Key"));
+    let key_signature = key_signature_snippet(document.metadata.attributes.get("Key"));
+    
+    let result = template
+        .replace("{{notes}}", &rhythmic_notation)
         .replace("{{header}}", &header)
-        .replace("{{notes}}", &all_notes.join(" "))
-        .replace("{{lyrics}}", &all_lyrics.join(" ")))
+        .replace("{{transpose}}", &transpose_directive)
+        .replace("{{key_signature}}", &key_signature)
+        .replace("{{lyrics}}", ""); // No lyrics for now
+    Ok(result)
 }

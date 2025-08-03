@@ -1,4 +1,8 @@
+// src/models/mod.rs
+// Core data structures for the notation parser
+
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use crate::pitch::PitchCode;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -23,14 +27,14 @@ pub struct Token {
     pub col: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Title {
     pub text: String,
     pub row: usize,
     pub col: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Directive {
     pub key: String,
     pub value: String,
@@ -38,16 +42,21 @@ pub struct Directive {
     pub col: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Metadata {
     pub title: Option<Title>,
     pub directives: Vec<Directive>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detected_system: Option<String>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub attributes: HashMap<String, String>, // Generic key-value attributes (Key, Transpose, TimeSignature, etc.)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Document {
     pub metadata: Metadata,
     pub nodes: Vec<Node>,
+    pub notation_system: Option<String>, // "Sargam", "Western", "Number" - controls output rendering
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -5,7 +5,108 @@ use std::collections::{HashMap, HashSet};
 use crate::models::{LineInfo, Token, Node};
 use crate::pitch::{lookup_pitch, guess_notation};
 
-pub fn flatten_spatial_relationships(physical_tokens: &[Token], lines_info: &[LineInfo]) -> Vec<Node> {
+fn is_dash(value: &str) -> bool {
+    value.chars().all(|c| c == '-')
+}
+
+pub fn find_musical_lines_by_packed_pitches(tokens: &[Token]) -> Vec<usize> {
+    let mut musical_lines = Vec::new();
+    let mut tokens_by_line: HashMap<usize, Vec<&Token>> = HashMap::new();
+    
+    // Group tokens by line
+    for token in tokens {
+        if token.token_type == "PITCH" {
+            tokens_by_line.entry(token.line).or_default().push(token);
+        }
+    }
+    
+    // Check each line for 3+ packed pitches from same notation system
+    for (line_num, line_tokens) in tokens_by_line {
+        if has_packed_musical_sequence(&line_tokens) {
+            musical_lines.push(line_num);
+        }
+    }
+    
+    musical_lines.sort();
+    musical_lines.dedup();
+    musical_lines
+}
+
+fn has_packed_musical_sequence(tokens: &[&Token]) -> bool {
+    if tokens.len() < 3 {
+        return false;
+    }
+    
+    // Sort tokens by column position
+    let mut sorted_tokens: Vec<&Token> = tokens.iter().cloned().collect();
+    sorted_tokens.sort_by_key(|t| t.col);
+    
+    // Find sequences of consecutive columns
+    let mut sequences = Vec::new();
+    let mut current_sequence = Vec::new();
+    
+    for (i, token) in sorted_tokens.iter().enumerate() {
+        if i == 0 || token.col == sorted_tokens[i-1].col + 1 {
+            // Consecutive or first token
+            current_sequence.push(*token);
+        } else {
+            // Gap found - save current sequence and start new one
+            if current_sequence.len() >= 3 {
+                sequences.push(current_sequence.clone());
+            }
+            current_sequence = vec![*token];
+        }
+    }
+    
+    // Don't forget the last sequence
+    if current_sequence.len() >= 3 {
+        sequences.push(current_sequence);
+    }
+    
+    // Check if any sequence has 3+ pitches from same notation system
+    for sequence in sequences {
+        if sequence.len() >= 3 && is_same_notation_system(&sequence) {
+            return true;
+        }
+    }
+    
+    false
+}
+
+fn is_same_notation_system(tokens: &[&Token]) -> bool {
+    if tokens.is_empty() {
+        return false;
+    }
+    
+    // Collect all pitch values (excluding dashes)
+    let pitch_values: Vec<&str> = tokens.iter()
+        .map(|t| t.value.as_str())
+        .filter(|&v| !is_dash(v))
+        .collect();
+    
+    if pitch_values.is_empty() {
+        return false; // All dashes - not a valid musical sequence
+    }
+    
+    // Guess notation from the pitch values
+    let notation = guess_notation(&pitch_values);
+    
+    // Check if all non-dash pitches belong to the same notation system
+    for &pitch_value in &pitch_values {
+        if lookup_pitch(pitch_value, notation).is_none() {
+            return false; // This pitch doesn't belong to the detected notation system
+        }
+    }
+    
+    true
+}
+
+// ============================================================================
+// PHASE 1: SPATIAL ANALYSIS 
+// Attaches floating elements (ornaments, octave markers) to their anchor pitches
+// ============================================================================
+
+pub fn attach_floating_elements(physical_tokens: &[Token], lines_info: &[LineInfo]) -> Vec<Node> {
     let mut nodes = Vec::new();
     let mut consumed_coords = HashSet::new();
     let token_map: HashMap<(usize, usize), &Token> =
@@ -179,7 +280,7 @@ pub fn flatten_spatial_relationships(physical_tokens: &[Token], lines_info: &[Li
         }
     }
     
-    // Second pass: add all other tokens as top-level nodes
+    // Second pass: add all other tokens as top-level nodes (including WHITESPACE and BARLINE)
     for token in physical_tokens {
         if !consumed_coords.contains(&(token.line, token.col)) {
             let (pitch_code, octave) = if token.token_type == "PITCH" && !is_dash(&token.value) {
@@ -238,6 +339,11 @@ pub fn flatten_spatial_relationships(physical_tokens: &[Token], lines_info: &[Li
     nodes
 }
 
+// ============================================================================  
+// PHASE 2: MUSICAL STRUCTURING
+// Groups hierarchical nodes into musical constructs (lines, beats)
+// ============================================================================
+
 pub fn group_nodes_into_lines_and_beats(nodes: &[Node], lines_of_music: &Vec<usize>) -> Vec<Node> {
     let mut result = Vec::new();
     let mut nodes_by_line: HashMap<usize, Vec<&Node>> = HashMap::new();
@@ -252,7 +358,10 @@ pub fn group_nodes_into_lines_and_beats(nodes: &[Node], lines_of_music: &Vec<usi
     sorted_lines.sort_by_key(|(line_num, _)| *line_num);
     
     for (line_num, line_nodes) in sorted_lines {
-        let line_node = if lines_of_music.contains(&line_num) {
+        // A line is musical if it's in the pre-identified list OR if it contains any PITCH nodes.
+        let is_musical = lines_of_music.contains(&line_num) || line_nodes.iter().any(|n| n.node_type == "PITCH");
+        
+        let line_node = if is_musical {
             // This is a line of music - create LINE node with BEAT children
             create_music_line_node(line_num, line_nodes)
         } else {
@@ -270,8 +379,8 @@ fn create_music_line_node(line_num: usize, line_nodes: Vec<&Node>) -> Node {
     let start_col = beats_and_separators.first().map(|n| n.col).unwrap_or(0);
     
     Node::with_children(
-        "LINE".to_string(),
-        format!("music-line-{}", line_num),
+        "MUSICAL_LINE".to_string(),
+        format!("line-{}", line_num),
         line_num,
         start_col,
         beats_and_separators,
@@ -293,60 +402,47 @@ fn create_regular_line_node(line_num: usize, line_nodes: Vec<&Node>) -> Node {
 }
 
 fn group_line_into_beats(line_nodes: Vec<&Node>) -> Vec<Node> {
-    let mut beats = Vec::new();
-    let mut current_beat_elements = Vec::new();
-    let mut beat_start_col = 0;
-    
-    // Sort nodes by column position
+    let mut result = Vec::new();
+    let mut accumulator = Vec::new();
+
+    // Sort nodes by column position to ensure correct order
     let mut sorted_nodes = line_nodes;
     sorted_nodes.sort_by_key(|n| n.col);
     
     for node in sorted_nodes {
         if is_beat_element(&node.node_type) {
-            if current_beat_elements.is_empty() {
-                beat_start_col = node.col;
-            }
-            current_beat_elements.push(node.clone());
-        } else if is_beat_separator(&node.node_type) {
-            // End current beat if we have elements
-            if !current_beat_elements.is_empty() {
-                let beat = create_beat_node(current_beat_elements, beat_start_col);
-                beats.push(beat);
-                current_beat_elements = Vec::new();
-            }
-            // Add the separator as a regular node
-            beats.push(node.clone());
+            // If it's a pitch, add it to the current beat accumulator
+            accumulator.push(node.clone());
         } else {
-            // For other node types, end current beat and add the node
-            if !current_beat_elements.is_empty() {
-                let beat = create_beat_node(current_beat_elements, beat_start_col);
-                beats.push(beat);
-                current_beat_elements = Vec::new();
+            // If it's not a pitch (e.g., whitespace, barline), the beat has ended.
+            
+            // 1. If the accumulator has pitches, create a BEAT node.
+            if !accumulator.is_empty() {
+                let start_col = accumulator.first().unwrap().col;
+                let beat_node = create_beat_node(accumulator, start_col);
+                result.push(beat_node);
+                accumulator = Vec::new(); // Clear the accumulator for the next beat
             }
-            beats.push(node.clone());
+            
+            // 2. Add the separator itself (whitespace, barline, etc.) to the result.
+            result.push(node.clone());
         }
     }
-    
-    // Handle any remaining beat elements
-    if !current_beat_elements.is_empty() {
-        let beat = create_beat_node(current_beat_elements, beat_start_col);
-        beats.push(beat);
+
+    // After the loop, if there are any remaining pitches in the accumulator, create one final beat.
+    if !accumulator.is_empty() {
+        let start_col = accumulator.first().unwrap().col;
+        let beat_node = create_beat_node(accumulator, start_col);
+        result.push(beat_node);
     }
-    
-    beats
+
+    result
 }
 
 fn is_beat_element(node_type: &str) -> bool {
     matches!(node_type, "PITCH")
 }
 
-fn is_beat_separator(node_type: &str) -> bool {
-    matches!(node_type, "BARLINE" | "WHITESPACE")
-}
-
-fn is_dash(value: &str) -> bool {
-    value.chars().all(|c| c == '-')
-}
 
 fn create_beat_node(mut elements: Vec<Node>, start_col: usize) -> Node {
     // Count trailing dashes for each pitch and mark them as consumed
