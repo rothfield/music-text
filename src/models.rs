@@ -52,7 +52,7 @@ pub struct Metadata {
     pub attributes: HashMap<String, String>, // Generic key-value attributes (Key, Transpose, TimeSignature, etc.)
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Document {
     pub metadata: Metadata,
     pub nodes: Vec<Node>,
@@ -74,6 +74,16 @@ pub struct Node {
     pub pitch_code: Option<PitchCode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub octave: Option<i8>, // 0 = middle, 1 = upper, -1 = lower, etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slur_start: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slur_end: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub beat_bracket_start: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub beat_bracket_end: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub syl: Option<String>,  // Syllable/lyric text associated with this note
 }
 
 impl Node {
@@ -88,6 +98,11 @@ impl Node {
             nodes: Vec::new(),
             pitch_code: None,
             octave: None,
+            slur_start: None,
+            slur_end: None,
+            beat_bracket_start: None,
+            beat_bracket_end: None,
+            syl: None,
         }
     }
     
@@ -102,6 +117,11 @@ impl Node {
             nodes,
             pitch_code: None,
             octave: None,
+            slur_start: None,
+            slur_end: None,
+            beat_bracket_start: None,
+            beat_bracket_end: None,
+            syl: None,
         }
     }
 }
@@ -114,6 +134,9 @@ pub enum TokenType {
     Word,
     Unknown,
     Whitespace,
+    SlurStart,
+    SlurEnd,
+    Dash,
 }
 
 impl TokenType {
@@ -125,6 +148,9 @@ impl TokenType {
             TokenType::Word => "WORD",
             TokenType::Unknown => "UNKNOWN",
             TokenType::Whitespace => "WHITESPACE",
+            TokenType::SlurStart => "SLUR_START",
+            TokenType::SlurEnd => "SLUR_END",
+            TokenType::Dash => "DASH",
         }
     }
 }

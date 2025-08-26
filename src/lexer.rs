@@ -243,20 +243,40 @@ pub fn parse_metadata(tokens: &[Token]) -> (Metadata, Vec<Token>) {
     let mut consumed_lines = HashSet::new();
     let mut consumed_tokens = HashSet::new();
 
-    // Find the first line containing a barline
-    let first_main_line = tokens
-        .iter()
-        .find(|t| t.token_type == "BARLINE")
-        .map(|t| t.line)
-        .unwrap_or(usize::MAX);
+    // First, identify all musical lines (lines with pitches or barlines)
+    // But exclude lines that start with a WORD followed by a colon (directives)
+    let mut musical_lines: HashSet<usize> = HashSet::new();
+    let mut directive_lines: HashSet<usize> = HashSet::new();
+    
+    // Identify directive lines first
+    for (i, token) in tokens.iter().enumerate() {
+        if token.token_type == "WORD" && token.col == 0 {
+            // Check if next non-whitespace token is a colon
+            if let Some(colon_token) = tokens.iter().skip(i + 1).find(|t| t.line == token.line && t.token_type != "WHITESPACE") {
+                if colon_token.token_type == "SYMBOLS" && colon_token.value == ":" {
+                    directive_lines.insert(token.line);
+                }
+            }
+        }
+    }
+    
+    // Now identify musical lines, excluding directive lines
+    for token in tokens {
+        if (token.token_type == "PITCH" || token.token_type == "BARLINE") && !directive_lines.contains(&token.line) {
+            musical_lines.insert(token.line);
+        }
+    }
 
-    // Determine the search range for metadata (up to the first barline or end of file)
+    // Find the first musical line
+    let first_musical_line = musical_lines.iter().min().copied().unwrap_or(usize::MAX);
+    
+    // Only process metadata from lines that come before the first musical line
     let max_line_num = tokens.iter().map(|t| t.line).max().unwrap_or(0);
-    let search_limit = std::cmp::min(first_main_line, max_line_num + 1);
+    let search_limit = std::cmp::min(first_musical_line, max_line_num + 1);
 
     // 1. First, extract directives before looking for titles (to avoid "Key: Value" being treated as title/author)
     for (i, token) in tokens.iter().enumerate() {
-        if token.line >= first_main_line { continue; }
+        if token.line >= first_musical_line { continue; }
 
         // Look for WORD token at start of line followed by colon
         if token.token_type == "WORD" && token.col == 0 {
@@ -370,7 +390,7 @@ pub fn parse_metadata(tokens: &[Token]) -> (Metadata, Vec<Token>) {
     if !found_title_author {
         if let Some(first_word) = tokens
             .iter()
-            .find(|t| t.token_type == "WORD" && t.line < first_main_line)
+            .find(|t| t.token_type == "WORD" && t.line < first_musical_line)
         {
             let title_line = first_word.line;
             

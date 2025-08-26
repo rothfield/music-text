@@ -307,6 +307,7 @@ pub enum VexFlowElement {
         original_duration: Option<String>, // Store FSM duration like "1/12" for triplet detection
         beam_start: bool,
         beam_end: bool,
+        syl: Option<String>, // Syllable/lyric text
     },
     Rest {
         duration: String,
@@ -320,6 +321,12 @@ pub enum VexFlowElement {
     Tuplet {
         notes: Vec<VexFlowElement>,
         divisions: u8, // Original beat divisions (e.g., 3 for triplet, 5 for quintuplet)
+    },
+    SlurStart,
+    SlurEnd,
+    Mordent {
+        note_index: usize, // Index of the note this mordent applies to
+        mordent_type: String, // "upper" or "lower"
     },
 }
 
@@ -347,31 +354,53 @@ pub fn convert_fsm_to_vexflow(document: &Document) -> Result<Vec<VexFlowStave>, 
             let mut accidental_table = NoteAccidentalTable::new(transpose_key);
             
             // Process each element in the line
-            for element in &line_node.nodes {
+            for (beat_idx, element) in line_node.nodes.iter().enumerate() {
                 match element.node_type.as_str() {
                     "BEAT" => {
-                        process_beat(&element, &mut stave, transpose_key, &mut accidental_table)?;
+                        process_beat(&element, &mut stave, transpose_key, &mut accidental_table, &line_node.nodes, beat_idx)?;
                     }
                     "BARLINE" => {
                         // Reset accidental table for new bar
                         accidental_table.reset_for_new_bar(transpose_key);
                         
-                        // Only add barlines if there are already notes (skip leading barlines)
-                        if !stave.notes.is_empty() {
-                            stave.notes.push(VexFlowElement::BarLine {
-                                bar_type: "single".to_string(),
-                            });
-                        }
+                        // Determine barline type based on the actual barline value
+                        let bar_type = match element.value.as_str() {
+                            "|:" => "repeat-begin",
+                            ":|" => "repeat-end", 
+                            "||" => "double",
+                            "|." => "final",  // Single bar with dot (end of piece)
+                            "||:" => "double-repeat-begin",
+                            ":||" => "double-repeat-end", 
+                            "::" => "double-repeat", // Both begin and end repeat
+                            "[:" => "repeat-begin", // Alternative repeat begin notation
+                            ":]" => "repeat-end",   // Alternative repeat end notation  
+                            "|" => "single",
+                            _ => "single" // Default fallback
+                        };
+                        
+                        // Add barlines (they will be handled by the frontend renderer)
+                        stave.notes.push(VexFlowElement::BarLine {
+                            bar_type: bar_type.to_string(),
+                        });
                     }
                     "BREATHMARK" => {
                         stave.notes.push(VexFlowElement::Breathe);
+                    }
+                    "SLUR_START" => {
+                        stave.notes.push(VexFlowElement::SlurStart);
+                    }
+                    "SLUR_END" => {
+                        stave.notes.push(VexFlowElement::SlurEnd);
                     }
                     _ => {}
                 }
             }
             
             if !stave.notes.is_empty() {
-                // Tie detection is now handled at note creation time
+                // NOTE: Tie detection is already handled correctly during note creation (lines 487-527)
+                // The apply_stave_tie_detection function incorrectly ties ALL consecutive same-pitch notes
+                // Commenting out to fix issue where GG becomes tied instead of two separate notes
+                // apply_stave_tie_detection(&mut stave.notes);
                 staves.push(stave);
             }
         }
@@ -380,7 +409,8 @@ pub fn convert_fsm_to_vexflow(document: &Document) -> Result<Vec<VexFlowStave>, 
     Ok(staves)
 }
 
-fn process_beat(beat_node: &Node, stave: &mut VexFlowStave, transpose_key: Option<&String>, accidental_table: &mut NoteAccidentalTable) -> Result<(), String> {
+fn process_beat(beat_node: &Node, stave: &mut VexFlowStave, transpose_key: Option<&String>, accidental_table: &mut NoteAccidentalTable, line_nodes: &Vec<Node>, beat_idx: usize) -> Result<(), String> {
+    eprintln!("DEBUG: Processing beat with {} child nodes", beat_node.nodes.len());
     let total_subdivisions = beat_node.divisions;
     // Only create tuplets for non-power-of-2 subdivisions
     let is_tuplet = total_subdivisions > 1 && (total_subdivisions & (total_subdivisions - 1)) != 0;
@@ -388,8 +418,16 @@ fn process_beat(beat_node: &Node, stave: &mut VexFlowStave, transpose_key: Optio
     let mut beat_elements = Vec::new();
     
     // Process notes in the beat
-    for note_node in &beat_node.nodes {
-        if note_node.node_type == "PITCH" {
+    for (i, note_node) in beat_node.nodes.iter().enumerate() {
+        eprintln!("DEBUG: Processing node type: {}", note_node.node_type);
+        if note_node.node_type == "SLUR_START" {
+            eprintln!("DEBUG: Adding SlurStart");
+            beat_elements.push(VexFlowElement::SlurStart);
+        } else if note_node.node_type == "SLUR_END" {
+            eprintln!("DEBUG: Adding SlurEnd");
+            beat_elements.push(VexFlowElement::SlurEnd);
+        } else if note_node.node_type == "PITCH" {
+            eprintln!("DEBUG: Processing PITCH node with value: {}", note_node.value);
             // Extract duration from the value (e.g., "S[1/16]" -> "1/16") 
             let duration_str = if let Some(start) = note_node.value.find('[') {
                 if let Some(end) = note_node.value.find(']') {
@@ -443,21 +481,72 @@ fn process_beat(beat_node: &Node, stave: &mut VexFlowStave, transpose_key: Optio
                     }
                 }
                 
+                // Track the first note index for mordent attachment
+                let first_note_index = beat_elements.len();
+                
                 // Add each duration (for tied notes) - SAME AS LILYPOND
                 for (j, (vexflow_duration, dots)) in vexflow_durations.iter().enumerate() {
-                    // Only the first note in a multi-note duration sequence should inherit tie status
-                    let should_be_tied = j == 0 && note_node.dash_consumed;
+                    // Check if this note should tie to the next one
+                    // Look ahead to see if the next pitch node has dash_consumed=true
+                    let should_tie_to_next = if j == 0 {
+                        // First check within this beat
+                        let tie_within_beat = beat_node.nodes.iter()
+                            .skip(i + 1)
+                            .find(|n| n.node_type == "PITCH")
+                            .map_or(false, |next_pitch| {
+                                next_pitch.dash_consumed && 
+                                next_pitch.pitch_code == note_node.pitch_code // Only tie same pitches
+                            });
+                        
+                        // If no tie within beat, check across beats
+                        if !tie_within_beat {
+                            // Look for the next BEAT node and check if its first PITCH has dash_consumed AND same pitch
+                            line_nodes.iter()
+                                .skip(beat_idx + 1)
+                                .find(|n| n.node_type == "BEAT")
+                                .and_then(|next_beat| next_beat.nodes.iter().find(|n| n.node_type == "PITCH"))
+                                .map_or(false, |first_pitch| {
+                                    first_pitch.dash_consumed && 
+                                    first_pitch.pitch_code == note_node.pitch_code // Only tie same pitches
+                                })
+                        } else {
+                            tie_within_beat
+                        }
+                    } else {
+                        false
+                    };
+                    // Only the first note should have lyrics - don't duplicate lyrics on tied continuations
+                    // Extract syllable from SYL child nodes or use the syl attribute
+                    let note_syl = if j == 0 { 
+                        extract_syllable_from_node(note_node).or(note_node.syl.clone())
+                    } else { None };
                     
                     beat_elements.push(VexFlowElement::Note {
                         keys: vec![key.clone()],
                         duration: vexflow_duration.clone(),
                         dots: *dots,
                         accidentals: accidentals.clone(),
-                        tied: should_be_tied,
+                        tied: should_tie_to_next,
                         original_duration: Some(duration_str.to_string()), // Preserve FSM duration
                         beam_start: false, // Will be set by beaming logic
                         beam_end: false,
+                        syl: note_syl, // Only first note gets lyrics, not tied continuations
                     });
+                }
+                
+                // Check for mordent ornaments attached to this pitch
+                // Attach mordent to the first note of this pitch (even if tied)
+                for child in &note_node.nodes {
+                    if child.node_type == "MORDENT" {
+                        // Determine if it's an upper or lower mordent
+                        // For now, treat ~ as upper mordent (standard convention)
+                        let mordent_type = if child.value == "~" { "upper" } else { "lower" };
+                        
+                        beat_elements.push(VexFlowElement::Mordent {
+                            note_index: first_note_index, // Index of the first note for this pitch
+                            mordent_type: mordent_type.to_string(),
+                        });
+                    }
                 }
             }
         } else if note_node.node_type == "REST" {
@@ -501,6 +590,7 @@ fn process_beat(beat_node: &Node, stave: &mut VexFlowStave, transpose_key: Optio
         });
     } else {
         // Add elements directly to stave
+        eprintln!("DEBUG: Adding {} beat elements to stave", beat_elements.len());
         stave.notes.extend(beat_elements);
     }
     
@@ -597,6 +687,20 @@ fn apply_tie_detection(elements: &mut Vec<VexFlowElement>) {
     }
 }
 
+fn get_note_duration(element: &VexFlowElement, note_idx: usize) -> Option<String> {
+    match element {
+        VexFlowElement::Note { duration, .. } => Some(duration.clone()),
+        VexFlowElement::Tuplet { notes, .. } => {
+            if let Some(VexFlowElement::Note { duration, .. }) = notes.get(note_idx) {
+                Some(duration.clone())
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 fn apply_stave_tie_detection(stave_elements: &mut Vec<VexFlowElement>) {
     if stave_elements.len() < 2 {
         return;
@@ -621,13 +725,19 @@ fn apply_stave_tie_detection(stave_elements: &mut Vec<VexFlowElement>) {
         }
     }
     
-    // Check for consecutive notes with same pitch and apply ties
+    // Check for consecutive notes with same pitch and duration for ties
     for i in 0..all_notes.len().saturating_sub(1) {
         let (elem_idx1, note_idx1, keys1) = &all_notes[i];
         let (elem_idx2, note_idx2, keys2) = &all_notes[i + 1];
         
+        // Get durations of both notes to compare
+        let duration1 = get_note_duration(&stave_elements[*elem_idx1], *note_idx1);
+        let duration2 = get_note_duration(&stave_elements[*elem_idx2], *note_idx2);
+        
+        // Only tie notes with same pitch (correct musical definition of ties)
         if keys1 == keys2 {
-            // Mark the first note as tied
+            // Mark the first note as tied (source of tie)
+            // This follows LilyPond convention where the tie is after the first note
             match &mut stave_elements[*elem_idx1] {
                 VexFlowElement::Note { tied, .. } => {
                     *tied = true;
@@ -664,6 +774,9 @@ fn fraction_to_vexflow_duration_proper(frac: Fraction) -> Vec<(String, u8)> {
         (Fraction::new(3u64, 8u64), vec![("q".to_string(), 1)]),    // dotted quarter
         (Fraction::new(3u64, 16u64), vec![("8".to_string(), 1)]),   // dotted eighth
         (Fraction::new(3u64, 32u64), vec![("16".to_string(), 1)]),  // dotted sixteenth
+        (Fraction::new(7u64, 8u64), vec![("h".to_string(), 2)]),    // double dotted half
+        (Fraction::new(7u64, 16u64), vec![("q".to_string(), 2)]),   // double dotted quarter
+        (Fraction::new(7u64, 32u64), vec![("8".to_string(), 2)]),   // double dotted eighth
     ];
     
     // Check for direct match first
@@ -846,4 +959,15 @@ mod tests {
         assert_eq!(show, true);
         assert_eq!(symbol, Some("n".to_string()));
     }
+}
+
+/// Extract the first syllable from SYL child nodes
+fn extract_syllable_from_node(node: &Node) -> Option<String> {
+    // Look for the first SYL child node
+    for child in &node.nodes {
+        if child.node_type == "SYL" && !child.value.trim().is_empty() {
+            return Some(child.value.clone());
+        }
+    }
+    None
 }

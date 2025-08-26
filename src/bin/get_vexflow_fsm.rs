@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use notation_parser::{parse_notation, get_fsm_vexflow_output};
+use notation_parser::parse_notation;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -19,13 +19,13 @@ fn main() {
     };
     
     // Parse the notation
-    let success = parse_notation(&input);
-    if !success {
+    let result = parse_notation(&input);
+    if !result.success() {
         eprintln!("{{\"error\": \"Failed to parse notation\"}}");
         std::process::exit(1);
     }
     
     // Get VexFlow FSM output and print to stdout
-    let vexflow_output = get_fsm_vexflow_output();
+    let vexflow_output = result.get_fsm_vexflow_output();
     println!("{}", vexflow_output);
 }

@@ -61,8 +61,8 @@ impl ToOutline for Document {
                 format!("<span class=\"pitch\">{}</span>", trimmed)
             } else if trimmed == "beat" {
                 format!("<span class=\"beat\">{}</span>", trimmed)
-            } else if trimmed == "musical-line" {
-                format!("<span class=\"musical-line\">{}</span>", trimmed)
+            } else if trimmed == "musical-line" || trimmed == "line" {
+                format!("<span class=\"musical-line\">musical-line</span>")
             } else if trimmed == "barline" {
                 format!("<span class=\"barline\">{}</span>", trimmed)
             } else if trimmed == "divisions" || trimmed == "pitch-code" || trimmed == "octave" {
@@ -112,8 +112,8 @@ impl ToOutline for Node {
                 format!("<span class=\"pitch\">{}</span>", trimmed)
             } else if trimmed == "beat" {
                 format!("<span class=\"beat\">{}</span>", trimmed)
-            } else if trimmed == "musical-line" {
-                format!("<span class=\"musical-line\">{}</span>", trimmed)
+            } else if trimmed == "musical-line" || trimmed == "line" {
+                format!("<span class=\"musical-line\">musical-line</span>")
             } else if trimmed == "barline" {
                 format!("<span class=\"barline\">{}</span>", trimmed)
             } else if trimmed == "divisions" || trimmed == "pitch-code" || trimmed == "octave" {

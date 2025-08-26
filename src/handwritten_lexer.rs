@@ -136,8 +136,23 @@ impl<'a> HandwrittenLexer<'a> {
             // Dashes (rhythmic placeholders) - each dash is a separate token
             '-' => {
                 Some(Token {
-                    token_type: TokenType::Pitch.as_str().to_string(),
+                    token_type: TokenType::Dash.as_str().to_string(),
                     value: "-".to_string(),
+                    line: 0, // Will be set by caller
+                    col: 0,  // Will be set by caller
+                })
+            }
+
+            // Underscores - slur markers (consume consecutive underscores)
+            '_' => {
+                let slur_start_pos = start_pos;
+                while let Some('_') = self.peek() {
+                    self.advance();
+                }
+                let slur_value: String = self.chars[slur_start_pos..self.pos].iter().collect();
+                Some(Token {
+                    token_type: "SLUR".to_string(),
+                    value: slur_value,
                     line: 0, // Will be set by caller
                     col: 0,  // Will be set by caller
                 })
@@ -170,7 +185,7 @@ impl<'a> HandwrittenLexer<'a> {
         }
     }
 
-    fn parse_pitch(&mut self, first_char: char) -> Option<Token> {
+    fn parse_pitch(&mut self, _first_char: char) -> Option<Token> {
         let start_pos = self.pos - 1;
         
         // Check for accidentals (sharps/flats) after the pitch
@@ -191,7 +206,9 @@ impl<'a> HandwrittenLexer<'a> {
         })
     }
 
-    fn parse_word(&mut self, first_char: char) -> Option<Token> {
+    fn parse_word(&mut self, _first_char: char) -> Option<Token> {
+        // Note: first_char has already been consumed, and pos points to the next character
+        // So we need to include the character at pos-1 (which is first_char)
         let start_pos = self.pos - 1;
         
         // Consume alphanumeric characters and some punctuation
@@ -200,7 +217,7 @@ impl<'a> HandwrittenLexer<'a> {
                 c if c.is_alphanumeric() => {
                     self.advance();
                 }
-                '_' | '-' => {
+                '-' => {
                     self.advance();
                 }
                 _ => break,
@@ -241,7 +258,7 @@ impl<'a> HandwrittenLexer<'a> {
     fn is_pitch_char(&self, ch: char) -> bool {
         match self.notation_type {
             NotationType::Western => matches!(ch, 'A'..='G'),
-            NotationType::Sargam => matches!(ch, 'S' | 'r' | 'R' | 'g' | 'G' | 'm' | 'M' | 'P' | 'd' | 'D' | 'n' | 'N'),
+            NotationType::Sargam => matches!(ch, 'S' | 's' | 'r' | 'R' | 'g' | 'G' | 'm' | 'M' | 'P' | 'p' | 'd' | 'D' | 'n' | 'N'),
             NotationType::Number => matches!(ch, '1'..='7'),
         }
     }

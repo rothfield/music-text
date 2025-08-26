@@ -13,10 +13,39 @@ path = "src/bin/cli.rs"
 [[bin]]
 name = "data_generator"
 path = "src/bin/data_generator.rs"
+required-features = ["data_generation"]
 
 [[bin]]
 name = "get_vexflow_fsm"
 path = "src/bin/get_vexflow_fsm.rs"
+
+[[bin]]
+name = "simple_test"
+path = "src/bin/simple_test.rs"
+
+[[bin]]
+name = "debug_test"
+path = "src/bin/debug_test.rs"
+
+[[bin]]
+name = "debug_unified"
+path = "src/bin/debug_unified.rs"
+
+[[bin]]
+name = "debug_document_difference"
+path = "src/bin/debug_document_difference.rs"
+
+[[bin]]
+name = "keystroke_test"
+path = "src/bin/keystroke_test.rs"
+
+[[bin]]
+name = "quick_test"
+path = "src/bin/quick_test.rs"
+
+[[bin]]
+name = "test_notation_detection"
+path = "src/bin/test_notation_detection.rs"
 
 [dependencies]
 bs58 = "0.5.0"
@@ -33,6 +62,7 @@ wasm-bindgen = { version = "0.2.92", features = ["serde-serialize"] }
 serde_derive = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 colored = "2.0"
+mustache = "0.9.0"
 rand = { version = "0.8.5", optional = true }
 svg = { version = "0.14.0", optional = true }
 

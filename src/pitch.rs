@@ -160,11 +160,11 @@ pub fn lookup_pitch(symbol: &str, notation: Notation) -> Option<PitchCode> {
         },
         Notation::Sargam => match symbol {
             // Natural sargam
-            "S" => Some(PitchCode::N1),    // Sa
+            "S" | "s" => Some(PitchCode::N1),    // Sa (both uppercase and lowercase)
             "R" => Some(PitchCode::N2),    // shuddha Re  
             "G" => Some(PitchCode::N3),    // shuddha Ga
             "m" => Some(PitchCode::N4),    // shuddha Ma
-            "P" => Some(PitchCode::N5),    // Pa
+            "P" | "p" => Some(PitchCode::N5),    // Pa (both uppercase and lowercase)
             "D" => Some(PitchCode::N6),    // shuddha Dha
             "N" => Some(PitchCode::N7),    // shuddha Ni
             // Komal (flattened) sargam
@@ -522,4 +522,24 @@ mod tests {
         assert_eq!(guess_notation(&["C", "D", "E"]), Notation::Western);
         assert_eq!(guess_notation(&["1", "2", "3"]), Notation::Number);
     }
+
+    #[test]
+    fn test_lowercase_sargam_pitches() {
+        // Test that lowercase s and p map to the same pitch codes as uppercase S and P
+        assert_eq!(lookup_pitch("s", Notation::Sargam), Some(PitchCode::N1)); // Sa
+        assert_eq!(lookup_pitch("S", Notation::Sargam), Some(PitchCode::N1)); // Sa
+        assert_eq!(lookup_pitch("p", Notation::Sargam), Some(PitchCode::N5)); // Pa
+        assert_eq!(lookup_pitch("P", Notation::Sargam), Some(PitchCode::N5)); // Pa
+        
+        // Verify they are equivalent
+        assert_eq!(lookup_pitch("s", Notation::Sargam), lookup_pitch("S", Notation::Sargam));
+        assert_eq!(lookup_pitch("p", Notation::Sargam), lookup_pitch("P", Notation::Sargam));
+    }
+}
+
+/// LilyPond note name systems
+#[derive(Debug, Clone, Copy)]
+pub enum LilyPondNoteNames {
+    Dutch,
+    English,
 }

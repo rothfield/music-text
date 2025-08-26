@@ -3,7 +3,6 @@
 
 use std::collections::{HashMap, HashSet};
 use crate::models::{Document, Node, LineInfo};
-use crate::colorizer::{colorize_string, colorize_title, colorize_beat_element};
 
 pub fn generate_flattened_spatial_view(
     document: &Document,
@@ -82,28 +81,14 @@ pub fn generate_flattened_spatial_view(
                 line_output.push_str(&" ".repeat(node.col - current_col));
             }
 
-            let (color, mut reverse) = styles.get(&node.node_type).cloned().unwrap_or_default();
-            
             // Check if this is a beat element
-            let (is_beat_element, display_value) = if node.value.starts_with("BEAT_ELEMENT:") {
-                (true, node.value.strip_prefix("BEAT_ELEMENT:").unwrap_or(&node.value))
+            let display_value = if node.value.starts_with("BEAT_ELEMENT:") {
+                node.value.strip_prefix("BEAT_ELEMENT:").unwrap_or(&node.value)
             } else {
-                (false, node.value.as_str())
+                node.value.as_str()
             };
             
-            if node.node_type == "TITLE" {
-                line_output.push_str(&colorize_title(display_value, &color));
-            } else if is_beat_element {
-                line_output.push_str(&colorize_beat_element(display_value, &color, reverse));
-            } else {
-                // Only apply reverse styling to the specific "unassigned" token from the input
-                if node.value == "unassigned" {
-                    reverse = true;
-                }
-                
-                let colored_val = colorize_string(display_value, &color, reverse);
-                line_output.push_str(&colored_val);
-            }
+            line_output.push_str(display_value);
             current_col = node.col + display_value.len();
         }
         

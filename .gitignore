@@ -7,11 +7,12 @@ node_modules/
 
 # Reference folders
 doremi-script/
-vexflow/
+#vexflow/
 
 # Test data and artifacts
 my_test_data/
 attic/
+test_output/
 test_*.123
 test_*.flattener.clr
 test_*.flattener.yaml
@@ -21,6 +22,15 @@ test_*.ly
 test_*.png
 test_*.svg
 test_output.txt
+
+# New test system - generated files only (keep baselines in git)
+tests/test_output/
+*.generated.ly
+*.generated.png
+*.diff.png
+# Keep baseline files in version control:
+# *.baseline.ly
+# *.baseline.png
 
 # Test outputs and generated files
 *.flattener.*
@@ -81,3 +91,11 @@ Thumbs.db
 # Archives
 *.tgz
 *.tar
+*.tar.gz
+
+# Web live files
+web_live_*
+
+# Server test files (should be in temp directory)
+server_test_*
+temp_server_tests/

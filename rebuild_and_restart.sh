@@ -5,14 +5,15 @@
 
 set -e
 
-echo "🔄 Rebuilding all Rust binaries..."
-echo "  📦 Building CLI binary..."
+echo "🔄 Starting rebuild at $(date '+%Y-%m-%d %H:%M:%S')..."
+echo ""
+echo "📦 Building CLI binary..."
 cargo build --release --bin cli
 
-echo "  📦 Building VexFlow FSM binary..."
+echo "📦 Building VexFlow FSM binary..."
 cargo build --release --bin get_vexflow_fsm
 
-echo "  📦 Building data generator binary (if deps available)..."
+echo "📦 Building data generator binary (if deps available)..."
 cargo build --release --bin data_generator || echo "  ⚠️  Data generator skipped (missing dependencies)"
 
 echo "🔄 Rebuilding WASM module..."
@@ -34,6 +35,7 @@ echo "✅ Checking server status..."
 if ps aux | grep -q "[n]ode server.js"; then
     echo "🎉 Web server is running at http://localhost:3000"
     echo "📁 Server log: server.log"
+    echo "✨ Rebuild completed at $(date '+%Y-%m-%d %H:%M:%S')"
 else
     echo "❌ Server failed to start. Check server.log for details."
     exit 1

@@ -1,162 +1,223 @@
 # Notation Parser
 
-A **spatial rhythmic notation** parser that converts text-based musical notation into LilyPond staff notation. This project represents the latest evolution of a 30-year exploration of using **space as time** in musical notation.
+A multi-notation music parser supporting Western, Sargam (Indian), and Numeric notation systems. The parser converts text-based musical notation into structured data formats including LilyPond, VexFlow, YAML, and JSON.
 
-**This parser handles a pragmatic pen-and-paper notation system** - an older type of handwritten musical notation where spatial relationships naturally express musical structure. The architecture may prove useful for OCRing such traditional handwritten musical documents.
+## Features
 
-## Core Innovation: Spatial Rhythmic Notation
+- **Multi-Notation Support**: Automatically detects and parses Western (A-G), Sargam (S,r,R,g,G,m,M,P,d,D,n,N), and Numeric (1-7) notation systems
+- **Multiple Output Formats**:
+  - LilyPond notation for music engraving
+  - VexFlow JSON for web-based music rendering
+  - YAML/JSON for structured data processing
+  - Colorized HTML output with syntax highlighting
+- **Rhythm Detection**: FSM-based rhythm parsing with support for beats, measures, and time signatures
+- **Metadata Extraction**: Parses titles, directives, key signatures, and other musical metadata
+- **Octave Support**: Handles octave markers (`,` `.` `'` `:`)
+- **WASM Support**: Can be compiled to WebAssembly for browser-based applications
+- **CLI and Library**: Available as both a command-line tool and a Rust library
 
-The fundamental insight is using **horizontal space to represent time duration**:
+## Installation
 
-```
-S--r  --g-  -m--
-│   │  │    │
-│   │  │    └─ m gets 3 time units  
-│   │  └───── g gets 2 time units
-│   └──────── r gets 1 time unit
-└─────────── S gets 3 time units
-```
+### Prerequisites
 
-This **spatial-to-temporal conversion** is the most complex part of the data model, requiring:
+- Rust 1.70 or higher
+- Cargo (comes with Rust)
 
-1. **Beat Detection**: Group pitches with their trailing dashes (`S--` = 1 pitch + 2 dashes = 3 divisions)
-2. **Division Counting**: Track dash consumption to avoid double-counting
-3. **Fractional Conversion**: Map divisions to musical fractions (3 divisions in 4-beat = 3/4 duration)
-4. **LilyPond Duration Mapping**: Convert fractions to Western note values (1/4 → "4", 1/2 → "2")
+### Build from Source
 
-## Multi-Notation System Support
-
-Supports multiple notation systems with automatic detection:
-
-- **Western**: C D E F G A B (with sharps/flats)
-- **Indian Classical**: S r R g G m M P d D n N (sargam)
-- **Numbers**: 1 2 3 4 5 6 7 (numbered notation)
-
-Each system is normalized to a common `PitchCode` enum for consistent processing.
-
-## Architecture
-
-### Modular Pipeline
-```
-Raw Text → Lexer → Parser → Flattener → Grouper → Converter
-          ↓       ↓        ↓          ↓         ↓
-       Tokens   Nodes   Spatial    Beats    LilyPond
-                        Relations
+```bash
+git clone https://github.com/yourusername/notation_parser.git
+cd notation_parser
+cargo build --release
 ```
 
-### Core Modules
+### Install CLI
 
-- **`models/`**: Data structures (Document, Node, Token, Metadata)
-- **`lexer/`**: Text tokenization, chunk parsing, metadata extraction  
-- **`parser/`**: Spatial relationship flattening, beat grouping algorithms
-- **`display/`**: ANSI colorization, visualization, legend generation
-- **`pitch/`**: Musical pitch handling with notation system detection
-- **`lilypond_converter/`**: Rhythm calculation and LilyPond generation
-
-### Key Data Structures
-
-**Node**: Hierarchical structure representing musical elements
-```rust
-struct Node {
-    node_type: String,    // "PITCH", "BEAT", "LINE", "BARLINE"
-    value: String,        // Original text value
-    pitch_code: Option<PitchCode>,  // Normalized pitch
-    octave: Option<i8>,   // Octave information
-    divisions: usize,     // Rhythmic subdivisions
-    nodes: Vec<Node>,     // Child nodes (spatial relationships)
-}
+```bash
+cargo install --path .
 ```
-
-**Document**: Complete parsed composition
-```rust
-struct Document {
-    metadata: Metadata,   // Title, directives
-    nodes: Vec<Node>,     // Hierarchical content
-}
-```
-
-## Complex Rhythm Processing
-
-The rhythm system handles intricate patterns through **beat division analysis**:
-
-### Example: `S--r  --g-  -m--`
-
-1. **Beat Detection**: Each character in a beat represents an equal subdivision.
-   - Beat 1: `S--r` (4 divisions: `S` gets 3, `r` gets 1)
-   - Beat 2: `--g-` (4 divisions: rest gets 2, `g` gets 2)
-   - Beat 3: `-m--` (4 divisions: rest gets 1, `m` gets 3)
-
-2. **Fractional Conversion**: Assuming one beat is a quarter note:
-   - `S` is 3/4 of the beat (dotted eighth note).
-   - `r` is 1/4 of the beat (sixteenth note).
-   - In Beat 2, an eighth rest is followed by `g`, an eighth note.
-   - In Beat 3, a sixteenth rest is followed by `m`, a dotted eighth note.
-
-3. **LilyPond Output**:
-   ```lilypond
-   c8. d16 r8 e8 r16 f8.
-   ```
-
-## Historical Context
-
-This project builds on **doremi-script**, a comprehensive notation system that supported:
-
-- 5 complete notation systems (ABC, Sargam, Numbers, Hindi, Doremi)
-- Advanced ornaments and articulations
-- Chord symbols and tala markings
-- Complex multi-stave compositions
-- State machine-based processing
-
-The current implementation focuses on the **core spatial rhythm innovation** with modern Rust performance and safety.
-
-## Visualization Features
-
-- **ANSI colorization** with CSS-style parsing
-- **Beat element underlining** for rhythm visualization
-- **Spatial layout preservation** in terminal output
-- **Configurable color schemes** for different token types
 
 ## Usage
 
+### Command Line Interface
+
 ```bash
-# Parse notation file
-cargo run input.123
+# Parse a file
+notation_parser input.txt
 
-# View colorized output
-cargo run input.123 | less -R
+# Parse from stdin
+echo "C D E F G" | notation_parser
 
-# Generate LilyPond
-cargo run input.123 > output.ly
-lilypond output.ly
+# Parse and save output files
+cargo run --bin cli mymusic.txt
+# Creates: test_output/mymusic_colored.html, mymusic.ly, mymusic.yaml, mymusic.json
 ```
 
-## Sample Input
+### As a Library
+
+```rust
+use notation_parser::{unified_parser, convert_to_lilypond};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let input = "Title: My Song\nC D E F | G A B C'";
+    let document = unified_parser(input)?;
+    let lilypond = convert_to_lilypond(&document)?;
+    println!("{}", lilypond);
+    Ok(())
+}
+```
+
+### WebAssembly Usage
+
+```javascript
+import init, { parse_notation, get_lilypond_output, get_json_output } from './notation_parser.js';
+
+await init();
+
+if (parse_notation("C D E F G")) {
+    console.log(get_lilypond_output());
+    console.log(get_json_output());
+}
+```
+
+## Notation Examples
+
+### Western Notation
+```
+Title: Scale in C Major
+C D E F G A B C'
+```
+
+### Sargam Notation
+```
+Title: Indian Classical Scale
+S R G m P D N S'
+```
+
+### Numeric Notation
+```
+Title: Simple Melody
+1 2 3 4 5 6 7 1'
+```
+
+### With Rhythm and Octaves
+```
+Title: Rhythmic Example
+C D E F | G, A, B, C | D' E' F' G' |
+```
+
+## Output Formats
+
+### LilyPond Output
+Generates standard LilyPond notation files that can be compiled to PDF sheet music:
+```lilypond
+\version "2.24.0"
+\header {
+    title = "My Song"
+}
+\relative c' {
+    c4 d e f | g a b c |
+}
+```
+
+### VexFlow JSON
+Produces JSON format compatible with VexFlow.js for web rendering:
+```json
+[
+  {
+    "clef": "treble",
+    "keys": ["c/4"],
+    "duration": "q",
+    "note_type": "Note"
+  }
+]
+```
+
+## Architecture
+
+This parser handles **hand-written spatial textual notation** that has never been parsed before. Unlike traditional music notation formats, this system preserves the 2D spatial relationships in the original text.
+
+### Key Design Insight: Dual AST Levels
+
+The parser maintains **two distinct AST representations**:
+
+1. **Parsed AST** (Flat) - What the parser extracts from the raw text:
+   - Individual notes, rests, barlines as they appear spatially
+   - No artificial groupings that don't exist in the source notation
+   - Faithful to what the human actually wrote down
+
+2. **Structured AST** (Hierarchical) - What the FSM creates for musical interpretation:
+   - Groups individual elements into beats, measures, tuplets
+   - Adds semantic musical meaning (e.g., "these 5 notes form a quintuplet")
+   - Optimized for music rendering systems (VexFlow, LilyPond)
+
+### Processing Pipeline
+
+1. **Lexical Analysis**: Tokenizes input text using a handwritten lexer
+2. **Notation Detection**: Automatically identifies the notation system (Western/Sargam/Numeric)
+3. **Spatial Analysis**: 
+   - **Phase 1** (`node_builder`): Converts tokens to flat hierarchical nodes, handling vertical spatial relationships (octave markers, ornaments, lyrics)
+   - **Phase 2** (`region_processor`): Processes horizontal spatial regions (slur overlines, beat brackets)
+4. **Rhythm Analysis**: FSM transforms flat AST into structured AST with beats and measures
+5. **Conversion**: Transforms the structured AST into various output formats
+
+### Spatial Layout Handling
+
+The system uniquely handles **2D spatial notation** where:
+- **Slurs** are drawn as overlines: `_______` above notes like `G -P | S`
+- **Octave markers** appear above/below pitches: dots, colons, apostrophes
+- **Lyrics** are positioned below the musical line
+- **Beat brackets** use underscores below notes to group rhythmic units
+
+The handwritten/pencil-and-paper approach allows easy notation of spatial information (similar to Neumes in medieval notation). Our challenge here is to allow users to enter this spatial musical information as text, preserving the 2D relationships that are crucial for musical meaning in a linear text format.
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+cargo test
+
+# Run specific test binary
+cargo run --bin simple_test
+cargo run --bin test_notation_detection
+```
+
+### Building for WASM
+
+```bash
+wasm-pack build --target web
+```
+
+### Project Structure
 
 ```
-Title: Example Song
-Key: C
-
-S--r  R-g-  G--m  P---
-ban-  su-   ri    plays
+notation_parser/
+├── src/
+│   ├── lib.rs              # Main library entry point
+│   ├── models.rs           # Core data structures
+│   ├── lexer.rs            # Tokenization
+│   ├── parser.rs           # Parsing logic
+│   ├── notation_detector.rs # Auto-detection of notation systems
+│   ├── rhythm_fsm.rs       # Rhythm state machine
+│   ├── lilypond_converter.rs # LilyPond output
+│   ├── vexflow_converter.rs  # VexFlow JSON output
+│   └── bin/
+│       └── cli.rs          # Command-line interface
+├── Cargo.toml
+└── README.md
 ```
 
-## Technical Innovation
+## Contributing
 
-This notation parser demonstrates several computer music innovations:
+Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
 
-1. **Spatial-Temporal Mapping**: Using 2D text layout to encode temporal relationships
-2. **Multi-System Normalization**: Unified processing of diverse notation systems  
-3. **Hierarchical Beat Modeling**: Tree structures for complex rhythmic relationships
-4. **Proportional Duration Calculation**: Mathematical conversion of space to time
-5. **Round-Trip Preservation**: Maintaining original layout through processing pipeline
+## License
 
-The **spatial rhythmic notation** concept places this work in the tradition of experimental music notation alongside Morton Feldman's proportional scores, Krzysztof Penderecki's timeline notation, and other 20th-century innovations in graphic notation.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Related Work
+## Acknowledgments
 
-- **doremi-script**: Previous implementation in Clojure with full web interface
-- **Proportional notation**: LilyPond's spacing where note duration = horizontal space
-- **Graphic scores**: Visual music notation using spatial relationships
-- **Timeline notation**: Contemporary classical music using time-proportional layouts
-
-This represents a unique approach to making **spatial rhythm notation** both human-readable and computationally precise.
+- VexFlow converter inspired by Tarmo Johannes' vexflow-react-components
+- Built with Rust and the wasm-bindgen ecosystem
