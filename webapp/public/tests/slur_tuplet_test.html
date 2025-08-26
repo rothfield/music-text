@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Slur with Tuplet Test</title>
+    <script src="lib/vexflow5.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-case { margin: 20px 0; border: 1px solid #ccc; padding: 10px; }
+        .success { color: green; }
+        .error { color: red; }
+        iframe { width: 100%; height: 400px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <h1>Slur with Tuplet Test - Verifying Fix</h1>
+    
+    <div class="test-case">
+        <h2>Test 1: Slur across a triplet</h2>
+        <p>Notation: <code>___<br>SSS</code> (slur over triplet)</p>
+        <div id="test1"></div>
+    </div>
+    
+    <div class="test-case">
+        <h2>Test 2: Slur spanning two triplets</h2>
+        <p>Notation: <code>_______<br>SSS GGG</code></p>
+        <div id="test2"></div>
+    </div>
+    
+    <div class="test-case">
+        <h2>Test 3: Main Web Interface Test</h2>
+        <p>Enter this notation in the web interface below:</p>
+        <pre>_______
+SSS GGG</pre>
+        <iframe src="/"></iframe>
+    </div>
+    
+    <script>
+        const { Renderer, Stave, Formatter, Voice, StaveNote, Tuplet, Beam, Curve } = VexFlow;
+        
+        function createSlurTupletTest(divId, testDescription) {
+            try {
+                const div = document.getElementById(divId);
+                const renderer = new Renderer(div, Renderer.Backends.SVG);
+                renderer.resize(500, 150);
+                const context = renderer.getContext();
+                
+                const stave = new Stave(10, 20, 400);
+                stave.addClef('treble');
+                stave.setContext(context);
+                stave.draw();
+                
+                let notes = [];
+                let tupletGroups = [];
+                let curves = [];
+                
+                if (divId === 'test1') {
+                    // Test 1: Slur across a single triplet
+                    const tripletNotes = [
+                        new StaveNote({ clef: 'treble', keys: ['c/4'], duration: '8' }),
+                        new StaveNote({ clef: 'treble', keys: ['c/4'], duration: '8' }),
+                        new StaveNote({ clef: 'treble', keys: ['c/4'], duration: '8' })
+                    ];
+                    notes = tripletNotes;
+                    
+                    // Create tuplet
+                    const tuplet = new Tuplet(tripletNotes, { 
+                        notesOccupied: 2, 
+                        numNotes: 3 
+                    });
+                    tuplet.setContext(context);
+                    tupletGroups.push(tuplet);
+                    
+                    // Create beam
+                    const beam = new Beam(tripletNotes);
+                    tupletGroups.push(beam);
+                    
+                    // Create slur from first to last note
+                    const curve = new Curve(
+                        tripletNotes[0],
+                        tripletNotes[2],
+                        { cps: [{ x: 0, y: 10 }, { x: 0, y: 10 }] }
+                    );
+                    curve.setContext(context);
+                    curves.push(curve);
+                    
+                } else if (divId === 'test2') {
+                    // Test 2: Slur spanning two triplets
+                    const triplet1Notes = [
+                        new StaveNote({ clef: 'treble', keys: ['c/4'], duration: '8' }),
+                        new StaveNote({ clef: 'treble', keys: ['c/4'], duration: '8' }),
+                        new StaveNote({ clef: 'treble', keys: ['c/4'], duration: '8' })
+                    ];
+                    
+                    const triplet2Notes = [
+                        new StaveNote({ clef: 'treble', keys: ['e/4'], duration: '8' }),
+                        new StaveNote({ clef: 'treble', keys: ['e/4'], duration: '8' }),
+                        new StaveNote({ clef: 'treble', keys: ['e/4'], duration: '8' })
+                    ];
+                    
+                    notes = [...triplet1Notes, ...triplet2Notes];
+                    
+                    // Create tuplets
+                    const tuplet1 = new Tuplet(triplet1Notes, { 
+                        notesOccupied: 2, 
+                        numNotes: 3 
+                    });
+                    tuplet1.setContext(context);
+                    tupletGroups.push(tuplet1);
+                    
+                    const tuplet2 = new Tuplet(triplet2Notes, { 
+                        notesOccupied: 2, 
+                        numNotes: 3 
+                    });
+                    tuplet2.setContext(context);
+                    tupletGroups.push(tuplet2);
+                    
+                    // Create beams
+                    const beam1 = new Beam(triplet1Notes);
+                    const beam2 = new Beam(triplet2Notes);
+                    tupletGroups.push(beam1, beam2);
+                    
+                    // Create slur from first note of first triplet to last note of second triplet
+                    const curve = new Curve(
+                        triplet1Notes[0],
+                        triplet2Notes[2],
+                        { cps: [{ x: 0, y: 20 }, { x: 0, y: 20 }] }
+                    );
+                    curve.setContext(context);
+                    curves.push(curve);
+                }
+                
+                // Create voice and format
+                const voice = new Voice({ num_beats: 4, beat_value: 4 });
+                voice.addTickables(notes);
+                
+                new Formatter().joinVoices([voice]).format([voice], 350);
+                voice.draw(context, stave);
+                
+                // Draw all tuplets and curves
+                tupletGroups.forEach(item => item.draw());
+                curves.forEach(curve => curve.draw());
+                
+                // Add success message
+                const msg = document.createElement('p');
+                msg.className = 'success';
+                msg.textContent = `✓ ${testDescription} rendered successfully!`;
+                div.parentElement.appendChild(msg);
+                
+                console.log(`✓ ${testDescription} completed`);
+            } catch (e) {
+                console.error(`✗ Error in ${testDescription}:`, e);
+                
+                const msg = document.createElement('p');
+                msg.className = 'error';
+                msg.textContent = `✗ Error: ${e.message}`;
+                document.getElementById(divId).parentElement.appendChild(msg);
+            }
+        }
+        
+        // Run tests
+        createSlurTupletTest('test1', 'Slur across triplet');
+        createSlurTupletTest('test2', 'Slur spanning two triplets');
+        
+        console.log('All slur-tuplet tests completed!');
+    </script>
+</body>
+</html>

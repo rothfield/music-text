@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tuplet Debug Test</title>
+    <script src="lib/vexflow5.js"></script>
+</head>
+<body>
+    <h1>Tuplet Debug Test</h1>
+    <div id="output"></div>
+    
+    <script>
+        console.log('VexFlow version:', VexFlow.VERSION || 'unknown');
+        console.log('Available VexFlow classes:', Object.keys(VexFlow));
+        
+        const { Renderer, Stave, Formatter, Voice, StaveNote, Tuplet } = VexFlow;
+        
+        // Create renderer and context
+        const div = document.getElementById('output');
+        const renderer = new Renderer(div, Renderer.Backends.SVG);
+        renderer.resize(500, 200);
+        const context = renderer.getContext();
+        
+        // Create stave
+        const stave = new Stave(10, 40, 400);
+        stave.addClef('treble');
+        stave.setContext(context);
+        stave.draw();
+        
+        // Create three eighth notes for a triplet
+        const notes = [
+            new StaveNote({ clef: 'treble', keys: ['c/4'], duration: '8' }),
+            new StaveNote({ clef: 'treble', keys: ['d/4'], duration: '8' }),
+            new StaveNote({ clef: 'treble', keys: ['e/4'], duration: '8' })
+        ];
+        
+        // Test different tuplet constructor calls
+        try {
+            console.log('Testing Tuplet constructor with object options...');
+            const tuplet = new Tuplet(notes, { notes_occupied: 2, num_notes: 3 });
+            tuplet.setContext(context);
+            
+            // Create voice and format
+            const voice = new Voice({ num_beats: 1, beat_value: 4 });
+            voice.addTickables(notes);
+            
+            new Formatter().joinVoices([voice]).format([voice], 350);
+            voice.draw(context, stave);
+            tuplet.draw();
+            
+            console.log('Tuplet created and drawn successfully!');
+        } catch (e) {
+            console.error('Error with object options:', e);
+            console.error('Stack:', e.stack);
+        }
+        
+        // Log tuplet methods
+        if (typeof Tuplet !== 'undefined') {
+            const testTuplet = new Tuplet([notes[0], notes[1]]);
+            console.log('Tuplet prototype methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(testTuplet)));
+        }
+    </script>
+</body>
+</html>

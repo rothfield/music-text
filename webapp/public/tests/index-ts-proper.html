@@ -1,0 +1,2566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notation Parser - Multi-System Music Notation</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .input-section, .output-section {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            margin: 15px 0;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #007cba;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #005a85;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .button-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        #live-vexflow-container {
+            background-color: #ffffff;
+            border: 2px solid #007cba;
+            border-radius: 4px;
+            padding: 15px;
+            min-height: 120px;
+            width: 100%;
+            overflow: visible;
+            height: auto;
+        }
+        
+        #live-vexflow-notation {
+            width: 100%;
+            height: auto;
+        }
+        
+        #live-vexflow-notation svg {
+            width: 150% !important;
+            height: auto !important;
+            max-width: none !important;
+            transform-origin: left top;
+        }
+        
+        pre {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .status.success { background-color: #d4edda; color: #155724; }
+        .status.error { background-color: #f8d7da; color: #721c24; }
+        .status.info { background-color: #d1ecf1; color: #0c5460; }
+        
+        /* Mobile-style toggle switch */
+        .staff-preview-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 32px;
+        }
+        
+        .toggle-switch input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            cursor: pointer;
+            z-index: 1;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.3s ease;
+            border-radius: 32px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 24px;
+            width: 24px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.3s ease;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #4CAF50;
+        }
+        
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(28px);
+        }
+        
+        .toggle-label {
+            font-size: 16px;
+            color: #333;
+            user-select: none;
+        }
+        
+        .toggle-description {
+            font-size: 14px;
+            color: #666;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header" id="header-section">
+        <h1>🎵 Multi-System Notation Parser <span id="version-display" style="font-size: 16px; color: #cccccc;"></span> <span id="timestamp-display" style="font-size: 12px; color: #999;"></span></h1>
+        <p>Enter music notation in any system: Sargam (S R G M P D N), Western (C D E F G A B), or Numbers (1 2 3 4 5 6 7)</p>
+    </div>
+
+    <div class="staff-preview-toggle">
+        <div class="toggle-switch">
+            <input type="checkbox" id="staff-preview-toggle" checked>
+            <span class="toggle-slider"></span>
+        </div>
+        <span class="toggle-label">🎼 Staff Notation Preview</span>
+        <span class="toggle-description">(Faster startup when off)</span>
+    </div>
+
+    <div class="input-section">
+        <h2>✏️ Enter Your Notation <span style="font-size: 16px; color: #cccccc; margin-left: 20px;">Detected System: <strong id="detected-system-display">???</strong></span></h2>
+        
+        <div class="control-group">
+            <input type="checkbox" id="constrain-mode-checkbox">
+            <label for="constrain-mode-checkbox">Constrain</label>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <button id="upper-octave-btn">Upper Octave</button>
+                <button id="middle-octave-btn">Middle Octave</button>
+                <button id="lower-octave-btn">Lower Octave</button>
+            </div>
+            <div class="control-group">
+                <label for="mode-select">Mode:</label>
+                <select id="mode-select">
+                    <option value="ionian">Ionian</option>
+                    <option value="dorian">Dorian</option>
+                    <option value="phrygian">Phrygian</option>
+                    <option value="lydian">Lydian</option>
+                    <option value="mixolydian">Mixolydian</option>
+                    <option value="aeolian">Aeolian</option>
+                    <option value="locrian">Locrian</option>
+                    <option value="custom">Custom</option>
+                </select>
+                <button id="apply-mode-btn">Apply Mode</button>
+            </div>
+            <div class="control-group" id="custom-mode-container" style="display: none;">
+                <label for="custom-mode-input">Custom Mode:</label>
+                <input type="text" id="custom-mode-input" placeholder="e.g., SRgmPDn" />
+            </div>
+            <div class="control-group">
+                <input type="checkbox" id="live-preview-checkbox" checked />
+                <label for="live-preview-checkbox">Live VexFlow Preview</label>
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <button id="generate-staff-btn">Generate LilyPond Staff Notation</button>
+            <button id="show-outline-btn">Show Outline</button>
+            <button id="show-yaml-btn">Show YAML</button>
+            <button id="show-fsm-btn">Hide Debug Panels</button>
+            <button id="show-all-debug-btn">Toggle All Debug</button>
+        </div>
+        
+        <div class="input-wrapper">
+            <!-- Simple textarea input -->
+            <textarea id="notation-input" rows="3" placeholder="Enter your notation here... Examples:
+• Sargam: | S R G M | P D N S' |
+• Western: | C D E F | G A B C |  
+• Numbers: | 1 2 3 4 | 5 6 7 1 |" style="width: 100%; padding: 15px; border: 2px solid #4CAF50; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 28px; resize: vertical; min-height: 120px; overflow: hidden;"></textarea>
+        </div>
+
+        <div class="output-section" id="live-vexflow-section">
+            <div id="live-vexflow-container">
+                <div id="live-vexflow-placeholder" style="color: #999; text-align: center;">
+                    🎵 VexFlow preview will appear here as you type musical notes
+                </div>
+                <div id="live-vexflow-notation" style="display: none;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="status-container"></div>
+
+    <!-- LilyPond Staff Notation (moved right after VexFlow) -->
+    <div class="output-section" id="staff-notation-section" style="display: none;">
+        <h2>LilyPond Staff Notation</h2>
+        <div style="background-color: #ffffff; border: 2px solid #4CAF50; border-radius: 4px; padding: 15px; min-height: 120px; display: flex; align-items: center; justify-content: center;">
+            <div id="staff-notation-placeholder" style="color: #999; text-align: center;">
+                Click "Generate LilyPond Staff Notation" to create staff notation image
+            </div>
+            <img id="staff-notation-image" style="display: none; max-width: 100%; height: auto;" alt="Staff Notation" />
+        </div>
+    </div>
+
+    <div class="output-section" id="outline-output-section" style="display: block;">
+        <h2>Document Outline</h2>
+        <pre id="outline-output" style="background-color: #1e1e1e; border: 2px solid #FF9800; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #ffffff;"></pre>
+    </div>
+
+    <div class="output-section" id="yaml-output-section" style="display: block;">
+        <h2>YAML Structure</h2>
+        <pre id="yaml-output" style="background-color: #1e1e1e; border: 2px solid #9C27B0; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #ffffff;"></pre>
+    </div>
+
+    <div class="output-section" id="fsm-debug-section" style="display: block;">
+        <h2>Tokenized Document <span style="font-size: 14px; color: #666;">(raw tokens from lexer)</span></h2>
+        <div id="tokenized-display" style="background-color: #fff3e0; border: 2px solid #FF9800; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #e65100; margin-bottom: 10px;"></div>
+        <h3>Document with Attached Items <span style="font-size: 12px; color: #666;">(after spatial analysis and floating element attachment)</span></h3>
+        <div id="attached-display" style="background-color: #f3e5f5; border: 2px solid #9C27B0; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #6a1b9a; margin-bottom: 10px;"></div>
+        <h4>FSM Output <span style="font-size: 12px; color: #666;">(shows beats, divisions, and pitch organization from parser)</span></h4>
+        <div id="fsm-beats-display" style="background-color: #e8f5e8; border: 2px solid #4CAF50; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #2e7d32; margin-bottom: 10px;"></div>
+        <h4>LilyPond Source <span style="font-size: 12px; color: #666;">(generated notation code)</span></h4>
+        <div id="debug-lilypond-source" style="background-color: #f0f4f8; border: 2px solid #8E24AA; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #4a148c; margin-bottom: 10px;"></div>
+        <h5>VexFlow JSON Data <span style="font-size: 12px; color: #666;">(final processed data sent to VexFlow renderer)</span></h5>
+        <div id="fsm-yaml-display" style="background-color: #f8f8f8; border: 2px solid #FF5722; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #333;"></div>
+    </div>
+
+
+
+
+
+    <!-- Load VexFlow library -->
+    <script src="https://unpkg.com/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+    
+    <!-- Load WASM module (mock for TypeScript testing) -->
+    <script>
+        // Mock WASM module that matches the real parser output structure
+        window.wasm_bindgen = {
+            parse_notation: function(notation) {
+                // This would be the real WASM parser
+                return JSON.stringify({
+                    staves: [{
+                        notes: [
+                            { type: 'SlurStart' },
+                            { type: 'Note', keys: ['e/4'], duration: 'q', dots: 0, accidentals: [], tied: true, original_duration: '1/4', beam_start: false, beam_end: false, syl: null },
+                            { type: 'Note', keys: ['e/4'], duration: '8', dots: 0, accidentals: [], tied: false, original_duration: '1/8', beam_start: true, beam_end: false, syl: null },
+                            { type: 'Note', keys: ['g/4'], duration: '8', dots: 0, accidentals: [], tied: false, original_duration: '1/8', beam_start: false, beam_end: true, syl: null },
+                            { type: 'BarLine', bar_type: 'single' },
+                            { type: 'Note', keys: ['c/4'], duration: 'q', dots: 0, accidentals: [], tied: false, original_duration: '1/4', beam_start: false, beam_end: false, syl: null },
+                            { type: 'SlurEnd' }
+                        ],
+                        key_signature: null
+                    }]
+                });
+            },
+            get_version: function() {
+                return "TypeScript Modular Version 1.0.0";
+            },
+            get_build_timestamp: function() {
+                return new Date().toISOString();
+            }
+        };
+    </script>
+
+    <!-- Load TypeScript modules -->
+    <script type="module">
+        import { UIController } from './js/modules/ui-controller.js';
+        
+        // Initialize the TypeScript application when DOM is loaded
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const app = new UIController();
+                await app.initialize();
+                console.log('🎵 TypeScript Notation Parser application initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize TypeScript application:', error);
+            }
+        });
+    </script>
+
+    <!-- Original JavaScript replaced with TypeScript modules above -->
+        let vexflowLoaded = false;
+        let staffPreviewEnabled = true; // Default to true
+        
+        // Load VexFlow library dynamically
+        async function loadVexFlow() {
+            if (vexflowLoaded) return true;
+            
+            try {
+                console.log('Loading VexFlow library...');
+                const script = document.createElement('script');
+                script.src = 'lib/vexflow.js';
+                script.async = true;
+                
+                return new Promise((resolve, reject) => {
+                    script.onload = () => {
+                        vexflowLoaded = true;
+                        console.log('✅ VexFlow library loaded successfully');
+                        resolve(true);
+                    };
+                    script.onerror = () => {
+                        console.error('❌ Failed to load VexFlow library');
+                        reject(new Error('Failed to load VexFlow'));
+                    };
+                    document.head.appendChild(script);
+                });
+            } catch (error) {
+                console.error('VexFlow loading error:', error);
+                return false;
+            }
+        }
+        
+        // Load WASM module
+        async function loadWasm() {
+            try {
+                const loadStartTime = performance.now();
+                const unique_version = new Date().getTime();
+                wasm = await import(`../pkg/notation_parser.js?v=${unique_version}`);
+                await wasm.default(); // This is the 'init' function
+                const loadEndTime = performance.now();
+                const loadTimeMs = Math.round(loadEndTime - loadStartTime);
+                wasmLoaded = true;
+                console.log(`WASM module loaded successfully in ${loadTimeMs}ms`);
+
+                // Display the version
+                const version = wasm.get_version();
+                const versionDisplay = document.getElementById('version-display');
+                if (versionDisplay) {
+                    versionDisplay.textContent = 'v' + version;
+                }
+
+                // Display the build timestamp and load time
+                const timestamp = wasm.get_build_timestamp();
+                const timestampDisplay = document.getElementById('timestamp-display');
+                if (timestampDisplay) {
+                    timestampDisplay.textContent = `(built ${timestamp}, loaded in ${loadTimeMs}ms)`;
+                }
+                
+                // Show success message with load time
+                showStatus(`✅ WASM module loaded successfully in ${loadTimeMs}ms!`, 'success');
+            } catch (error) {
+                console.error('Failed to load WASM module:', error);
+                showStatus(`❌ Failed to load WASM module: ${error.message}`, 'error');
+            }
+        }
+        
+        // Simple textarea mode - no canvas editor needed
+        
+        // Get the textarea element
+        const notationInput = document.getElementById('notation-input');
+        const statusContainer = document.getElementById('status-container');
+        const generateStaffBtn = document.getElementById('generate-staff-btn');
+        const staffNotationSection = document.getElementById('staff-notation-section');
+        const staffNotationImage = document.getElementById('staff-notation-image');
+        const staffNotationPlaceholder = document.getElementById('staff-notation-placeholder');
+        // LilyPond source elements
+        const lilypondSourceSection = document.getElementById('lilypond-source-section');
+        const lilypondSourceElement = document.getElementById('lilypond-source');
+        const showOutlineBtn = document.getElementById('show-outline-btn');
+        const outlineOutputSection = document.getElementById('outline-output-section');
+        const outlineOutput = document.getElementById('outline-output');
+        const showYamlBtn = document.getElementById('show-yaml-btn');
+        const yamlOutputSection = document.getElementById('yaml-output-section');
+        const yamlOutput = document.getElementById('yaml-output');
+        const showFsmBtn = document.getElementById('show-fsm-btn');
+        const showAllDebugBtn = document.getElementById('show-all-debug-btn');
+        const fsmDebugSection = document.getElementById('fsm-debug-section');
+        const tokenizedDisplay = document.getElementById('tokenized-display');
+        const attachedDisplay = document.getElementById('attached-display');
+        const fsmBeatsDisplay = document.getElementById('fsm-beats-display');
+        const debugLilypondSource = document.getElementById('debug-lilypond-source');
+        const fsmYamlDisplay = document.getElementById('fsm-yaml-display');
+        const upperOctaveBtn = document.getElementById('upper-octave-btn');
+        const middleOctaveBtn = document.getElementById('middle-octave-btn');
+        const lowerOctaveBtn = document.getElementById('lower-octave-btn');
+        const modeSelect = document.getElementById('mode-select');
+        const applyModeBtn = document.getElementById('apply-mode-btn');
+        const customModeContainer = document.getElementById('custom-mode-container');
+        const customModeInput = document.getElementById('custom-mode-input');
+        const constrainModeCheckbox = document.getElementById('constrain-mode-checkbox');
+        const livePreviewCheckbox = document.getElementById('live-preview-checkbox');
+        const liveVexflowSection = document.getElementById('live-vexflow-section');
+        const liveVexflowContainer = document.getElementById('live-vexflow-container');
+        const liveVexflowPlaceholder = document.getElementById('live-vexflow-placeholder');
+        const liveVexflowNotation = document.getElementById('live-vexflow-notation');
+        const staffPreviewToggle = document.getElementById('staff-preview-toggle');
+        
+        let gridData = [];
+        let gridCaretPositions = []; // Track caret position for each cell
+        let currentCell = null;
+        
+        // Grid functions removed
+        function createGridFromText(text) {
+            const lines = text.split('\n');
+            const maxCols = Math.max(...lines.map(line => Math.ceil(line.length / 2)), 25); // Minimum 25 columns (50 chars / 2)
+            
+            gridData = lines.map(line => {
+                const cells = [];
+                // Split into 2-character chunks
+                for (let i = 0; i < line.length; i += 2) {
+                    cells.push(line.substring(i, i + 2));
+                }
+                // Pad with empty strings to reach maxCols
+                while (cells.length < maxCols) {
+                    cells.push('');
+                }
+                return cells;
+            });
+            
+            // Initialize caret positions array to match grid dimensions
+            gridCaretPositions = gridData.map(row => 
+                row.map(cell => cell.length) // Start caret at end of existing content
+            );
+            
+            // Ensure at least 20 rows
+            while (gridData.length < 20) {
+                gridData.push(new Array(maxCols).fill(''));
+                gridCaretPositions.push(new Array(maxCols).fill(0));
+            }
+            
+            renderGrid();
+        }
+        
+        function renderGrid() {
+            const table = gridTable;
+            table.innerHTML = '';
+            
+            gridData.forEach((row, rowIndex) => {
+                const tr = document.createElement('tr');
+                
+                // Add row label
+                const labelTd = document.createElement('td');
+                labelTd.className = 'row-label';
+                labelTd.textContent = rowIndex + 1;
+                tr.appendChild(labelTd);
+                
+                row.forEach((cell, colIndex) => {
+                    const td = document.createElement('td');
+                    td.textContent = cell;
+                    td.dataset.row = rowIndex;
+                    td.dataset.col = colIndex;
+                    
+                    td.addEventListener('click', () => selectCell(rowIndex, colIndex));
+                    
+                    tr.appendChild(td);
+                });
+                
+                table.appendChild(tr);
+            });
+        }
+        
+        function selectCell(row, col) {
+            // Remove previous selection
+            if (currentCell) {
+                const prevCell = document.querySelector(`td[data-row="${currentCell.row}"][data-col="${currentCell.col}"]`);
+                if (prevCell) prevCell.classList.remove('active');
+            }
+            
+            // Set new selection
+            currentCell = { row, col };
+            const cell = document.querySelector(`td[data-row="${row}"][data-col="${col}"]`);
+            if (cell) cell.classList.add('active');
+        }
+        
+        function updateCell(row, col, value) {
+            gridData[row][col] = value;
+            
+            const cell = document.querySelector(`td[data-row="${row}"][data-col="${col}"]`);
+            if (cell) {
+                cell.textContent = value;
+            }
+        }
+        
+        function moveSelection(row, col) {
+            // Ensure row and col are within bounds
+            row = Math.max(0, Math.min(row, gridData.length - 1));
+            col = Math.max(0, Math.min(col, gridData[0].length - 1));
+            
+            selectCell(row, col);
+        }
+        
+        function updateTextFromGrid() {
+            const text = gridData.map(row => 
+                row.map(cell => cell === '' ? '  ' : cell.padEnd(2, ' ')).join('').trimEnd()
+            ).join('\n').trimEnd();
+            notationInput.value = text;
+            debouncedParse();
+        }
+        
+        
+        
+
+        function showStatus(message, type = 'info') {
+            statusContainer.innerHTML = `<div class="status ${type}">${message}</div>`;
+            
+            // Auto-hide success/info messages after 3 seconds
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    statusContainer.innerHTML = '';
+                }, 3000);
+            }
+        }
+
+        
+
+        let parseTimeout;
+        let isCurrentlyParsing = false;
+        let liveVexflowTimeout;
+        let isLiveVexflowEnabled = true;
+
+        async function parseNotation(notation, showMessages = true) {
+            if (!notation.trim()) {
+                document.getElementById('detected-system-display').textContent = '???';
+                return;
+            }
+
+            if (isCurrentlyParsing) {
+                return; // Skip if already parsing
+            }
+
+            isCurrentlyParsing = true;
+            
+            if (showMessages) {
+                showStatus('Processing your notation...', 'info');
+            }
+
+            try {
+                // Parse with WASM
+                const success = wasm.parse_notation(notation);
+                
+                if (success) {
+                    // Canvas editor handles its own rendering
+
+                    const detectedSystem = wasm.get_detected_system();
+                    document.getElementById('detected-system-display').textContent = detectedSystem;
+                    
+                    // Trigger live VexFlow preview immediately and debounced
+                    debouncedLiveVexFlow(notation);
+                    
+                    if (showMessages) {
+                        showStatus('✅ Successfully processed with WASM!', 'success');
+                    }
+                } else {
+                    const errorMsg = wasm.get_error_message();
+                    document.getElementById('detected-system-display').textContent = '???';
+                    // On error, we don't update the text area to avoid losing user input
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                if (showMessages) {
+                    showStatus(`❌ Error: ${error.message}`, 'error');
+                }
+                console.error('WASM parsing error:', error.message);
+            } finally {
+                isCurrentlyParsing = false;
+            }
+        }
+
+
+        // Live VexFlow preview rendering - Clean implementation using only API data
+        async function renderLiveVexFlowPreview(notation) {
+            console.log('🎼 Starting VexFlow render');
+            
+            // Check if staff preview is disabled
+            if (!staffPreviewEnabled) {
+                liveVexflowPlaceholder.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #666;">
+                        🎼 Staff notation preview is disabled<br>
+                        <small>Enable it with the toggle above for faster startup</small>
+                    </div>
+                `;
+                liveVexflowPlaceholder.style.display = 'block';
+                liveVexflowNotation.style.display = 'none';
+                return;
+            }
+            
+            // Load VexFlow if not already loaded
+            if (!vexflowLoaded) {
+                liveVexflowPlaceholder.innerHTML = `
+                    <div style="text-align: center; padding: 20px;">
+                        <div>📦 Loading VexFlow library...</div>
+                    </div>
+                `;
+                liveVexflowPlaceholder.style.display = 'block';
+                liveVexflowNotation.style.display = 'none';
+                
+                try {
+                    await loadVexFlow();
+                } catch (error) {
+                    liveVexflowPlaceholder.innerHTML = `
+                        <div style="text-align: center; padding: 20px; color: #ff6b6b;">
+                            ❌ Failed to load VexFlow: ${error.message}
+                        </div>
+                    `;
+                    return;
+                }
+            }
+            
+            if (!isLiveVexflowEnabled || !notation.trim() || !window.Vex) {
+                liveVexflowPlaceholder.style.display = 'block';
+                liveVexflowNotation.style.display = 'none';
+                return;
+            }
+
+            // Show loading indicator with build timestamp
+            liveVexflowPlaceholder.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <div>🎼 Rendering VexFlow...</div>
+                    <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                        Build: Aug 2 19:20 (triplet detection + proper beaming)
+                    </div>
+                </div>
+            `;
+            liveVexflowPlaceholder.style.display = 'block';
+            liveVexflowNotation.style.display = 'none';
+
+            try {
+                // Call API to get properly parsed VexFlow data
+                const response = await fetch('/api/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        notation: notation, 
+                        filename: `web_live_${Date.now()}.123` 
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success || !result.vexflowFsm || !Array.isArray(result.vexflowFsm)) {
+                    throw new Error('Invalid API response');
+                }
+                
+                // Render the VexFlow data
+                renderVexFlowFromFSM(result.vexflowFsm);
+                
+            } catch (error) {
+                console.error('VexFlow preview error:', error);
+                liveVexflowPlaceholder.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #ff6b6b;">
+                        <div>⚠️ VexFlow render failed: ${error.message}</div>
+                        <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                            Build: Aug 2 19:20 (triplet detection + proper beaming)
+                        </div>
+                    </div>
+                `;
+                liveVexflowPlaceholder.style.display = 'block';
+                liveVexflowNotation.style.display = 'none';
+            }
+        }
+        
+        // Render VexFlow from FSM data (clean implementation)
+        function renderVexFlowFromFSM(staves) {
+            const { Renderer, Stave, Formatter, Voice, Beam } = Vex.Flow;
+            
+            // Clear and prepare container
+            liveVexflowNotation.innerHTML = '';
+            liveVexflowPlaceholder.style.display = 'none';
+            liveVexflowNotation.style.display = 'block';
+            
+            // Create renderer with dynamic height
+            const renderer = new Renderer(liveVexflowNotation, Renderer.Backends.SVG);
+            const estimatedHeight = Math.max(150, staves.length * 100);
+            renderer.resize(800, estimatedHeight);
+            const context = renderer.getContext();
+            context.scale(0.7, 0.7);
+            
+            let currentY = 20;
+            
+            // Process each stave
+            staves.forEach((staveData, staveIndex) => {
+                if (!staveData.notes || staveData.notes.length === 0) return;
+                
+                // Create stave
+                const stave = new Stave(20, currentY, 1000);
+                if (staveIndex === 0) {
+                    stave.addClef('treble');
+                    
+                    // Add key signature if present
+                    if (staveData.key_signature) {
+                        // Map key signatures to VexFlow format
+                        const keyMap = {
+                            'C': 'C', 'G': 'G', 'D': 'D', 'A': 'A', 'E': 'E', 'B': 'B', 'F#': 'F#', 'C#': 'C#',
+                            'F': 'F', 'Bb': 'Bb', 'Eb': 'Eb', 'Ab': 'Ab', 'Db': 'Db', 'Gb': 'Gb', 'Cb': 'Cb',
+                            'c': 'C', 'g': 'G', 'd': 'D', 'a': 'A', 'e': 'E', 'b': 'B', 'f#': 'F#', 'c#': 'C#',
+                            'f': 'F', 'bb': 'Bb', 'eb': 'Eb', 'ab': 'Ab', 'db': 'Db', 'gb': 'Gb'
+                        };
+                        
+                        const vexflowKey = keyMap[staveData.key_signature] || 'C';
+                        stave.addKeySignature(vexflowKey);
+                    }
+                }
+                stave.setContext(context).draw();
+                
+                // Convert FSM elements to VexFlow notes
+                const vexNotes = []; // All VexFlow elements (notes, rests, barlines)  
+                const noteOnlyArray = []; // Only actual notes for slur indexing
+                const beamGroups = [];
+                const tupletGroups = [];
+                let currentBeamGroup = [];
+                
+                staveData.notes.forEach((element, index) => {
+                    try {
+                    if (element.type === 'Tuplet') {
+                        // Handle Tuplet objects from FSM
+                        const tupletNotes = element.notes.map(noteData => {
+                            console.log('Processing note data:', noteData);
+                            // Check if this is a rest (either has type: 'Rest' or keys start with '-')
+                            const isRest = noteData.type === 'Rest' || (noteData.keys && noteData.keys.length > 0 && noteData.keys[0].startsWith('-'));
+                            
+                            let note;
+                            if (isRest) {
+                                // Create rest
+                                note = new Vex.Flow.StaveNote({
+                                    clef: 'treble',
+                                    keys: ['b/4'], // Default rest position
+                                    duration: noteData.duration + 'r' + (noteData.dots > 0 ? 'd'.repeat(noteData.dots) : '')
+                                });
+                            } else {
+                                // Create normal note
+                                note = new Vex.Flow.StaveNote({
+                                    clef: 'treble',
+                                    keys: noteData.keys,
+                                    duration: noteData.duration + (noteData.dots > 0 ? 'd'.repeat(noteData.dots) : '')
+                                });
+                            }
+                            
+                            // Add accidentals (handle new FSM format) - skip for rests
+                            if (!isRest && noteData.accidentals) {
+                                noteData.accidentals.forEach(accData => {
+                                    if (accData.accidental && accData.accidental !== 'n') {
+                                        note.addModifier(new Vex.Flow.Accidental(accData.accidental), accData.index);
+                                    }
+                                });
+                            }
+                            
+                            // Add dots
+                            if (noteData.dots > 0) {
+                                for (let i = 0; i < noteData.dots; i++) {
+                                    note.addDot(0);
+                                }
+                            }
+                            
+                            return note;
+                        });
+                        
+                        // Add tuplet notes to main notes array
+                        vexNotes.push(...tupletNotes);
+                        noteOnlyArray.push(...tupletNotes); // Add to note-only array for slur indexing
+                        
+                        // Create beam for tuplet notes if they're beamable (8th notes or shorter)
+                        // But don't beam if there are any rests in the tuplet
+                        if (tupletNotes.length >= 2) {
+                            const hasRests = tupletNotes.some(note => note.getDuration().includes('r'));
+                            const firstNoteDuration = tupletNotes[0].getDuration();
+                            
+                            if (!hasRests && (firstNoteDuration === '8' || firstNoteDuration === '16' || firstNoteDuration === '32')) {
+                                beamGroups.push(tupletNotes);
+                            }
+                        }
+                        
+                        // Calculate tuplet parameters based on actual note durations
+                        const noteCount = tupletNotes.length;
+                        
+                        // Calculate total duration in eighth-note equivalents
+                        let totalDurationEighths = 0;
+                        let durationDebug = [];
+                        tupletNotes.forEach(note => {
+                            const duration = note.getDuration();
+                            durationDebug.push(duration);
+                            // VexFlow returns different duration strings
+                            if (duration === 'w' || duration === '1') totalDurationEighths += 8;      // whole note
+                            else if (duration === 'h' || duration === '2') totalDurationEighths += 4; // half note
+                            else if (duration === 'q' || duration === '4') totalDurationEighths += 2; // quarter note
+                            else if (duration === '8') totalDurationEighths += 1; // eighth note
+                            else if (duration === '16') totalDurationEighths += 0.5; // sixteenth note
+                            else if (duration === '32') totalDurationEighths += 0.25; // thirty-second note
+                            else totalDurationEighths += 2; // default to quarter note equivalent
+                        });
+                        
+                        // Debug logging can be enabled when needed
+                        // console.log(`Tuplet debug: ${noteCount} notes, durations: [${durationDebug.join(', ')}], total eighths: ${totalDurationEighths}`);
+                        
+                        // Determine if this needs a tuplet bracket
+                        let tupletOptions = null;
+                        
+                        // For mixed durations (like C4 + D8 = 3 eighth-note equivalents)
+                        if (totalDurationEighths === 3 && noteCount === 2) {
+                            // C4 + D8 case: 3 eighth-equivalents in space of 2
+                            tupletOptions = { notes_occupied: 2, num_notes: 3 };
+                        }
+                        // For uniform eighth note triplets
+                        else if (noteCount === 3 && totalDurationEighths === 3) {
+                            // 3 eighth notes in space of 2
+                            tupletOptions = { notes_occupied: 2, num_notes: 3 };
+                        }
+                        // For uniform quarter note triplets  
+                        else if (noteCount === 3 && totalDurationEighths === 6) {
+                            // 3 quarter notes in space of 2 (half note)
+                            tupletOptions = { notes_occupied: 2, num_notes: 3 };
+                        }
+                        // For quintuplets (5 notes regardless of duration)
+                        else if (noteCount === 5) {
+                            tupletOptions = { notes_occupied: 4, num_notes: 5 };
+                        }
+                        // For sextuplets (6 notes)
+                        else if (noteCount === 6) {
+                            tupletOptions = { notes_occupied: 4, num_notes: 6 };
+                        }
+                        // For septuplets (7 notes)
+                        else if (noteCount === 7) {
+                            tupletOptions = { notes_occupied: 4, num_notes: 7 };
+                        }
+                        // Powers of 2 or regular groupings: no tuplet
+                        else {
+                            const isPowerOfTwo = (noteCount & (noteCount - 1)) === 0;
+                            if (!isPowerOfTwo && noteCount > 2) {
+                                // Generic odd number case
+                                tupletOptions = { notes_occupied: Math.max(2, noteCount - 1), num_notes: noteCount };
+                            }
+                        }
+                        
+                        // Store tuplet info for later creation
+                        tupletGroups.push({notes: tupletNotes, options: tupletOptions});
+                        
+                    } else if (element.type === 'Note') {
+                        const note = new Vex.Flow.StaveNote({
+                            clef: 'treble',
+                            keys: element.keys,
+                            duration: element.duration + (element.dots > 0 ? 'd'.repeat(element.dots) : '')
+                        });
+                        
+                        // Add accidentals (handle new FSM format)
+                        if (element.accidentals) {
+                            element.accidentals.forEach(acc => {
+                                if (acc.accidental && acc.accidental !== 'n') {
+                                    note.addModifier(new Vex.Flow.Accidental(acc.accidental), acc.index);
+                                }
+                            });
+                        }
+                        
+                        // Add dots
+                        for (let i = 0; i < element.dots; i++) {
+                            note.addDot(0);
+                        }
+                        
+                        console.log(`Adding Note ${vexNotes.length}:`, note);
+                        vexNotes.push(note);
+                        noteOnlyArray.push(note); // Add to note-only array for slur indexing
+                        
+                        // Basic beaming for individual notes (tuplets handled separately)
+                        // Don't beam rests
+                        if (!element.type || element.type !== 'Rest') {
+                            if (element.beam_start || element.beam_end || (element.duration === '8' || element.duration === '16')) {
+                                // Handle beaming based on FSM beam markers
+                                if (element.beam_start) {
+                                    currentBeamGroup = [note];
+                                } else if (element.beam_end && currentBeamGroup.length > 0) {
+                                    currentBeamGroup.push(note);
+                                    if (currentBeamGroup.length >= 2) {
+                                        beamGroups.push([...currentBeamGroup]);
+                                    }
+                                    currentBeamGroup = [];
+                                } else if (currentBeamGroup.length > 0) {
+                                    currentBeamGroup.push(note);
+                                } else if (element.duration === '8' || element.duration === '16') {
+                                    // Single eighth/sixteenth notes - don't beam them
+                                    // Just let them render as individual notes with flags
+                                }
+                            }
+                        }
+                        
+                    } else if (element.type === 'Rest') {
+                        const rest = new Vex.Flow.StaveNote({
+                            clef: 'treble',
+                            keys: ['b/4'],
+                            duration: element.duration + 'r' + (element.dots > 0 ? 'd'.repeat(element.dots) : '')
+                        });
+                        
+                        // Add dots to rest
+                        for (let i = 0; i < element.dots; i++) {
+                            rest.addDot(0);
+                        }
+                        
+                        vexNotes.push(rest);
+                        
+                        // Debug: check if rest is being beamed
+                        console.log('Processing rest, currentBeamGroup length:', currentBeamGroup.length);
+                        
+                        // Rests break beam groups
+                        if (currentBeamGroup.length >= 2) {
+                            beamGroups.push([...currentBeamGroup]);
+                        }
+                        currentBeamGroup = [];
+                        
+                        // Debug: make sure rest doesn't get added to any beam groups
+                        console.log('Rest processed, beamGroups count:', beamGroups.length);
+                    } else if (element.type === 'BarLine') {
+                        // Handle barlines - break beaming
+                        if (currentBeamGroup.length >= 2) {
+                            beamGroups.push([...currentBeamGroup]);
+                        }
+                        currentBeamGroup = [];
+                        
+                        // Add barline note
+                        const barline = new Vex.Flow.BarNote();
+                        vexNotes.push(barline);
+                    } else if (element.type === 'SlurStart' || element.type === 'SlurEnd') {
+                        // Handle slur markers - these don't generate VexFlow notes, just track for slur creation
+                        console.log('Processing slur marker:', element.type);
+                        // Slur markers don't create notes, they're used for slur curve creation
+                    }
+                    } catch (error) {
+                        console.error('VexFlow element processing error:', error);
+                        console.error('Problem element:', element);
+                        // Skip this element and continue
+                    }
+                });
+                
+                // Don't forget the last beam group
+                if (currentBeamGroup.length >= 2) {
+                    beamGroups.push(currentBeamGroup);
+                }
+                
+                if (vexNotes.length === 0) return;
+                
+                // Create voice and add notes
+                const voice = new Voice({
+                    num_beats: 4,
+                    beat_value: 4,
+                    resolution: Vex.Flow.RESOLUTION
+                }).setStrict(false);
+                
+                voice.addTickables(vexNotes);
+                
+                // Create beams for regular notes (only if group has 2+ notes)
+                const beams = beamGroups
+                    .filter(group => group.length >= 2) // Only beam groups with 2 or more notes
+                    .map(group => {
+                        const beam = new Beam(group);
+                        beam.setContext(context);
+                        return beam;
+                    });
+                
+                // Create tuplets from tupletGroups with dynamic options
+                const tuplets = tupletGroups
+                    .filter(group => group.options !== null) // Only create tuplets for non-power-of-2
+                    .map(group => {
+                        const tuplet = new Vex.Flow.Tuplet(group.notes, group.options);
+                        tuplet.setContext(context);
+                        return tuplet;
+                    });
+                
+                // Create ties for notes marked as tied
+                // The tied flag is on the FIRST note of a tie pair (source note)
+                const ties = [];
+                let vexNoteIndex = 0;
+                
+                staveData.notes.forEach((element, elementIndex) => {
+                    if (element.type === 'Note') {
+                        // Check if THIS note should tie to the NEXT note
+                        if (element.tied) {
+                            // Find the next note (not rest) to tie to
+                            let nextNoteIndex = vexNoteIndex + 1;
+                            let searchIndex = elementIndex + 1;
+                            
+                            // Look for the next actual note
+                            while (searchIndex < staveData.notes.length) {
+                                const nextElement = staveData.notes[searchIndex];
+                                if (nextElement.type === 'Note') {
+                                    console.log(`Creating tie from note ${vexNoteIndex} to note ${nextNoteIndex} (${element.keys} to ${nextElement.keys})`);
+                                    const tie = new Vex.Flow.StaveTie({
+                                        first_note: vexNotes[vexNoteIndex],
+                                        last_note: vexNotes[nextNoteIndex],
+                                        first_indices: [0],
+                                        last_indices: [0]
+                                    });
+                                    tie.setContext(context);
+                                    ties.push(tie);
+                                    break;
+                                } else if (nextElement.type === 'Tuplet') {
+                                    // If next element is a tuplet, tie to its first note
+                                    if (nextElement.notes.length > 0 && nextElement.notes[0].type === 'Note') {
+                                        console.log(`Creating tie from note ${vexNoteIndex} to tuplet note ${nextNoteIndex} (${element.keys})`);
+                                        const tie = new Vex.Flow.StaveTie({
+                                            first_note: vexNotes[vexNoteIndex],
+                                            last_note: vexNotes[nextNoteIndex],
+                                            first_indices: [0],
+                                            last_indices: [0]
+                                        });
+                                        tie.setContext(context);
+                                        ties.push(tie);
+                                        break;
+                                    }
+                                    nextNoteIndex += nextElement.notes.filter(n => n.type === 'Note').length;
+                                } else if (nextElement.type === 'Rest') {
+                                    nextNoteIndex++;
+                                }
+                                searchIndex++;
+                            }
+                        }
+                        vexNoteIndex++;
+                    } else if (element.type === 'Tuplet') {
+                        element.notes.forEach((note, noteIndex) => {
+                            if (note.tied) {
+                                // For tuplet notes, also look for the next note to tie to
+                                let nextNoteIndex = vexNoteIndex + 1;
+                                
+                                // First check if tying to next note in same tuplet
+                                if (noteIndex < element.notes.length - 1) {
+                                    console.log(`Creating intra-tuplet tie from note ${vexNoteIndex} to note ${nextNoteIndex}`);
+                                    const tie = new Vex.Flow.StaveTie({
+                                        first_note: vexNotes[vexNoteIndex],
+                                        last_note: vexNotes[nextNoteIndex],
+                                        first_indices: [0],
+                                        last_indices: [0]
+                                    });
+                                    tie.setContext(context);
+                                    ties.push(tie);
+                                } else {
+                                    // Tying from last note in tuplet to next element
+                                    let searchIndex = elementIndex + 1;
+                                    nextNoteIndex = vexNoteIndex + 1;
+                                    
+                                    while (searchIndex < staveData.notes.length) {
+                                        const nextElement = staveData.notes[searchIndex];
+                                        if (nextElement.type === 'Note') {
+                                            console.log(`Creating tie from tuplet note ${vexNoteIndex} to note ${nextNoteIndex}`);
+                                            const tie = new Vex.Flow.StaveTie({
+                                                first_note: vexNotes[vexNoteIndex],
+                                                last_note: vexNotes[nextNoteIndex],
+                                                first_indices: [0],
+                                                last_indices: [0]
+                                            });
+                                            tie.setContext(context);
+                                            ties.push(tie);
+                                            break;
+                                        } else if (nextElement.type === 'Tuplet' && nextElement.notes.length > 0) {
+                                            console.log(`Creating tie from tuplet note ${vexNoteIndex} to next tuplet note ${nextNoteIndex}`);
+                                            const tie = new Vex.Flow.StaveTie({
+                                                first_note: vexNotes[vexNoteIndex],
+                                                last_note: vexNotes[nextNoteIndex],
+                                                first_indices: [0],
+                                                last_indices: [0]
+                                            });
+                                            tie.setContext(context);
+                                            ties.push(tie);
+                                            break;
+                                        }
+                                        searchIndex++;
+                                    }
+                                }
+                            }
+                            vexNoteIndex++;
+                        });
+                    } else if (element.type === 'Rest') {
+                        // Just increment the index for rests
+                        vexNoteIndex++;
+                    } else if (element.type === 'SlurStart' || element.type === 'SlurEnd') {
+                        // Slur markers don't affect note indexing
+                        // They're handled separately for slur curve creation
+                    }
+                });
+                
+                console.log(`Created ${ties.length} ties`);
+                
+                // Create slurs from SlurStart/SlurEnd markers
+                const curves = [];
+                let slurStartNoteIndex = -1;
+                let noteOnlyIndex = 0; // Track only actual notes for slurs
+                
+                staveData.notes.forEach((element, elementIndex) => {
+                    if (element.type === 'SlurStart') {
+                        slurStartNoteIndex = noteOnlyIndex;
+                    } else if (element.type === 'SlurEnd' && slurStartNoteIndex >= 0) {
+                        // Create curve from slurStartNoteIndex to previous note (before SlurEnd)
+                        const endNoteIndex = noteOnlyIndex - 1;
+                        if (endNoteIndex > slurStartNoteIndex && endNoteIndex < noteOnlyArray.length) {
+                            console.log(`Creating slur curve from note ${slurStartNoteIndex} to note ${endNoteIndex}`);
+                            
+                            // Check if both notes have stems before creating curve
+                            const startNote = noteOnlyArray[slurStartNoteIndex];
+                            const endNote = noteOnlyArray[endNoteIndex];
+                            
+                            let canCreateCurve = true;
+                            
+                            // Validate start note
+                            if (!startNote || typeof startNote.getStem !== 'function') {
+                                console.warn(`Start note ${slurStartNoteIndex} invalid for slur`);
+                                canCreateCurve = false;
+                            } else {
+                                try {
+                                    startNote.getStem();
+                                } catch (e) {
+                                    console.warn(`Start note ${slurStartNoteIndex} has no stem:`, e);
+                                    canCreateCurve = false;
+                                }
+                            }
+                            
+                            // Validate end note
+                            if (!endNote) {
+                                console.warn(`End note ${endNoteIndex} is null/undefined`);
+                                canCreateCurve = false;
+                            } else if (typeof endNote.getStem !== 'function') {
+                                console.warn(`End note ${endNoteIndex} invalid for slur - no getStem function`, endNote);
+                                console.warn(`End note type:`, typeof endNote, endNote.constructor.name);
+                                console.warn(`End note methods:`, Object.getOwnPropertyNames(endNote));
+                                canCreateCurve = false;
+                            } else {
+                                try {
+                                    const stem = endNote.getStem();
+                                    console.log(`End note ${endNoteIndex} stem:`, stem);
+                                    if (!stem) {
+                                        console.warn(`End note ${endNoteIndex} getStem() returned null/undefined`);
+                                        // Try to force stem creation
+                                        if (typeof endNote.buildStem === 'function') {
+                                            console.log(`Attempting to build stem for note ${endNoteIndex}`);
+                                            endNote.buildStem();
+                                            const newStem = endNote.getStem();
+                                            console.log(`After buildStem, note ${endNoteIndex} stem:`, newStem);
+                                            if (!newStem) {
+                                                canCreateCurve = false;
+                                            }
+                                        } else {
+                                            canCreateCurve = false;
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.warn(`End note ${endNoteIndex} has no stem:`, e);
+                                    canCreateCurve = false;
+                                }
+                            }
+                            
+                            if (canCreateCurve) {
+                                const curve = new Vex.Flow.Curve(
+                                    startNote,
+                                    endNote,
+                                    {
+                                        cps: [{ x: 0, y: 10 }, { x: 0, y: 10 }]
+                                    }
+                                );
+                                curve.setContext(context);
+                                curves.push(curve);
+                            } else {
+                                console.error(`Skipping slur from note ${slurStartNoteIndex} to ${endNoteIndex} due to missing stems`);
+                            }
+                        }
+                        slurStartNoteIndex = -1;
+                    } else if (element.type === 'Note') {
+                        noteOnlyIndex++; // Only count actual notes for slurs
+                    } else if (element.type === 'Tuplet') {
+                        noteOnlyIndex += element.notes.filter(n => n.type === 'Note').length;
+                    }
+                    // Note: Rest and BarLine don't increment noteOnlyIndex
+                });
+                
+                // Debug: Log all vexNotes before formatting
+                console.log('VexNotes array:', vexNotes.map((note, i) => ({
+                    index: i, 
+                    type: typeof note,
+                    constructor: note?.constructor?.name,
+                    hasStem: typeof note?.getStem === 'function',
+                    keys: note?.keys || 'no keys'
+                })));
+                
+                console.log('NoteOnlyArray:', noteOnlyArray.map((note, i) => ({
+                    index: i, 
+                    type: typeof note,
+                    constructor: note?.constructor?.name,
+                    hasStem: typeof note?.getStem === 'function',
+                    keys: note?.keys || 'no keys'
+                })));
+                
+                // Format and draw with much tighter spacing
+                new Formatter().joinVoices([voice]).format([voice], 225);
+                voice.draw(context, stave);
+                beams.forEach(beam => beam.draw());
+                tuplets.forEach(tuplet => tuplet.draw());
+                ties.forEach(tie => tie.draw());
+                curves.forEach(curve => curve.draw());
+                
+                currentY += 100;
+            });
+        }
+
+
+        // Helper function to get canvas editor content
+        function getCanvasEditorContent() {
+            // Canvas editor removed, get content from textarea
+            return notationInput.value;
+        }
+
+        // Debounced live VexFlow preview - 300ms delay for faster response
+        function debouncedLiveVexFlow(notation) {
+            if (!isLiveVexflowEnabled) return;
+            
+            console.log('Debouncing VexFlow preview for:', notation);
+            clearTimeout(liveVexflowTimeout);
+            liveVexflowTimeout = setTimeout(() => {
+                console.log('Debounce timer triggered, rendering VexFlow');
+                renderLiveVexFlowPreview(notation);
+            }, 300); // 300ms delay for faster response
+        }
+
+
+
+
+
+        // Enhanced ANSI to HTML converter
+        function convertAnsiToHtml(ansiText) {
+            
+            let html = ansiText
+                // Handle escape sequences
+                .replace(/\u001b\[1m/g, '<strong>')
+                .replace(/\u001b\[0m/g, '</span>')
+                .replace(/\u001b\[32m/g, '<span style="color: #4CAF50;">')
+                .replace(/\u001b\[33m/g, '<span style="color: #FFC107;">')
+                .replace(/\u001b\[4;33m/g, '<span style="color: #FFC107; text-decoration: underline;">')
+                .replace(/\u001b\[1;4;37m/g, '<span style="color: white; font-weight: bold; text-decoration: underline;">')
+                .replace(/\u001b\[38;2;165;142;142m/g, '<span style="color: rgb(165,142,142);">')
+                .replace(/\u001b\[48;2;50;50;50;37m/g, '<span style="background-color: rgb(50,50,50); color: white;">')
+                .replace(/\u001b\[37m/g, '<span style="color: white;">')
+                // Handle bracket notation as fallback
+                .replace(/\[1m/g, '<strong>')
+                .replace(/\[0m/g, '</span>')
+                .replace(/\[32m/g, '<span style="color: #4CAF50;">')
+                .replace(/\[33m/g, '<span style="color: #FFC107;">')
+                .replace(/\[4;33m/g, '<span style="color: #FFC107; text-decoration: underline;">')
+                .replace(/\[1;4;37m/g, '<span style="color: white; font-weight: bold; text-decoration: underline;">')
+                .replace(/\[38;2;165;142;142m/g, '<span style="color: rgb(165,142,142);">')
+                .replace(/\[48;2;50;50;50;37m/g, '<span style="background-color: rgb(50,50,50); color: white;">')
+                .replace(/\[37m/g, '<span style="color: white;">')
+                // Convert newlines to <br>
+                .replace(/\n/g, '<br>');
+                
+            return html;
+        }
+
+        async function generateStaffNotation() {
+            const now = Date.now();
+            const oneMinuteAgo = now - 60000;
+
+            // Filter out timestamps older than a minute
+            lilypondGenerationTimestamps = lilypondGenerationTimestamps.filter(ts => ts > oneMinuteAgo);
+
+            if (lilypondGenerationTimestamps.length >= 3) {
+                showStatus('Rate limit exceeded (3 times per minute). Please wait.', 'error');
+                return;
+            }
+
+            // Show the staff notation section
+            staffNotationSection.style.display = 'block';
+            
+            generateStaffBtn.disabled = true;
+            generateStaffBtn.textContent = 'Processing...';
+            
+            try {
+                // Get current content from canvas editor
+                const notation = getCanvasEditorContent();
+                if (!notation.trim()) {
+                    staffNotationImage.style.display = 'none';
+                    staffNotationPlaceholder.style.display = 'block';
+                    staffNotationPlaceholder.innerHTML = 'No notation to generate staff notation';
+                    return;
+                }
+                
+                // Parse first to get the LilyPond code
+                await parseNotation(notation, true);
+                if (!wasmLoaded) return;
+                const lilypondCode = wasm.get_lilypond_output();
+                
+                if (!lilypondCode || typeof lilypondCode !== 'string' || !lilypondCode.trim()) {
+                    staffNotationImage.style.display = 'none';
+                    staffNotationPlaceholder.style.display = 'block';
+                    staffNotationPlaceholder.innerHTML = 'No LilyPond output to generate staff notation';
+                    return;
+                }
+                
+                // Show LilyPond source at the end
+                lilypondSourceSection.style.display = 'block';
+                lilypondSourceElement.textContent = lilypondCode;
+
+                lilypondGenerationTimestamps.push(now);
+
+                // Generate PNG from LilyPond code via server
+                const response = await fetch('/api/lilypond-to-png', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        lilypondCode: lilypondCode
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.success && result.imageUrl) {
+                    staffNotationImage.src = result.imageUrl;
+                    staffNotationImage.style.display = 'block';
+                    staffNotationPlaceholder.style.display = 'none';
+                    showStatus('Staff notation generated successfully!', 'success');
+                    
+                    // Ensure LilyPond source is visible at the end
+                    lilypondSourceSection.style.display = 'block';
+                } else {
+                    throw new Error(result.error || 'Failed to generate staff notation');
+                }
+            } catch (error) {
+                console.error('Staff notation generation failed:', error);
+                staffNotationImage.style.display = 'none';
+                staffNotationPlaceholder.style.display = 'block';
+                staffNotationPlaceholder.innerHTML = 'Staff notation generation failed';
+                showStatus(`Error: ${error.message}`, 'error');
+            } finally {
+                generateStaffBtn.disabled = false;
+                generateStaffBtn.textContent = 'Generate LilyPond Staff Notation';
+            }
+        }
+
+
+        async function showOutline() {
+            const notation = notationInput.value.trim();
+            if (!notation) {
+                outlineOutputSection.style.display = 'none';
+                return;
+            }
+
+            if (!wasmLoaded) {
+                showStatus('WASM not loaded, please wait.', 'error');
+                return;
+            }
+
+            try {
+                const success = wasm.parse_notation(notation);
+                if (success) {
+                    const outlineCode = wasm.get_outline_output();
+                    if (outlineCode && typeof outlineCode === 'string' && outlineCode.trim()) {
+                        outlineOutput.innerHTML = outlineCode;
+                        outlineOutputSection.style.display = 'block';
+                    } else {
+                        outlineOutput.textContent = 'No outline generated.';
+                        outlineOutputSection.style.display = 'block';
+                    }
+                } else {
+                    const errorMsg = wasm.get_error_message();
+                    throw new Error(errorMsg || 'Failed to parse notation');
+                }
+            } catch (error) {
+                outlineOutput.textContent = `Error: ${error.message}`;
+                outlineOutputSection.style.display = 'block';
+            }
+        }
+
+        async function showYaml() {
+            const notation = notationInput.value.trim();
+            if (!notation) {
+                yamlOutputSection.style.display = 'none';
+                return;
+            }
+
+            if (!wasmLoaded) {
+                showStatus('WASM not loaded, please wait.', 'error');
+                return;
+            }
+
+            try {
+                const success = wasm.parse_notation(notation);
+                if (success) {
+                    const yamlCode = wasm.get_yaml_output();
+                    if (yamlCode && typeof yamlCode === 'string' && yamlCode.trim()) {
+                        yamlOutput.textContent = yamlCode;
+                        yamlOutputSection.style.display = 'block';
+                    } else {
+                        yamlOutput.textContent = 'No YAML generated.';
+                        yamlOutputSection.style.display = 'block';
+                    }
+                } else {
+                    const errorMsg = wasm.get_error_message();
+                    throw new Error(errorMsg || 'Failed to parse notation');
+                }
+            } catch (error) {
+                yamlOutput.textContent = `Error: ${error.message}`;
+                yamlOutputSection.style.display = 'block';
+            }
+        }
+
+        function formatJsonAsYaml(obj, indent = 0) {
+            const spaces = '  '.repeat(indent);
+            let result = '';
+            
+            if (Array.isArray(obj)) {
+                if (obj.length === 0) {
+                    return '[]';
+                }
+                for (let i = 0; i < obj.length; i++) {
+                    const item = obj[i];
+                    if (typeof item === 'object' && item !== null) {
+                        result += `${spaces}- \n${formatJsonAsYaml(item, indent + 1)}`;
+                    } else {
+                        result += `${spaces}- ${item}\n`;
+                    }
+                }
+            } else if (typeof obj === 'object' && obj !== null) {
+                for (const [key, value] of Object.entries(obj)) {
+                    if (Array.isArray(value)) {
+                        if (value.length === 0) {
+                            result += `${spaces}${key}: []\n`;
+                        } else if (value.every(v => typeof v !== 'object')) {
+                            // Simple array on one line
+                            result += `${spaces}${key}: [${value.join(', ')}]\n`;
+                        } else {
+                            result += `${spaces}${key}:\n${formatJsonAsYaml(value, indent + 1)}`;
+                        }
+                    } else if (typeof value === 'object' && value !== null) {
+                        result += `${spaces}${key}:\n${formatJsonAsYaml(value, indent + 1)}`;
+                    } else {
+                        result += `${spaces}${key}: ${value}\n`;
+                    }
+                }
+            } else {
+                result += `${spaces}${obj}\n`;
+            }
+            
+            return result;
+        }
+
+        async function showFsmDebug() {
+            const notation = notationInput.value.trim();
+            if (!notation) {
+                fsmDebugSection.style.display = 'none';
+                localStorage.setItem('fsmDebugVisible', 'false');
+                return;
+            }
+
+            try {
+                // Call API to get the FSM debug data
+                const response = await fetch('/api/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        notation: notation, 
+                        filename: `fsm_debug_${Date.now()}.123` 
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success && result.vexflowFsm) {
+                    const yamlOutput = formatJsonAsYaml(result.vexflowFsm);
+                    
+                    // Get FSM document structure from the dedicated field
+                    let fsmBeatsOutput = 'No FSM document structure available.';
+                    if (result.documentOutline) {
+                        fsmBeatsOutput = result.documentOutline.trim();
+                    }
+                    
+                    // Get tokenized data
+                    let tokenizedOutput = 'No tokenized data available.';
+                    if (result.tokenizedData) {
+                        tokenizedOutput = formatJsonAsYaml(result.tokenizedData);
+                    }
+                    
+                    // Get attached items data
+                    let attachedOutput = 'No attached items data available.';
+                    if (result.attachedItemsData) {
+                        attachedOutput = result.attachedItemsData.trim();
+                    }
+                    
+                    // Get LilyPond source if available
+                    let lilypondSourceText = '';
+                    if (wasmLoaded) {
+                        try {
+                            lilypondSourceText = wasm.get_lilypond_output() || 'No LilyPond output available';
+                        } catch (e) {
+                            lilypondSourceText = 'Error getting LilyPond output';
+                        }
+                    }
+                    
+                    if (yamlOutput) {
+                        tokenizedDisplay.textContent = tokenizedOutput;
+                        attachedDisplay.textContent = attachedOutput;
+                        fsmBeatsDisplay.textContent = fsmBeatsOutput;
+                        debugLilypondSource.textContent = lilypondSourceText;
+                        fsmYamlDisplay.textContent = yamlOutput;
+                        fsmDebugSection.style.display = 'block';
+                        showFsmBtn.textContent = 'Hide VexFlow JSON';
+                        localStorage.setItem('fsmDebugVisible', 'true');
+                    } else {
+                        tokenizedDisplay.textContent = tokenizedOutput;
+                        attachedDisplay.textContent = attachedOutput;
+                        fsmYamlDisplay.textContent = 'No VexFlow FSM data available.';
+                        fsmBeatsDisplay.textContent = fsmBeatsOutput;
+                        debugLilypondSource.textContent = lilypondSourceText;
+                        fsmDebugSection.style.display = 'block';
+                        showFsmBtn.textContent = 'Hide VexFlow JSON';
+                        localStorage.setItem('fsmDebugVisible', 'true');
+                    }
+                } else {
+                    throw new Error(result.error || 'Failed to get VexFlow FSM data');
+                }
+                
+            } catch (error) {
+                fsmYamlDisplay.textContent = `Error: ${error.message}`;
+                fsmDebugOutput.textContent = '';
+                fsmDebugSection.style.display = 'block';
+                showFsmBtn.textContent = 'Hide VexFlow JSON';
+                localStorage.setItem('fsmDebugVisible', 'true');
+            }
+        }
+
+        function toggleFsmDebug() {
+            const isVisible = fsmDebugSection.style.display !== 'none';
+            if (isVisible) {
+                fsmDebugSection.style.display = 'none';
+                showFsmBtn.textContent = 'Show Debug Panels';
+                localStorage.setItem('fsmDebugVisible', 'false');
+            } else {
+                showFsmDebug();
+                showFsmBtn.textContent = 'Hide Debug Panels';
+            }
+        }
+
+        function toggleAllDebugPanels() {
+            const debugSections = [fsmDebugSection, outlineOutputSection, yamlOutputSection];
+            const isAnyVisible = debugSections.some(section => section.style.display !== 'none');
+            
+            if (isAnyVisible) {
+                // Hide all debug panels
+                debugSections.forEach(section => section.style.display = 'none');
+                showOutlineBtn.textContent = 'Show Outline';
+                showYamlBtn.textContent = 'Show YAML';
+                showFsmBtn.textContent = 'Show Debug Panels';
+                showAllDebugBtn.textContent = 'Show All Debug';
+                localStorage.setItem('allDebugVisible', 'false');
+                localStorage.setItem('outlineVisible', 'false');
+                localStorage.setItem('yamlVisible', 'false');
+                localStorage.setItem('fsmDebugVisible', 'false');
+            } else {
+                // Show all debug panels
+                debugSections.forEach(section => section.style.display = 'block');
+                showOutlineBtn.textContent = 'Hide Outline';
+                showYamlBtn.textContent = 'Hide YAML';
+                showFsmBtn.textContent = 'Hide Debug Panels';
+                showAllDebugBtn.textContent = 'Hide All Debug';
+                localStorage.setItem('allDebugVisible', 'true');
+                localStorage.setItem('outlineVisible', 'true');
+                localStorage.setItem('yamlVisible', 'true');
+                localStorage.setItem('fsmDebugVisible', 'true');
+                
+                // Trigger data loading for panels that need it
+                const notation = notationInput.value.trim();
+                if (notation) {
+                    showFsmDebug();
+                    showOutline();
+                    showYaml();
+                }
+            }
+        }
+
+        function debouncedParse() {
+            clearTimeout(parseTimeout);
+            parseTimeout = setTimeout(() => {
+                const notation = notationInput.value;
+                parseNotation(notation, false);
+                saveToLocalStorage(notation);
+            }, 500); // Wait 500ms after user stops typing
+        }
+
+        function saveToLocalStorage(notation) {
+            try {
+                const settings = {
+                    notation: notation,
+                    mode: modeSelect.value,
+                    customMode: customModeInput.value,
+                    constrain: constrainModeCheckbox.checked,
+                    livePreview: livePreviewCheckbox.checked,
+                    staffPreview: staffPreviewEnabled
+                };
+                localStorage.setItem('notationSettings', JSON.stringify(settings));
+            } catch (e) {
+                console.error("Failed to save to local storage:", e);
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const savedSettings = localStorage.getItem('notationSettings');
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    // Restore notation content
+                    if (settings.notation) {
+                        notationInput.value = settings.notation;
+                    }
+                    // Restore preferences
+                    modeSelect.value = settings.mode || 'ionian';
+                    customModeInput.value = settings.customMode || '';
+                    constrainModeCheckbox.checked = settings.constrain || false;
+                    livePreviewCheckbox.checked = settings.livePreview !== undefined ? settings.livePreview : true;
+                    
+                    // Restore staff preview setting
+                    staffPreviewEnabled = settings.staffPreview !== undefined ? settings.staffPreview : true;
+                    staffPreviewToggle.checked = staffPreviewEnabled;
+
+                    // Trigger change to show/hide custom mode input
+                    modeSelect.dispatchEvent(new Event('change'));
+                } else {
+                    // Default values for first time users
+                    livePreviewCheckbox.checked = true;
+                    staffPreviewEnabled = true;
+                    staffPreviewToggle.checked = true;
+                }
+                
+                // Restore debug panel visibility
+                restoreDebugPanelState();
+            } catch (e) {
+                console.error("Failed to load from local storage:", e);
+                // Default values on error
+                livePreviewCheckbox.checked = true;
+                restoreDebugPanelState();
+            }
+        }
+
+        function restoreDebugPanelState() {
+            // Force all debug panels to be visible by default when page loads
+            const fsmDebugVisible = true;
+            const outlineVisible = true;
+            const yamlVisible = true;
+            
+            if (fsmDebugVisible) {
+                fsmDebugSection.style.display = 'block';
+                showFsmBtn.textContent = 'Hide Debug Panels';
+            } else {
+                fsmDebugSection.style.display = 'none';
+                showFsmBtn.textContent = 'Show Debug Panels';
+            }
+            
+            if (outlineVisible) {
+                outlineOutputSection.style.display = 'block';
+                showOutlineBtn.textContent = 'Hide Outline';
+            } else {
+                outlineOutputSection.style.display = 'none';
+                showOutlineBtn.textContent = 'Show Outline';
+            }
+            
+            if (yamlVisible) {
+                yamlOutputSection.style.display = 'block';
+                showYamlBtn.textContent = 'Hide YAML';
+            } else {
+                yamlOutputSection.style.display = 'none';
+                showYamlBtn.textContent = 'Show YAML';
+            }
+            
+            // Save the forced visible state to localStorage
+            localStorage.setItem('fsmDebugVisible', 'true');
+            localStorage.setItem('outlineVisible', 'true');
+            localStorage.setItem('yamlVisible', 'true');
+            localStorage.setItem('allDebugVisible', 'true');
+            
+            // Update the toggle all button text
+            const debugSections = [fsmDebugSection, outlineOutputSection, yamlOutputSection];
+            const isAnyVisible = debugSections.some(section => section.style.display !== 'none');
+            showAllDebugBtn.textContent = isAnyVisible ? 'Hide All Debug' : 'Show All Debug';
+        }
+
+        function handleOctaveChange(octaveType) {
+            // TODO: Implement octave changes for canvas editor
+            console.log('Octave change not yet implemented for canvas editor:', octaveType);
+            return;
+            
+            const textarea = notationInput;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+
+            if (start === end) return; // Nothing selected
+
+            let lines = text.split('\n');
+            let selectionChanged = false;
+
+            // Find which line the selection starts on
+            let charCount = 0;
+            let startLineIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                if (start < charCount + lines[i].length + 1) {
+                    startLineIndex = i;
+                    break;
+                }
+                charCount += lines[i].length + 1;
+            }
+
+            if (startLineIndex === -1) return; // Should not happen
+
+            const startCol = start - charCount;
+            
+            // Check if selection spans multiple lines - we don't support this
+            let tempCharCount = charCount;
+            for (let i = startLineIndex; i < lines.length; i++) {
+                if (end < tempCharCount + lines[i].length + 1) {
+                    if (i > startLineIndex) {
+                        alert("Multi-line octave changes are not supported. Please select notes on a single line.");
+                        return;
+                    }
+                    break;
+                }
+                tempCharCount += lines[i].length + 1;
+            }
+
+
+            let lineAboveIndex = startLineIndex - 1;
+            let lineBelowIndex = startLineIndex + 1;
+            let newStart = start;
+
+            // Add line above if needed
+            if (lineAboveIndex < 0) {
+                lines.unshift('');
+                startLineIndex++;
+                lineAboveIndex = 0;
+                newStart += 1; // For the new '\n'
+                selectionChanged = true;
+            }
+
+            // Add line below if needed
+            if (lineBelowIndex >= lines.length) {
+                lines.push('');
+                lineBelowIndex = lines.length - 1;
+            }
+
+            // Pad lines to be the same length
+            const maxLength = Math.max(lines[startLineIndex].length, lines[lineAboveIndex].length, lines[lineBelowIndex].length);
+            lines[startLineIndex] = lines[startLineIndex].padEnd(maxLength, ' ');
+            lines[lineAboveIndex] = lines[lineAboveIndex].padEnd(maxLength, ' ');
+            lines[lineBelowIndex] = lines[lineBelowIndex].padEnd(maxLength, ' ');
+
+            function setChar(lineIndex, col, char) {
+                const line = lines[lineIndex];
+                lines[lineIndex] = line.substring(0, col) + char + line.substring(col + 1);
+            }
+
+            const sargamChars = ['s', 'r', 'g', 'm', 'p', 'd', 'n'];
+            const numberChars = ['1', '2', '3', '4', '5', '6', '7'];
+            const westernChars = ['c', 'd', 'e', 'f', 'g', 'a', 'b'];
+
+            for (let i = 0; i < (end - start); i++) {
+                const col = startCol + i;
+                const selectedChar = lines[startLineIndex][col];
+
+                // Skip if the character is not a musical note (sargam, number, or western)
+                const isMusicalNote = sargamChars.includes(selectedChar.toLowerCase()) ||
+                                     numberChars.includes(selectedChar) ||
+                                     westernChars.includes(selectedChar.toLowerCase());
+                
+                if (!isMusicalNote) {
+                    continue;
+                }
+
+                if (octaveType === 'upper') {
+                    setChar(lineAboveIndex, col, '.');
+                    if (lines[lineBelowIndex][col] === '.') {
+                        setChar(lineBelowIndex, col, ' ');
+                    }
+                } else if (octaveType === 'lower') {
+                    setChar(lineBelowIndex, col, '.');
+                    if (lines[lineAboveIndex][col] === '.') {
+                        setChar(lineAboveIndex, col, ' ');
+                    }
+                } else if (octaveType === 'middle') {
+                    if (lines[lineAboveIndex][col] === '.') {
+                        setChar(lineAboveIndex, col, ' ');
+                    }
+                    if (lines[lineBelowIndex][col] === '.') {
+                        setChar(lineBelowIndex, col, ' ');
+                    }
+                }
+            }
+            
+            // Trim empty lines from start/end
+            while (lines.length > 0 && lines[0].trim() === '') {
+                lines.shift();
+                newStart -= (lines[0] ? lines[0].length : 0) + 1;
+            }
+             while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+                lines.pop();
+            }
+
+
+            textarea.value = lines.join('\n');
+            
+            // Restore selection
+            textarea.focus();
+            const finalStart = selectionChanged ? newStart : start;
+            textarea.setSelectionRange(finalStart, finalStart + (end - start));
+            
+            // Trigger parse
+            debouncedParse();
+        }
+
+        const modeMappings = {
+            ionian:     { s: 'S', r: 'R', g: 'G', m: 'm', p: 'P', d: 'D', n: 'N' },
+            dorian:     { s: 'S', r: 'R', g: 'g', m: 'm', p: 'P', d: 'D', n: 'n' },
+            phrygian:   { s: 'S', r: 'r', g: 'g', m: 'm', p: 'P', d: 'd', n: 'n' },
+            lydian:     { s: 'S', r: 'R', g: 'G', m: 'M', p: 'P', d: 'D', n: 'N' },
+            mixolydian: { s: 'S', r: 'R', g: 'G', m: 'm', p: 'P', d: 'D', n: 'n' },
+            aeolian:    { s: 'S', r: 'R', g: 'g', m: 'm', p: 'P', d: 'd', n: 'n' },
+            locrian:    { s: 'S', r: 'r', g: 'g', m: 'm', p: 'p', d: 'd', n: 'n' }
+        };
+
+        function applyMode() {
+            // TODO: Implement mode application for canvas editor
+            console.log('Mode application not yet implemented for canvas editor');
+            return;
+            
+            const textarea = notationInput;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end);
+
+            if (start === end) return; // No text selected
+
+            const selectedMode = modeSelect.value;
+            let mapping;
+
+            if (selectedMode === 'custom') {
+                const customModeString = customModeInput.value;
+                if (customModeString.length !== 7 || !/^[srgmpdnSRGMPDN]+$/.test(customModeString)) {
+                    alert('Custom mode must be exactly 7 characters long and contain only s, r, g, m, p, d, n characters.');
+                    return;
+                }
+                mapping = {};
+                const sargam = ['s', 'r', 'g', 'm', 'p', 'd', 'n'];
+                for (let i = 0; i < sargam.length; i++) {
+                    mapping[sargam[i]] = customModeString[i];
+                }
+            } else {
+                mapping = modeMappings[selectedMode];
+            }
+            
+            if (!mapping) return;
+
+            let newText = '';
+            for (let i = 0; i < selectedText.length; i++) {
+                const char = selectedText[i];
+                const lowerChar = char.toLowerCase();
+                if (mapping[lowerChar]) {
+                    newText += mapping[lowerChar];
+                } else {
+                    newText += char;
+                }
+            }
+
+            // Replace the selected text with the new text
+            const fullText = textarea.value;
+            textarea.value = fullText.substring(0, start) + newText + fullText.substring(end);
+
+            // Restore selection
+            textarea.focus();
+            textarea.setSelectionRange(start, start + newText.length);
+
+            // Trigger parse
+            debouncedParse();
+        }
+
+
+        generateStaffBtn.addEventListener('click', generateStaffNotation);
+        showOutlineBtn.addEventListener('click', showOutline);
+        showYamlBtn.addEventListener('click', showYaml);
+        showFsmBtn.addEventListener('click', toggleFsmDebug);
+        showAllDebugBtn.addEventListener('click', toggleAllDebugPanels);
+        
+        // Staff preview toggle event listener
+        staffPreviewToggle.addEventListener('change', function() {
+            staffPreviewEnabled = this.checked;
+            
+            if (staffPreviewEnabled) {
+                // Show VexFlow section and trigger preview if there's content
+                liveVexflowSection.style.display = 'block';
+                const notation = getCanvasEditorContent();
+                if (notation) {
+                    renderLiveVexFlowPreview(notation);
+                }
+                console.log('✅ Staff notation preview enabled');
+            } else {
+                // Hide VexFlow section and clear timeouts
+                liveVexflowSection.style.display = 'none';
+                clearTimeout(liveVexflowTimeout);
+                console.log('❌ Staff notation preview disabled - faster startup');
+            }
+            
+            // Save setting to localStorage
+            const notation = getCanvasEditorContent();
+            saveToLocalStorage(notation);
+        });
+        
+        // Live VexFlow preview checkbox event listener
+        livePreviewCheckbox.addEventListener('change', function() {
+            isLiveVexflowEnabled = this.checked;
+            if (isLiveVexflowEnabled) {
+                liveVexflowSection.style.display = 'block';
+                // Trigger immediate preview if there's content
+                const notation = getCanvasEditorContent();
+                if (notation) {
+                    renderLiveVexFlowPreview(notation);
+                }
+            } else {
+                liveVexflowSection.style.display = 'none';
+                clearTimeout(liveVexflowTimeout);
+            }
+            
+            // Save checkbox state to localStorage
+            const notation = getCanvasEditorContent();
+            saveToLocalStorage(notation);
+        });
+        // Grid toggle removed
+        upperOctaveBtn.addEventListener('click', () => handleOctaveChange('upper'));
+        middleOctaveBtn.addEventListener('click', () => handleOctaveChange('middle'));
+        lowerOctaveBtn.addEventListener('click', () => handleOctaveChange('lower'));
+        applyModeBtn.addEventListener('click', applyMode);
+
+        modeSelect.addEventListener('change', () => {
+            if (modeSelect.value === 'custom') {
+                customModeContainer.style.display = 'flex';
+            } else {
+                customModeContainer.style.display = 'none';
+            }
+        });
+
+
+            
+
+        // Canvas editor handles its own events
+        // The contentChange listener in handleCanvasEditorChange() handles parsing
+
+        // Auto-reload when WASM changes
+        let lastWasmTimestamp = null;
+        
+        async function checkWasmUpdates() {
+            try {
+                const response = await fetch('../pkg/notation_parser_bg.wasm', { method: 'HEAD' });
+                const lastModified = response.headers.get('Last-Modified');
+                
+                if (lastWasmTimestamp && lastModified && lastWasmTimestamp !== lastModified) {
+                    console.log('🔄 WASM file updated, reloading page...');
+                    showStatus('🔄 WASM updated - reloading page...', 'info');
+                    setTimeout(() => window.location.reload(), 1000);
+                    return;
+                }
+                
+                lastWasmTimestamp = lastModified;
+            } catch (error) {
+                // Silently fail - don't spam console during development
+            }
+        }
+        
+        // Check for WASM updates every 2 seconds during development
+        function startWasmWatcher() {
+            // Removed automatic WASM update checking - check manually as needed
+            // setInterval(checkWasmUpdates, 2000);
+        }
+
+        // Self-test function that runs on first load
+        async function runSelfTest() {
+            const hasRunTest = localStorage.getItem('selfTestCompleted');
+            if (hasRunTest) {
+                return; // Test already completed
+            }
+            
+            showStatus('🧪 Running self-test to verify functionality...', 'info');
+            
+            const testResults = [];
+            
+            try {
+                // Test 1: WASM module loaded
+                if (!wasmLoaded || !wasm) {
+                    throw new Error('WASM module not loaded');
+                }
+                testResults.push('✅ WASM module loaded');
+                
+                // Test 2: Version info available
+                const version = wasm.get_version();
+                const timestamp = wasm.get_build_timestamp();
+                if (!version || !timestamp) {
+                    throw new Error('Version/timestamp info missing');
+                }
+                testResults.push('✅ Version info available');
+                
+                // Test 3: Basic parsing works
+                const testInput = '| S R G M |';
+                const parseSuccess = wasm.parse_notation(testInput);
+                if (!parseSuccess) {
+                    const errorMsg = wasm.get_error_message();
+                    throw new Error(`Parse failed: ${errorMsg}`);
+                }
+                testResults.push('✅ Basic parsing works');
+                
+                // Test 4: Notation system detection
+                const detectedSystem = wasm.get_detected_system();
+                if (detectedSystem !== 'Sargam') {
+                    throw new Error(`Expected Sargam, got ${detectedSystem}`);
+                }
+                testResults.push('✅ Notation system detection works');
+                
+                // Test 5: Colorized output generation
+                const colorizedOutput = wasm.get_colorized_output();
+                if (!colorizedOutput || colorizedOutput.length < 10) {
+                    throw new Error('Colorized output missing or too short');
+                }
+                testResults.push('✅ Colorized output generation works');
+                
+                // Test 6: LilyPond code generation
+                const lilypondOutput = wasm.get_lilypond_output();
+                if (!lilypondOutput || !lilypondOutput.includes('c4 d4 e4')) {
+                    throw new Error('LilyPond output missing expected notes');
+                }
+                testResults.push('✅ LilyPond code generation works');
+                
+                // Test 6b: Empty input handling (should generate rests)
+                const emptyInput = 'Test Title\n\n|     |';
+                const emptyParseSuccess = wasm.parse_notation(emptyInput);
+                if (emptyParseSuccess) {
+                    const emptyLilypondOutput = wasm.get_lilypond_output();
+                    if (emptyLilypondOutput && emptyLilypondOutput.includes('r')) {
+                        testResults.push('✅ Empty input generates rests properly');
+                    } else {
+                        throw new Error('Empty input should generate rests');
+                    }
+                } else {
+                    throw new Error('Empty input parsing failed');
+                }
+                
+                // Test 7: Outline generation
+                const outlineOutput = wasm.get_outline_output();
+                if (!outlineOutput || !outlineOutput.includes('musical-line')) {
+                    throw new Error('Outline output missing or malformed');
+                }
+                testResults.push('✅ Outline generation works');
+                
+                // Test 8: YAML output generation
+                const yamlOutput = wasm.get_yaml_output();
+                if (!yamlOutput || yamlOutput.length < 10) {
+                    throw new Error('YAML output missing or too short');
+                }
+                testResults.push('✅ YAML output generation works');
+                
+                // Test 9: VexFlow library availability
+                if (window.Vex && window.Vex.Flow) {
+                    testResults.push('✅ VexFlow client-side notation library loaded');
+                    testResults.push('✅ VexFlow ready for API-based rendering');
+                } else {
+                    testResults.push('❌ VexFlow library not loaded');
+                }
+                
+                // All tests passed
+                const successMessage = `🎉 Self-test completed successfully!\n\n${testResults.join('\n')}\n\nAll core functionality verified. System ready for use.`;
+                showStatus(successMessage, 'success');
+                
+                // Mark test as completed
+                localStorage.setItem('selfTestCompleted', 'true');
+                localStorage.setItem('selfTestResults', JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    version: version,
+                    buildTimestamp: timestamp,
+                    results: testResults
+                }));
+                
+                console.log('Self-test completed successfully:', testResults);
+                
+            } catch (error) {
+                const failureMessage = `❌ Self-test failed: ${error.message}\n\nPartial results:\n${testResults.join('\n')}\n\nPlease check the console for more details.`;
+                showStatus(failureMessage, 'error');
+                console.error('Self-test failed:', error);
+                console.log('Partial test results:', testResults);
+            }
+        }
+        
+        // Function to manually re-run self-test (for debugging)
+        window.runSelfTest = function() {
+            localStorage.removeItem('selfTestCompleted');
+            localStorage.removeItem('selfTestResults');
+            runSelfTest();
+        };
+        
+        // Function to show self-test results
+        window.showSelfTestResults = function() {
+            const results = localStorage.getItem('selfTestResults');
+            if (results) {
+                const parsed = JSON.parse(results);
+                console.log('Last self-test results:', parsed);
+                showStatus(`Last self-test: ${parsed.timestamp}\nVersion: ${parsed.version}\nResults:\n${parsed.results.join('\n')}`, 'info');
+            } else {
+                showStatus('No self-test results found. Run runSelfTest() to execute.', 'info');
+            }
+        };
+        
+
+        // Initialize Canvas Editor
+        // Simplified - no longer using canvas editor
+        function initializeCanvasEditor() {
+            try {
+                console.log('Initializing canvas editor...');
+                
+                if (!Editor) {
+                    throw new Error('Canvas Editor not imported');
+                }
+                
+                // Get initial content from localStorage or use default
+                const savedSettings = localStorage.getItem('notationSettings');
+                let initialContent = '';
+                
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    initialContent = settings.notation || initialContent;
+                }
+                
+                // Convert text to canvas-editor format
+                const editorData = initialContent.split('\n').map(line => ({
+                    value: line
+                }));
+                
+                console.log('Editor data:', editorData);
+                
+                // Initialize the canvas editor with minimal config first
+                canvasEditor = new Editor(
+                    canvasEditorContainer,
+                    editorData,
+                    {
+                        height: 200,
+                        defaultFont: 'Courier New',
+                        defaultSize: 16
+                    }
+                );
+                
+                console.log('Canvas editor created:', canvasEditor);
+                
+                // Debug: Log available methods (only once during init)
+                console.log('=== CANVAS EDITOR API DEBUG ===');
+                console.log('Canvas editor methods:', Object.getOwnPropertyNames(canvasEditor));
+                console.log('Canvas editor prototype methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(canvasEditor)));
+                console.log('================================');
+                
+                // Add event listeners for content changes
+                if (canvasEditor && canvasEditor.listener) {
+                    canvasEditor.listener.contentChange = handleCanvasEditorChange;
+                    console.log('Content change listener attached');
+                }
+                
+                console.log('Canvas editor initialized successfully');
+                showStatus('✅ Canvas editor loaded successfully!', 'success');
+                
+            } catch (error) {
+                console.error('Failed to initialize canvas editor:', error);
+                showStatus('❌ Canvas editor failed, using fallback textarea', 'error');
+                
+                // Fallback - show error message
+                canvasEditorContainer.innerHTML = '<div style="padding: 20px; color: #ff6b6b; text-align: center;">Failed to load canvas editor. Please refresh the page.</div>';
+                // Canvas editor removed
+            }
+        }
+        
+        // Handle canvas editor content changes
+        function handleCanvasEditorChange() {
+            // Canvas editor removed, do nothing
+            return;
+            
+            try {
+                console.log('Canvas editor content changed - trying command API');
+                
+                // Try using the command API to get content
+                let textContent = '';
+                
+                if (canvasEditor.command) {
+                    // Try different command options to get content
+                    try {
+                        const result = canvasEditor.command.executeGetValue();
+                        console.log('executeGetValue result:', result);
+                        if (result) textContent = result;
+                    } catch (e) {
+                        console.log('executeGetValue not available:', e.message);
+                    }
+                    
+                    if (!textContent) {
+                        try {
+                            const result = canvasEditor.command.getValue();
+                            console.log('getValue result:', result);
+                            if (result && result.data) {
+                                // Extract text from the data structure
+                                if (Array.isArray(result.data.main)) {
+                                    textContent = result.data.main.map(item => item.value || '').join('\n');
+                                } else if (typeof result.data.main === 'string') {
+                                    textContent = result.data.main;
+                                }
+                                console.log('Extracted text from data.main:', textContent);
+                            }
+                        } catch (e) {
+                            console.log('getValue not available:', e.message);
+                        }
+                    }
+                    
+                    if (!textContent) {
+                        try {
+                            const result = canvasEditor.command.getText();
+                            console.log('getText result:', result);
+                            if (result) textContent = result;
+                        } catch (e) {
+                            console.log('getText not available:', e.message);
+                        }
+                    }
+                    
+                    if (!textContent) {
+                        console.log('Available command methods:', Object.getOwnPropertyNames(canvasEditor.command));
+                    }
+                }
+                
+                console.log('Extracted text content:', textContent);
+                
+                if (textContent) {
+                    // Update compatibility object
+                    notationInput.value = textContent;
+                    
+                    // Parse with WASM
+                    if (wasmLoaded && textContent && typeof textContent === 'string' && textContent.trim()) {
+                        parseNotation(textContent, false);
+                        
+                        // Draw beat loops after parsing
+                        setTimeout(() => {
+                            drawBeatLoops(textContent);
+                        }, 50);
+                    }
+                    
+                    // Save to localStorage
+                    saveToLocalStorage(textContent);
+                }
+                
+            } catch (error) {
+                console.error('Canvas editor change handling error:', error);
+            }
+        }
+        
+        // Draw beat loops on the canvas
+        // Simplified beat loop visualization - just highlight beats in console for now
+        function drawBeatLoops(textContent) {
+            if (!wasmLoaded || !wasm) return;
+            
+            try {
+                // Get the parsed document structure from WASM
+                const success = wasm.parse_notation(textContent);
+                if (!success) return;
+                
+                const outlineOutput = wasm.get_outline_output();
+                const documentStructure = parseOutlineForVexFlow(outlineOutput);
+                
+                console.log('Document structure for beat loops:', documentStructure);
+                
+                // Get canvas context from the editor
+                let canvas = null;
+                
+                // Try different ways to access the canvas
+                if (canvasEditor.getCanvas) {
+                    canvas = canvasEditor.getCanvas();
+                } else if (canvasEditor.command && canvasEditor.command.getCanvas) {
+                    canvas = canvasEditor.command.getCanvas();
+                } else {
+                    // Try to find canvas elements in the DOM
+                    const canvasElements = canvasEditorContainer.querySelectorAll('canvas');
+                    console.log('Found canvas elements:', canvasElements.length);
+                    if (canvasElements.length >= 2) {
+                        canvas = canvasElements[1]; // Force use of second canvas (text input canvas)
+                        console.log('Using second canvas element (text input):', canvas);
+                    } else {
+                        console.warn('Only found', canvasElements.length, 'canvas elements, need at least 2');
+                        return;
+                    }
+                }
+                
+                if (!canvas) {
+                    console.warn('Cannot access canvas from editor, available methods:', Object.getOwnPropertyNames(canvasEditor.command || {}));
+                    return;
+                }
+                
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                
+                // Find beats with multiple divisions and draw loops
+                const canvasElements = canvasEditorContainer.querySelectorAll('canvas');
+                console.log('Available canvases for beat loops:', canvasElements.length);
+                
+                // Debug: Log canvas details
+                canvasElements.forEach((canvas, index) => {
+                    console.log(`Canvas ${index}:`, {
+                        width: canvas.width,
+                        height: canvas.height,
+                        style: {
+                            width: canvas.style.width,
+                            height: canvas.style.height,
+                            backgroundColor: canvas.style.backgroundColor,
+                            position: canvas.style.position,
+                            zIndex: canvas.style.zIndex
+                        }
+                    });
+                });
+                
+                // Use the main text canvas (likely canvas 1, as canvas 0 might be UI)
+                const textCanvas = canvasElements.length >= 2 ? canvasElements[1] : canvasElements[0];
+                if (!textCanvas) {
+                    console.warn('No text canvas found');
+                    return;
+                }
+                
+                const textCtx = textCanvas.getContext('2d');
+                if (!textCtx) return;
+                
+                console.log('Using text canvas:', textCanvas);
+                
+                documentStructure.lines.forEach((line, lineIndex) => {
+                    line.beats.forEach((beat, beatIndex) => {
+                        if (beat.pitches.length > 1) {
+                            // This beat has multiple pitches - draw a loop on the text canvas
+                            drawBeatLoop(textCtx, lineIndex, beatIndex, beat, textCanvas);
+                        }
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error drawing beat loops:', error);
+            }
+        }
+        
+        // Draw a single beat loop
+        function drawBeatLoop(ctx, lineIndex, beatIndex, beat, canvas) {
+            try {
+                // Get canvas dimensions for better positioning
+                const canvasHeight = canvas.height;
+                const canvasWidth = canvas.width;
+                
+                console.log(`Canvas dimensions: ${canvasWidth}x${canvasHeight}`);
+                
+                // Better positioning based on canvas size and text layout
+                const lineHeight = Math.max(24, canvasHeight / 8); // Adaptive line height
+                const charWidth = 12;  // Approximate character width for monospace
+                
+                // Position the loop near the bottom of the canvas (below text)
+                const y = canvasHeight - 30; // Position near bottom of canvas
+                const x = beatIndex * charWidth * 6 + 40;     // X position based on beat index
+                const width = beat.pitches.length * charWidth * 3; // Width based on pitch count
+                
+                // Draw the loop (rounded rectangle at bottom of text)
+                ctx.save();
+                ctx.strokeStyle = '#4CAF50';
+                ctx.lineWidth = 3;
+                ctx.globalAlpha = 0.8;
+                
+                const loopY = y; // At the calculated Y position
+                const loopHeight = 12;
+                const radius = 6;
+                
+                // Draw rounded rectangle (beat loop)
+                ctx.beginPath();
+                ctx.moveTo(x + radius, loopY);
+                ctx.lineTo(x + width - radius, loopY);
+                ctx.arcTo(x + width, loopY, x + width, loopY + radius, radius);
+                ctx.lineTo(x + width, loopY + loopHeight - radius);
+                ctx.arcTo(x + width, loopY + loopHeight, x + width - radius, loopY + loopHeight, radius);
+                ctx.lineTo(x + radius, loopY + loopHeight);
+                ctx.arcTo(x, loopY + loopHeight, x, loopY + loopHeight - radius, radius);
+                ctx.lineTo(x, loopY + radius);
+                ctx.arcTo(x, loopY, x + radius, loopY, radius);
+                ctx.stroke();
+                
+                ctx.restore();
+                
+                console.log(`Drew beat loop at line ${lineIndex}, beat ${beatIndex} at position (${x}, ${loopY})`);
+                
+            } catch (error) {
+                console.error('Error drawing individual beat loop:', error);
+            }
+        }
+
+        // Initialize WASM and parse initial content on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            loadFromLocalStorage();
+            await loadWasm();
+            
+            // Initialize canvas editor after WASM is loaded
+            if (wasmLoaded) {
+                // Initialize textarea with saved content or placeholder
+                if (!notationInput.value || notationInput.value.trim() === '') {
+                    notationInput.value = "| S R G M | P D N S' |";
+                }
+                
+                // Auto-grow textarea function
+                function autoGrowTextarea() {
+                    notationInput.style.height = 'auto';
+                    notationInput.style.height = Math.max(120, notationInput.scrollHeight) + 'px';
+                }
+                
+                // Add input listener for live updates and auto-grow
+                notationInput.addEventListener('input', () => {
+                    autoGrowTextarea();
+                    debouncedParse(); // Save to localStorage and parse
+                    if (livePreviewCheckbox.checked) {
+                        debouncedLiveVexFlow(notationInput.value);
+                    }
+                });
+                
+                // Initial auto-grow on page load
+                autoGrowTextarea();
+                
+                // Handle staff preview setting and VexFlow loading
+                if (staffPreviewEnabled) {
+                    // Load VexFlow if staff preview is enabled
+                    console.log('🎼 Staff preview enabled - loading VexFlow...');
+                    loadVexFlow().then(() => {
+                        liveVexflowSection.style.display = 'block';
+                        
+                        // Draw VexFlow based on current content
+                        setTimeout(() => {
+                            const currentContent = getCanvasEditorContent();
+                            if (currentContent && currentContent.trim()) {
+                                renderLiveVexFlowPreview(currentContent);
+                            }
+                        }, 500);
+                    }).catch(error => {
+                        console.error('Failed to load VexFlow on startup:', error);
+                    });
+                } else {
+                    // Staff preview disabled - hide section and don't load VexFlow
+                    console.log('⚡ Staff preview disabled - skipping VexFlow load for faster startup');
+                    liveVexflowSection.style.display = 'none';
+                }
+                
+                // Set live preview checkbox based on settings
+                livePreviewCheckbox.checked = true;
+                isLiveVexflowEnabled = true;
+                
+                await runSelfTest();
+            }
+            
+            debouncedParse();
+            
+            // Populate debug panels after initial parse
+            setTimeout(() => {
+                const notation = notationInput.value.trim();
+                if (notation) {
+                    // Show all debug panels with initial content
+                    showFsmDebug();
+                    showOutline();
+                    showYaml();
+                }
+            }, 100);
+            
+            // Start watching for WASM updates
+            await checkWasmUpdates(); // Get initial timestamp
+            startWasmWatcher();
+        });
+
+        // Show initial welcome message with load time
+        let wasmLoadStartTime = performance.now();
+        showStatus('👋 Welcome! Loading WASM module...', 'info');
+        
+        // Add debug commands to console on load
+        console.log(`
+🎵 Notation Parser Debug Commands:
+• runSelfTest() - Re-run the self-test suite
+• showSelfTestResults() - Show last self-test results
+• wasm.get_version() - Get WASM version
+• wasm.get_build_timestamp() - Get build timestamp
+• wasm.parse_notation("| S R G M |") - Test parsing
+        `);
+    </script>
+
+    <!-- LilyPond Source Code (at the end) -->
+    <div class="output-section" id="lilypond-source-section" style="display: none;">
+        <h2>LilyPond Source Code</h2>
+        <pre id="lilypond-source" style="background-color: #1e1e1e; border: 2px solid #1976d2; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #ffffff;"></pre>
+    </div>
+</body>
+</html>

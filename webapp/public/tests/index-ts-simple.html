@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notation Parser - Multi-System Music Notation</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .input-section, .output-section {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            margin: 15px 0;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #007cba;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #005a85;
+        }
+        
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .button-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        #live-vexflow-container {
+            background-color: #ffffff;
+            border: 2px solid #007cba;
+            border-radius: 4px;
+            padding: 15px;
+            min-height: 120px;
+            width: 100%;
+            overflow: visible;
+            height: auto;
+        }
+        
+        #live-vexflow-notation {
+            width: 100%;
+            height: auto;
+        }
+        
+        #live-vexflow-notation svg {
+            width: 150% !important;
+            height: auto !important;
+            max-width: none !important;
+            transform-origin: left top;
+        }
+        
+        pre {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .status.success { background-color: #d4edda; color: #155724; }
+        .status.error { background-color: #f8d7da; color: #721c24; }
+        .status.info { background-color: #d1ecf1; color: #0c5460; }
+        
+        /* Mobile-style toggle switch */
+        .staff-preview-toggle {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 32px;
+        }
+        
+        .toggle-switch input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            cursor: pointer;
+            z-index: 1;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.3s ease;
+            border-radius: 32px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 24px;
+            width: 24px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.3s ease;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #4CAF50;
+        }
+        
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(28px);
+        }
+        
+        .toggle-label {
+            font-size: 16px;
+            color: #333;
+            user-select: none;
+        }
+        
+        .toggle-description {
+            font-size: 14px;
+            color: #666;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header" id="header-section">
+        <h1>🎵 Multi-System Notation Parser <span id="version-display" style="font-size: 16px; color: #cccccc;"></span> <span id="timestamp-display" style="font-size: 12px; color: #999;"></span></h1>
+        <p>Enter music notation in any system: Sargam (S R G M P D N), Western (C D E F G A B), or Numbers (1 2 3 4 5 6 7)</p>
+    </div>
+
+    <div class="staff-preview-toggle">
+        <div class="toggle-switch">
+            <input type="checkbox" id="staff-preview-toggle" checked>
+            <span class="toggle-slider"></span>
+        </div>
+        <span class="toggle-label">🎼 Staff Notation Preview</span>
+        <span class="toggle-description">(Faster startup when off)</span>
+    </div>
+
+    <div class="input-section">
+        <h2>✏️ Enter Your Notation <span style="font-size: 16px; color: #cccccc; margin-left: 20px;">Detected System: <strong id="detected-system-display">???</strong></span></h2>
+        
+        <div class="control-group">
+            <input type="checkbox" id="constrain-mode-checkbox">
+            <label for="constrain-mode-checkbox">Constrain</label>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <button id="upper-octave-btn">Upper Octave</button>
+                <button id="middle-octave-btn">Middle Octave</button>
+                <button id="lower-octave-btn">Lower Octave</button>
+            </div>
+            <div class="control-group">
+                <label for="mode-select">Mode:</label>
+                <select id="mode-select">
+                    <option value="ionian">Ionian</option>
+                    <option value="dorian">Dorian</option>
+                    <option value="phrygian">Phrygian</option>
+                    <option value="lydian">Lydian</option>
+                    <option value="mixolydian">Mixolydian</option>
+                    <option value="aeolian">Aeolian</option>
+                    <option value="locrian">Locrian</option>
+                    <option value="custom">Custom</option>
+                </select>
+                <button id="apply-mode-btn">Apply Mode</button>
+            </div>
+            <div class="control-group" id="custom-mode-container" style="display: none;">
+                <label for="custom-mode-input">Custom Mode:</label>
+                <input type="text" id="custom-mode-input" placeholder="e.g., SRgmPDn" />
+            </div>
+            <div class="control-group">
+                <input type="checkbox" id="live-preview-checkbox" checked />
+                <label for="live-preview-checkbox">Live VexFlow Preview</label>
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <button id="generate-staff-btn">Generate LilyPond Staff Notation</button>
+            <button id="show-outline-btn">Show Outline</button>
+            <button id="show-yaml-btn">Show YAML</button>
+            <button id="show-fsm-btn">Hide Debug Panels</button>
+            <button id="show-all-debug-btn">Toggle All Debug</button>
+        </div>
+        
+        <div class="input-wrapper">
+            <!-- Simple textarea input -->
+            <textarea id="notation-input" rows="3" placeholder="Enter your notation here... Examples:
+• Sargam: | S R G M | P D N S' |
+• Western: | C D E F | G A B C |  
+• Numbers: | 1 2 3 4 | 5 6 7 1 |" style="width: 100%; padding: 15px; border: 2px solid #4CAF50; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 28px; resize: vertical; min-height: 120px; overflow: hidden;"></textarea>
+        </div>
+
+        <div class="output-section" id="live-vexflow-section">
+            <div id="live-vexflow-container">
+                <div id="live-vexflow-placeholder" style="color: #999; text-align: center;">
+                    🎵 VexFlow preview will appear here as you type musical notes
+                </div>
+                <div id="live-vexflow-notation" style="display: none;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="status-container"></div>
+
+    <!-- LilyPond Staff Notation (moved right after VexFlow) -->
+    <div class="output-section" id="staff-notation-section" style="display: none;">
+        <h2>LilyPond Staff Notation</h2>
+        <div style="background-color: #ffffff; border: 2px solid #4CAF50; border-radius: 4px; padding: 15px; min-height: 120px; display: flex; align-items: center; justify-content: center;">
+            <div id="staff-notation-placeholder" style="color: #999; text-align: center;">
+                Click "Generate LilyPond Staff Notation" to create staff notation image
+            </div>
+            <img id="staff-notation-image" style="display: none; max-width: 100%; height: auto;" alt="Staff Notation" />
+        </div>
+    </div>
+
+    <div class="output-section" id="outline-output-section" style="display: block;">
+        <h2>Document Outline</h2>
+        <pre id="outline-output" style="background-color: #1e1e1e; border: 2px solid #FF9800; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #ffffff;"></pre>
+    </div>
+
+    <div class="output-section" id="yaml-output-section" style="display: block;">
+        <h2>YAML Structure</h2>
+        <pre id="yaml-output" style="background-color: #1e1e1e; border: 2px solid #9C27B0; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #ffffff;"></pre>
+    </div>
+
+    <div class="output-section" id="fsm-debug-section" style="display: block;">
+        <h2>Tokenized Document <span style="font-size: 14px; color: #666;">(raw tokens from lexer)</span></h2>
+        <div id="tokenized-display" style="background-color: #fff3e0; border: 2px solid #FF9800; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #e65100; margin-bottom: 10px;"></div>
+        <h3>Document with Attached Items <span style="font-size: 12px; color: #666;">(after spatial analysis and floating element attachment)</span></h3>
+        <div id="attached-display" style="background-color: #f3e5f5; border: 2px solid #9C27B0; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #6a1b9a; margin-bottom: 10px;"></div>
+        <h4>FSM Output <span style="font-size: 12px; color: #666;">(shows beats, divisions, and pitch organization from parser)</span></h4>
+        <div id="fsm-beats-display" style="background-color: #e8f5e8; border: 2px solid #4CAF50; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #2e7d32; margin-bottom: 10px;"></div>
+        <h4>LilyPond Source <span style="font-size: 12px; color: #666;">(generated notation code)</span></h4>
+        <div id="debug-lilypond-source" style="background-color: #f0f4f8; border: 2px solid #8E24AA; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #4a148c; margin-bottom: 10px;"></div>
+        <h5>VexFlow JSON Data <span style="font-size: 12px; color: #666;">(final processed data sent to VexFlow renderer)</span></h5>
+        <div id="fsm-yaml-display" style="background-color: #f8f8f8; border: 2px solid #FF5722; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #333;"></div>
+    </div>
+
+
+
+
+
+    <script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>
