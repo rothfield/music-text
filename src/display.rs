@@ -6,7 +6,7 @@ use crate::models::{Document, Node, LineInfo};
 
 pub fn generate_flattened_spatial_view(
     document: &Document,
-    lines_info: &[LineInfo],
+    lines: &[LineInfo],
     _styles: &HashMap<String, (String, bool)>,
     _main_lines: &HashSet<usize>,
 ) -> String {
@@ -45,7 +45,7 @@ pub fn generate_flattened_spatial_view(
     }
 
     // Process each line in order
-    for line_info in lines_info {
+    for line_info in lines {
         let mut line_output = String::new();
         let mut current_col = 0;
 

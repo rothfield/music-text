@@ -8,8 +8,7 @@ use serde_yaml;
 use notation_parser::{
     lex_text, generate_flattened_spatial_view, 
     generate_outline,
-    tokenize_with_handwritten_lexer,
-    LilyPondNoteNames
+    tokenize_with_handwritten_lexer
 };
 
 #[derive(Parser, Debug)]
@@ -43,13 +42,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Handle --to-lilypond flag
     if args.to_lilypond {
-        let (document_v2, _) = notation_parser::unified_parser_v2(&raw_text)?;
-        let fsm_output = notation_parser::get_last_fsm_output();
+        let (document_v2, _) = notation_parser::unified_parser(&raw_text)?;
+        let elements = notation_parser::get_last_elements();
         
-        let lilypond_output = notation_parser::to_lilypond_src::convert_fsm_output_to_lilypond_src(
-            &fsm_output,
+        let lilypond_output = notation_parser::to_lilypond_src::convert_elements_to_lilypond_src(
+            &elements,
             &document_v2.metadata,
-            LilyPondNoteNames::English,
             Some(&raw_text)
         ).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         
@@ -81,15 +79,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let base_filename = base_path.file_name()
         .unwrap_or_else(|| std::ffi::OsStr::new("stdin"));
     
-    let lines_info = lex_text(&raw_text);
+    let lines = lex_text(&raw_text);
 
     // Parse with V2 parser to get elements
-    let (document_v2, _spatial_analysis_yaml) = notation_parser::unified_parser_v2(&raw_text)?;
+    let (document_v2, _spatial_analysis_yaml) = notation_parser::unified_parser(&raw_text)?;
     let document: notation_parser::Document = document_v2.clone().into();
     
-    // Get FSM output that was already processed by unified_parser_v2
+    // Get FSM output that was already processed by unified_parser
     // Don't run FSM again - use the stored output
-    let fsm_output = notation_parser::get_last_fsm_output();
+    let elements = notation_parser::get_last_elements();
 
     // --- Use handwritten lexer for tokenization ---
     let all_tokens = tokenize_with_handwritten_lexer(&raw_text);
@@ -116,16 +114,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Generate flattened view (no colorization)
     let main_lines: HashSet<usize> = all_tokens.iter().filter(|t| t.token_type == "BARLINE").map(|t| t.line).collect();
     let empty_styles = HashMap::new();
-    let flattened_spatial_output = generate_flattened_spatial_view(&document, &lines_info, &empty_styles, &main_lines);
+    let flattened_spatial_output = generate_flattened_spatial_view(&document, &lines, &empty_styles, &main_lines);
     let flattened_spatial_path = output_dir.join(base_filename).with_extension("flattener.clr");
     fs::write(&flattened_spatial_path, &flattened_spatial_output)?;
     eprintln!("Wrote flatten spatial relationships output to {}", flattened_spatial_path.display());
 
     // --- LilyPond Output using V2 converter with FSM output ---
-    let lilypond_output = notation_parser::to_lilypond_src::convert_fsm_output_to_lilypond_src(
-        &fsm_output,
+    let lilypond_output = notation_parser::to_lilypond_src::convert_elements_to_lilypond_src(
+        &elements,
         &document_v2.metadata,
-        LilyPondNoteNames::English, 
         Some(&raw_text)
     ).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     let lilypond_path = output_dir.join(base_filename).with_extension("ly");
@@ -155,8 +152,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "_".repeat(15));
     
     // Print VexFlow JSON output for testing - use V2 converter with FSM output
-    let fsm_output = notation_parser::get_last_fsm_output();
-    match notation_parser::convert_fsm_output_to_staff_notation(&fsm_output, &document.metadata) {
+    let elements = notation_parser::get_last_elements();
+    match notation_parser::convert_elements_to_staff_notation(&elements, &document.metadata) {
         Ok(staves) => {
             match serde_json::to_string(&staves) {
                 Ok(vexflow_json) => {

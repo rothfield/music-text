@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use notation_parser::{parse_notation, convert_fsm_output_to_staff_notation};
+use notation_parser::{parse_notation, convert_elements_to_staff_notation};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -26,10 +26,10 @@ fn main() {
     }
     
     // Get FSM output and convert using V2 converter
-    let fsm_output = notation_parser::get_last_fsm_output();
+    let elements = notation_parser::get_last_elements();
     let document = result.get_document().expect("Document should exist");
     
-    match convert_fsm_output_to_staff_notation(&fsm_output, &document.metadata) {
+    match convert_elements_to_staff_notation(&elements, &document.metadata) {
         Ok(staves) => {
             match serde_json::to_string(&staves) {
                 Ok(json) => println!("{}", json),

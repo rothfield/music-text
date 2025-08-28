@@ -3,7 +3,7 @@
 // for the flat AST level (before FSM processing)
 
 use serde::{Deserialize, Serialize};
-use crate::models::{Node, Metadata}; // Keep using existing for compatibility
+use crate::models::{Document, Node, Metadata}; // Keep using existing for compatibility
 use crate::pitch::Degree;
 
 /// Shared position information for all parsed elements
@@ -130,16 +130,9 @@ pub enum ParsedElement {
 
 /// Document structure using new parsed elements
 /// Note: This is for the parser output level, before FSM processing
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParsedDocument {
-    pub metadata: Metadata, // Reuse existing metadata structure
-    pub elements: Vec<ParsedElement>,
-    pub notation_system: Option<String>,
-}
-
 /// Complete document structure using ParsedElement (replacement for Document)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DocumentV2 {
+pub struct ParsedDocument {
     pub metadata: Metadata, // Reuse existing metadata structure
     pub elements: Vec<ParsedElement>, // Final processed elements after FSM
     pub notation_system: Option<String>,
@@ -307,10 +300,10 @@ pub fn parsed_elements_to_nodes(elements: Vec<ParsedElement>) -> Vec<Node> {
     elements.into_iter().map(|e| e.into()).collect()
 }
 
-/// Convert DocumentV2 to legacy Document for WASM compatibility
-impl From<DocumentV2> for crate::Document {
-    fn from(doc_v2: DocumentV2) -> Self {
-        crate::Document {
+/// Convert ParsedDocument to legacy Document for WASM compatibility
+impl From<ParsedDocument> for Document {
+    fn from(doc_v2: ParsedDocument) -> Self {
+        Document {
             metadata: doc_v2.metadata,
             nodes: parsed_elements_to_nodes(doc_v2.elements),
             notation_system: doc_v2.notation_system,

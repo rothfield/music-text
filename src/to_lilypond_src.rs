@@ -1,13 +1,12 @@
 // LilyPond Source Code Generator - Works directly with ParsedElement, no conversion needed
 use crate::models::{Metadata}; // Keep using existing metadata
-use crate::pitch::{Degree, LilyPondNoteNames};
+use crate::pitch::{Degree};
 use crate::lilypond_templates::{TemplateContext, render_lilypond};
-use crate::rhythm_fsm_v2::{OutputItemV2, BeatV2};
+use crate::rhythm_fsm::{Item, Beat};
 
-pub fn convert_fsm_output_to_lilypond_src(
-    fsm_output: &Vec<OutputItemV2>,
+pub fn convert_elements_to_lilypond_src(
+    elements: &Vec<Item>,
     metadata: &Metadata,
-    note_names: LilyPondNoteNames,
     source: Option<&str>
 ) -> Result<String, String> {
     eprintln!("V2 LILYPOND CONVERTER: Processing FSM output with beats");
@@ -15,10 +14,10 @@ pub fn convert_fsm_output_to_lilypond_src(
     let mut lilypond_notes: Vec<String> = Vec::new();
     let mut previous_beat_notes: Vec<String> = Vec::new();
     
-    for (_beat_index, item) in fsm_output.iter().enumerate() {
+    for (_element_index, item) in elements.iter().enumerate() {
         match item {
-            OutputItemV2::Beat(beat) => {
-                let beat_notes = convert_beat_to_lilypond(beat, &note_names)?;
+            Item::Beat(beat) => {
+                let beat_notes = convert_beat_to_lilypond(beat)?;
                 
                 // Handle ties: if this beat is tied to previous, add tie to last note of previous beat
                 if beat.tied_to_previous && !previous_beat_notes.is_empty() && !beat_notes.is_empty() {
@@ -33,16 +32,16 @@ pub fn convert_fsm_output_to_lilypond_src(
                 lilypond_notes.extend(beat_notes.clone());
                 previous_beat_notes = beat_notes;
             },
-            OutputItemV2::Barline(style) => {
+            Item::Barline(style) => {
                 lilypond_notes.push(format!("\\bar \"{}\"", style));
             },
-            OutputItemV2::Breathmark => {
+            Item::Breathmark => {
                 lilypond_notes.push("\\breathe".to_string());
             },
-            OutputItemV2::SlurStart => {
+            Item::SlurStart => {
                 // Handle slur start if needed
             },
-            OutputItemV2::SlurEnd => {
+            Item::SlurEnd => {
                 // Handle slur end if needed
             },
         }
@@ -72,7 +71,7 @@ pub fn convert_fsm_output_to_lilypond_src(
         .map_err(|e| format!("Template render error: {}", e))
 }
 
-fn convert_beat_to_lilypond(beat: &BeatV2, note_names: &LilyPondNoteNames) -> Result<Vec<String>, String> {
+fn convert_beat_to_lilypond(beat: &Beat) -> Result<Vec<String>, String> {
     let mut notes = Vec::new();
     
     for beat_element in &beat.elements {
@@ -80,7 +79,7 @@ fn convert_beat_to_lilypond(beat: &BeatV2, note_names: &LilyPondNoteNames) -> Re
         let duration_string = fraction_to_lilypond_note(beat_element.tuplet_duration);
         
         if beat_element.is_note() {
-            let lily_note = degree_to_lilypond(beat_element.degree.unwrap(), beat_element.octave.unwrap(), note_names)?;
+            let lily_note = degree_to_lilypond(beat_element.degree.unwrap(), beat_element.octave.unwrap())?;
             eprintln!("V2 LILYPOND: Note {} with tuplet_duration {} -> {}{}", 
                 beat_element.value, beat_element.tuplet_duration, lily_note, duration_string);
             
@@ -108,7 +107,7 @@ fn convert_beat_to_lilypond(beat: &BeatV2, note_names: &LilyPondNoteNames) -> Re
 // The V2 architecture correctly uses FSM-calculated tuplet_duration values directly.
 
 
-fn degree_to_lilypond(degree: Degree, octave: i8, _note_names: &LilyPondNoteNames) -> Result<String, String> {
+fn degree_to_lilypond(degree: Degree, octave: i8) -> Result<String, String> {
     // Convert Degree to LilyPond note name - handle all variants
     let base_note = match degree {
         // 1 series (Do/Sa/C)

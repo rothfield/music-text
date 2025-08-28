@@ -3,315 +3,786 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notation Parser - Multi-System Music Notation</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <title>Music Notation Parser - Text to Staff Notation</title>
+    <meta name="description" content="Convert text-based music notation (Numbers, Letters, Sargam) to professional staff notation instantly">
+    
+    <!-- Modern CSS with CSS Variables for theming -->
     <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --text-muted: #9ca3af;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --border-color: #e5e7eb;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+        }
+
         * {
             box-sizing: border-box;
-        }
-        
-        body {
-            font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-            max-width: none;
+            padding: 0;
         }
-        
-        .container {
-            max-width: 1400px;
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Header Section */
+        .hero {
+            background: var(--bg-primary);
+            padding: 2rem 1rem;
+            text-align: center;
+            box-shadow: var(--shadow-md);
+        }
+
+        .hero h1 {
+            font-size: clamp(1.8rem, 4vw, 2.5rem);
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .hero p {
+            font-size: clamp(1rem, 2vw, 1.125rem);
+            color: var(--text-secondary);
+            max-width: 600px;
             margin: 0 auto;
         }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .input-section, .output-section {
-            background-color: white;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .input-wrapper {
-            width: 100%;
-        }
-        
-        textarea {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #4CAF50;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 20px;
-            resize: vertical;
-            min-height: 120px;
-            overflow: hidden;
-        }
-        
-        .controls {
-            margin: 15px 0;
+
+        .notation-badges {
             display: flex;
-            gap: 15px;
-            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
             flex-wrap: wrap;
         }
-        
-        .control-group {
+
+        .badge {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Main Container */
+        .container {
+            width: 100%;
+            margin: 0;
+            padding: 2rem 1rem;
+        }
+
+        /* Card Components */
+        .card {
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 0.5rem;
         }
-        
-        button {
-            padding: 10px 20px;
-            margin: 5px;
-            background-color: #007cba;
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        /* Input Section */
+        .input-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        #notation-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 1rem;
+            line-height: 1.5;
+            resize: vertical;
+            min-height: 120px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        #notation-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
+        }
+
+        #notation-input::placeholder {
+            color: #000000 !important;
+            opacity: 1 !important;
+            font-weight: 500;
+        }
+
+        /* VexFlow Output */
+        #vexflow-canvas {
+            width: 100%;
+            min-height: 200px;
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            border: 2px dashed var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: auto;
+            transition: border-color 0.2s ease;
+        }
+
+        #vexflow-canvas.has-content {
+            border: 2px solid var(--success-color);
+            border-style: solid;
+        }
+
+        #vexflow-canvas svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .placeholder {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            padding: 2rem;
+        }
+
+        .placeholder-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        /* Error States */
+        .error-message {
+            background: rgb(254 242 242);
+            border: 1px solid rgb(252 165 165);
+            color: var(--error-color);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            margin-top: 1rem;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .hero {
+                padding: 1.5rem 1rem;
+            }
+            
+            .card-content {
+                padding: 1rem;
+            }
+            
+            .card-header {
+                padding: 1rem;
+            }
+            
+            .notation-badges {
+                gap: 0.5rem;
+            }
+            
+            .badge {
+                padding: 0.375rem 0.75rem;
+                font-size: 0.75rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #notation-input {
+                font-size: 16px; /* Prevent zoom on iOS */
+                padding: 0.875rem;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        /* LilyPond Button */
+        .lilypond-btn {
+            background-color: var(--success-color);
             color: white;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
             border: none;
-            border-radius: 4px;
+            border-radius: var(--radius-md);
             cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            margin-right: 0.75rem;
         }
-        
-        button:hover {
-            background-color: #005a85;
+
+        .lilypond-btn:hover {
+            background-color: #059669;
+            transform: translateY(-1px);
         }
-        
-        button:disabled {
-            background-color: #ccc;
+
+        .lilypond-btn:active {
+            transform: translateY(0);
+        }
+
+        .lilypond-btn:disabled {
+            background-color: #9ca3af;
+            transform: none;
             cursor: not-allowed;
         }
-        
-        .button-container {
-            text-align: center;
-            margin: 20px 0;
+
+        .source-toggle-btn {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
-        
-        #live-vexflow-container {
-            background-color: #ffffff;
-            border: 2px solid #007cba;
-            border-radius: 4px;
-            padding: 15px;
-            min-height: 120px;
-            width: 100%;
-            overflow: visible;
-            height: auto;
+
+        .source-toggle-btn:hover {
+            background-color: var(--bg-tertiary);
+            transform: translateY(-1px);
         }
-        
-        #live-vexflow-notation {
-            width: 100%;
-            height: auto;
+
+        .source-toggle-btn:active {
+            transform: translateY(0);
         }
-        
-        #live-vexflow-notation svg {
-            width: 150% !important;
-            height: auto !important;
-            max-width: none !important;
-            transform-origin: left top;
+
+        .lilypond-source {
+            margin-top: 1rem;
+            display: none;
         }
-        
-        pre {
-            background-color: #f8f8f8;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 15px;
+
+        .lilypond-source.visible {
+            display: block;
+        }
+
+        .source-code-display {
+            background: var(--bg-tertiary);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 0.875rem;
             overflow-x: auto;
+            white-space: pre-wrap;
+            border: 1px solid var(--border-color);
         }
-        
-        .status {
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
-        
-        .status.success { background-color: #d4edda; color: #155724; }
-        .status.error { background-color: #f8d7da; color: #721c24; }
-        .status.info { background-color: #d1ecf1; color: #0c5460; }
-        
-        
-        /* Server status indicator styles - small box top right */
-        .server-status-indicator {
+
+        /* Server Status Indicator */
+        .server-status {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 12px;
+            top: 1rem;
+            right: 1rem;
+            background: var(--bg-primary);
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
             font-weight: 500;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-color);
             z-index: 1000;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border: 2px solid;
         }
-        
-        .server-status-indicator.online {
-            background-color: #d4edda;
-            border-color: #28a745;
-            color: #155724;
+
+        .server-status.online {
+            color: var(--success-color);
+            border-color: var(--success-color);
         }
-        
-        .server-status-indicator.offline {
-            background-color: #f8d7da;
-            border-color: #dc3545;
-            color: #721c24;
+
+        .server-status.offline {
+            color: var(--error-color);
+            border-color: var(--error-color);
         }
-        
-        .server-status-indicator.checking {
-            background-color: #d1ecf1;
-            border-color: #17a2b8;
-            color: #0c5460;
+
+        /* Header positioning for status indicator */
+        .hero {
+            position: relative;
         }
-        
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background-color: currentColor;
-            animation: pulse 2s infinite;
-        }
-        
-        .server-status-indicator.offline .status-dot {
-            animation: none;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --text-primary: #f9fafb;
+                --text-secondary: #d1d5db;
+                --text-muted: #9ca3af;
+                --bg-primary: #1f2937;
+                --bg-secondary: #374151;
+                --bg-tertiary: #4b5563;
+                --border-color: #4b5563;
+            }
+            
+            body {
+                background: linear-gradient(135deg, #1e3a8a 0%, #581c87 100%);
+            }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@latest/build/vexflow.js"></script>
 </head>
 <body>
-<div class="container">
-    <div class="header" id="header-section">
-        <h1>🎵 Text to Staff Notation <span id="version-display" style="font-size: 16px; color: #cccccc;"></span> <span id="timestamp-display" style="font-size: 12px; color: #999;"></span></h1>
-        <p>Enter music notation: Number (1 2 3 4 5 6 7), Letter (C D E F G A B), or Sargam (S R G M P D N)</p>
-    </div>
+    <!-- Hero Section -->
+    <header class="hero">
+        <div id="server-status" class="server-status">
+            <span id="server-indicator">🟡 Checking server...</span>
+        </div>
+        <h1>🎵 Text to Staff Notation</h1>
+        <p>Convert text-based music notation to staff notation</p>
+    </header>
 
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Input Card -->
+        <div class="card">
+            <div class="card-content">
+                <div class="input-group">
+                    <textarea 
+                        id="notation-input" 
+                        placeholder="Numbers: 1-2-3-4-5-6-7
+Letters: C-D-E-F-G-A-B  
+Sargam: S-R-G-M-P-D-N
 
-    <div class="input-section">
-        <h2>✏️ Enter Your Notation <span style="font-size: 16px; color: #cccccc; margin-left: 20px;">Detected System: <strong id="detected-system-display">???</strong></span></h2>
-        
-        <div class="control-group">
-            <input type="checkbox" id="constrain-mode-checkbox">
-            <label for="constrain-mode-checkbox">Constrain</label>
-        </div>
-        
-        <div class="controls">
-            <div class="control-group">
-                <button id="upper-octave-btn">Upper Octave</button>
-                <button id="middle-octave-btn">Middle Octave</button>
-                <button id="lower-octave-btn">Lower Octave</button>
-            </div>
-            <div class="control-group">
-                <label for="mode-select">Mode:</label>
-                <select id="mode-select">
-                    <option value="ionian">Ionian</option>
-                    <option value="dorian">Dorian</option>
-                    <option value="phrygian">Phrygian</option>
-                    <option value="lydian">Lydian</option>
-                    <option value="mixolydian">Mixolydian</option>
-                    <option value="aeolian">Aeolian</option>
-                    <option value="locrian">Locrian</option>
-                    <option value="custom">Custom</option>
-                </select>
-                <button id="apply-mode-btn">Apply Mode</button>
-            </div>
-            <div class="control-group" id="custom-mode-container" style="display: none;">
-                <label for="custom-mode-input">Custom Mode:</label>
-                <input type="text" id="custom-mode-input" placeholder="e.g., SRgmPDn" />
-            </div>
-            <div class="control-group">
-                <input type="checkbox" id="live-preview-checkbox" checked />
-                <label for="live-preview-checkbox">Live VexFlow Preview</label>
-            </div>
-        </div>
-        
-        <div class="button-container">
-            <button id="generate-staff-btn">Generate LilyPond Staff Notation</button>
-            <button id="show-outline-btn">Show Outline</button>
-            <button id="show-yaml-btn">Show YAML</button>
-            <button id="show-fsm-btn">Hide Debug Panels</button>
-            <button id="show-all-debug-btn">Toggle All Debug</button>
-        </div>
-        
-        <div class="input-wrapper">
-            <!-- Simple textarea input -->
-            <textarea id="notation-input" rows="3" placeholder="Enter your notation here... Examples:
-• Sargam: | S R G M | P D N S' |
-• Western: | C D E F | G A B C |  
-• Numbers: | 1 2 3 4 | 5 6 7 1 |" style="width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid #4CAF50; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 20px; resize: vertical; min-height: 120px; overflow: hidden; margin: 0;"></textarea>
-        </div>
-
-        <div class="output-section" id="live-vexflow-section">
-            <div id="live-vexflow-container">
-                <div id="live-vexflow-placeholder" style="color: #999; text-align: center;">
-                    🎵 VexFlow preview will appear here as you type musical notes
+Try Happy Birthday:
+• Numbers: 5-5 | 6 5 1 | 7 - - | 5-5 | 6 5 2 | 1 - - |
+           , ,   , ,     ,       , ,   , ,     
+• Letters: G-G | A G C | B - - | G-G | A G D | C - - |
+          , ,   , ,     ,       , ,   , ,
+• Sargam: P-P | D P S | N - - | P-P | D P R | S - - |
+         , ,   , ,     ,       , ,   , ,"
+                        autocomplete="off"
+                        spellcheck="false"
+                    ></textarea>
                 </div>
-                <div id="live-vexflow-notation" style="display: none;"></div>
             </div>
         </div>
 
-    </div>
-
-    <div id="status-container"></div>
-
-    <!-- LilyPond Staff Notation (moved right after VexFlow) -->
-    <div class="output-section" id="staff-notation-section" style="display: none;">
-        <h2>LilyPond Staff Notation</h2>
-        <div style="background-color: #ffffff; border: 2px solid #4CAF50; border-radius: 4px; padding: 15px; min-height: 120px; display: flex; align-items: center; justify-content: center;">
-            <div id="staff-notation-placeholder" style="color: #999; text-align: center;">
-                Click "Generate LilyPond Staff Notation" to create staff notation image
+        <!-- VexFlow Output Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <span>🎼</span>
+                    Live Staff Preview
+                    <span id="loading-indicator" class="loading" style="display: none;"></span>
+                </h2>
             </div>
-            <img id="staff-notation-image" style="display: none; max-width: 100%; height: auto;" alt="Staff Notation" />
+            <div class="card-content">
+                <div id="vexflow-canvas">
+                    <div class="placeholder">
+                        <span class="placeholder-icon">🎵</span>
+                        <div>Your notation will appear here as beautiful staff notation</div>
+                        <div style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.7;">
+                            Start typing in the text area above
+                        </div>
+                    </div>
+                </div>
+                <div id="error-container"></div>
+            </div>
         </div>
-    </div>
 
-    <div class="output-section" id="outline-output-section" style="display: block;">
-        <h2>Document Outline</h2>
-        <pre id="outline-output" style="background-color: #1e1e1e; border: 2px solid #FF9800; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #ffffff;"></pre>
-    </div>
+        <!-- LilyPond Generation Card -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <span>📄</span>
+                    Professional Staff Notation
+                </h2>
+            </div>
+            <div class="card-content">
+                <div style="text-align: center; margin-bottom: 1rem;">
+                    <button id="generate-lilypond-btn" class="lilypond-btn">
+                        Generate LilyPond
+                    </button>
+                    <button id="toggle-source-btn" class="source-toggle-btn">
+                        Show Source
+                    </button>
+                </div>
+                <div id="lilypond-output">
+                    <div class="placeholder">
+                        <span class="placeholder-icon">📄</span>
+                        <div>Click Generate LilyPond to create professional staff notation</div>
+                    </div>
+                </div>
+                <div id="lilypond-source" class="lilypond-source">
+                    <div style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">LilyPond Source Code</div>
+                    <div id="source-code" class="source-code-display"></div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">
+                        Copy to LilyPond software for rendering
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
 
-    <div class="output-section" id="yaml-output-section" style="display: block;">
-        <h2>YAML Structure</h2>
-        <pre id="yaml-output" style="background-color: #1e1e1e; border: 2px solid #9C27B0; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #ffffff;"></pre>
-    </div>
+    <script type="module">
+        import init, { parse_notation } from './pkg/notation_parser.js';
+        
+        let vexflowRenderer = null;
+        let context = null;
+        let isInitialized = false;
+        
+        function showLoading(show = true) {
+            const indicator = document.getElementById('loading-indicator');
+            indicator.style.display = show ? 'inline-block' : 'none';
+        }
+        
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = `
+                <div class="error-message">
+                    ⚠️ ${message}
+                </div>
+            `;
+        }
+        
+        function clearError() {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = '';
+        }
+        
+        function initVexFlow() {
+            const canvas = document.getElementById('vexflow-canvas');
+            canvas.innerHTML = '';
+            canvas.classList.add('has-content');
+            
+            const VF = Vex.Flow;
+            vexflowRenderer = new VF.Renderer(canvas, VF.Renderer.Backends.SVG);
+            vexflowRenderer.resize(800, 200);
+            context = vexflowRenderer.getContext();
+        }
+        
+        function resetCanvas() {
+            const canvas = document.getElementById('vexflow-canvas');
+            canvas.classList.remove('has-content');
+            canvas.innerHTML = `
+                <div class="placeholder">
+                    <span class="placeholder-icon">🎵</span>
+                    <div>Your notation will appear here as beautiful staff notation</div>
+                    <div style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.7;">
+                        Start typing in the text area above
+                    </div>
+                </div>
+            `;
+        }
+        
+        
+        function renderNotation(input) {
+            if (!isInitialized) return;
+            
+            showLoading();
+            clearError();
+            
+            // Debounce rendering for better performance
+            setTimeout(() => {
+                try {
+                    if (!input.trim()) {
+                        resetCanvas();
+                        showLoading(false);
+                        return;
+                    }
+                    
+                    const result = parse_notation(input);
+                    if (!result.success) {
+                        resetCanvas();
+                        showError('Could not parse the notation. Please check your syntax.');
+                        showLoading(false);
+                        return;
+                    }
+                    
+                    const vexflowOutput = result.vexflow_output;
+                    if (!vexflowOutput) {
+                        resetCanvas();
+                        showError('No notation to display from the parsed input.');
+                        showLoading(false);
+                        return;
+                    }
+                    
+                    // Execute Rust-generated VexFlow JavaScript directly
+                    const canvas = document.getElementById('vexflow-canvas');
+                    const renderVexFlow = new Function('canvas', 'VF', vexflowOutput);
+                    renderVexFlow(canvas, Vex.Flow);
+                    
+                    showLoading(false);
+                    
+                } catch (error) {
+                    console.error('Rendering error:', error);
+                    resetCanvas();
+                    showError(`Rendering error: ${error.message || 'Unknown error occurred'}`);
+                    showLoading(false);
+                }
+            }, 300); // Debounce delay
+        }
+        
+        let isServerOnline = false;
+        
+        async function checkServerStatus() {
+            const serverStatus = document.getElementById('server-status');
+            const serverIndicator = document.getElementById('server-indicator');
+            
+            try {
+                const response = await fetch('/api/health', { method: 'GET' });
+                if (response.ok) {
+                    serverIndicator.innerHTML = 'Server Online';
+                    serverStatus.className = 'server-status online';
+                    isServerOnline = true;
+                } else {
+                    serverIndicator.innerHTML = 'Server Offline';
+                    serverStatus.className = 'server-status offline';
+                    isServerOnline = false;
+                }
+            } catch (error) {
+                serverIndicator.innerHTML = 'Server Offline';
+                serverStatus.className = 'server-status offline';
+                isServerOnline = false;
+            }
+        }
 
-    <div class="output-section" id="fsm-debug-section" style="display: block;">
-        <h2>Tokenized Document <span style="font-size: 14px; color: #666;">(raw tokens from lexer)</span></h2>
-        <div id="tokenized-display" style="background-color: #fff3e0; border: 2px solid #FF9800; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #e65100; margin-bottom: 10px;"></div>
-        <h3>Document with Attached Items <span style="font-size: 12px; color: #666;">(after spatial analysis and floating element attachment)</span></h3>
-        <div id="attached-display" style="background-color: #f3e5f5; border: 2px solid #9C27B0; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #6a1b9a; margin-bottom: 10px;"></div>
-        <h4>FSM Output <span style="font-size: 12px; color: #666;">(shows beats, divisions, and pitch organization from parser)</span></h4>
-        <div id="fsm-beats-display" style="background-color: #e8f5e8; border: 2px solid #4CAF50; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #2e7d32; margin-bottom: 10px;"></div>
-        <h4>LilyPond Source <span style="font-size: 12px; color: #666;">(generated notation code)</span></h4>
-        <div id="debug-lilypond-source" style="background-color: #f0f4f8; border: 2px solid #8E24AA; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #4a148c; margin-bottom: 10px;"></div>
-        <h5>VexFlow JSON Data <span style="font-size: 12px; color: #666;">(final processed data sent to VexFlow renderer)</span></h5>
-        <div id="fsm-yaml-display" style="background-color: #f8f8f8; border: 2px solid #FF5722; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #333;"></div>
-    </div>
+        let currentLilypondSource = '';
+        let isSourceVisible = false;
+        
+        function toggleSource() {
+            const sourceSection = document.getElementById('lilypond-source');
+            const toggleBtn = document.getElementById('toggle-source-btn');
+            
+            if (isSourceVisible) {
+                sourceSection.classList.remove('visible');
+                toggleBtn.textContent = 'Show Source';
+                isSourceVisible = false;
+            } else {
+                sourceSection.classList.add('visible');
+                toggleBtn.textContent = 'Hide Source';
+                isSourceVisible = true;
+            }
+        }
+        
+        async function generateLilyPond() {
+            const input = document.getElementById('notation-input');
+            const lilypondBtn = document.getElementById('generate-lilypond-btn');
+            const lilypondOutput = document.getElementById('lilypond-output');
+            const sourceCode = document.getElementById('source-code');
+            
+            if (!input.value.trim()) {
+                lilypondOutput.innerHTML = `
+                    <div class="error-message">
+                        ⚠️ Please enter some notation first
+                    </div>
+                `;
+                return;
+            }
+            
+            try {
+                lilypondBtn.disabled = true;
+                lilypondBtn.textContent = 'Generating...';
+                
+                const result = parse_notation(input.value.trim());
+                if (!result.success) {
+                    throw new Error('Could not parse notation');
+                }
+                
+                const lilypondCode = result.lilypond_output;
+                if (!lilypondCode || !lilypondCode.trim()) {
+                    throw new Error('No LilyPond output generated');
+                }
+                
+                // Always update source code
+                currentLilypondSource = lilypondCode;
+                sourceCode.textContent = lilypondCode;
+                
+                if (isServerOnline) {
+                    // Server online: Try to generate PNG
+                    try {
+                        const response = await fetch('/api/lilypond-to-png', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ lilypondCode: lilypondCode })
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            lilypondOutput.innerHTML = `
+                                <div style="text-align: center;">
+                                    <div style="color: var(--success-color); font-weight: 500; margin-bottom: 1rem;">✅ Professional notation generated</div>
+                                    <img src="${data.imageUrl}" alt="LilyPond Staff Notation" style="max-width: 100%; height: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                                </div>
+                            `;
+                            return;
+                        }
+                    } catch (serverError) {
+                        console.log('Server PNG generation failed:', serverError);
+                    }
+                    
+                    // PNG generation failed
+                    lilypondOutput.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            <div style="color: var(--warning-color); font-weight: 500; margin-bottom: 0.5rem;">⚠️ Server error - showing source code instead</div>
+                            <div style="font-size: 0.875rem;">Use Show Source button to view generated code</div>
+                        </div>
+                    `;
+                } else {
+                    // Server offline
+                    lilypondOutput.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            <div style="color: var(--error-color); font-weight: 500; margin-bottom: 0.5rem;">🔴 Server offline - source code generated</div>
+                            <div style="font-size: 0.875rem;">Use Show Source button to view generated code</div>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('LilyPond generation error:', error);
+                lilypondOutput.innerHTML = `
+                    <div class="error-message">
+                        ⚠️ ${error.message || 'Failed to generate LilyPond notation'}
+                    </div>
+                `;
+            } finally {
+                lilypondBtn.disabled = false;
+                lilypondBtn.textContent = 'Generate LilyPond';
+            }
+        }
 
+        // Local storage functions
+        function saveToLocalStorage(notation) {
+            try {
+                const settings = {
+                    notation: notation,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('musicNotationSettings', JSON.stringify(settings));
+            } catch (e) {
+                console.error("Failed to save to local storage:", e);
+            }
+        }
+        
+        function loadFromLocalStorage() {
+            try {
+                const savedSettings = localStorage.getItem('musicNotationSettings');
+                if (savedSettings) {
+                    const settings = JSON.parse(savedSettings);
+                    const input = document.getElementById('notation-input');
+                    if (settings.notation && input) {
+                        input.value = settings.notation;
+                        return settings.notation;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load from local storage:", e);
+            }
+            return '';
+        }
 
-
-
-
-    <!-- LilyPond Source Code (at the end) -->
-    <div class="output-section" id="lilypond-source-section" style="display: none;">
-        <h2>LilyPond Source Code</h2>
-        <pre id="lilypond-source" style="background-color: #1e1e1e; border: 2px solid #1976d2; border-radius: 4px; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; min-height: 100px; max-height: 400px; overflow-y: auto; color: #ffffff;"></pre>
-    </div>
-</div> <!-- Close container -->
-
-<!-- Server Status Indicator - Fixed Top Right -->
-<div id="server-status-indicator" class="server-status-indicator checking">
-    <div class="status-dot"></div>
-    <span id="server-status-text">Server</span>
-    <span id="server-status-details" style="font-size: 10px; opacity: 0.8;"></span>
-</div>
-
-<script type="module" src="js/main.js"></script>
+        async function setupApp() {
+            try {
+                showLoading();
+                await checkServerStatus();
+                
+                // Check server status periodically
+                setInterval(checkServerStatus, 5000);
+                
+                await init({ module_or_path: './pkg/notation_parser_bg.wasm' });
+                isInitialized = true;
+                
+                const input = document.getElementById('notation-input');
+                const lilypondBtn = document.getElementById('generate-lilypond-btn');
+                
+                // Load saved notation from localStorage
+                const savedNotation = loadFromLocalStorage();
+                if (savedNotation) {
+                    input.value = savedNotation;
+                }
+                
+                // Render initial notation only if there's content
+                if (input.value.trim()) {
+                    renderNotation(input.value);
+                }
+                
+                // Update on input with debouncing
+                let debounceTimer;
+                input.addEventListener('input', (e) => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(() => {
+                        renderNotation(e.target.value);
+                        saveToLocalStorage(e.target.value);
+                    }, 150);
+                });
+                
+                // Handle focus and blur for mobile
+                input.addEventListener('focus', () => {
+                    input.select();
+                });
+                
+                // LilyPond generation button
+                lilypondBtn.addEventListener('click', generateLilyPond);
+                
+                // Source toggle button
+                const toggleBtn = document.getElementById('toggle-source-btn');
+                toggleBtn.addEventListener('click', toggleSource);
+                
+                showLoading(false);
+            } catch (error) {
+                console.error('Setup error:', error);
+                showError(`Failed to initialize: ${error.message || 'Please refresh the page'}`);
+                showLoading(false);
+            }
+        }
+        
+        setupApp();
+    </script>
 </body>
 </html>

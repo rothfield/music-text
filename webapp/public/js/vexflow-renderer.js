@@ -38,9 +38,15 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
     
     const renderer = new Renderer(liveVexflowNotation, Renderer.Backends.SVG);
     const estimatedHeight = Math.max(150, staves.length * 100);
-    renderer.resize(800, estimatedHeight);
+    
+    // Get container width to make VexFlow responsive
+    const containerWidth = liveVexflowNotation.parentElement.offsetWidth || 1200;
+    const renderWidth = Math.max(containerWidth - 30, 800); // Account for padding, minimum 800px
+    
+    renderer.resize(renderWidth, estimatedHeight);
     const context = renderer.getContext();
-    context.scale(0.7, 0.7);
+    // Remove fixed scaling - let CSS handle sizing
+    // context.scale(0.7, 0.7);
     
     let currentY = 20;
     
@@ -52,7 +58,8 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
             return;
         }
         
-        const stave = new Stave(20, currentY, 1000);
+        const staveWidth = renderWidth - 40; // Leave margin on both sides
+        const stave = new Stave(20, currentY, staveWidth);
         if (staveIndex === 0) {
             stave.addClef('treble');
             
@@ -293,7 +300,8 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
             }
         });
         
-        new Formatter().joinVoices([voice]).format([voice], 225);
+        const formatterWidth = staveWidth - 100; // Account for clef and margins
+        new Formatter().joinVoices([voice]).format([voice], formatterWidth);
         voice.draw(context, stave);
         beams.forEach(beam => beam.draw());
         tuplets.forEach(tuplet => tuplet.draw());

@@ -1,7 +1,7 @@
-// Staff Notation Converter - Works directly with FSM OutputItemV2, clean architecture
+// Staff Notation Converter - Works directly with FSM Item, clean architecture
 // Generates VexFlow-compatible JSON for staff notation rendering
 use crate::models::Metadata;
-use crate::rhythm_fsm_v2::{OutputItemV2, BeatV2};
+use crate::rhythm_fsm::{Item, Beat};
 use crate::pitch::{Degree};
 use crate::rhythm::RhythmConverter;
 use serde::{Deserialize, Serialize};
@@ -148,9 +148,160 @@ fn degree_to_scale_degree(degree: Degree) -> (&'static str, i8) {
 
 
 
+/// Generate JavaScript code for VexFlow rendering
+pub fn convert_elements_to_vexflow_js(
+    elements: &Vec<Item>,
+    metadata: &Metadata
+) -> Result<String, String> {
+    let transpose_key = metadata.attributes.get("Key");
+    let transposer = KeyTransposer::new(transpose_key);
+    
+    let mut js_code = String::new();
+    
+    // Start JavaScript function
+    js_code.push_str("// Clear canvas\n");
+    js_code.push_str("canvas.innerHTML = '';\n");
+    js_code.push_str("canvas.classList.add('has-content');\n\n");
+    
+    js_code.push_str("// Initialize VexFlow\n");
+    js_code.push_str("const renderer = new VF.Renderer(canvas, VF.Renderer.Backends.SVG);\n");
+    js_code.push_str("renderer.resize(800, 200);\n");
+    js_code.push_str("const ctx = renderer.getContext();\n\n");
+    
+    js_code.push_str("// Create stave\n");
+    
+    // Process elements to generate notes, beams, ties
+    let mut notes_js = String::new();
+    let mut beams_js = String::new();
+    let mut ties_js = String::new();
+    let mut note_count = 0;
+    let mut beam_groups = Vec::new();
+    let mut current_beam_group = Vec::new();
+    
+    // Collect beats from elements
+    let mut beats = Vec::new();
+    for element in elements {
+        if let Item::Beat(beat) = element {
+            beats.push(beat);
+        }
+    }
+    
+    // Track tie points
+    let mut tie_points = Vec::new();
+    
+    // Process beats to generate VexFlow JavaScript
+    for (i, beat) in beats.iter().enumerate() {
+        let beat_start_note = note_count;
+        
+        for beat_element in &beat.elements {
+            if beat_element.is_note() {
+                let degree = beat_element.degree.unwrap();
+                let (pitch_key, _) = transposer.transpose_pitch(degree, 0);
+                
+                // Get VexFlow duration
+                let vf_duration = match beat_element.tuplet_duration.to_string().as_str() {
+                    "1/4" => "q",
+                    "1/8" => "8", 
+                    "1/16" => "16",
+                    "1/2" => "h",
+                    "1/1" => "w",
+                    _ => "q",
+                };
+                
+                notes_js.push_str(&format!(
+                    "const note{} = new VF.StaveNote({{keys: ['{}'], duration: '{}'}});\n",
+                    note_count, pitch_key, vf_duration
+                ));
+                
+                // Handle beaming for eighth notes
+                if vf_duration == "8" {
+                    current_beam_group.push(note_count);
+                } else {
+                    if current_beam_group.len() >= 2 {
+                        beam_groups.push(current_beam_group.clone());
+                    }
+                    current_beam_group.clear();
+                }
+                
+                note_count += 1;
+            }
+        }
+        
+        // Check if this beat is tied to previous - if so, create tie
+        if beat.tied_to_previous && i > 0 {
+            // Find last note of previous beat and first note of current beat
+            let current_beat_first_note = beat_start_note;
+            let previous_beat_last_note = beat_start_note - 1;
+            
+            if current_beat_first_note < note_count && previous_beat_last_note >= 0 {
+                tie_points.push((previous_beat_last_note, current_beat_first_note));
+            }
+        }
+    }
+    
+    // Generate tie JavaScript
+    for (i, (from_note, to_note)) in tie_points.iter().enumerate() {
+        ties_js.push_str(&format!(
+            "const tie{} = new VF.StaveTie({{first_note: note{}, last_note: note{}, first_indices: [0], last_indices: [0]}});\n",
+            i, from_note, to_note
+        ));
+    }
+    
+    // Final beam group
+    if current_beam_group.len() >= 2 {
+        beam_groups.push(current_beam_group);
+    }
+    
+    // Generate beam JavaScript
+    for (i, beam_group) in beam_groups.iter().enumerate() {
+        if beam_group.len() >= 2 {
+            let note_refs: Vec<String> = beam_group.iter().map(|n| format!("note{}", n)).collect();
+            beams_js.push_str(&format!(
+                "const beam{} = new VF.Beam([{}]);\n",
+                i, note_refs.join(", ")
+            ));
+        }
+    }
+    
+    // Calculate stave width based on note count
+    let stave_width = 250 + (note_count * 35).max(200);
+    js_code.push_str(&format!("const stave = new VF.Stave(10, 40, {});\n", stave_width));
+    js_code.push_str("stave.addClef('treble').setContext(ctx).draw();\n\n");
+    
+    // Combine all JavaScript
+    js_code.push_str("// Create notes\n");
+    js_code.push_str(&notes_js);
+    js_code.push_str("\n// Create beams\n");
+    js_code.push_str(&beams_js);
+    js_code.push_str("\n// Create ties\n");
+    js_code.push_str(&ties_js);
+    
+    js_code.push_str("\n// Collect all notes for formatting\n");
+    js_code.push_str(&format!("const allNotes = [{}];\n", 
+        (0..note_count).map(|i| format!("note{}", i)).collect::<Vec<_>>().join(", ")
+    ));
+    
+    js_code.push_str("\n// Format and draw\n");
+    js_code.push_str("if (allNotes.length > 0) {\n");
+    js_code.push_str("  VF.Formatter.FormatAndDraw(ctx, stave, allNotes);\n");
+    js_code.push_str("}\n\n");
+    
+    // Draw beams
+    for i in 0..beam_groups.len() {
+        js_code.push_str(&format!("if (typeof beam{} !== 'undefined') beam{}.setContext(ctx).draw();\n", i, i));
+    }
+    
+    // Draw ties
+    for i in 0..tie_points.len() {
+        js_code.push_str(&format!("if (typeof tie{} !== 'undefined') tie{}.setContext(ctx).draw();\n", i, i));
+    }
+    
+    Ok(js_code)
+}
+
 /// Main conversion function from V2 FSM output to staff notation JSON
-pub fn convert_fsm_output_to_staff_notation(
-    fsm_output: &Vec<OutputItemV2>,
+pub fn convert_elements_to_staff_notation(
+    elements: &Vec<Item>,
     metadata: &Metadata
 ) -> Result<Vec<StaffNotationStave>, String> {
     let transpose_key = metadata.attributes.get("Key");
@@ -164,9 +315,9 @@ pub fn convert_fsm_output_to_staff_notation(
     
     // First pass: collect all beats to handle ties properly
     let mut beats = Vec::new();
-    for item in fsm_output {
+    for item in elements {
         match item {
-            OutputItemV2::Beat(beat) => {
+            Item::Beat(beat) => {
                 beats.push(beat);
             },
             _ => {
@@ -182,23 +333,23 @@ pub fn convert_fsm_output_to_staff_notation(
     }
     
     // Third pass: process remaining non-beat items
-    for item in fsm_output {
+    for item in elements {
         match item {
-            OutputItemV2::Beat(_) => {
+            Item::Beat(_) => {
                 // Already processed
             },
-            OutputItemV2::Barline(style) => {
+            Item::Barline(style) => {
                 current_stave.notes.push(StaffNotationElement::BarLine {
                     bar_type: map_barline_style(style),
                 });
             },
-            OutputItemV2::Breathmark => {
+            Item::Breathmark => {
                 current_stave.notes.push(StaffNotationElement::Breathe);
             },
-            OutputItemV2::SlurStart => {
+            Item::SlurStart => {
                 current_stave.notes.push(StaffNotationElement::SlurStart);
             },
-            OutputItemV2::SlurEnd => {
+            Item::SlurEnd => {
                 current_stave.notes.push(StaffNotationElement::SlurEnd);
             },
         }
@@ -221,7 +372,7 @@ pub fn convert_fsm_output_to_staff_notation(
 }
 
 fn process_beat_v2(
-    beat: &BeatV2, 
+    beat: &Beat, 
     stave: &mut StaffNotationStave,
     transposer: &KeyTransposer,
     next_beat_tied: bool

@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use crate::models::Token;
-use crate::models_v2::{ParsedElement, Position};
+use crate::parsed_models::{ParsedElement, Position};
 
 pub fn apply_slurs_and_regions_to_elements(elements: &mut Vec<ParsedElement>, tokens: &[Token]) {
     let mut tokens_by_line: HashMap<usize, Vec<&Token>> = HashMap::new();

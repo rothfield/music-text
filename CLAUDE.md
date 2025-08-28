@@ -170,6 +170,7 @@ For any tuplet with N divisions (where N is not a power of 2):
 - `cd webapp && node server.js` - Start web server (port 3000)
 - Test tuplets like "1-2" in the web interface
 - Verify both VexFlow rendering and LilyPond source output
+- **Use Playwright for automated browser testing when needed** - `npx playwright test`
 
 ### Current Status
 - ✅ Fixed V2 LilyPond tuplet generation to use standard durations

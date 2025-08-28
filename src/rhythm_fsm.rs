@@ -1,5 +1,5 @@
 // Rhythm FSM V2 - Works with ParsedElement instead of Node
-use crate::models_v2::{ParsedElement, ParsedChild, OrnamentType, Position};
+use crate::parsed_models::{ParsedElement, ParsedChild, OrnamentType, Position};
 use crate::pitch::Degree;
 use fraction::Fraction;
 
@@ -124,7 +124,7 @@ impl BeatElement {
 }
 
 #[derive(Debug, Clone)]
-pub struct BeatV2 {
+pub struct Beat {
     pub divisions: usize,
     pub elements: Vec<BeatElement>,           // RENAMED: ElementV2 → BeatElement
     pub tied_to_previous: bool,
@@ -133,8 +133,8 @@ pub struct BeatV2 {
 }
 
 #[derive(Debug, Clone)]
-pub enum OutputItemV2 {
-    Beat(BeatV2),
+pub enum Item {
+    Beat(Beat),
     Barline(String),
     Breathmark,
     SlurStart,
@@ -150,8 +150,8 @@ enum State {
 
 struct FSMV2 {
     state: State,
-    output: Vec<OutputItemV2>,
-    current_beat: Option<BeatV2>,
+    output: Vec<Item>,
+    current_beat: Option<Beat>,
     inside_beat_bracket: bool,
 }
 
@@ -222,7 +222,7 @@ impl FSMV2 {
     }
 
     fn start_beat_pitch(&mut self, element: &ParsedElement) {
-        let mut beat = BeatV2 { divisions: 1, elements: vec![], tied_to_previous: false, is_tuplet: false, tuplet_ratio: None };
+        let mut beat = Beat { divisions: 1, elements: vec![], tied_to_previous: false, is_tuplet: false, tuplet_ratio: None };
         beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
         self.current_beat = Some(beat);
         self.state = State::InBeat;
@@ -242,7 +242,7 @@ impl FSMV2 {
                     duration: None,
                 };
 
-                let mut beat = BeatV2 { 
+                let mut beat = Beat { 
                     divisions: 1, 
                     elements: vec![], 
                     tied_to_previous: true,
@@ -268,7 +268,7 @@ impl FSMV2 {
             position: dash_element.position().clone(),
             duration: None,
         };
-        let mut beat = BeatV2 { divisions: 1, elements: vec![], tied_to_previous: false, is_tuplet: false, tuplet_ratio: None };
+        let mut beat = Beat { divisions: 1, elements: vec![], tied_to_previous: false, is_tuplet: false, tuplet_ratio: None };
         beat.elements.push(BeatElement::from(rest_element).with_subdivisions(1));
         self.current_beat = Some(beat);
         self.state = State::InBeat;
@@ -293,7 +293,7 @@ impl FSMV2 {
     fn find_last_non_dash_element(&self) -> Option<&BeatElement> {
         // Look through the output to find the last non-dash element
         for output_item in self.output.iter().rev() {
-            if let OutputItemV2::Beat(beat) = output_item {
+            if let Item::Beat(beat) = output_item {
                 for beat_element in beat.elements.iter().rev() {
                     if !beat_element.is_dash() {
                         return Some(beat_element);
@@ -377,7 +377,7 @@ impl FSMV2 {
                 }
             }
             
-            self.output.push(OutputItemV2::Beat(beat));
+            self.output.push(Item::Beat(beat));
         }
     }
     
@@ -390,33 +390,33 @@ impl FSMV2 {
     }
 
     fn emit_barline(&mut self, value: String) {
-        self.output.push(OutputItemV2::Barline(value));
+        self.output.push(Item::Barline(value));
     }
 
     fn emit_breathmark(&mut self) {
-        self.output.push(OutputItemV2::Breathmark);
+        self.output.push(Item::Breathmark);
     }
 
     fn emit_slur_start(&mut self) {
-        self.output.push(OutputItemV2::SlurStart);
+        self.output.push(Item::SlurStart);
     }
 
     fn emit_slur_end(&mut self) {
-        self.output.push(OutputItemV2::SlurEnd);
+        self.output.push(Item::SlurEnd);
     }
 }
 
 // Convert FSM output back to ParsedElements
-pub fn convert_fsm_output_to_elements_public(output: Vec<OutputItemV2>) -> Vec<ParsedElement> {
-    convert_fsm_output_to_elements(output)
+pub fn convert_elements_to_elements_public(output: Vec<Item>) -> Vec<ParsedElement> {
+    convert_elements_to_elements(output)
 }
 
-fn convert_fsm_output_to_elements(output: Vec<OutputItemV2>) -> Vec<ParsedElement> {
+fn convert_elements_to_elements(output: Vec<Item>) -> Vec<ParsedElement> {
     let mut result = Vec::new();
     
     for item in output {
         match item {
-            OutputItemV2::Beat(beat) => {
+            Item::Beat(beat) => {
                 // Create a beat container or just add elements directly
                 for beat_element in beat.elements {
                     // Reconstruct ParsedElement from BeatElement
@@ -448,24 +448,24 @@ fn convert_fsm_output_to_elements(output: Vec<OutputItemV2>) -> Vec<ParsedElemen
                     result.push(reconstructed_element);
                 }
             },
-            OutputItemV2::Barline(value) => {
+            Item::Barline(value) => {
                 result.push(ParsedElement::Barline {
                     style: value,
                     position: Position::new(0, 0), // Position will need to be preserved better
                 });
             },
-            OutputItemV2::Breathmark => {
+            Item::Breathmark => {
                 result.push(ParsedElement::Symbol {
                     value: "'".to_string(),
                     position: Position::new(0, 0),
                 });
             },
-            OutputItemV2::SlurStart => {
+            Item::SlurStart => {
                 result.push(ParsedElement::SlurStart {
                     position: Position::new(0, 0),
                 });
             },
-            OutputItemV2::SlurEnd => {
+            Item::SlurEnd => {
                 result.push(ParsedElement::SlurEnd {
                     position: Position::new(0, 0),
                 });
@@ -491,7 +491,7 @@ pub fn group_elements_with_fsm(elements: &[ParsedElement], _lines_of_music: &[us
         eprintln!("V2 FSM DEBUG: Output {}: {:?}", i, item);
     }
     
-    let result = convert_fsm_output_to_elements(fsm.output);
+    let result = convert_elements_to_elements(fsm.output);
     eprintln!("V2 FSM DEBUG: Final result count: {}", result.len());
     for (i, element) in result.iter().enumerate() {
         eprintln!("V2 FSM DEBUG: Result {}: {:?}", i, element);
@@ -501,7 +501,7 @@ pub fn group_elements_with_fsm(elements: &[ParsedElement], _lines_of_music: &[us
 }
 
 // New function that returns the full FSM output with beat information
-pub fn group_elements_with_fsm_full(elements: &[ParsedElement], _lines_of_music: &[usize]) -> Vec<OutputItemV2> {
+pub fn group_elements_with_fsm_full(elements: &[ParsedElement], _lines_of_music: &[usize]) -> Vec<Item> {
     eprintln!("V2 FSM DEBUG: Input elements count: {}", elements.len());
     for (i, element) in elements.iter().enumerate() {
         eprintln!("V2 FSM DEBUG: Element {}: {:?}", i, element);

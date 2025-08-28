@@ -1,10 +1,10 @@
 // Clean room V2 FSM - reimplemented based on V1 behavior
 // Goal: Process ParsedElements and calculate duration fractions for rhythm
 
-use crate::models_v2::ParsedElement;
+use crate::parsed_models::ParsedElement;
 
 /// Process ParsedElements through FSM and calculate durations
-pub fn process_rhythm_v2_clean(elements: Vec<ParsedElement>) -> Vec<ParsedElement> {
+pub fn process_rhythm_clean(elements: Vec<ParsedElement>) -> Vec<ParsedElement> {
     let processor = RhythmProcessorClean::new();
     processor.process(elements)
 }
