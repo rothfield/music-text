@@ -45,7 +45,12 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
     let currentY = 20;
     
     staves.forEach((staveData, staveIndex) => {
-        if (!staveData.notes || staveData.notes.length === 0) return;
+        console.log(`Processing stave ${staveIndex}:`, staveData);
+        console.log(`Notes array:`, staveData.notes);
+        if (!staveData.notes || staveData.notes.length === 0) {
+            console.log(`Skipping stave ${staveIndex} - no notes`);
+            return;
+        }
         
         const stave = new Stave(20, currentY, 1000);
         if (staveIndex === 0) {
@@ -72,25 +77,45 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
         
         staveData.notes.forEach((element) => {
             try {
-                if (element.type === 'Tuplet') {
-                    const tupletNotes = element.notes.map(noteData => {
-                        const isRest = noteData.type === 'Rest' || (noteData.keys && noteData.keys.length > 0 && noteData.keys[0].startsWith('-'));
+                console.log('Processing element:', element);
+                
+                // Handle Rust enum JSON format: {Tuplet: {...}} vs {type: 'Tuplet', ...}
+                const elementType = element.type || (element.Tuplet ? 'Tuplet' : element.Note ? 'Note' : 'Unknown');
+                const elementData = element.type ? element : (element.Tuplet || element.Note || element);
+                
+                console.log('Element type:', elementType);
+                console.log('Element data:', elementData);
+                
+                if (elementType === 'Tuplet') {
+                    console.log('Processing tuplet with notes:', elementData.notes);
+                    const tupletNotes = elementData.notes.map((noteData, index) => {
+                        console.log(`Tuplet note ${index}:`, noteData);
+                        
+                        // Handle Rust enum format for tuplet notes too
+                        const noteType = noteData.type || (noteData.Note ? 'Note' : noteData.Rest ? 'Rest' : 'Unknown');
+                        const actualNoteData = noteData.type ? noteData : (noteData.Note || noteData.Rest || noteData);
+                        
+                        console.log(`Tuplet note type: ${noteType}, data:`, actualNoteData);
+                        
+                        const isRest = noteType === 'Rest' || (actualNoteData.keys && actualNoteData.keys.length > 0 && actualNoteData.keys[0].startsWith('-'));
                         let note;
                         if (isRest) {
-                            note = new Vex.Flow.StaveNote({ clef: 'treble', keys: ['b/4'], duration: noteData.duration + 'r' + (noteData.dots > 0 ? 'd'.repeat(noteData.dots) : '') });
+                            note = new Vex.Flow.StaveNote({ clef: 'treble', keys: ['b/4'], duration: actualNoteData.duration + 'r' });
                         } else {
-                            note = new Vex.Flow.StaveNote({ clef: 'treble', keys: noteData.keys, duration: noteData.duration + (noteData.dots > 0 ? 'd'.repeat(noteData.dots) : '') });
+                            note = new Vex.Flow.StaveNote({ clef: 'treble', keys: actualNoteData.keys, duration: actualNoteData.duration });
                         }
-                        if (!isRest && noteData.accidentals) {
-                            noteData.accidentals.forEach(accData => {
+                        if (!isRest && actualNoteData.accidentals) {
+                            actualNoteData.accidentals.forEach(accData => {
                                 if (accData.accidental && accData.accidental !== 'n') {
                                     note.addModifier(new Accidental(accData.accidental), accData.index);
                                 }
                             });
                         }
-                        if (noteData.dots > 0) {
-                            for (let i = 0; i < noteData.dots; i++) {
-                                note.addDot(0);
+                        // Add dots using Dot class if present
+                        if (actualNoteData.dots && actualNoteData.dots > 0) {
+                            const Dot = Vex.Flow.Dot;
+                            for (let i = 0; i < actualNoteData.dots; i++) {
+                                note.addModifier(new Dot(), 0);
                             }
                         }
                         return note;
@@ -130,35 +155,48 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
                         }
                     }
                     tupletGroups.push({ notes: tupletNotes, options: tupletOptions });
-                } else if (element.type === 'Note') {
-                    const note = new Vex.Flow.StaveNote({ clef: 'treble', keys: element.keys, duration: element.duration + (element.dots > 0 ? 'd'.repeat(element.dots) : '') });
-                    if (element.accidentals) {
-                        element.accidentals.forEach(acc => {
+                } else if (elementType === 'Note') {
+                    // Don't include dots in duration string for VexFlow 4.2.2
+                    const note = new Vex.Flow.StaveNote({ clef: 'treble', keys: elementData.keys, duration: elementData.duration });
+                    if (elementData.accidentals) {
+                        elementData.accidentals.forEach(acc => {
                             if (acc.accidental && acc.accidental !== 'n') {
                                 note.addModifier(new Accidental(acc.accidental), acc.index);
                             }
                         });
                     }
-                    for (let i = 0; i < element.dots; i++) note.addDot(0);
+                    // Add dots using Dot class if present
+                    if (elementData.dots && elementData.dots > 0) {
+                        const Dot = Vex.Flow.Dot;
+                        for (let i = 0; i < elementData.dots; i++) {
+                            note.addModifier(new Dot(), 0);
+                        }
+                    }
                     vexNotes.push(note);
                     noteOnlyArray.push(note);
-                    if (!element.type || element.type !== 'Rest') {
-                        if (element.beam_start || element.beam_end || (element.duration === '8' || element.duration === '16')) {
-                            if (element.beam_start) currentBeamGroup = [note];
-                            else if (element.beam_end && currentBeamGroup.length > 0) {
+                    if (elementType !== 'Rest') {
+                        if (elementData.beam_start || elementData.beam_end || (elementData.duration === '8' || elementData.duration === '16')) {
+                            if (elementData.beam_start) currentBeamGroup = [note];
+                            else if (elementData.beam_end && currentBeamGroup.length > 0) {
                                 currentBeamGroup.push(note);
                                 if (currentBeamGroup.length >= 2) beamGroups.push([...currentBeamGroup]);
                                 currentBeamGroup = [];
                             } else if (currentBeamGroup.length > 0) currentBeamGroup.push(note);
                         }
                     }
-                } else if (element.type === 'Rest') {
-                    const rest = new Vex.Flow.StaveNote({ clef: 'treble', keys: ['b/4'], duration: element.duration + 'r' + (element.dots > 0 ? 'd'.repeat(element.dots) : '') });
-                    for (let i = 0; i < element.dots; i++) rest.addDot(0);
+                } else if (elementType === 'Rest') {
+                    const rest = new Vex.Flow.StaveNote({ clef: 'treble', keys: ['b/4'], duration: elementData.duration + 'r' });
+                    // Add dots using Dot class if present
+                    if (elementData.dots && elementData.dots > 0) {
+                        const Dot = Vex.Flow.Dot;
+                        for (let i = 0; i < elementData.dots; i++) {
+                            rest.addModifier(new Dot(), 0);
+                        }
+                    }
                     vexNotes.push(rest);
                     if (currentBeamGroup.length >= 2) beamGroups.push([...currentBeamGroup]);
                     currentBeamGroup = [];
-                } else if (element.type === 'BarLine') {
+                } else if (elementType === 'BarLine') {
                     if (currentBeamGroup.length >= 2) beamGroups.push([...currentBeamGroup]);
                     currentBeamGroup = [];
                     vexNotes.push(new BarNote());
@@ -318,13 +356,39 @@ export async function renderLiveVexFlowPreview(notation, { liveVexflowPlaceholde
     liveVexflowNotation.style.display = 'none';
 
     try {
-        const result = await parseNotationApi(notation);
-        
-        if (!result.success || !result.vexflowFsm || !Array.isArray(result.vexflowFsm)) {
-            throw new Error('Invalid API response');
+        // Use WASM module directly instead of server API
+        if (!window.wasm || !window.wasmLoaded) {
+            throw new Error('WASM module not loaded');
         }
         
-        renderVexFlowFromFSM(result.vexflowFsm, { liveVexflowNotation, liveVexflowPlaceholder });
+        const result = window.wasm.parse_notation(notation);
+        
+        if (!result.success) {
+            throw new Error(result.error_message || 'Parsing failed');
+        }
+        
+        const vexflowJsonStr = result.vexflow_output;
+        if (!vexflowJsonStr || vexflowJsonStr === '[]') {
+            throw new Error('No VexFlow output generated');
+        }
+        
+        const vexflowData = JSON.parse(vexflowJsonStr);
+        console.log('VexFlow JSON data:', vexflowData);
+        
+        if (!Array.isArray(vexflowData)) {
+            throw new Error('Invalid VexFlow data format');
+        }
+        
+        console.log('VexFlow data length:', vexflowData.length);
+        if (vexflowData.length > 0) {
+            console.log('First stave:', vexflowData[0]);
+            if (vexflowData[0].notes && vexflowData[0].notes.length > 0) {
+                console.log('First note:', vexflowData[0].notes[0]);
+                console.log('All notes:', vexflowData[0].notes);
+            }
+        }
+        
+        renderVexFlowFromFSM(vexflowData, { liveVexflowNotation, liveVexflowPlaceholder });
         
     } catch (error) {
         console.error('VexFlow preview error:', error);

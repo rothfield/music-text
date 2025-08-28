@@ -64,12 +64,14 @@ pub enum ParsedElement {
         value: String, // Original text value (e.g. "G", "S", "1")
         position: Position,
         children: Vec<ParsedChild>, // Attached ornaments, octave markers, lyrics
+        duration: Option<(usize, usize)>, // Duration fraction (numerator, denominator) from FSM
     },
     
     /// Rest note
     Rest { 
         value: String, // Original text value
         position: Position,
+        duration: Option<(usize, usize)>, // Duration fraction (numerator, denominator) from FSM
     },
     
     /// Note extension (dash) - inherits pitch from preceding note
@@ -77,6 +79,7 @@ pub enum ParsedElement {
         pitch_code: Option<PitchCode>, // Inherited from preceding note
         octave: Option<i8>, // Inherited or calculated from local octave markers
         position: Position,
+        duration: Option<(usize, usize)>, // Duration fraction (numerator, denominator) from FSM
     },
     
     /// Bar line separator
@@ -206,7 +209,7 @@ impl Position {
 impl From<ParsedElement> for Node {
     fn from(element: ParsedElement) -> Self {
         match element {
-            ParsedElement::Note { pitch_code, octave, value, position, children } => {
+            ParsedElement::Note { pitch_code, octave, value, position, children, duration } => {
                 let mut node = Node::new(
                     "PITCH".to_string(),
                     value,
@@ -215,6 +218,11 @@ impl From<ParsedElement> for Node {
                 );
                 node.pitch_code = Some(pitch_code);
                 node.octave = Some(octave);
+                
+                // Store duration if present
+                if let Some((num, denom)) = duration {
+                    node.duration_fraction = Some(format!("{}/{}", num, denom));
+                }
                 
                 // Convert children to child nodes
                 for child in children {
@@ -241,14 +249,21 @@ impl From<ParsedElement> for Node {
                 node
             },
             
-            ParsedElement::Rest { value, position } => {
-                Node::new("REST".to_string(), value, position.row, position.col)
+            ParsedElement::Rest { value, position, duration } => {
+                let mut node = Node::new("REST".to_string(), value, position.row, position.col);
+                if let Some((num, denom)) = duration {
+                    node.duration_fraction = Some(format!("{}/{}", num, denom));
+                }
+                node
             },
             
-            ParsedElement::Dash { pitch_code, octave, position } => {
+            ParsedElement::Dash { pitch_code, octave, position, duration } => {
                 let mut node = Node::new("DASH".to_string(), "-".to_string(), position.row, position.col);
                 node.pitch_code = pitch_code;
                 node.octave = octave;
+                if let Some((num, denom)) = duration {
+                    node.duration_fraction = Some(format!("{}/{}", num, denom));
+                }
                 node
             },
             

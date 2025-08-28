@@ -147,19 +147,40 @@ app.post('/api/parse', async (req, res) => {
         let colorizedOutput = 'Colorized output has been disabled.';
         
         // Generate staff notation using LilyPond
-        const lilypondFile = filename.replace('.123', '.ly');
+        const lilypondFile = path.join('test_output', path.basename(filename).replace('.123', '.ly'));
         let staffNotationUrl = null;
         
         if (await fs.pathExists(lilypondFile)) {
             try {
-                const baseFilename = filename.replace('.123', '');
-                const pngFilename = `${baseFilename}.png`;
+                const baseFilename = path.basename(filename).replace('.123', '');
+                const outputPath = path.join(__dirname, baseFilename);
+                const pngFilename = `${outputPath}.png`;
                 
                 // Generate PNG from LilyPond file
-                await execAsync(`lilypond --png --output=${baseFilename} ${lilypondFile}`);
+                await execAsync(`lilypond --png --output="${outputPath}" "${lilypondFile}"`);
                 
                 if (await fs.pathExists(pngFilename)) {
-                    staffNotationUrl = `/${pngFilename}`;
+                    // Crop the PNG to remove excess whitespace using netpbm tools (like doremi-script)
+                    try {
+                        const stemFile = pngFilename.replace('.png', '');
+                        // Convert PNG to PNM, crop whitespace, convert back to PNG
+                        await execAsync(`pngtopnm "${pngFilename}" > "${stemFile}.pnm"`);
+                        await execAsync(`pnmcrop -white "${stemFile}.pnm" > "${stemFile}-cropped.pnm"`);
+                        await execAsync(`pnmtopng "${stemFile}-cropped.pnm" > "${pngFilename}"`);
+                        // Clean up temp files
+                        await execAsync(`rm -f "${stemFile}.pnm" "${stemFile}-cropped.pnm"`);
+                        console.log(`Cropped PNG using netpbm: ${pngFilename}`);
+                    } catch (cropError) {
+                        console.warn('netpbm crop failed, trying ImageMagick fallback:', cropError.message);
+                        // Fallback to ImageMagick
+                        try {
+                            await execAsync(`magick "${pngFilename}" -trim +repage "${pngFilename}"`);
+                            console.log(`Cropped PNG with ImageMagick: ${pngFilename}`);
+                        } catch (magickError) {
+                            console.warn('All cropping methods failed, using uncropped PNG:', magickError.message);
+                        }
+                    }
+                    staffNotationUrl = `/${baseFilename}.png`;
                 }
             } catch (lilyError) {
                 console.warn('LilyPond generation failed:', lilyError.message);
@@ -486,7 +507,10 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Server startup self-test
+// Legacy server self-tests removed - using WASM for all parsing now
+// Only server-side functionality is LilyPond PNG generation from WASM-generated .ly content
+
+/*
 async function runServerSelfTest() {
     console.log('\n🧪 Running server startup self-test...\n');
     
@@ -570,9 +594,15 @@ Author: Test Author
                 expectedSystem: 'Sargam'
             },
             {
-                name: 'SS lilypond self test',
-                input: 'SS',
-                expectedNotes: 'c8 c8',
+                name: 'S--S lilypond self test',
+                input: 'S--S',
+                expectedNotes: 'c16. c32',  // 3/16 + 1/16 durations
+                expectedSystem: 'Sargam'
+            },
+            {
+                name: 'S--S -S tie test',
+                input: 'S--S -S',
+                expectedNotes: 'c16. c32~ c16 c16',  // Beat 1: 3/16 + 1/16~, Beat 2: tied 1/4 + 1/4
                 expectedSystem: 'Sargam'
             },
         ];
@@ -603,6 +633,40 @@ Author: Test Author
                         const parsedJson = JSON.parse(jsonContent);
                         if (parsedJson && Array.isArray(parsedJson) && parsedJson.length > 0) {
                             testResults.push(`✅ ${testCase.name}: JSON output generated`);
+                            
+                            // Also check LilyPond output if we have expected notes
+                            if (testCase.expectedNotes) {
+                                const lyFile = path.join(tempDir, baseName + '.ly');
+                                if (await fs.pathExists(lyFile)) {
+                                    const lyContent = await fs.readFile(lyFile, 'utf8');
+                                    const lyMatch = lyContent.match(/\\fixed c' \{[^}]*\}/);
+                                    if (lyMatch) {
+                                        const notesLine = lyMatch[0];
+                                        const actualNotes = notesLine.match(/\\clef treble\s+([^}]+)/);
+                                        if (actualNotes) {
+                                            const actualNotesStr = actualNotes[1].trim();
+                                            if (actualNotesStr === testCase.expectedNotes) {
+                                                testResults.push(`✅ ${testCase.name}: LilyPond notes match expected`);
+                                            } else {
+                                                testResults.push(`❌ ${testCase.name}: LilyPond notes mismatch`);
+                                                testResults.push(`   Expected: ${testCase.expectedNotes}`);
+                                                testResults.push(`   Actual:   ${actualNotesStr}`);
+                                                allTestsPassed = false;
+                                            }
+                                        } else {
+                                            testResults.push(`❌ ${testCase.name}: Could not extract notes from LilyPond`);
+                                            allTestsPassed = false;
+                                        }
+                                    } else {
+                                        testResults.push(`❌ ${testCase.name}: Invalid LilyPond format`);
+                                        allTestsPassed = false;
+                                    }
+                                } else {
+                                    testResults.push(`❌ ${testCase.name}: No LilyPond file generated`);
+                                    allTestsPassed = false;
+                                }
+                            }
+                            
                             passedTests++;
                         } else {
                             testResults.push(`❌ ${testCase.name}: JSON output has no valid tokens`);
@@ -682,15 +746,15 @@ Author: Test Author
         }
     }
 }
+*/
 
 // Start the server
-app.listen(port, async () => {
+app.listen(port, () => {
     console.log(`🎵 Notation Parser Web Server running at http://localhost:${port}`);
     console.log(`📁 Serving files from: ${__dirname}`);
     console.log(`🎼 Ready to parse Sargam, Western, and Number notation!`);
-    
-    // Run self-test after server starts
-    await runServerSelfTest();
+    console.log('✨ All notation parsing now handled by WASM module');
+    console.log('📄 Server only handles LilyPond PNG generation');
 });
 
 // Graceful shutdown

@@ -1,5 +1,4 @@
 use wasm_bindgen::prelude::*;
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 // Import our existing modules
@@ -7,11 +6,9 @@ mod models;
 pub mod models_v2; // New type-safe parser AST
 mod lexer;
 pub mod handwritten_lexer;
-mod spatial_analysis;
-mod node_builder;
-mod region_processor;
 mod region_processor_v2; // New region processor for ParsedElement
-mod rhythm_fsm_v2; // New FSM for ParsedElement
+pub mod rhythm_fsm_v2;
+pub mod rhythm_fsm_v2_clean; // New FSM for ParsedElement
 mod lyrics_v2; // New lyrics processor for ParsedElement
 mod pitch;
 mod display;
@@ -19,9 +16,8 @@ mod lilypond_converter;
 pub mod lilypond_converter_v2; // New V2 converter - no conversion needed!
 mod lilypond_templates;
 mod outline;
-mod vexflow_fsm_converter;
+pub mod vexflow_converter_v2; // New V2 VexFlow converter
 mod rhythm;
-pub mod rhythm_fsm;
 mod notation_detector;
 mod lyrics;
 
@@ -34,7 +30,7 @@ pub use pitch::LilyPondNoteNames;
 pub use display::generate_flattened_spatial_view;
 pub use outline::{generate_outline, ToOutline};
 pub use pitch::{lookup_pitch, guess_notation, Notation};
-pub use vexflow_fsm_converter::{convert_fsm_to_vexflow, VexFlowStave, VexFlowElement};
+pub use vexflow_converter_v2::{convert_fsm_output_to_vexflow as convert_fsm_output_to_vexflow_v2, VexFlowStave, VexFlowElement, VexFlowAccidental};
 
 /// Complete parsing result structure for WASM API
 #[wasm_bindgen]
@@ -104,7 +100,9 @@ impl ParseResult {
     pub fn spatial_analysis_output(&self) -> String {
         self.spatial_analysis_output.clone()
     }
-    
+}
+
+impl ParseResult {
     /// Get English LilyPond output from the stored document
     pub fn get_english_lilypond_output(&self, source_text: &str) -> String {
         if let Some(ref doc) = self.document {
@@ -117,125 +115,94 @@ impl ParseResult {
         }
     }
     
-    /// Get FSM VexFlow output from the stored document
-    pub fn get_fsm_vexflow_output(&self) -> String {
-        if let Some(ref doc) = self.document {
-            match convert_fsm_to_vexflow(doc) {
-                Ok(staves) => {
-                    match serde_json::to_string(&staves) {
-                        Ok(json) => json,
-                        Err(e) => format!("{{\"error\": \"JSON serialization failed: {}\"}}", e)
-                    }
+    /// Get the parsed document
+    pub fn get_document(&self) -> Option<Document> {
+        self.document.clone()
+    }
+    
+    
+}
+
+
+// unified_parser V1 deleted - use unified_parser_v2 instead
+
+/// Simple conversion from tokens to ParsedElement (replacement for node_builder)
+fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::pitch::Notation) -> Vec<models_v2::ParsedElement> {
+    use crate::models_v2::{ParsedElement, Position};
+    use crate::pitch::{lookup_pitch};
+    
+    let mut elements = Vec::new();
+    
+    for token in tokens {
+        let position = Position { row: token.line, col: token.col };
+        
+        match token.token_type.as_str() {
+            "PITCH" => {
+                // Use global notation detection instead of per-token guessing
+                if let Some(pitch_code) = lookup_pitch(&token.value, global_notation) {
+                    elements.push(ParsedElement::Note {
+                        pitch_code,
+                        octave: 0, // Default octave, will be calculated later
+                        value: token.value.clone(),
+                        position,
+                        children: Vec::new(),
+                        duration: None,
+                    });
+                } else {
+                    elements.push(ParsedElement::Unknown {
+                        value: token.value.clone(),
+                        position,
+                    });
                 }
-                Err(e) => format!("{{\"error\": \"VexFlow conversion failed: {}\"}}", e)
-            }
-        } else {
-            "[]".to_string()
-        }
-    }
-    
-}
-
-/// Convert slur attributes on nodes to actual SLUR_START and SLUR_END tokens
-fn convert_slur_attributes_to_tokens(nodes: &mut Vec<Node>) {
-    for node in nodes.iter_mut() {
-        // Recursively process child nodes first
-        convert_slur_attributes_to_tokens(&mut node.nodes);
-        
-        // Then convert slur attributes to tokens in this node's children
-        convert_slur_attributes_in_children(&mut node.nodes);
-    }
-}
-
-fn convert_slur_attributes_in_children(children: &mut Vec<Node>) {
-    let mut new_children = Vec::new();
-    
-    for mut child in children.drain(..) {
-        // Check if this child needs a slur start token before it
-        if child.slur_start == Some(true) {
-            let slur_start_node = Node::new(
-                "SLUR_START".to_string(),
-                "(".to_string(),
-                child.row,
-                child.col,
-            );
-            new_children.push(slur_start_node);
-            child.slur_start = None; // Clear the attribute
-        }
-        
-        // Add the child itself
-        new_children.push(child);
-        
-        // Check if the last child needs a slur end token after it
-        if let Some(last_child) = new_children.last_mut() {
-            if last_child.slur_end == Some(true) {
-                let slur_end_node = Node::new(
-                    "SLUR_END".to_string(),
-                    ")".to_string(),
-                    last_child.row,
-                    last_child.col + 1,
-                );
-                last_child.slur_end = None; // Clear the attribute
-                new_children.push(slur_end_node);
+            },
+            "BARLINE" => {
+                elements.push(ParsedElement::Barline {
+                    style: token.value.clone(),
+                    position,
+                });
+            },
+            "REST" => {
+                elements.push(ParsedElement::Rest {
+                    value: token.value.clone(),
+                    position,
+                    duration: None,
+                });
+            },
+            "DASH" => {
+                elements.push(ParsedElement::Dash {
+                    pitch_code: None, // Will be inherited later
+                    octave: None,
+                    position,
+                    duration: None,
+                });
+            },
+            "WHITESPACE" => {
+                elements.push(ParsedElement::Whitespace {
+                    width: token.value.len(),
+                    position,
+                });
+            },
+            "NEWLINE" => {
+                elements.push(ParsedElement::Newline {
+                    position,
+                });
+            },
+            "WORD" => {
+                elements.push(ParsedElement::Word {
+                    text: token.value.clone(),
+                    position,
+                });
+            },
+            _ => {
+                elements.push(ParsedElement::Symbol {
+                    value: token.value.clone(),
+                    position,
+                });
             }
         }
     }
     
-    *children = new_children;
-}
-
-
-pub fn unified_parser(input_text: &str) -> Result<(Document, String), Box<dyn std::error::Error>> {
-    // First detect the notation type (this will be used by the lexer)
-    let detected_notation = notation_detector::detect_notation_type(input_text);
-    
-    // Use handwritten lexer for tokenization (which now uses the detected notation)
-    let all_tokens = handwritten_lexer::tokenize_with_handwritten_lexer(input_text);
-    
-    // Create lines_info for spatial analysis (still needed for parser phases)
-    let lines_info = lex_text(input_text);
-    
-    // Step 3: Parse metadata and detect notation system
-    let (mut metadata, remaining_tokens) = lexer::parse_metadata(&all_tokens);
-
-    // Store the detected notation system
-    metadata.detected_system = Some(detected_notation.as_str().to_string());
-
-    // Step 4: Use the complete parsing pipeline
-    // Phase 1: Attach floating elements (spatial analysis) with intelligent lyrics detection
-    let (hierarchical_nodes, _consumed_coords) = node_builder::attach_floating_elements(&remaining_tokens, &lines_info, input_text);
-    
-    // Find lines that contain musical content for Phase 2
-    let lines_of_music = find_musical_lines(&remaining_tokens);
-    
-    // Step 4.4: Apply beat bracket and slur attributes to hierarchical nodes before FSM processing
-    let mut hierarchical_nodes_with_attrs = hierarchical_nodes.clone();
-    region_processor::apply_slurs_and_regions_to_nodes(&mut hierarchical_nodes_with_attrs, &remaining_tokens);
-    
-    // Save spatial analysis output for debugging
-    let spatial_analysis_yaml = serde_yaml::to_string(&hierarchical_nodes_with_attrs).unwrap_or_else(|e| format!("YAML serialization error: {}", e));
-
-    // Phase 2: Group nodes into lines and beats using FSM (musical structuring)
-    eprintln!("UNIFIED_PARSER: About to call FSM with {} hierarchical_nodes", hierarchical_nodes_with_attrs.len());
-    let mut structured_nodes = rhythm_fsm::group_nodes_with_fsm(&hierarchical_nodes_with_attrs, &lines_of_music);
-
-    // Step 4.6: Convert slur attributes to actual tokens
-    convert_slur_attributes_to_tokens(&mut structured_nodes);
-    
-    // Step 4.7: Process lyrics if present
-    if lyrics::has_lyrics(&remaining_tokens, &lines_of_music) {
-        let lyrics_lines = lyrics::parse_lyrics_lines(&remaining_tokens, input_text);
-        lyrics::distribute_syllables_to_notes(&mut structured_nodes, lyrics_lines);
-    }
-
-    // Step 5: Create document
-    let document = Document {
-        metadata: metadata.clone(),
-        nodes: structured_nodes,
-        notation_system: metadata.detected_system.clone(),
-    };
-
-    Ok((document, spatial_analysis_yaml))
+    elements
 }
 
 /// V2 Parser using ParsedElement instead of Node
@@ -253,8 +220,15 @@ pub fn unified_parser_v2(input_text: &str) -> Result<(models_v2::DocumentV2, Str
     let (mut metadata, remaining_tokens) = lexer::parse_metadata(&all_tokens);
     metadata.detected_system = Some(detected_notation.as_str().to_string());
 
-    // Phase 1: Attach floating elements using new ParsedElement system
-    let (mut elements, _consumed_coords) = node_builder::attach_floating_elements_v2(&remaining_tokens, &lines_info, input_text);
+    // Convert NotationType to Notation for pitch lookup
+    let global_notation = match detected_notation {
+        notation_detector::NotationType::Western => crate::pitch::Notation::Western,
+        notation_detector::NotationType::Sargam => crate::pitch::Notation::Sargam,
+        notation_detector::NotationType::Number => crate::pitch::Notation::Number,
+    };
+
+    // Phase 1: Convert tokens to ParsedElement system using global notation detection
+    let mut elements = convert_tokens_to_parsed_elements(&remaining_tokens, global_notation);
     
     // Phase 2: Apply slur regions and beat brackets
     region_processor_v2::apply_slurs_and_regions_to_elements(&mut elements, &remaining_tokens);
@@ -264,7 +238,46 @@ pub fn unified_parser_v2(input_text: &str) -> Result<(models_v2::DocumentV2, Str
 
     // Phase 3: Group elements into lines and beats using FSM
     let lines_of_music = find_musical_lines(&remaining_tokens);
-    let mut structured_elements = rhythm_fsm_v2::group_elements_with_fsm(&elements, &lines_of_music);
+    
+    // Check if we should use the clean FSM
+    let use_clean_fsm = std::env::var("USE_CLEAN_FSM").is_ok();
+    
+    let (fsm_output, mut structured_elements) = if use_clean_fsm {
+        eprintln!("Using CLEAN FSM for rhythm processing in lib");
+        // Process with clean FSM
+        let processed_elements = rhythm_fsm_v2_clean::process_rhythm_v2_clean(elements.clone());
+        
+        // Convert to OutputItemV2 for compatibility - simplified version for lib
+        let mut output = Vec::new();
+        for elem in &processed_elements {
+            match elem {
+                models_v2::ParsedElement::Note { .. } |
+                models_v2::ParsedElement::Rest { .. } |
+                models_v2::ParsedElement::Dash { .. } => {
+                    let beat = rhythm_fsm_v2::BeatV2 {
+                        divisions: 1,
+                        elements: vec![rhythm_fsm_v2::BeatElement::from(elem.clone()).with_subdivisions(1)],
+                        tied_to_previous: false,
+                        is_tuplet: false,
+                        tuplet_ratio: None,
+                    };
+                    output.push(rhythm_fsm_v2::OutputItemV2::Beat(beat));
+                }
+                models_v2::ParsedElement::Barline { .. } => {
+                    output.push(rhythm_fsm_v2::OutputItemV2::Barline(elem.value()));
+                }
+                _ => {}
+            }
+        }
+        (output, processed_elements)
+    } else {
+        let fsm_output = rhythm_fsm_v2::group_elements_with_fsm_full(&elements, &lines_of_music);
+        let structured_elements = rhythm_fsm_v2::convert_fsm_output_to_elements_public(fsm_output.clone());
+        (fsm_output, structured_elements)
+    };
+    
+    // Store FSM output for LilyPond conversion
+    LAST_FSM_OUTPUT.with(|s| *s.borrow_mut() = fsm_output);
     
     // Phase 4: Process lyrics if present
     if lyrics::has_lyrics(&remaining_tokens, &lines_of_music) {
@@ -305,27 +318,48 @@ fn find_musical_lines(tokens: &[Token]) -> Vec<usize> {
     musical_lines
 }
 
-// Configuration for the parser
-static mut LILYPOND_DISABLED: bool = false;
 
 #[wasm_bindgen]
 pub fn parse_notation(input_text: &str) -> ParseResult {
     // Set panic hook for better error messages in WASM
     console_error_panic_hook::set_once();
 
-    match parse_notation_internal(input_text) {
-        Ok((lilypond, yaml, json, outline, legend, detected_system, document, vexflow, spatial_analysis_yaml)) => {
+    // V1 parse_notation deprecated - use V2 system instead
+    match unified_parser_v2(input_text) {
+        Ok((document_v2, spatial_analysis_yaml)) => {
+            let document: Document = document_v2.into();
+            
+            // Generate VexFlow output using V2 converter
+            let vexflow_json = match convert_fsm_output_to_vexflow_v2(&get_last_fsm_output(), &document.metadata) {
+                Ok(staves) => match serde_json::to_string(&staves) {
+                    Ok(json) => json,
+                    Err(_) => String::new(),
+                },
+                Err(_) => String::new(),
+            };
+            
+            // Generate LilyPond output using V2 converter
+            let lilypond_output = match lilypond_converter_v2::convert_fsm_output_to_lilypond(
+                &get_last_fsm_output(),
+                &document.metadata,
+                crate::pitch::LilyPondNoteNames::English,
+                Some(input_text)
+            ) {
+                Ok(ly_content) => ly_content,
+                Err(_) => String::new(),
+            };
+            
             ParseResult {
                 success: true,
                 error_message: None,
                 document: Some(document),
-                lilypond_output: lilypond,
-                yaml_output: yaml,
-                json_output: json,
-                outline_output: outline,
-                legend,
-                detected_system,
-                vexflow_output: vexflow,
+                lilypond_output: lilypond_output,
+                yaml_output: String::new(),
+                json_output: String::new(),
+                outline_output: String::new(),
+                legend: String::new(),
+                detected_system: "V2".to_string(),
+                vexflow_output: vexflow_json,
                 spatial_analysis_output: spatial_analysis_yaml,
             }
         }
@@ -353,11 +387,6 @@ pub fn parse_notation(input_text: &str) -> ParseResult {
 
 
 
-/// Legacy function for compatibility - use parse_notation() instead
-#[wasm_bindgen]
-pub fn convert_lilypond_to_vexflow_json(_lilypond_code: &str) -> String {
-    format!("{{\"error\": \"LilyPond-based VexFlow conversion no longer supported\"}}")
-}
 
 
 #[wasm_bindgen]
@@ -384,12 +413,18 @@ thread_local! {
     static LAST_COLORIZED_OUTPUT: RefCell<String> = RefCell::new(String::new());
     static LAST_OUTLINE_OUTPUT: RefCell<String> = RefCell::new(String::new());
     static LAST_YAML_OUTPUT: RefCell<String> = RefCell::new(String::new());
+    static LAST_FSM_OUTPUT: RefCell<Vec<rhythm_fsm_v2::OutputItemV2>> = RefCell::new(Vec::new());
     static LAST_ERROR_MESSAGE: RefCell<String> = RefCell::new(String::new());
 }
 
 #[wasm_bindgen]
 pub fn get_detected_system() -> String {
     LAST_DETECTED_SYSTEM.with(|s| s.borrow().clone())
+}
+
+/// Get the last FSM output for CLI use (avoid running FSM twice)
+pub fn get_last_fsm_output() -> Vec<rhythm_fsm_v2::OutputItemV2> {
+    LAST_FSM_OUTPUT.with(|s| s.borrow().clone())
 }
 
 #[wasm_bindgen]
@@ -417,120 +452,10 @@ pub fn get_error_message() -> String {
     LAST_ERROR_MESSAGE.with(|s| s.borrow().clone())
 }
 
-fn parse_notation_internal(input_text: &str) -> Result<(String, String, String, String, String, String, Document, String, String), Box<dyn std::error::Error>> {
-    // Use V2 parser with direct V2 LilyPond converter - no conversion needed!
-    let (document_v2, spatial_analysis_yaml) = unified_parser_v2(input_text)?;
-    let detected_system = document_v2.metadata.detected_system.clone().unwrap_or("???".to_string());
-    
-    // Convert V2 to legacy Document only for WASM compatibility (other outputs)
-    let document: Document = document_v2.clone().into();
-    
-    // Store the detected system for get_detected_system()
-    LAST_DETECTED_SYSTEM.with(|s| *s.borrow_mut() = detected_system.clone());
-    
-    // Clear error message on successful parse
-    LAST_ERROR_MESSAGE.with(|s| *s.borrow_mut() = String::new());
-
-    // Generate outputs
-    
-    let all_tokens = handwritten_lexer::tokenize_with_handwritten_lexer(input_text);
-
-    let legend = generate_legend(&all_tokens, &document.metadata);
-    
-    // Store colorized output (legend) for get_colorized_output()
-    LAST_COLORIZED_OUTPUT.with(|s| *s.borrow_mut() = legend.clone());
-    
-    let lilypond_output = unsafe {
-        if LILYPOND_DISABLED {
-            "% LilyPond output disabled".to_string()
-        } else {
-            // Use V2 converter directly - no conversion bugs!
-            lilypond_converter_v2::convert_document_v2_to_lilypond(&document_v2, LilyPondNoteNames::English, Some(input_text))
-                .unwrap_or_else(|e| format!("LilyPond V2 error: {}", e))
-        }
-    };
-    
-    // Store LilyPond output for get_lilypond_output()
-    LAST_LILYPOND_OUTPUT.with(|s| *s.borrow_mut() = lilypond_output.clone());
-    let yaml_output = serde_yaml::to_string(&document)?;
-    let json_output = serde_json::to_string_pretty(&document)?;
-    let outline_output = document.to_html_outline(0);
-    
-    // Store outline output for get_outline_output()
-    LAST_OUTLINE_OUTPUT.with(|s| *s.borrow_mut() = outline_output.clone());
-    
-    // Store YAML output for get_yaml_output()
-    LAST_YAML_OUTPUT.with(|s| *s.borrow_mut() = yaml_output.clone());
-    
-    // Debug: Check if outline contains what we expect
-    if !outline_output.contains("musical-line") {
-        // For web compatibility, ensure we have musical-line in the output
-        // (This might happen if the document structure uses 'line' instead of 'musical-line')
-        eprintln!("Warning: outline_output does not contain 'musical-line': {}", outline_output);
-    }
-    
-    // Generate VexFlow output (now from FSM, not LilyPond)
-    let vexflow_output = unsafe {
-        if LILYPOND_DISABLED {
-            // Use FSM-based VexFlow generation
-            match vexflow_fsm_converter::convert_fsm_to_vexflow(&document) {
-                Ok(vexflow_staves) => serde_json::to_string(&vexflow_staves).unwrap_or_else(|e| format!("{{\"error\": \"JSON serialization error: {}\"}}", e)),
-                Err(e) => format!("{{\"error\": \"VexFlow FSM conversion error: {}\"}}", e)
-            }
-        } else {
-            // Legacy LilyPond-based VexFlow generation removed
-            format!("{{\"error\": \"LilyPond-based VexFlow conversion no longer supported\"}}")
-        }
-    };
-
-    Ok((lilypond_output, yaml_output, json_output, outline_output, legend, detected_system, document, vexflow_output, spatial_analysis_yaml))
-}
+// parse_notation_internal deleted - V2 system used instead
 
 
 
-// Generate legend HTML
-fn generate_legend(tokens: &[crate::models::Token], metadata: &crate::models::Metadata) -> String {
-    let mut used_tokens: HashMap<String, String> = HashMap::new();
-    
-    // Collect sample values for each token type
-    for token in tokens {
-        if !used_tokens.contains_key(&token.token_type) {
-            used_tokens.insert(token.token_type.clone(), token.value.clone());
-        }
-    }
-    
-    let mut legend = String::new();
-    legend.push_str("<div class=\"legend\">");
-    legend.push_str("<strong>--- Active Token Legend ---</strong><br>");
-    
-    // Sort token types for consistent display
-    let mut sorted_tokens: Vec<_> = used_tokens.iter().collect();
-    sorted_tokens.sort_by_key(|(k, _)| *k);
-    
-    for (token_type, sample_value) in sorted_tokens {
-        let css_class = format!("token-{}", token_type.to_lowercase().replace("_", "-"));
-        legend.push_str(&format!(
-            "- {}: <span class=\"{}\">{}</span><br>",
-            token_type, css_class, sample_value
-        ));
-    }
-    
-    // Add metadata legend entries if present
-    if metadata.title.is_some() {
-        legend.push_str("- TITLE: <span class=\"token-title\">Title Text</span><br>");
-    }
-    if !metadata.directives.is_empty() {
-        legend.push_str("- DIRECTIVE_KEY: <span class=\"token-directive-key\">key:</span><br>");
-        legend.push_str("- DIRECTIVE_VALUE: <span class=\"token-directive-value\">value</span><br>");
-    }
-    
-    legend.push_str("- OCTAVE_MARKER: <span class=\"token-octave-marker\" style=\"color: purple; font-style: italic;\">.':,</span><br>");
-    legend.push_str("- UNASSIGNED: <span class=\"token-unassigned\"> </span><br>");
-    legend.push_str("<strong>---------------------------</strong>");
-    legend.push_str("</div>");
-    
-    legend
-}
 
 // Initialize function called when WASM module loads
 #[wasm_bindgen(start)]

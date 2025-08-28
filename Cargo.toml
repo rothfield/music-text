@@ -11,41 +11,8 @@ name = "cli"
 path = "src/bin/cli.rs"
 
 [[bin]]
-name = "data_generator"
-path = "src/bin/data_generator.rs"
-required-features = ["data_generation"]
-
-[[bin]]
 name = "get_vexflow_fsm"
 path = "src/bin/get_vexflow_fsm.rs"
-
-[[bin]]
-name = "simple_test"
-path = "src/bin/simple_test.rs"
-
-[[bin]]
-name = "debug_test"
-path = "src/bin/debug_test.rs"
-
-[[bin]]
-name = "debug_unified"
-path = "src/bin/debug_unified.rs"
-
-[[bin]]
-name = "debug_document_difference"
-path = "src/bin/debug_document_difference.rs"
-
-[[bin]]
-name = "keystroke_test"
-path = "src/bin/keystroke_test.rs"
-
-[[bin]]
-name = "quick_test"
-path = "src/bin/quick_test.rs"
-
-[[bin]]
-name = "test_notation_detection"
-path = "src/bin/test_notation_detection.rs"
 
 [dependencies]
 bs58 = "0.5.0"

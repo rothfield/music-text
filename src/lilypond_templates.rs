@@ -176,6 +176,12 @@ pub fn auto_select_template_v2(document: &DocumentV2) -> LilyPondTemplate {
     }
 }
 
+pub fn auto_select_template_for_metadata(metadata: &crate::models::Metadata) -> LilyPondTemplate {
+    // Always use Standard template for CLI output to get compact paper settings
+    // The Standard template has proper paper size constraints for web UI display
+    LilyPondTemplate::Standard
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

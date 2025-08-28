@@ -63,6 +63,10 @@ async function loadWasm() {
         const loadEndTime = performance.now();
         const loadTimeMs = Math.round(loadEndTime - loadStartTime);
         wasmLoaded = true;
+        
+        // Expose WASM module globally for VexFlow renderer
+        window.wasm = wasm;
+        window.wasmLoaded = wasmLoaded;
         console.log(`WASM module loaded successfully in ${loadTimeMs}ms`);
 
         const version = wasm.get_version();
@@ -163,9 +167,17 @@ async function generateStaffNotation() {
             return;
         }
         
-        await parseNotation(notation, true);
         if (!wasmLoaded) return;
-        const lilypondCode = wasm.get_lilypond_output();
+        
+        // Use WASM ParseResult to get LilyPond output (same as VexFlow approach)
+        const result = wasm.parse_notation(notation);
+        if (!result.success) {
+            elements.staffNotationImage.style.display = 'none';
+            elements.staffNotationPlaceholder.style.display = 'block';
+            elements.staffNotationPlaceholder.innerHTML = 'Failed to parse notation';
+            return;
+        }
+        const lilypondCode = result.lilypond_output;
         
         if (!lilypondCode || typeof lilypondCode !== 'string' || !lilypondCode.trim()) {
             elements.staffNotationImage.style.display = 'none';
@@ -179,16 +191,16 @@ async function generateStaffNotation() {
 
         lilypondGenerationTimestamps.push(now);
 
-        const result = await generateLilypondPngApi(lilypondCode);
+        const pngResult = await generateLilypondPngApi(lilypondCode);
         
-        if (result.success && result.imageUrl) {
-            elements.staffNotationImage.src = result.imageUrl;
+        if (pngResult.success && pngResult.imageUrl) {
+            elements.staffNotationImage.src = pngResult.imageUrl;
             elements.staffNotationImage.style.display = 'block';
             elements.staffNotationPlaceholder.style.display = 'none';
             showStatus(elements.statusContainer, 'Staff notation generated successfully!', 'success');
             elements.lilypondSourceSection.style.display = 'block';
         } else {
-            throw new Error(result.error || 'Failed to generate staff notation');
+            throw new Error(pngResult.error || 'Failed to generate staff notation');
         }
     } catch (error) {
         console.error('Staff notation generation failed:', error);

@@ -1,47 +1,139 @@
 // Rhythm FSM V2 - Works with ParsedElement instead of Node
-use crate::models_v2::{ParsedElement, Position};
+use crate::models_v2::{ParsedElement, ParsedChild, OrnamentType, Position};
 use crate::pitch::PitchCode;
+use fraction::Fraction;
 
-fn previous_power_of_two(n: usize) -> usize {
-    if n <= 1 {
-        return 1;
-    }
-    let mut power = 1;
-    while power * 2 < n {
-        power *= 2;
-    }
-    power
-}
 
-fn gcd(a: usize, b: usize) -> usize {
-    if b == 0 {
-        a
-    } else {
-        gcd(b, a % b)
-    }
-}
-
-fn reduce_fraction(numerator: usize, denominator: usize) -> (usize, usize) {
-    let g = gcd(numerator, denominator);
-    (numerator / g, denominator / g)
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParsedElementType {
+    Note,
+    Rest, 
+    Dash,
+    Barline,
+    SlurStart,
+    SlurEnd,
+    Whitespace,
+    Newline,
+    Word,
+    Symbol,
+    Unknown,
 }
 
 #[derive(Debug, Clone)]
-struct ElementV2 {
-    element: ParsedElement,
-    subdivisions: usize,
-    duration: Option<String>,
+pub struct BeatElement {
+    // Beat-specific fields
+    pub subdivisions: usize,
+    pub duration: Fraction,        // Actual beat fraction: subdivisions/divisions  
+    pub tuplet_duration: Fraction, // Simple rule duration: subdivisions * (1/4 ÷ power_of_2)
+    
+    // All ParsedElement fields copied directly (bit copy approach)
+    pub pitch_code: Option<PitchCode>, // Note/Dash: Some(code), Others: None
+    pub octave: Option<i8>,            // Note/Dash: Some(octave), Others: None  
+    pub value: String,                 // Original text value from all elements
+    pub position: Position,            // Position from all elements
+    pub children: Vec<ParsedChild>,    // Note: actual children, Others: empty vec
+    pub element_duration: Option<(usize, usize)>, // Original ParsedElement duration (replaced by Fraction durations)
+    
+    // Extracted convenience fields
+    pub syl: Option<String>,           // Extracted from children
+    pub ornaments: Vec<OrnamentType>,  // Extracted from children  
+    pub octave_markers: Vec<String>,   // Extracted from children
+    
+    // Element type (instead of multiple boolean flags)
+    pub element_type: ParsedElementType,
 }
 
-#[derive(Debug)]
-struct BeatV2 {
-    divisions: usize,
-    elements: Vec<ElementV2>,
-    tied_to_previous: bool,
+impl From<ParsedElement> for BeatElement {
+    fn from(element: ParsedElement) -> Self {
+        let (pitch_code, octave, value, position, children, element_duration, element_type) = match element {
+            ParsedElement::Note { pitch_code, octave, value, position, children, duration } => 
+                (Some(pitch_code), Some(octave), value, position, children, duration, ParsedElementType::Note),
+            ParsedElement::Rest { value, position, duration } => 
+                (None, None, value, position, vec![], duration, ParsedElementType::Rest),
+            ParsedElement::Dash { pitch_code, octave, position, duration } => 
+                (pitch_code, octave, "-".to_string(), position, vec![], duration, ParsedElementType::Dash),
+            ParsedElement::Barline { style, position } => 
+                (None, None, style, position, vec![], None, ParsedElementType::Barline),
+            ParsedElement::SlurStart { position } => 
+                (None, None, "(".to_string(), position, vec![], None, ParsedElementType::SlurStart),
+            ParsedElement::SlurEnd { position } => 
+                (None, None, ")".to_string(), position, vec![], None, ParsedElementType::SlurEnd),
+            ParsedElement::Whitespace { width: _, position } => 
+                (None, None, " ".to_string(), position, vec![], None, ParsedElementType::Whitespace),
+            ParsedElement::Newline { position } => 
+                (None, None, "\n".to_string(), position, vec![], None, ParsedElementType::Newline),
+            ParsedElement::Word { text, position } => 
+                (None, None, text, position, vec![], None, ParsedElementType::Word),
+            ParsedElement::Symbol { value, position } => 
+                (None, None, value, position, vec![], None, ParsedElementType::Symbol),
+            ParsedElement::Unknown { value, position } => 
+                (None, None, value, position, vec![], None, ParsedElementType::Unknown),
+        };
+        
+        // Extract convenience fields from children
+        let syl = children.iter().find_map(|child| match child {
+            ParsedChild::Syllable { text, .. } => Some(text.clone()),
+            _ => None
+        });
+        
+        let ornaments = children.iter().filter_map(|child| match child {
+            ParsedChild::Ornament { kind, .. } => Some(kind.clone()),
+            _ => None
+        }).collect();
+        
+        let octave_markers = children.iter().filter_map(|child| match child {
+            ParsedChild::OctaveMarker { symbol, .. } => Some(symbol.clone()),
+            _ => None
+        }).collect();
+        
+        Self {
+            subdivisions: 1, // Default, will be set by FSM
+            duration: Fraction::new(0u64, 1u64), // Default, will be calculated in finish_beat
+            tuplet_duration: Fraction::new(0u64, 1u64), // Default, will be calculated in finish_beat
+            pitch_code,
+            octave,
+            value,
+            position,
+            children,
+            element_duration,
+            syl,
+            ornaments,
+            octave_markers,
+            element_type,
+        }
+    }
 }
 
-#[derive(Debug)]
-enum OutputItemV2 {
+impl BeatElement {
+    pub fn with_subdivisions(mut self, subdivisions: usize) -> Self {
+        self.subdivisions = subdivisions;
+        self
+    }
+    
+    pub fn extend_subdivision(&mut self) {
+        self.subdivisions += 1;
+    }
+    
+    // Helper methods for element type checking
+    pub fn is_note(&self) -> bool { self.element_type == ParsedElementType::Note }
+    pub fn is_rest(&self) -> bool { self.element_type == ParsedElementType::Rest }
+    pub fn is_dash(&self) -> bool { self.element_type == ParsedElementType::Dash }
+    pub fn is_barline(&self) -> bool { self.element_type == ParsedElementType::Barline }
+    pub fn is_slur_start(&self) -> bool { self.element_type == ParsedElementType::SlurStart }
+    pub fn is_slur_end(&self) -> bool { self.element_type == ParsedElementType::SlurEnd }
+}
+
+#[derive(Debug, Clone)]
+pub struct BeatV2 {
+    pub divisions: usize,
+    pub elements: Vec<BeatElement>,           // RENAMED: ElementV2 → BeatElement
+    pub tied_to_previous: bool,
+    pub is_tuplet: bool,                      // NEW: Fast boolean check  
+    pub tuplet_ratio: Option<(usize, usize)>, // NEW: (divisions, power_of_2) for tuplets
+}
+
+#[derive(Debug, Clone)]
+pub enum OutputItemV2 {
     Beat(BeatV2),
     Barline(String),
     Breathmark,
@@ -130,31 +222,34 @@ impl FSMV2 {
     }
 
     fn start_beat_pitch(&mut self, element: &ParsedElement) {
-        let mut beat = BeatV2 { divisions: 1, elements: vec![], tied_to_previous: false };
-        beat.elements.push(ElementV2 { element: element.clone(), subdivisions: 1, duration: None });
+        let mut beat = BeatV2 { divisions: 1, elements: vec![], tied_to_previous: false, is_tuplet: false, tuplet_ratio: None };
+        beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
         self.current_beat = Some(beat);
         self.state = State::InBeat;
     }
 
     fn start_beat_dash(&mut self, dash_element: &ParsedElement) {
         let last_element = self.find_last_non_dash_element();
-        if let Some(prev_element) = last_element {
+        if let Some(prev_beat_element) = last_element {
             // Found previous pitch - create a tied note
-            if let ParsedElement::Note { pitch_code, octave, position, .. } = prev_element {
+            if prev_beat_element.is_note() && prev_beat_element.pitch_code.is_some() {
                 let tied_note = ParsedElement::Note {
-                    pitch_code: *pitch_code,
-                    octave: *octave,
-                    value: format!("{:?}", pitch_code), // Convert pitch_code to debug representation
+                    pitch_code: prev_beat_element.pitch_code.unwrap(),
+                    octave: prev_beat_element.octave.unwrap(),
+                    value: format!("{:?}", prev_beat_element.pitch_code.unwrap()), // Convert pitch_code to debug representation
                     position: dash_element.position().clone(),
                     children: vec![], // No children for tied notes
+                    duration: None,
                 };
 
                 let mut beat = BeatV2 { 
                     divisions: 1, 
                     elements: vec![], 
-                    tied_to_previous: true
+                    tied_to_previous: true,
+                    is_tuplet: false,
+                    tuplet_ratio: None
                 };
-                beat.elements.push(ElementV2 { element: tied_note, subdivisions: 1, duration: None });
+                beat.elements.push(BeatElement::from(tied_note).with_subdivisions(1));
                 self.current_beat = Some(beat);
                 self.state = State::InBeat;
             } else {
@@ -171,9 +266,10 @@ impl FSMV2 {
         let rest_element = ParsedElement::Rest {
             value: "r".to_string(),
             position: dash_element.position().clone(),
+            duration: None,
         };
-        let mut beat = BeatV2 { divisions: 1, elements: vec![], tied_to_previous: false };
-        beat.elements.push(ElementV2 { element: rest_element, subdivisions: 1, duration: None });
+        let mut beat = BeatV2 { divisions: 1, elements: vec![], tied_to_previous: false, is_tuplet: false, tuplet_ratio: None };
+        beat.elements.push(BeatElement::from(rest_element).with_subdivisions(1));
         self.current_beat = Some(beat);
         self.state = State::InBeat;
     }
@@ -182,7 +278,7 @@ impl FSMV2 {
         if let Some(beat) = &mut self.current_beat {
             beat.divisions += 1;
             if let Some(last) = beat.elements.last_mut() {
-                last.subdivisions += 1;
+                last.extend_subdivision();
             }
         }
     }
@@ -190,17 +286,17 @@ impl FSMV2 {
     fn add_pitch_to_beat(&mut self, element: &ParsedElement) {
         if let Some(beat) = &mut self.current_beat {
             beat.divisions += 1;
-            beat.elements.push(ElementV2 { element: element.clone(), subdivisions: 1, duration: None });
+            beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
         }
     }
 
-    fn find_last_non_dash_element(&self) -> Option<&ParsedElement> {
+    fn find_last_non_dash_element(&self) -> Option<&BeatElement> {
         // Look through the output to find the last non-dash element
         for output_item in self.output.iter().rev() {
             if let OutputItemV2::Beat(beat) = output_item {
-                for element_wrapper in beat.elements.iter().rev() {
-                    if !self.is_dash(&element_wrapper.element) {
-                        return Some(&element_wrapper.element);
+                for beat_element in beat.elements.iter().rev() {
+                    if !beat_element.is_dash() {
+                        return Some(beat_element);
                     }
                 }
             }
@@ -253,9 +349,44 @@ impl FSMV2 {
     }
 
     fn finish_beat(&mut self) {
-        if let Some(beat) = self.current_beat.take() {
+        if let Some(mut beat) = self.current_beat.take() {
+            // Tuplet detection: not a power of 2 AND more than one element
+            // A single element always fills the beat, regardless of subdivisions
+            beat.is_tuplet = beat.elements.len() > 1 && 
+                           beat.divisions > 1 && 
+                           (beat.divisions & (beat.divisions - 1)) != 0;
+            
+            if beat.is_tuplet {
+                let power_of_2 = Self::find_next_lower_power_of_2(beat.divisions);
+                beat.tuplet_ratio = Some((beat.divisions, power_of_2));
+                
+                // Calculate both duration types for tuplets
+                let each_unit = Fraction::new(1u64, 4u64) / power_of_2;
+                for beat_element in &mut beat.elements {
+                    // Actual duration (subdivision fraction of the beat)
+                    beat_element.duration = Fraction::new(beat_element.subdivisions as u64, beat.divisions as u64);
+                    // Simple rule duration (for notation display)
+                    beat_element.tuplet_duration = each_unit * beat_element.subdivisions;
+                }
+            } else {
+                // Regular beat processing
+                for beat_element in &mut beat.elements {
+                    let base_duration = Fraction::new(beat_element.subdivisions as u64, beat.divisions as u64) * Fraction::new(1u64, 4u64);
+                    beat_element.duration = base_duration;
+                    beat_element.tuplet_duration = base_duration; // Same for regular beats
+                }
+            }
+            
             self.output.push(OutputItemV2::Beat(beat));
         }
+    }
+    
+    fn find_next_lower_power_of_2(n: usize) -> usize {
+        let mut power = 1;
+        while power * 2 < n {
+            power *= 2;
+        }
+        power.max(2)
     }
 
     fn emit_barline(&mut self, value: String) {
@@ -276,6 +407,10 @@ impl FSMV2 {
 }
 
 // Convert FSM output back to ParsedElements
+pub fn convert_fsm_output_to_elements_public(output: Vec<OutputItemV2>) -> Vec<ParsedElement> {
+    convert_fsm_output_to_elements(output)
+}
+
 fn convert_fsm_output_to_elements(output: Vec<OutputItemV2>) -> Vec<ParsedElement> {
     let mut result = Vec::new();
     
@@ -283,8 +418,34 @@ fn convert_fsm_output_to_elements(output: Vec<OutputItemV2>) -> Vec<ParsedElemen
         match item {
             OutputItemV2::Beat(beat) => {
                 // Create a beat container or just add elements directly
-                for element_wrapper in beat.elements {
-                    result.push(element_wrapper.element);
+                for beat_element in beat.elements {
+                    // Reconstruct ParsedElement from BeatElement
+                    let reconstructed_element = match beat_element.element_type {
+                        ParsedElementType::Note => ParsedElement::Note {
+                            pitch_code: beat_element.pitch_code.unwrap(),
+                            octave: beat_element.octave.unwrap(),
+                            value: beat_element.value,
+                            position: beat_element.position,
+                            children: beat_element.children,
+                            duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),
+                        },
+                        ParsedElementType::Rest => ParsedElement::Rest {
+                            value: beat_element.value,
+                            position: beat_element.position,
+                            duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),
+                        },
+                        ParsedElementType::Dash => ParsedElement::Dash {
+                            pitch_code: beat_element.pitch_code,
+                            octave: beat_element.octave,
+                            position: beat_element.position,
+                            duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),
+                        },
+                        _ => ParsedElement::Symbol {
+                            value: beat_element.value,
+                            position: beat_element.position,
+                        }
+                    };
+                    result.push(reconstructed_element);
                 }
             },
             OutputItemV2::Barline(value) => {
@@ -337,4 +498,23 @@ pub fn group_elements_with_fsm(elements: &[ParsedElement], _lines_of_music: &[us
     }
     
     result
+}
+
+// New function that returns the full FSM output with beat information
+pub fn group_elements_with_fsm_full(elements: &[ParsedElement], _lines_of_music: &[usize]) -> Vec<OutputItemV2> {
+    eprintln!("V2 FSM DEBUG: Input elements count: {}", elements.len());
+    for (i, element) in elements.iter().enumerate() {
+        eprintln!("V2 FSM DEBUG: Element {}: {:?}", i, element);
+    }
+    
+    let mut fsm = FSMV2::new();
+    let element_refs: Vec<&ParsedElement> = elements.iter().collect();
+    fsm.process(element_refs);
+    
+    eprintln!("V2 FSM DEBUG: Output items count: {}", fsm.output.len());
+    for (i, item) in fsm.output.iter().enumerate() {
+        eprintln!("V2 FSM DEBUG: Output {}: {:?}", i, item);
+    }
+    
+    fsm.output
 }

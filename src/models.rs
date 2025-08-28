@@ -84,6 +84,8 @@ pub struct Node {
     pub beat_bracket_end: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub syl: Option<String>,  // Syllable/lyric text associated with this note
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_fraction: Option<String>, // Duration as fraction "1/2", "1/4", etc
 }
 
 impl Node {
@@ -103,6 +105,7 @@ impl Node {
             beat_bracket_start: None,
             beat_bracket_end: None,
             syl: None,
+            duration_fraction: None,
         }
     }
     
@@ -122,6 +125,7 @@ impl Node {
             beat_bracket_start: None,
             beat_bracket_end: None,
             syl: None,
+            duration_fraction: None,
         }
     }
 }

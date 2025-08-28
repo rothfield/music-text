@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use notation_parser::parse_notation;
+use notation_parser::{parse_notation, convert_fsm_output_to_vexflow_v2};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -18,14 +18,24 @@ fn main() {
         }
     };
     
-    // Parse the notation
+    // Parse the notation to get document
     let result = parse_notation(&input);
     if !result.success() {
         eprintln!("{{\"error\": \"Failed to parse notation\"}}");
         std::process::exit(1);
     }
     
-    // Get VexFlow FSM output and print to stdout
-    let vexflow_output = result.get_fsm_vexflow_output();
-    println!("{}", vexflow_output);
+    // Get FSM output and convert using V2 converter
+    let fsm_output = notation_parser::get_last_fsm_output();
+    let document = result.get_document().expect("Document should exist");
+    
+    match convert_fsm_output_to_vexflow_v2(&fsm_output, &document.metadata) {
+        Ok(staves) => {
+            match serde_json::to_string(&staves) {
+                Ok(json) => println!("{}", json),
+                Err(e) => eprintln!("{{\"error\": \"JSON serialization failed: {}\"}}", e)
+            }
+        }
+        Err(e) => eprintln!("{{\"error\": \"VexFlow conversion failed: {}\"}}", e)
+    }
 }
