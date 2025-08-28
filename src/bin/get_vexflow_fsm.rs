@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use notation_parser::{parse_notation, convert_fsm_output_to_vexflow_v2};
+use notation_parser::{parse_notation, convert_fsm_output_to_staff_notation};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -29,7 +29,7 @@ fn main() {
     let fsm_output = notation_parser::get_last_fsm_output();
     let document = result.get_document().expect("Document should exist");
     
-    match convert_fsm_output_to_vexflow_v2(&fsm_output, &document.metadata) {
+    match convert_fsm_output_to_staff_notation(&fsm_output, &document.metadata) {
         Ok(staves) => {
             match serde_json::to_string(&staves) {
                 Ok(json) => println!("{}", json),

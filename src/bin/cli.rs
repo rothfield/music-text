@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (document_v2, _) = notation_parser::unified_parser_v2(&raw_text)?;
         let fsm_output = notation_parser::get_last_fsm_output();
         
-        let lilypond_output = notation_parser::lilypond_converter_v2::convert_fsm_output_to_lilypond(
+        let lilypond_output = notation_parser::to_lilypond_src::convert_fsm_output_to_lilypond_src(
             &fsm_output,
             &document_v2.metadata,
             LilyPondNoteNames::English,
@@ -122,7 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Wrote flatten spatial relationships output to {}", flattened_spatial_path.display());
 
     // --- LilyPond Output using V2 converter with FSM output ---
-    let lilypond_output = notation_parser::lilypond_converter_v2::convert_fsm_output_to_lilypond(
+    let lilypond_output = notation_parser::to_lilypond_src::convert_fsm_output_to_lilypond_src(
         &fsm_output,
         &document_v2.metadata,
         LilyPondNoteNames::English, 
@@ -156,7 +156,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Print VexFlow JSON output for testing - use V2 converter with FSM output
     let fsm_output = notation_parser::get_last_fsm_output();
-    match notation_parser::convert_fsm_output_to_vexflow_v2(&fsm_output, &document.metadata) {
+    match notation_parser::convert_fsm_output_to_staff_notation(&fsm_output, &document.metadata) {
         Ok(staves) => {
             match serde_json::to_string(&staves) {
                 Ok(vexflow_json) => {

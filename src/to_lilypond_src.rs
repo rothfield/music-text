@@ -1,10 +1,10 @@
-// V2 LilyPond Converter - Works directly with ParsedElement, no conversion needed
+// LilyPond Source Code Generator - Works directly with ParsedElement, no conversion needed
 use crate::models::{Metadata}; // Keep using existing metadata
 use crate::pitch::{Degree, LilyPondNoteNames};
 use crate::lilypond_templates::{TemplateContext, render_lilypond};
 use crate::rhythm_fsm_v2::{OutputItemV2, BeatV2};
 
-pub fn convert_fsm_output_to_lilypond(
+pub fn convert_fsm_output_to_lilypond_src(
     fsm_output: &Vec<OutputItemV2>,
     metadata: &Metadata,
     note_names: LilyPondNoteNames,

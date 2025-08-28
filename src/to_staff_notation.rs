@@ -1,24 +1,25 @@
-// V2 VexFlow Converter - Works directly with FSM OutputItemV2, clean architecture
+// Staff Notation Converter - Works directly with FSM OutputItemV2, clean architecture
+// Generates VexFlow-compatible JSON for staff notation rendering
 use crate::models::Metadata;
 use crate::rhythm_fsm_v2::{OutputItemV2, BeatV2};
 use crate::pitch::{Degree};
 use crate::rhythm::RhythmConverter;
 use serde::{Deserialize, Serialize};
 
-/// VexFlow output structures - moved from V1 vexflow_fsm_converter
+/// Staff notation output structures for rendering
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VexFlowStave {
-    pub notes: Vec<VexFlowElement>,
+pub struct StaffNotationStave {
+    pub notes: Vec<StaffNotationElement>,
     pub key_signature: Option<String>, // Key signature like "C", "G", "F", "Bb", etc.
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum VexFlowElement {
+pub enum StaffNotationElement {
     Note {
         keys: Vec<String>,
         duration: String,
         dots: u8,
-        accidentals: Vec<VexFlowAccidental>,
+        accidentals: Vec<StaffNotationAccidental>,
         tied: bool,
         original_duration: Option<String>, // Store FSM duration like "1/12" for triplet detection
         beam_start: bool,
@@ -37,13 +38,13 @@ pub enum VexFlowElement {
     SlurStart,
     SlurEnd,
     Tuplet {
-        notes: Vec<VexFlowElement>,
+        notes: Vec<StaffNotationElement>,
         ratio: (u8, u8), // (3, 2) for triplets, (5, 4) for quintuplets
     },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VexFlowAccidental {
+pub struct StaffNotationAccidental {
     pub index: usize,
     pub accidental: String,
 }
@@ -74,7 +75,7 @@ impl KeyTransposer {
     }
 
     /// Convert Degree to VexFlow key using scale degree mapping
-    fn transpose_pitch(&self, degree: Degree, octave: i8) -> (String, Vec<VexFlowAccidental>) {
+    fn transpose_pitch(&self, degree: Degree, octave: i8) -> (String, Vec<StaffNotationAccidental>) {
         // Map scale degree to note in the current key
         let (scale_degree_letter, chromatic_alteration) = degree_to_scale_degree(degree);
         
@@ -102,7 +103,7 @@ impl KeyTransposer {
                 "b".repeat((-chromatic_alteration) as usize)
             };
             
-            accidentals.push(VexFlowAccidental {
+            accidentals.push(StaffNotationAccidental {
                 index: 0,
                 accidental: accidental_symbol,
             });
@@ -147,16 +148,16 @@ fn degree_to_scale_degree(degree: Degree) -> (&'static str, i8) {
 
 
 
-/// Main conversion function from V2 FSM output to VexFlow JSON
-pub fn convert_fsm_output_to_vexflow(
+/// Main conversion function from V2 FSM output to staff notation JSON
+pub fn convert_fsm_output_to_staff_notation(
     fsm_output: &Vec<OutputItemV2>,
     metadata: &Metadata
-) -> Result<Vec<VexFlowStave>, String> {
+) -> Result<Vec<StaffNotationStave>, String> {
     let transpose_key = metadata.attributes.get("Key");
     let transposer = KeyTransposer::new(transpose_key);
     
     let mut staves = Vec::new();
-    let mut current_stave = VexFlowStave { 
+    let mut current_stave = StaffNotationStave { 
         notes: Vec::new(),
         key_signature: transpose_key.cloned()
     };
@@ -187,18 +188,18 @@ pub fn convert_fsm_output_to_vexflow(
                 // Already processed
             },
             OutputItemV2::Barline(style) => {
-                current_stave.notes.push(VexFlowElement::BarLine {
+                current_stave.notes.push(StaffNotationElement::BarLine {
                     bar_type: map_barline_style(style),
                 });
             },
             OutputItemV2::Breathmark => {
-                current_stave.notes.push(VexFlowElement::Breathe);
+                current_stave.notes.push(StaffNotationElement::Breathe);
             },
             OutputItemV2::SlurStart => {
-                current_stave.notes.push(VexFlowElement::SlurStart);
+                current_stave.notes.push(StaffNotationElement::SlurStart);
             },
             OutputItemV2::SlurEnd => {
-                current_stave.notes.push(VexFlowElement::SlurEnd);
+                current_stave.notes.push(StaffNotationElement::SlurEnd);
             },
         }
     }
@@ -210,7 +211,7 @@ pub fn convert_fsm_output_to_vexflow(
     
     // If no beats were processed, create empty stave
     if staves.is_empty() {
-        staves.push(VexFlowStave {
+        staves.push(StaffNotationStave {
             notes: Vec::new(),
             key_signature: transpose_key.cloned()
         });
@@ -221,7 +222,7 @@ pub fn convert_fsm_output_to_vexflow(
 
 fn process_beat_v2(
     beat: &BeatV2, 
-    stave: &mut VexFlowStave,
+    stave: &mut StaffNotationStave,
     transposer: &KeyTransposer,
     next_beat_tied: bool
 ) -> Result<(), String> {
@@ -239,7 +240,7 @@ fn process_beat_v2(
                 for (j, (vexflow_duration, dots)) in vexflow_durations.iter().enumerate() {
                     let should_tie = j < vexflow_durations.len() - 1; // Tie if more durations follow
                     
-                    beat_notes.push(VexFlowElement::Note {
+                    beat_notes.push(StaffNotationElement::Note {
                         keys: vec![key.clone()],
                         duration: vexflow_duration.clone(),
                         dots: *dots,
@@ -256,7 +257,7 @@ fn process_beat_v2(
                 let vexflow_durations = RhythmConverter::fraction_to_vexflow(beat_element.tuplet_duration);
                 
                 for (vexflow_duration, dots) in vexflow_durations {
-                    beat_notes.push(VexFlowElement::Rest {
+                    beat_notes.push(StaffNotationElement::Rest {
                         duration: vexflow_duration,
                         dots,
                         original_duration: Some(format!("{}", beat_element.tuplet_duration)),
@@ -269,8 +270,8 @@ fn process_beat_v2(
     // Handle ties to next beat: if the next beat is tied to this beat,
     // mark the last note in this beat as tied
     if next_beat_tied {
-        if let Some(last_note) = beat_notes.iter_mut().rev().find(|note| matches!(note, VexFlowElement::Note { .. })) {
-            if let VexFlowElement::Note { tied, .. } = last_note {
+        if let Some(last_note) = beat_notes.iter_mut().rev().find(|note| matches!(note, StaffNotationElement::Note { .. })) {
+            if let StaffNotationElement::Note { tied, .. } = last_note {
                 *tied = true;
             }
         }
@@ -282,7 +283,7 @@ fn process_beat_v2(
     // Use FSM-provided tuplet information
     if beat.is_tuplet {
         let (tuplet_num, tuplet_den) = beat.tuplet_ratio.unwrap();
-        stave.notes.push(VexFlowElement::Tuplet {
+        stave.notes.push(StaffNotationElement::Tuplet {
             notes: beat_notes,
             ratio: (tuplet_num as u8, tuplet_den as u8),
         });
@@ -293,7 +294,7 @@ fn process_beat_v2(
     Ok(())
 }
 
-fn apply_beaming_v2(notes: &mut Vec<VexFlowElement>, is_tuplet: bool) {
+fn apply_beaming_v2(notes: &mut Vec<StaffNotationElement>, is_tuplet: bool) {
     if notes.len() < 2 {
         return;
     }
@@ -305,7 +306,7 @@ fn apply_beaming_v2(notes: &mut Vec<VexFlowElement>, is_tuplet: bool) {
     
     for (i, note) in notes.iter().enumerate() {
         let is_beamable = match note {
-            VexFlowElement::Note { duration, .. } => {
+            StaffNotationElement::Note { duration, .. } => {
                 if is_tuplet {
                     // In tuplets, beam quarter notes and shorter
                     matches!(duration.as_str(), "q" | "8" | "16" | "32")
@@ -349,10 +350,10 @@ fn apply_beaming_v2(notes: &mut Vec<VexFlowElement>, is_tuplet: bool) {
     }
 }
 
-fn apply_beam_markers(notes: &mut Vec<VexFlowElement>, start: usize, end: usize) {
+fn apply_beam_markers(notes: &mut Vec<StaffNotationElement>, start: usize, end: usize) {
     for (i, note) in notes.iter_mut().enumerate() {
         if i >= start && i <= end {
-            if let VexFlowElement::Note { beam_start, beam_end, .. } = note {
+            if let StaffNotationElement::Note { ref mut beam_start, ref mut beam_end, .. } = note {
                 *beam_start = i == start;
                 *beam_end = i == end;
             }

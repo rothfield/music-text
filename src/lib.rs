@@ -13,10 +13,10 @@ mod lyrics_v2; // New lyrics processor for ParsedElement
 mod pitch;
 mod display;
 // mod lilypond_converter; // DELETED - V1 converter unused
-pub mod lilypond_converter_v2; // New V2 converter - no conversion needed!
+pub mod to_lilypond_src; // LilyPond source code generation
 mod lilypond_templates; // Still used by V2 converter
 mod outline;
-pub mod vexflow_converter_v2; // New V2 VexFlow converter
+pub mod to_staff_notation; // Staff notation rendering (VexFlow)
 mod rhythm;
 mod notation_detector;
 // mod lyrics; // DELETED - replaced with lyrics_v2
@@ -30,7 +30,7 @@ pub use pitch::LilyPondNoteNames;
 pub use display::generate_flattened_spatial_view;
 pub use outline::{generate_outline, ToOutline};
 pub use pitch::{lookup_pitch, Notation}; // guess_notation DELETED - unused
-pub use vexflow_converter_v2::{convert_fsm_output_to_vexflow as convert_fsm_output_to_vexflow_v2, VexFlowStave, VexFlowElement, VexFlowAccidental};
+pub use to_staff_notation::{convert_fsm_output_to_staff_notation, StaffNotationStave, StaffNotationElement, StaffNotationAccidental};
 
 /// Complete parsing result structure for WASM API
 #[wasm_bindgen]
@@ -320,7 +320,7 @@ pub fn parse_notation(input_text: &str) -> ParseResult {
             let document: Document = document_v2.into();
             
             // Generate VexFlow output using V2 converter
-            let vexflow_json = match convert_fsm_output_to_vexflow_v2(&get_last_fsm_output(), &document.metadata) {
+            let vexflow_json = match convert_fsm_output_to_staff_notation(&get_last_fsm_output(), &document.metadata) {
                 Ok(staves) => match serde_json::to_string(&staves) {
                     Ok(json) => json,
                     Err(_) => String::new(),
@@ -329,7 +329,7 @@ pub fn parse_notation(input_text: &str) -> ParseResult {
             };
             
             // Generate LilyPond output using V2 converter
-            let lilypond_output = match lilypond_converter_v2::convert_fsm_output_to_lilypond(
+            let lilypond_output = match to_lilypond_src::convert_fsm_output_to_lilypond_src(
                 &get_last_fsm_output(),
                 &document.metadata,
                 crate::pitch::LilyPondNoteNames::English,
