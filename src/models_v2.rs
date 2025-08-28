@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use crate::models::{Node, Metadata}; // Keep using existing for compatibility
-use crate::pitch::PitchCode;
+use crate::pitch::Degree;
 
 /// Shared position information for all parsed elements
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -59,7 +59,7 @@ pub enum ParsedChild {
 pub enum ParsedElement {
     /// Musical note with pitch
     Note { 
-        pitch_code: PitchCode,
+        degree: Degree,
         octave: i8, // Calculated from octave markers
         value: String, // Original text value (e.g. "G", "S", "1")
         position: Position,
@@ -76,7 +76,7 @@ pub enum ParsedElement {
     
     /// Note extension (dash) - inherits pitch from preceding note
     Dash { 
-        pitch_code: Option<PitchCode>, // Inherited from preceding note
+        degree: Option<Degree>, // Inherited from preceding note
         octave: Option<i8>, // Inherited or calculated from local octave markers
         position: Position,
         duration: Option<(usize, usize)>, // Duration fraction (numerator, denominator) from FSM
@@ -209,14 +209,14 @@ impl Position {
 impl From<ParsedElement> for Node {
     fn from(element: ParsedElement) -> Self {
         match element {
-            ParsedElement::Note { pitch_code, octave, value, position, children, duration } => {
+            ParsedElement::Note { degree, octave, value, position, children, duration } => {
                 let mut node = Node::new(
                     "PITCH".to_string(),
                     value,
                     position.row,
                     position.col,
                 );
-                node.pitch_code = Some(pitch_code);
+                node.degree = Some(degree);
                 node.octave = Some(octave);
                 
                 // Store duration if present
@@ -257,9 +257,9 @@ impl From<ParsedElement> for Node {
                 node
             },
             
-            ParsedElement::Dash { pitch_code, octave, position, duration } => {
+            ParsedElement::Dash { degree, octave, position, duration } => {
                 let mut node = Node::new("DASH".to_string(), "-".to_string(), position.row, position.col);
-                node.pitch_code = pitch_code;
+                node.degree = degree;
                 node.octave = octave;
                 if let Some((num, denom)) = duration {
                     node.duration_fraction = Some(format!("{}/{}", num, denom));

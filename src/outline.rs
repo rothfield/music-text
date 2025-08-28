@@ -154,9 +154,9 @@ impl Node {
         output.push_str(&format!("{}  {}\n", indent, self.value));
         
         // Pitch-specific attributes
-        if let Some(pitch_code) = &self.pitch_code {
+        if let Some(degree) = &self.degree {
             output.push_str(&format!("{}  pitch-code\n", indent));
-            output.push_str(&format!("{}    {}\n", indent, pitchcode_to_string(*pitch_code)));
+            output.push_str(&format!("{}    {}\n", indent, pitchcode_to_string(*degree)));
         }
         
         if let Some(octave) = self.octave {

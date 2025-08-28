@@ -12,24 +12,24 @@ pub mod rhythm_fsm_v2_clean; // New FSM for ParsedElement
 mod lyrics_v2; // New lyrics processor for ParsedElement
 mod pitch;
 mod display;
-mod lilypond_converter;
+// mod lilypond_converter; // DELETED - V1 converter unused
 pub mod lilypond_converter_v2; // New V2 converter - no conversion needed!
-mod lilypond_templates;
+mod lilypond_templates; // Still used by V2 converter
 mod outline;
 pub mod vexflow_converter_v2; // New V2 VexFlow converter
 mod rhythm;
 mod notation_detector;
-mod lyrics;
+// mod lyrics; // DELETED - replaced with lyrics_v2
 
 pub use models::*;
-pub use lexer::{lex_text, tokenize_chunk};
+pub use lexer::lex_text; // tokenize_chunk DELETED - unused
 pub use handwritten_lexer::tokenize_with_handwritten_lexer;
-pub use lilypond_converter::{convert_to_lilypond, convert_to_lilypond_with_template};
-pub use lilypond_templates::{LilyPondTemplate, TemplateContext};
+// pub use lilypond_converter::{convert_to_lilypond, convert_to_lilypond_with_template}; // DELETED - V1 converter unused
+// pub use lilypond_templates::{LilyPondTemplate, TemplateContext}; // DELETED - V1 templates unused
 pub use pitch::LilyPondNoteNames;
 pub use display::generate_flattened_spatial_view;
 pub use outline::{generate_outline, ToOutline};
-pub use pitch::{lookup_pitch, guess_notation, Notation};
+pub use pitch::{lookup_pitch, Notation}; // guess_notation DELETED - unused
 pub use vexflow_converter_v2::{convert_fsm_output_to_vexflow as convert_fsm_output_to_vexflow_v2, VexFlowStave, VexFlowElement, VexFlowAccidental};
 
 /// Complete parsing result structure for WASM API
@@ -103,17 +103,7 @@ impl ParseResult {
 }
 
 impl ParseResult {
-    /// Get English LilyPond output from the stored document
-    pub fn get_english_lilypond_output(&self, source_text: &str) -> String {
-        if let Some(ref doc) = self.document {
-            match convert_to_lilypond(doc, LilyPondNoteNames::English, Some(source_text)) {
-                Ok(lily) => lily,
-                Err(e) => format!("Error: {}", e),
-            }
-        } else {
-            "No document available".to_string()
-        }
-    }
+    // get_english_lilypond_output DELETED - unused V1 function
     
     /// Get the parsed document
     pub fn get_document(&self) -> Option<Document> {
@@ -139,9 +129,9 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
         match token.token_type.as_str() {
             "PITCH" => {
                 // Use global notation detection instead of per-token guessing
-                if let Some(pitch_code) = lookup_pitch(&token.value, global_notation) {
+                if let Some(degree) = lookup_pitch(&token.value, global_notation) {
                     elements.push(ParsedElement::Note {
-                        pitch_code,
+                        degree,
                         octave: 0, // Default octave, will be calculated later
                         value: token.value.clone(),
                         position,
@@ -170,7 +160,7 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
             },
             "DASH" => {
                 elements.push(ParsedElement::Dash {
-                    pitch_code: None, // Will be inherited later
+                    degree: None, // Will be inherited later
                     octave: None,
                     position,
                     duration: None,
@@ -214,7 +204,7 @@ pub fn unified_parser_v2(input_text: &str) -> Result<(models_v2::DocumentV2, Str
     let all_tokens = handwritten_lexer::tokenize_with_handwritten_lexer(input_text);
     
     // Create lines_info for spatial analysis compatibility
-    let lines_info = lex_text(input_text);
+    let _lines_info = lex_text(input_text);
     
     // Parse metadata and detect notation system
     let (mut metadata, remaining_tokens) = lexer::parse_metadata(&all_tokens);
@@ -280,7 +270,7 @@ pub fn unified_parser_v2(input_text: &str) -> Result<(models_v2::DocumentV2, Str
     LAST_FSM_OUTPUT.with(|s| *s.borrow_mut() = fsm_output);
     
     // Phase 4: Process lyrics if present
-    if lyrics::has_lyrics(&remaining_tokens, &lines_of_music) {
+    if lyrics_v2::has_lyrics(&remaining_tokens, &lines_of_music) {
         let lyrics_lines = lyrics_v2::parse_lyrics_lines(&remaining_tokens, input_text);
         lyrics_v2::distribute_syllables_to_elements(&mut structured_elements, lyrics_lines);
     }

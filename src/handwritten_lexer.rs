@@ -2,7 +2,7 @@ use crate::models::{Token, TokenType};
 use crate::notation_detector::NotationType;
 
 pub struct HandwrittenLexer<'a> {
-    input: &'a str,
+    _input: &'a str,
     chars: Vec<char>,
     pos: usize,
     line: usize,
@@ -13,7 +13,7 @@ pub struct HandwrittenLexer<'a> {
 impl<'a> HandwrittenLexer<'a> {
     pub fn new(input: &'a str, notation_type: NotationType) -> Self {
         Self {
-            input,
+            _input: input,
             chars: input.chars().collect(),
             pos: 0,
             line: 0,

@@ -71,6 +71,40 @@ Input: "C-D" → Parse: [Note{N1}, Dash, Note{N2}] → FSM → Output: "C4 D8 tu
 
 **IMPORTANT**: All three input systems produce identical internal representation and output!
 
+## CRITICAL CRITICAL CRITICAL: Dash (-) Behavior
+
+⚠️ **CRITICAL: DASH IS THE EXTENDER SYMBOL** ⚠️
+
+The dash (-) character has **DUAL BEHAVIOR** that is essential to understand:
+
+### Primary Function: EXTENSION
+- **Extends notes within beats, across beats, and through barlines**
+- **Creates tied notes when extending a previous pitch**
+- **Duration extension**: Each dash adds one subdivision to the previous note
+
+### Secondary Function: REST
+- **Only when there is NO previous note to extend**
+- **Only when a breath mark (') has occurred, breaking the extension chain**
+
+### Critical Examples:
+
+**Extension Examples:**
+- `S- -S` → S extended (2 subdivisions) tied to S (1 subdivision) = `c4~ c8 c8`
+- `S--R` → S extended (3 subdivisions) + R (1 subdivision) 
+- `S-|-R` → S extended across barline, tied to R
+
+**Rest Examples:**
+- `-S` → rest + S (dash creates rest since no previous note)
+- `S' -R` → S + breath + rest + R (breath breaks extension chain)
+
+**CRITICAL RULE:** Dash ALWAYS tries to extend the previous note first. Only creates a rest if:
+1. No previous note exists, OR
+2. A breath mark (') has broken the extension chain
+
+**CRITICAL FOR FSMS:** The FSM must track the "extension chain" state and distinguish between:
+- Dash as extension (tied note creation)  
+- Dash as rest (when extension chain is broken)
+
 ## IMPORTANT IMPORTANT IMPORTANT: Rhythm System Understanding
 
 ⚠️ **IMPORTANT: READ RHYTHM_SYSTEM.md FIRST** ⚠️  

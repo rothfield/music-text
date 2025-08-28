@@ -7,7 +7,7 @@ use crate::models::{Document, Node, LineInfo};
 pub fn generate_flattened_spatial_view(
     document: &Document,
     lines_info: &[LineInfo],
-    styles: &HashMap<String, (String, bool)>,
+    _styles: &HashMap<String, (String, bool)>,
     _main_lines: &HashSet<usize>,
 ) -> String {
     let mut output_lines = Vec::new();

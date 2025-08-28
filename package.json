@@ -4,8 +4,15 @@
   "description": "Web interface for multi-system music notation parser",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node server.js", 
+    "dev": "node server.js",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:layout": "playwright test tests/layout.spec.js",
+    "test:functionality": "playwright test tests/functionality.spec.js", 
+    "test:performance": "playwright test tests/performance.spec.js",
+    "test:report": "playwright show-report"
   },
   "dependencies": {
     "@hufe921/canvas-editor": "^0.9.113",
@@ -15,6 +22,22 @@
     "fs-extra": "^11.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "node-fetch": "^2.7.0"
-  }
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rothfield/notation_parser.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rothfield/notation_parser/issues"
+  },
+  "homepage": "https://github.com/rothfield/notation_parser#readme"
 }

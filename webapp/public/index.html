@@ -8,9 +8,9 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 15px;
             background-color: #f5f5f5;
         }
         
@@ -21,7 +21,7 @@
         
         .input-section, .output-section {
             background-color: white;
-            padding: 20px;
+            padding: 15px;
             margin-bottom: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -106,100 +106,66 @@
         .status.error { background-color: #f8d7da; color: #721c24; }
         .status.info { background-color: #d1ecf1; color: #0c5460; }
         
-        /* Mobile-style toggle switch */
-        .staff-preview-toggle {
+        
+        /* Server status indicator styles - small box top right */
+        .server-status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
             font-weight: 500;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 2px solid;
         }
         
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 32px;
+        .server-status-indicator.online {
+            background-color: #d4edda;
+            border-color: #28a745;
+            color: #155724;
         }
         
-        .toggle-switch input {
-            position: absolute;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            cursor: pointer;
-            z-index: 1;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
+        .server-status-indicator.offline {
+            background-color: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
         }
         
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: 0.3s ease;
-            border-radius: 32px;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        .server-status-indicator.checking {
+            background-color: #d1ecf1;
+            border-color: #17a2b8;
+            color: #0c5460;
         }
         
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 24px;
-            width: 24px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: 0.3s ease;
+        .status-dot {
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            background-color: currentColor;
+            animation: pulse 2s infinite;
         }
         
-        .toggle-switch input:checked + .toggle-slider {
-            background-color: #4CAF50;
+        .server-status-indicator.offline .status-dot {
+            animation: none;
         }
         
-        .toggle-switch input:checked + .toggle-slider:before {
-            transform: translateX(28px);
-        }
-        
-        .toggle-label {
-            font-size: 16px;
-            color: #333;
-            user-select: none;
-        }
-        
-        .toggle-description {
-            font-size: 14px;
-            color: #666;
-            margin-left: 8px;
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
     </style>
 </head>
 <body>
     <div class="header" id="header-section">
-        <h1>🎵 Multi-System Notation Parser <span id="version-display" style="font-size: 16px; color: #cccccc;"></span> <span id="timestamp-display" style="font-size: 12px; color: #999;"></span></h1>
-        <p>Enter music notation in any system: Sargam (S R G M P D N), Western (C D E F G A B), or Numbers (1 2 3 4 5 6 7)</p>
+        <h1>🎵 Text to Staff Notation <span id="version-display" style="font-size: 16px; color: #cccccc;"></span> <span id="timestamp-display" style="font-size: 12px; color: #999;"></span></h1>
+        <p>Enter music notation: Number (1 2 3 4 5 6 7), Letter (C D E F G A B), or Sargam (S R G M P D N)</p>
     </div>
 
-    <div class="staff-preview-toggle">
-        <div class="toggle-switch">
-            <input type="checkbox" id="staff-preview-toggle" checked>
-            <span class="toggle-slider"></span>
-        </div>
-        <span class="toggle-label">🎼 Staff Notation Preview</span>
-        <span class="toggle-description">(Faster startup when off)</span>
-    </div>
 
     <div class="input-section">
         <h2>✏️ Enter Your Notation <span style="font-size: 16px; color: #cccccc; margin-left: 20px;">Detected System: <strong id="detected-system-display">???</strong></span></h2>
@@ -252,7 +218,7 @@
             <textarea id="notation-input" rows="3" placeholder="Enter your notation here... Examples:
 • Sargam: | S R G M | P D N S' |
 • Western: | C D E F | G A B C |  
-• Numbers: | 1 2 3 4 | 5 6 7 1 |" style="width: 100%; padding: 15px; border: 2px solid #4CAF50; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 28px; resize: vertical; min-height: 120px; overflow: hidden;"></textarea>
+• Numbers: | 1 2 3 4 | 5 6 7 1 |" style="width: 100%; box-sizing: border-box; padding: 15px; border: 2px solid #4CAF50; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 20px; resize: vertical; min-height: 120px; overflow: hidden;"></textarea>
         </div>
 
         <div class="output-section" id="live-vexflow-section">
@@ -305,6 +271,13 @@
 
 
 
+
+    <!-- Server Status Indicator - Fixed Top Right -->
+    <div id="server-status-indicator" class="server-status-indicator checking">
+        <div class="status-dot"></div>
+        <span id="server-status-text">Server</span>
+        <span id="server-status-details" style="font-size: 10px; opacity: 0.8;"></span>
+    </div>
 
     <script type="module" src="js/main.js"></script>
 

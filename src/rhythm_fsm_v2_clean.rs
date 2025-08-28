@@ -5,7 +5,7 @@ use crate::models_v2::ParsedElement;
 
 /// Process ParsedElements through FSM and calculate durations
 pub fn process_rhythm_v2_clean(elements: Vec<ParsedElement>) -> Vec<ParsedElement> {
-    let mut processor = RhythmProcessorClean::new();
+    let processor = RhythmProcessorClean::new();
     processor.process(elements)
 }
 
@@ -124,9 +124,9 @@ impl RhythmProcessorClean {
                 
                 // Create updated element with duration
                 let updated_element = match elem_with_subdivisions.element {
-                    ParsedElement::Note { pitch_code, octave, value, position, children, .. } => {
+                    ParsedElement::Note { degree, octave, value, position, children, .. } => {
                         ParsedElement::Note {
-                            pitch_code,
+                            degree,
                             octave,
                             value,
                             position,
@@ -141,9 +141,9 @@ impl RhythmProcessorClean {
                             duration: Some((reduced_num, reduced_denom)),
                         }
                     }
-                    ParsedElement::Dash { pitch_code, octave, position, .. } => {
+                    ParsedElement::Dash { degree, octave, position, .. } => {
                         ParsedElement::Dash {
-                            pitch_code,
+                            degree,
                             octave,
                             position,
                             duration: Some((reduced_num, reduced_denom)),

@@ -1,6 +1,6 @@
 // Rhythm FSM V2 - Works with ParsedElement instead of Node
 use crate::models_v2::{ParsedElement, ParsedChild, OrnamentType, Position};
-use crate::pitch::PitchCode;
+use crate::pitch::Degree;
 use fraction::Fraction;
 
 
@@ -27,7 +27,7 @@ pub struct BeatElement {
     pub tuplet_duration: Fraction, // Simple rule duration: subdivisions * (1/4 ÷ power_of_2)
     
     // All ParsedElement fields copied directly (bit copy approach)
-    pub pitch_code: Option<PitchCode>, // Note/Dash: Some(code), Others: None
+    pub degree: Option<Degree>, // Note/Dash: Some(code), Others: None
     pub octave: Option<i8>,            // Note/Dash: Some(octave), Others: None  
     pub value: String,                 // Original text value from all elements
     pub position: Position,            // Position from all elements
@@ -45,13 +45,13 @@ pub struct BeatElement {
 
 impl From<ParsedElement> for BeatElement {
     fn from(element: ParsedElement) -> Self {
-        let (pitch_code, octave, value, position, children, element_duration, element_type) = match element {
-            ParsedElement::Note { pitch_code, octave, value, position, children, duration } => 
-                (Some(pitch_code), Some(octave), value, position, children, duration, ParsedElementType::Note),
+        let (degree, octave, value, position, children, element_duration, element_type) = match element {
+            ParsedElement::Note { degree, octave, value, position, children, duration } => 
+                (Some(degree), Some(octave), value, position, children, duration, ParsedElementType::Note),
             ParsedElement::Rest { value, position, duration } => 
                 (None, None, value, position, vec![], duration, ParsedElementType::Rest),
-            ParsedElement::Dash { pitch_code, octave, position, duration } => 
-                (pitch_code, octave, "-".to_string(), position, vec![], duration, ParsedElementType::Dash),
+            ParsedElement::Dash { degree, octave, position, duration } => 
+                (degree, octave, "-".to_string(), position, vec![], duration, ParsedElementType::Dash),
             ParsedElement::Barline { style, position } => 
                 (None, None, style, position, vec![], None, ParsedElementType::Barline),
             ParsedElement::SlurStart { position } => 
@@ -90,7 +90,7 @@ impl From<ParsedElement> for BeatElement {
             subdivisions: 1, // Default, will be set by FSM
             duration: Fraction::new(0u64, 1u64), // Default, will be calculated in finish_beat
             tuplet_duration: Fraction::new(0u64, 1u64), // Default, will be calculated in finish_beat
-            pitch_code,
+            degree,
             octave,
             value,
             position,
@@ -232,11 +232,11 @@ impl FSMV2 {
         let last_element = self.find_last_non_dash_element();
         if let Some(prev_beat_element) = last_element {
             // Found previous pitch - create a tied note
-            if prev_beat_element.is_note() && prev_beat_element.pitch_code.is_some() {
+            if prev_beat_element.is_note() && prev_beat_element.degree.is_some() {
                 let tied_note = ParsedElement::Note {
-                    pitch_code: prev_beat_element.pitch_code.unwrap(),
+                    degree: prev_beat_element.degree.unwrap(),
                     octave: prev_beat_element.octave.unwrap(),
-                    value: format!("{:?}", prev_beat_element.pitch_code.unwrap()), // Convert pitch_code to debug representation
+                    value: format!("{:?}", prev_beat_element.degree.unwrap()), // Convert degree to debug representation
                     position: dash_element.position().clone(),
                     children: vec![], // No children for tied notes
                     duration: None,
@@ -422,7 +422,7 @@ fn convert_fsm_output_to_elements(output: Vec<OutputItemV2>) -> Vec<ParsedElemen
                     // Reconstruct ParsedElement from BeatElement
                     let reconstructed_element = match beat_element.element_type {
                         ParsedElementType::Note => ParsedElement::Note {
-                            pitch_code: beat_element.pitch_code.unwrap(),
+                            degree: beat_element.degree.unwrap(),
                             octave: beat_element.octave.unwrap(),
                             value: beat_element.value,
                             position: beat_element.position,
@@ -435,7 +435,7 @@ fn convert_fsm_output_to_elements(output: Vec<OutputItemV2>) -> Vec<ParsedElemen
                             duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),
                         },
                         ParsedElementType::Dash => ParsedElement::Dash {
-                            pitch_code: beat_element.pitch_code,
+                            degree: beat_element.degree,
                             octave: beat_element.octave,
                             position: beat_element.position,
                             duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),

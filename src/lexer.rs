@@ -3,7 +3,7 @@
 
 use regex::Regex;
 use std::collections::{HashSet, HashMap};
-use crate::models::{ChunkInfo, LineInfo, Token, Title, Directive, Metadata, TokenType};
+use crate::models::{ChunkInfo, LineInfo, Token, Title, Directive, Metadata}; // TokenType DELETED - unused
 
 fn split_barlines_from_chunk(chunk: &str, start_col: usize) -> Vec<ChunkInfo> {
     let mut result = Vec::new();
@@ -71,6 +71,8 @@ pub fn lex_text(raw_text: &str) -> Vec<LineInfo> {
     lines_data
 }
 
+// DELETED - unused V1 function
+/*
 pub fn tokenize_chunk(chunk: &str, line_num: usize, col_num: usize) -> Vec<Token> {
     let pitch_regex = Regex::new(r"^([SrRgGmMPdDnN](##|#|bb|b)?|[1-7](##|#|bb|b)?|[A-G](##|#|bb|b)?)+$").unwrap();
     if pitch_regex.is_match(chunk) {
@@ -173,6 +175,7 @@ pub fn tokenize_chunk(chunk: &str, line_num: usize, col_num: usize) -> Vec<Token
         col: col_num,
     }]
 }
+*/
 
 fn group_words_into_segments<'a>(words: &'a [&'a Token]) -> Vec<Vec<&'a Token>> {
     if words.is_empty() {

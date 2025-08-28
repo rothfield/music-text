@@ -1,12 +1,9 @@
 // V2 VexFlow Converter - Works directly with FSM OutputItemV2, clean architecture
-use crate::models_v2::{ParsedElement, DocumentV2};
 use crate::models::Metadata;
 use crate::rhythm_fsm_v2::{OutputItemV2, BeatV2};
-use crate::pitch::{PitchCode};
+use crate::pitch::{Degree};
 use crate::rhythm::RhythmConverter;
 use serde::{Deserialize, Serialize};
-use fraction::Fraction;
-use std::collections::HashMap;
 
 /// VexFlow output structures - moved from V1 vexflow_fsm_converter
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,123 +48,104 @@ pub struct VexFlowAccidental {
     pub accidental: String,
 }
 
-/// Clean key transposition using structured data instead of hardcoded mappings
+/// Key signature handler for scale degree mapping
 #[derive(Debug, Clone)]
 struct KeyTransposer {
-    /// Semitone offset from C (e.g., G = 7, F = -5 = 7 in mod 12)
-    semitone_offset: i8,
-    /// Key signature accidentals (F# = true, Bb = false for flats)
-    key_signature: Vec<(usize, bool)>, // (note_index_0_to_6, is_sharp)
+    /// Root note of the key (scale degree 1 maps to this)
+    tonic_note: &'static str,
+    /// Key signature accidentals that apply to scale degrees
+    _key_signature: Vec<(usize, bool)>, // (note_index_0_to_6, is_sharp) - for future use
 }
 
 impl KeyTransposer {
     fn new(key: Option<&String>) -> Self {
         match key.as_ref().map(|k| k.to_uppercase()).as_deref() {
-            Some("G") => KeyTransposer { semitone_offset: 7, key_signature: vec![(3, true)] }, // F#
-            Some("D") => KeyTransposer { semitone_offset: 2, key_signature: vec![(3, true), (0, true)] }, // F#, C#  
-            Some("A") => KeyTransposer { semitone_offset: 9, key_signature: vec![(3, true), (0, true), (4, true)] }, // F#, C#, G#
-            Some("E") => KeyTransposer { semitone_offset: 4, key_signature: vec![(3, true), (0, true), (4, true), (1, true)] }, // F#, C#, G#, D#
-            Some("B") => KeyTransposer { semitone_offset: 11, key_signature: vec![(3, true), (0, true), (4, true), (1, true), (5, true)] }, // F#, C#, G#, D#, A#
-            Some("F") => KeyTransposer { semitone_offset: 5, key_signature: vec![(6, false)] }, // Bb
-            Some("BB") | Some("B♭") => KeyTransposer { semitone_offset: 10, key_signature: vec![(6, false), (2, false)] }, // Bb, Eb
-            Some("EB") | Some("E♭") => KeyTransposer { semitone_offset: 3, key_signature: vec![(6, false), (2, false), (5, false)] }, // Bb, Eb, Ab
-            Some("AB") | Some("A♭") => KeyTransposer { semitone_offset: 8, key_signature: vec![(6, false), (2, false), (5, false), (1, false)] }, // Bb, Eb, Ab, Db
-            _ => KeyTransposer { semitone_offset: 0, key_signature: vec![] }, // C major (no accidentals)
+            Some("G") => KeyTransposer { tonic_note: "g", _key_signature: vec![(3, true)] }, // F#
+            Some("D") => KeyTransposer { tonic_note: "d", _key_signature: vec![(3, true), (0, true)] }, // F#, C#  
+            Some("A") => KeyTransposer { tonic_note: "a", _key_signature: vec![(3, true), (0, true), (4, true)] }, // F#, C#, G#
+            Some("E") => KeyTransposer { tonic_note: "e", _key_signature: vec![(3, true), (0, true), (4, true), (1, true)] }, // F#, C#, G#, D#
+            Some("B") => KeyTransposer { tonic_note: "b", _key_signature: vec![(3, true), (0, true), (4, true), (1, true), (5, true)] }, // F#, C#, G#, D#, A#
+            Some("F") => KeyTransposer { tonic_note: "f", _key_signature: vec![(6, false)] }, // Bb
+            Some("BB") | Some("B♭") => KeyTransposer { tonic_note: "bb", _key_signature: vec![(6, false), (2, false)] }, // Bb, Eb
+            Some("EB") | Some("E♭") => KeyTransposer { tonic_note: "eb", _key_signature: vec![(6, false), (2, false), (5, false)] }, // Bb, Eb, Ab
+            Some("AB") | Some("A♭") => KeyTransposer { tonic_note: "ab", _key_signature: vec![(6, false), (2, false), (5, false), (1, false)] }, // Bb, Eb, Ab, Db
+            _ => KeyTransposer { tonic_note: "c", _key_signature: vec![] }, // C major (no accidentals)
         }
     }
 
-    /// Convert PitchCode to VexFlow key with proper transposition and accidentals
-    fn transpose_pitch(&self, pitch_code: PitchCode, octave: i8) -> (String, Vec<VexFlowAccidental>) {
-        // Convert PitchCode to base semitone (C=0, D=2, E=4, etc.)
-        let base_semitone = pitch_code_to_semitone(pitch_code);
+    /// Convert Degree to VexFlow key using scale degree mapping
+    fn transpose_pitch(&self, degree: Degree, octave: i8) -> (String, Vec<VexFlowAccidental>) {
+        // Map scale degree to note in the current key
+        let (scale_degree_letter, chromatic_alteration) = degree_to_scale_degree(degree);
         
-        // Apply transposition
-        let transposed_semitone = (base_semitone + self.semitone_offset) % 12;
+        // Map scale degrees to the current key
+        // For now, simple approach: C major scale degrees → target key
+        let c_major_scale = ["c", "d", "e", "f", "g", "a", "b"];
+        let target_key_scale = self.get_scale_for_key();
         
-        // Convert back to note name
-        let (note_letter, base_accidental) = semitone_to_note_letter(transposed_semitone);
+        let scale_degree_index = c_major_scale.iter().position(|&note| note == scale_degree_letter)
+            .unwrap_or(0);
+        let target_note = target_key_scale[scale_degree_index];
         
         // Adjust octave for VexFlow (4 = middle C)
-        let vexflow_octave = octave + 4; // Convert from relative to absolute
+        let vexflow_octave = octave + 4;
         
         // Create VexFlow key
-        let key = format!("{}/{}", note_letter, vexflow_octave);
+        let key = format!("{}/{}", target_note, vexflow_octave);
         
-        // Determine if accidental needs to be shown based on key signature
+        // Handle chromatic alterations (sharps/flats beyond key signature)
         let mut accidentals = Vec::new();
-        if let Some(accidental_symbol) = base_accidental {
-            let note_index = note_letter_to_index(&note_letter);
-            let key_has_accidental = self.key_signature.iter()
-                .any(|(idx, _)| *idx == note_index);
-                
-            // Show accidental if it's not in key signature or contradicts it
-            if !key_has_accidental || self.accidental_contradicts_key_signature(&accidental_symbol, note_index) {
-                accidentals.push(VexFlowAccidental {
-                    index: 0,
-                    accidental: accidental_symbol,
-                });
-            }
+        if chromatic_alteration != 0 {
+            let accidental_symbol = if chromatic_alteration > 0 {
+                "#".repeat(chromatic_alteration as usize)
+            } else {
+                "b".repeat((-chromatic_alteration) as usize)
+            };
+            
+            accidentals.push(VexFlowAccidental {
+                index: 0,
+                accidental: accidental_symbol,
+            });
         }
         
         (key, accidentals)
     }
     
-    fn accidental_contradicts_key_signature(&self, accidental: &str, note_index: usize) -> bool {
-        self.key_signature.iter()
-            .find(|(idx, _)| *idx == note_index)
-            .map_or(false, |(_, is_sharp)| {
-                (*is_sharp && accidental.contains('b')) || (!*is_sharp && accidental.contains('#'))
-            })
+    /// Get the scale for the current key (scale degrees 1-7 mapped to actual notes)
+    fn get_scale_for_key(&self) -> [&'static str; 7] {
+        // For now, simplified mapping. In reality, you'd calculate the proper scale.
+        match self.tonic_note {
+            "c" => ["c", "d", "e", "f", "g", "a", "b"],
+            "g" => ["g", "a", "b", "c", "d", "e", "fs"], // G major has F#
+            "d" => ["d", "e", "fs", "g", "a", "b", "cs"], // D major has F#, C#
+            "f" => ["f", "g", "a", "bb", "c", "d", "e"], // F major has Bb
+            _ => ["c", "d", "e", "f", "g", "a", "b"], // Default to C major
+        }
     }
 }
 
-/// Convert PitchCode enum to semitone offset from C
-fn pitch_code_to_semitone(pitch_code: PitchCode) -> i8 {
-    use PitchCode::*;
-    match pitch_code {
-        // 1 series (C)
-        N1bb => -2, N1b => -1, N1 => 0, N1s => 1, N1ss => 2,
-        // 2 series (D)  
-        N2bb => 0, N2b => 1, N2 => 2, N2s => 3, N2ss => 4,
-        // 3 series (E)
-        N3bb => 2, N3b => 3, N3 => 4, N3s => 5, N3ss => 6,
-        // 4 series (F)
-        N4bb => 3, N4b => 4, N4 => 5, N4s => 6, N4ss => 7,
-        // 5 series (G)
-        N5bb => 5, N5b => 6, N5 => 7, N5s => 8, N5ss => 9,
-        // 6 series (A)
-        N6bb => 7, N6b => 8, N6 => 9, N6s => 10, N6ss => 11,
-        // 7 series (B)
-        N7bb => 9, N7b => 10, N7 => 11, N7s => 0, N7ss => 1,
+/// Convert Degree to scale degree (note letter + accidental offset)
+fn degree_to_scale_degree(degree: Degree) -> (&'static str, i8) {
+    use Degree::*;
+    match degree {
+        // Scale degree 1 (Do/Sa/C)
+        N1bb => ("c", -2), N1b => ("c", -1), N1 => ("c", 0), N1s => ("c", 1), N1ss => ("c", 2),
+        // Scale degree 2 (Re/D)  
+        N2bb => ("d", -2), N2b => ("d", -1), N2 => ("d", 0), N2s => ("d", 1), N2ss => ("d", 2),
+        // Scale degree 3 (Mi/Ga/E)
+        N3bb => ("e", -2), N3b => ("e", -1), N3 => ("e", 0), N3s => ("e", 1), N3ss => ("e", 2),
+        // Scale degree 4 (Fa/Ma/F)
+        N4bb => ("f", -2), N4b => ("f", -1), N4 => ("f", 0), N4s => ("f", 1), N4ss => ("f", 2),
+        // Scale degree 5 (Sol/Pa/G)
+        N5bb => ("g", -2), N5b => ("g", -1), N5 => ("g", 0), N5s => ("g", 1), N5ss => ("g", 2),
+        // Scale degree 6 (La/Dha/A)
+        N6bb => ("a", -2), N6b => ("a", -1), N6 => ("a", 0), N6s => ("a", 1), N6ss => ("a", 2),
+        // Scale degree 7 (Ti/Ni/B)
+        N7bb => ("b", -2), N7b => ("b", -1), N7 => ("b", 0), N7s => ("b", 1), N7ss => ("b", 2),
     }
 }
 
-/// Convert semitone back to note letter and accidental
-fn semitone_to_note_letter(semitone: i8) -> (String, Option<String>) {
-    let normalized = ((semitone % 12) + 12) % 12; // Handle negative numbers
-    match normalized {
-        0 => ("c".to_string(), None),
-        1 => ("c".to_string(), Some("#".to_string())),
-        2 => ("d".to_string(), None),
-        3 => ("d".to_string(), Some("#".to_string())),
-        4 => ("e".to_string(), None),
-        5 => ("f".to_string(), None),
-        6 => ("f".to_string(), Some("#".to_string())),
-        7 => ("g".to_string(), None),
-        8 => ("g".to_string(), Some("#".to_string())),
-        9 => ("a".to_string(), None),
-        10 => ("a".to_string(), Some("#".to_string())),
-        11 => ("b".to_string(), None),
-        _ => ("c".to_string(), None), // Fallback
-    }
-}
 
-fn note_letter_to_index(note: &str) -> usize {
-    match note.chars().next().unwrap_or('c') {
-        'c' => 0, 'd' => 1, 'e' => 2, 'f' => 3, 'g' => 4, 'a' => 5, 'b' => 6,
-        _ => 0,
-    }
-}
 
 /// Main conversion function from V2 FSM output to VexFlow JSON
 pub fn convert_fsm_output_to_vexflow(
@@ -183,10 +161,30 @@ pub fn convert_fsm_output_to_vexflow(
         key_signature: transpose_key.cloned()
     };
     
+    // First pass: collect all beats to handle ties properly
+    let mut beats = Vec::new();
     for item in fsm_output {
         match item {
             OutputItemV2::Beat(beat) => {
-                process_beat_v2(beat, &mut current_stave, &transposer)?;
+                beats.push(beat);
+            },
+            _ => {
+                // Process non-beat items immediately after processing all beats
+            }
+        }
+    }
+    
+    // Second pass: process beats with tie information
+    for (i, beat) in beats.iter().enumerate() {
+        let next_beat_tied = beats.get(i + 1).map_or(false, |next| next.tied_to_previous);
+        process_beat_v2(beat, &mut current_stave, &transposer, next_beat_tied)?;
+    }
+    
+    // Third pass: process remaining non-beat items
+    for item in fsm_output {
+        match item {
+            OutputItemV2::Beat(_) => {
+                // Already processed
             },
             OutputItemV2::Barline(style) => {
                 current_stave.notes.push(VexFlowElement::BarLine {
@@ -224,7 +222,8 @@ pub fn convert_fsm_output_to_vexflow(
 fn process_beat_v2(
     beat: &BeatV2, 
     stave: &mut VexFlowStave,
-    transposer: &KeyTransposer
+    transposer: &KeyTransposer,
+    next_beat_tied: bool
 ) -> Result<(), String> {
     let mut beat_notes = Vec::new();
     
@@ -234,7 +233,7 @@ fn process_beat_v2(
                 let vexflow_durations = RhythmConverter::fraction_to_vexflow(beat_element.tuplet_duration);
                 
                 // Transpose pitch
-                let (key, accidentals) = transposer.transpose_pitch(beat_element.pitch_code.unwrap(), beat_element.octave.unwrap());
+                let (key, accidentals) = transposer.transpose_pitch(beat_element.degree.unwrap(), beat_element.octave.unwrap());
                 
                 // Handle tied notes (if this element spans multiple durations)
                 for (j, (vexflow_duration, dots)) in vexflow_durations.iter().enumerate() {
@@ -249,7 +248,7 @@ fn process_beat_v2(
                         original_duration: Some(format!("{}", beat_element.tuplet_duration)),
                         beam_start: false,
                         beam_end: false,
-                        syl: None, // TODO: Extract syllables from children
+                        syl: None,
                     });
                 }
         } else if beat_element.is_rest() {
@@ -265,6 +264,16 @@ fn process_beat_v2(
                 }
         } 
         // Skip other element types within beats (they're handled elsewhere)
+    }
+    
+    // Handle ties to next beat: if the next beat is tied to this beat,
+    // mark the last note in this beat as tied
+    if next_beat_tied {
+        if let Some(last_note) = beat_notes.iter_mut().rev().find(|note| matches!(note, VexFlowElement::Note { .. })) {
+            if let VexFlowElement::Note { tied, .. } = last_note {
+                *tied = true;
+            }
+        }
     }
     
     // Apply beaming to beat notes
@@ -351,64 +360,6 @@ fn apply_beam_markers(notes: &mut Vec<VexFlowElement>, start: usize, end: usize)
     }
 }
 
-fn convert_tuplet_duration_to_vexflow_v2(subdivisions: usize, divisions: usize) -> Vec<(String, u8)> {
-    // For tuplets, map subdivisions to appropriate durations like LilyPond converter
-    // This respects the subdivision proportions instead of using uniform durations
-    
-    let base_duration = if divisions <= 3 {
-        // Small tuplets (3-tuplet) use eighth/quarter notes
-        match subdivisions {
-            1 => "8".to_string(),   // Eighth note
-            2 => "q".to_string(),   // Quarter note
-            3 => "q".to_string(),   // Quarter note (dotted would be "q" with dots=1, but keep simple)
-            4 => "h".to_string(),   // Half note
-            _ => "8".to_string(),
-        }
-    } else if divisions <= 7 {
-        // Medium tuplets (4-7 notes) use sixteenth/eighth notes  
-        match subdivisions {
-            1 => "16".to_string(),  // Sixteenth note
-            2 => "8".to_string(),   // Eighth note
-            3 => "8".to_string(),   // Eighth note
-            4 => "q".to_string(),   // Quarter note
-            _ => "16".to_string(),
-        }
-    } else if divisions <= 15 {
-        // Large tuplets (8-15 notes) use thirty-second/sixteenth notes
-        match subdivisions {
-            1 => "32".to_string(),  // Thirty-second note
-            2 => "16".to_string(),  // Sixteenth note  
-            3 => "16".to_string(),  // Sixteenth note
-            4 => "8".to_string(),   // Eighth note
-            _ => "32".to_string(),
-        }
-    } else {
-        // Very large tuplets (16+ notes) use sixty-fourth/thirty-second notes
-        match subdivisions {
-            1 => "64".to_string(),  // Sixty-fourth note
-            2 => "32".to_string(),  // Thirty-second note
-            3 => "32".to_string(),  // Thirty-second note
-            4 => "16".to_string(),  // Sixteenth note
-            _ => "64".to_string(),
-        }
-    };
-    
-    vec![(base_duration, 0)]
-}
-
-// Keep old function for compatibility but mark as deprecated
-fn convert_tuplet_duration_to_vexflow(_subdivisions: usize, total_divisions: usize) -> Vec<(String, u8)> {
-    // DEPRECATED: Use convert_tuplet_duration_to_vexflow_v2 instead
-    let base_duration = if total_divisions <= 3 {
-        "8".to_string()    // Triplets and smaller get eighth notes
-    } else if total_divisions <= 6 {
-        "16".to_string()   // Larger tuplets get sixteenth notes  
-    } else {
-        "32".to_string()   // Very large tuplets get thirty-second notes
-    };
-    
-    vec![(base_duration, 0)]
-}
 
 fn map_barline_style(style: &str) -> String {
     match style {
@@ -426,17 +377,7 @@ fn map_barline_style(style: &str) -> String {
     }
 }
 
-// Legacy compatibility function - delegates to FSM-based converter
-pub fn convert_document_v2_to_vexflow(
-    _document: &DocumentV2
-) -> Result<Vec<VexFlowStave>, String> {
-    // V2 documents should use the FSM output path, not direct conversion
-    // Return empty result for now - this function shouldn't be called in V2 flow
-    Ok(vec![VexFlowStave {
-        notes: Vec::new(),
-        key_signature: None,
-    }])
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -445,26 +386,17 @@ mod tests {
     #[test]
     fn test_key_transposer_creation() {
         let transposer = KeyTransposer::new(Some(&"G".to_string()));
-        assert_eq!(transposer.semitone_offset, 7);
-        assert_eq!(transposer.key_signature.len(), 1);
-        assert_eq!(transposer.key_signature[0], (3, true)); // F# 
+        assert_eq!(transposer.tonic_note, "g");
+        assert_eq!(transposer._key_signature.len(), 1);
+        assert_eq!(transposer._key_signature[0], (3, true)); // F# 
     }
     
     #[test]
-    fn test_pitch_code_to_semitone() {
-        assert_eq!(pitch_code_to_semitone(PitchCode::N1), 0);  // C
-        assert_eq!(pitch_code_to_semitone(PitchCode::N2), 2);  // D 
-        assert_eq!(pitch_code_to_semitone(PitchCode::N1s), 1); // C#
+    fn test_degree_to_scale_degree() {
+        assert_eq!(degree_to_scale_degree(Degree::N1), ("c", 0));   // Scale degree 1 = C natural
+        assert_eq!(degree_to_scale_degree(Degree::N2), ("d", 0));   // Scale degree 2 = D natural 
+        assert_eq!(degree_to_scale_degree(Degree::N1s), ("c", 1));  // Scale degree 1 sharp = C#
+        assert_eq!(degree_to_scale_degree(Degree::N2b), ("d", -1)); // Scale degree 2 flat = Db
     }
     
-    #[test]
-    fn test_semitone_to_note_letter() {
-        let (note, acc) = semitone_to_note_letter(0);
-        assert_eq!(note, "c");
-        assert_eq!(acc, None);
-        
-        let (note, acc) = semitone_to_note_letter(1);
-        assert_eq!(note, "c");
-        assert_eq!(acc, Some("#".to_string()));
-    }
 }

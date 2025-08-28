@@ -1,13 +1,11 @@
-use mustache::Template;
 use serde::Serialize;
-use crate::models::Document;
-use crate::models_v2::DocumentV2;
+// use crate::models::Document; // DELETED - unused import
 
 #[derive(Debug, Clone)]
 pub enum LilyPondTemplate {
-    Minimal,
+    // Minimal, // DELETED - unused variant
     Standard,
-    Testing,
+    // Testing, // DELETED - unused variant
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -38,6 +36,8 @@ impl Default for TemplateContext {
 }
 
 impl TemplateContext {
+    // DELETED - unused method
+    /*
     pub fn from_document(document: &Document, source_text: Option<&str>, musical_content: &str) -> Self {
         let mut context = TemplateContext::default();
         
@@ -61,6 +61,7 @@ impl TemplateContext {
         
         context
     }
+    */
     
     pub fn builder() -> TemplateContextBuilder {
         TemplateContextBuilder::new()
@@ -78,20 +79,26 @@ impl TemplateContextBuilder {
         }
     }
     
+    // DELETED - unused method
+    /*
     pub fn version<S: Into<String>>(mut self, version: S) -> Self {
         self.context.version = version.into();
         self
     }
+    */
     
     pub fn title<S: Into<String>>(mut self, title: S) -> Self {
         self.context.title = Some(title.into());
         self
     }
     
+    // DELETED - unused method
+    /*
     pub fn composer<S: Into<String>>(mut self, composer: S) -> Self {
         self.context.composer = Some(composer.into());
         self
     }
+    */
     
     pub fn source_comment<S: Into<String>>(mut self, source: S) -> Self {
         self.context.source_comment = Some(format_source_comment(&source.into()));
@@ -103,20 +110,29 @@ impl TemplateContextBuilder {
         self
     }
     
+    // DELETED - unused method
+    /*
     pub fn time_signature<S: Into<String>>(mut self, time_sig: S) -> Self {
         self.context.time_signature = Some(time_sig.into());
         self
     }
+    */
     
+    // DELETED - unused method
+    /*
     pub fn key_signature<S: Into<String>>(mut self, key_sig: S) -> Self {
         self.context.key_signature = Some(key_sig.into());
         self
     }
+    */
     
+    // DELETED - unused method
+    /*
     pub fn lyrics<S: Into<String>>(mut self, lyrics: S) -> Self {
         self.context.lyrics = Some(lyrics.into());
         self
     }
+    */
     
     pub fn build(self) -> TemplateContext {
         self.context
@@ -132,9 +148,9 @@ fn format_source_comment(source: &str) -> String {
 
 pub fn get_template_content(template_type: LilyPondTemplate) -> &'static str {
     match template_type {
-        LilyPondTemplate::Minimal => include_str!("templates/minimal.ly.mustache"),
+        // LilyPondTemplate::Minimal => include_str!("templates/minimal.ly.mustache"),
         LilyPondTemplate::Standard => include_str!("templates/standard.ly.mustache"),
-        LilyPondTemplate::Testing => include_str!("templates/testing.ly.mustache"),
+        // LilyPondTemplate::Testing => include_str!("templates/testing.ly.mustache"),
     }
 }
 
@@ -145,6 +161,8 @@ pub fn render_lilypond(template_type: LilyPondTemplate, context: &TemplateContex
     Ok(rendered)
 }
 
+// DELETED - unused function
+/*
 pub fn auto_select_template(document: &Document) -> LilyPondTemplate {
     // For now, use heuristics to select template
     // TODO: Make this more sophisticated based on document features
@@ -161,22 +179,10 @@ pub fn auto_select_template(document: &Document) -> LilyPondTemplate {
         LilyPondTemplate::Minimal
     }
 }
+*/
 
-pub fn auto_select_template_v2(document: &DocumentV2) -> LilyPondTemplate {
-    // V2 template selection logic
-    let has_complex_metadata = document.metadata.title.is_some();
-    let has_many_nodes = document.elements.len() > 20;
-    
-    if has_many_nodes {
-        LilyPondTemplate::Standard
-    } else if has_complex_metadata {
-        LilyPondTemplate::Testing
-    } else {
-        LilyPondTemplate::Minimal
-    }
-}
 
-pub fn auto_select_template_for_metadata(metadata: &crate::models::Metadata) -> LilyPondTemplate {
+pub fn auto_select_template_for_metadata(_metadata: &crate::models::Metadata) -> LilyPondTemplate {
     // Always use Standard template for CLI output to get compact paper settings
     // The Standard template has proper paper size constraints for web UI display
     LilyPondTemplate::Standard
@@ -205,7 +211,7 @@ mod tests {
             .staves("c d e f")
             .build();
             
-        let result = render_lilypond(LilyPondTemplate::Minimal, &context);
+        let result = render_lilypond(LilyPondTemplate::Standard, &context);
         assert!(result.is_ok());
         let rendered = result.unwrap();
         assert!(rendered.contains("\\version \"2.24.0\""));

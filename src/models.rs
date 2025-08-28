@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::pitch::PitchCode;
+use crate::pitch::Degree;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChunkInfo {
@@ -71,7 +71,7 @@ pub struct Node {
     pub dash_consumed: bool,
     pub nodes: Vec<Node>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pitch_code: Option<PitchCode>,
+    pub degree: Option<Degree>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub octave: Option<i8>, // 0 = middle, 1 = upper, -1 = lower, etc.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -98,7 +98,7 @@ impl Node {
             divisions: 0,
             dash_consumed: false,
             nodes: Vec::new(),
-            pitch_code: None,
+            degree: None,
             octave: None,
             slur_start: None,
             slur_end: None,
@@ -118,7 +118,7 @@ impl Node {
             divisions: 0,
             dash_consumed: false,
             nodes,
-            pitch_code: None,
+            degree: None,
             octave: None,
             slur_start: None,
             slur_end: None,

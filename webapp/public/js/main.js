@@ -1,5 +1,5 @@
 import { showStatus, formatJsonAsYaml } from './utils.js';
-import { parseNotationApi, generateLilypondPngApi } from './api.js';
+import { parseNotationApi, generateLilypondPngApi, checkServerHealth } from './api.js';
 import { renderLiveVexFlowPreview } from './vexflow-renderer.js';
 
 let wasm;
@@ -10,6 +10,8 @@ let isLiveVexflowEnabled = true;
 let isCurrentlyParsing = false;
 let parseTimeout;
 let liveVexflowTimeout;
+let serverStatus = { online: null, lastCheck: 0 };
+let serverHealthCheckInterval;
 
 const elements = {
     notationInput: document.getElementById('notation-input'),
@@ -51,6 +53,9 @@ const elements = {
     versionDisplay: document.getElementById('version-display'),
     timestampDisplay: document.getElementById('timestamp-display'),
     detectedSystemDisplay: document.getElementById('detected-system-display'),
+    serverStatusIndicator: document.getElementById('server-status-indicator'),
+    serverStatusText: document.getElementById('server-status-text'),
+    serverStatusDetails: document.getElementById('server-status-details'),
 };
 
 async function loadWasm() {
@@ -83,6 +88,41 @@ async function loadWasm() {
     } catch (error) {
         console.error('Failed to load WASM module:', error);
         showStatus(elements.statusContainer, `❌ Failed to load WASM module: ${error.message}`, 'error');
+    }
+}
+
+async function updateServerStatus() {
+    elements.serverStatusIndicator.className = 'server-status-indicator checking';
+    elements.serverStatusText.textContent = 'Checking server...';
+    elements.serverStatusDetails.textContent = '';
+    
+    const health = await checkServerHealth();
+    serverStatus.online = health.online;
+    serverStatus.lastCheck = Date.now();
+    
+    if (health.online) {
+        elements.serverStatusIndicator.className = 'server-status-indicator online';
+        elements.serverStatusText.textContent = '🟢 ' + health.status;
+        elements.serverStatusDetails.textContent = health.details;
+    } else {
+        elements.serverStatusIndicator.className = 'server-status-indicator offline';
+        elements.serverStatusText.textContent = '🔴 ' + health.status;
+        elements.serverStatusDetails.textContent = health.details;
+    }
+}
+
+function startServerHealthChecks() {
+    // Initial check
+    updateServerStatus();
+    
+    // Check every 30 seconds
+    serverHealthCheckInterval = setInterval(updateServerStatus, 30000);
+}
+
+function stopServerHealthChecks() {
+    if (serverHealthCheckInterval) {
+        clearInterval(serverHealthCheckInterval);
+        serverHealthCheckInterval = null;
     }
 }
 
@@ -206,8 +246,50 @@ async function generateStaffNotation() {
         console.error('Staff notation generation failed:', error);
         elements.staffNotationImage.style.display = 'none';
         elements.staffNotationPlaceholder.style.display = 'block';
-        elements.staffNotationPlaceholder.innerHTML = 'Staff notation generation failed';
-        showStatus(elements.statusContainer, `Error: ${error.message}`, 'error');
+        
+        // Check if this is a server connectivity issue
+        const isServerError = error.message.includes('fetch') || 
+                             error.message.includes('500') || 
+                             error.message.includes('502') || 
+                             error.message.includes('503') ||
+                             error.message.includes('timeout');
+                             
+        if (isServerError) {
+            elements.staffNotationPlaceholder.innerHTML = `
+                <div style="text-align: center; color: #721c24;">
+                    <div style="font-size: 18px; margin-bottom: 10px;">⚠️ Server Connection Issue</div>
+                    <div style="margin-bottom: 15px;">
+                        Unable to generate LilyPond staff notation due to server problems.
+                    </div>
+                    <div style="background-color: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 4px; margin: 10px 0;">
+                        <strong>✅ VexFlow preview still works!</strong><br>
+                        The live notation preview above uses client-side rendering and works offline.
+                    </div>
+                    <div style="font-size: 14px; color: #666; margin-top: 10px;">
+                        LilyPond requires server-side processing for high-quality output.<br>
+                        Please check your internet connection or try again later.
+                    </div>
+                </div>
+            `;
+            showStatus(elements.statusContainer, `🔴 Server unavailable for LilyPond generation`, 'error');
+            
+            // Trigger a server status update
+            updateServerStatus();
+        } else {
+            elements.staffNotationPlaceholder.innerHTML = `
+                <div style="text-align: center; color: #721c24;">
+                    <div style="font-size: 18px; margin-bottom: 10px;">❌ Generation Failed</div>
+                    <div style="margin-bottom: 15px;">
+                        ${error.message}
+                    </div>
+                    <div style="background-color: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 4px; margin: 10px 0;">
+                        <strong>✅ VexFlow preview still works!</strong><br>
+                        Check the live notation preview above for instant feedback.
+                    </div>
+                </div>
+            `;
+            showStatus(elements.statusContainer, `❌ Error: ${error.message}`, 'error');
+        }
     } finally {
         elements.generateStaffBtn.disabled = false;
         elements.generateStaffBtn.textContent = 'Generate LilyPond Staff Notation';
@@ -456,6 +538,7 @@ function setupEventListeners() {
 
 async function main() {
     loadFromLocalStorage();
+    startServerHealthChecks(); // Start monitoring server status
     await loadWasm();
     const initialNotation = getCanvasEditorContent();
     if (initialNotation) {

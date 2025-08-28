@@ -122,38 +122,26 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
                     });
                     vexNotes.push(...tupletNotes);
                     noteOnlyArray.push(...tupletNotes);
+                    // Auto-beam tuplet notes if they are beamable durations
                     if (tupletNotes.length >= 2) {
                         const hasRests = tupletNotes.some(note => note.getDuration().includes('r'));
-                        const firstNoteDuration = tupletNotes[0].getDuration();
-                        if (!hasRests && (firstNoteDuration === '8' || firstNoteDuration === '16' || firstNoteDuration === '32')) {
+                        const beamableDurations = tupletNotes.every(note => {
+                            const duration = note.getDuration().replace('r', '');
+                            return ['8', '16', '32', '64'].includes(duration);
+                        });
+                        if (!hasRests && beamableDurations) {
                             beamGroups.push(tupletNotes);
                         }
                     }
-                    const noteCount = tupletNotes.length;
-                    let totalDurationEighths = 0;
-                    tupletNotes.forEach(note => {
-                        const duration = note.getDuration();
-                        if (duration === 'w' || duration === '1') totalDurationEighths += 8;
-                        else if (duration === 'h' || duration === '2') totalDurationEighths += 4;
-                        else if (duration === 'q' || duration === '4') totalDurationEighths += 2;
-                        else if (duration === '8') totalDurationEighths += 1;
-                        else if (duration === '16') totalDurationEighths += 0.5;
-                        else if (duration === '32') totalDurationEighths += 0.25;
-                        else totalDurationEighths += 2;
-                    });
-                    let tupletOptions = null;
-                    if (totalDurationEighths === 3 && noteCount === 2) tupletOptions = { notes_occupied: 2, num_notes: 3 };
-                    else if (noteCount === 3 && totalDurationEighths === 3) tupletOptions = { notes_occupied: 2, num_notes: 3 };
-                    else if (noteCount === 3 && totalDurationEighths === 6) tupletOptions = { notes_occupied: 2, num_notes: 3 };
-                    else if (noteCount === 5) tupletOptions = { notes_occupied: 4, num_notes: 5 };
-                    else if (noteCount === 6) tupletOptions = { notes_occupied: 4, num_notes: 6 };
-                    else if (noteCount === 7) tupletOptions = { notes_occupied: 4, num_notes: 7 };
-                    else {
-                        const isPowerOfTwo = (noteCount & (noteCount - 1)) === 0;
-                        if (!isPowerOfTwo && noteCount > 2) {
-                            tupletOptions = { notes_occupied: Math.max(2, noteCount - 1), num_notes: noteCount };
-                        }
+                    // Trust the FSM - it should always provide correct tuplet ratios
+                    if (!elementData.ratio || elementData.ratio.length !== 2) {
+                        console.error('FSM tuplet missing or invalid ratio field:', elementData);
+                        return; // Skip malformed tuplets
                     }
+                    
+                    const [num_notes, notes_occupied] = elementData.ratio;
+                    const tupletOptions = { notes_occupied, num_notes };
+                    console.log(`Using FSM ratio [${num_notes}, ${notes_occupied}] for tuplet options:`, tupletOptions);
                     tupletGroups.push({ notes: tupletNotes, options: tupletOptions });
                 } else if (elementType === 'Note') {
                     // Don't include dots in duration string for VexFlow 4.2.2
@@ -175,13 +163,27 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
                     vexNotes.push(note);
                     noteOnlyArray.push(note);
                     if (elementType !== 'Rest') {
-                        if (elementData.beam_start || elementData.beam_end || (elementData.duration === '8' || elementData.duration === '16')) {
-                            if (elementData.beam_start) currentBeamGroup = [note];
-                            else if (elementData.beam_end && currentBeamGroup.length > 0) {
+                        // Handle explicit beam markers first
+                        if (elementData.beam_start) {
+                            // Finalize any previous beam group
+                            if (currentBeamGroup.length >= 2) beamGroups.push([...currentBeamGroup]);
+                            currentBeamGroup = [note];
+                        } else if (elementData.beam_end) {
+                            if (currentBeamGroup.length > 0) {
                                 currentBeamGroup.push(note);
                                 if (currentBeamGroup.length >= 2) beamGroups.push([...currentBeamGroup]);
+                            }
+                            currentBeamGroup = [];
+                        } else {
+                            // Auto-beam logic for beamable durations
+                            const isBeamable = ['8', '16', '32', '64'].includes(elementData.duration);
+                            if (isBeamable) {
+                                currentBeamGroup.push(note);
+                            } else {
+                                // Non-beamable note, finalize any current beam group
+                                if (currentBeamGroup.length >= 2) beamGroups.push([...currentBeamGroup]);
                                 currentBeamGroup = [];
-                            } else if (currentBeamGroup.length > 0) currentBeamGroup.push(note);
+                            }
                         }
                     }
                 } else if (elementType === 'Rest') {

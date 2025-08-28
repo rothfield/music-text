@@ -1,0 +1,72 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic:
+    - heading "🎵 Text to Staff Notation v0.1.0 (built Built on unknown at unknown (v0.1.0), loaded in 66ms)" [level=1]:
+      - text: 🎵 Text to Staff Notation
+      - generic: v0.1.0
+      - generic: (built Built on unknown at unknown (v0.1.0), loaded in 66ms)
+    - paragraph: "Enter music notation: Number (1 2 3 4 5 6 7), Letter (C D E F G A B), or Sargam (S R G M P D N)"
+  - generic [ref=e2]:
+    - 'heading "✏️ Enter Your Notation Detected System: ???" [level=2]':
+      - text: ✏️ Enter Your Notation
+      - generic:
+        - text: "Detected System:"
+        - strong: "???"
+    - generic [ref=e3]:
+      - checkbox "Constrain" [ref=e4]
+      - generic: Constrain
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - button "Upper Octave" [ref=e7] [cursor=pointer]
+        - button "Middle Octave" [ref=e8] [cursor=pointer]
+        - button "Lower Octave" [ref=e9] [cursor=pointer]
+      - generic [ref=e10]:
+        - generic: "Mode:"
+        - combobox "Mode:" [ref=e11]:
+          - option "Ionian" [selected]
+          - option "Dorian"
+          - option "Phrygian"
+          - option "Lydian"
+          - option "Mixolydian"
+          - option "Aeolian"
+          - option "Locrian"
+          - option "Custom"
+        - button "Apply Mode" [ref=e12] [cursor=pointer]
+      - generic [ref=e13]:
+        - checkbox "Live VexFlow Preview" [checked] [ref=e14]
+        - generic: Live VexFlow Preview
+    - generic [ref=e15]:
+      - button "Generate LilyPond Staff Notation" [ref=e16] [cursor=pointer]
+      - button "Show Outline" [ref=e17] [cursor=pointer]
+      - button "Show YAML" [ref=e18] [cursor=pointer]
+      - button "Hide Debug Panels" [ref=e19] [cursor=pointer]
+      - button "Toggle All Debug" [ref=e20] [cursor=pointer]
+    - 'textbox "Enter your notation here... Examples: • Sargam: | S R G M | P D N S'' | • Western: | C D E F | G A B C | • Numbers: | 1 2 3 4 | 5 6 7 1 |" [ref=e22]'
+    - generic [ref=e24]:
+      - generic: 🎵 VexFlow preview will appear here as you type musical notes
+  - generic [ref=e25]:
+    - heading "Document Outline" [level=2]
+  - generic [ref=e27]:
+    - heading "YAML Structure" [level=2]
+  - generic [ref=e29]:
+    - heading "Tokenized Document (raw tokens from lexer)" [level=2]:
+      - text: Tokenized Document
+      - generic: (raw tokens from lexer)
+    - heading "Document with Attached Items (after spatial analysis and floating element attachment)" [level=3]:
+      - text: Document with Attached Items
+      - generic: (after spatial analysis and floating element attachment)
+    - heading "FSM Output (shows beats, divisions, and pitch organization from parser)" [level=4]:
+      - text: FSM Output
+      - generic: (shows beats, divisions, and pitch organization from parser)
+    - heading "LilyPond Source (generated notation code)" [level=4]:
+      - text: LilyPond Source
+      - generic: (generated notation code)
+    - heading "VexFlow JSON Data (final processed data sent to VexFlow renderer)" [level=5]:
+      - text: VexFlow JSON Data
+      - generic: (final processed data sent to VexFlow renderer)
+  - generic [ref=e35]:
+    - generic: 🟢 Server online
+    - generic: v1.0.0
+```
