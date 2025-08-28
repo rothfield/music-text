@@ -23,8 +23,9 @@ pub enum ParsedElementType {
 pub struct BeatElement {
     // Beat-specific fields
     pub subdivisions: usize,
-    pub duration: Fraction,        // Actual beat fraction: subdivisions/divisions  
-    pub tuplet_duration: Fraction, // Simple rule duration: subdivisions * (1/4 ÷ power_of_2)
+    pub duration: Fraction,               // Actual beat fraction: subdivisions/divisions  
+    pub tuplet_duration: Fraction,        // Mathematical tuplet duration (1/6, 1/3, etc.)
+    pub tuplet_display_duration: Option<Fraction>, // Display duration for tuplets (1/16, 1/8, etc.), None for regular notes
     
     // All ParsedElement fields copied directly (bit copy approach)
     pub degree: Option<Degree>, // Note/Dash: Some(code), Others: None
@@ -90,6 +91,7 @@ impl From<ParsedElement> for BeatElement {
             subdivisions: 1, // Default, will be set by FSM
             duration: Fraction::new(0u64, 1u64), // Default, will be calculated in finish_beat
             tuplet_duration: Fraction::new(0u64, 1u64), // Default, will be calculated in finish_beat
+            tuplet_display_duration: None, // None for regular notes, Some() for tuplets
             degree,
             octave,
             value,
@@ -367,6 +369,8 @@ impl FSMV2 {
                     beat_element.duration = Fraction::new(beat_element.subdivisions as u64, beat.divisions as u64);
                     // Simple rule duration (for notation display)
                     beat_element.tuplet_duration = each_unit * beat_element.subdivisions;
+                    // Display duration specifically for tuplet notation
+                    beat_element.tuplet_display_duration = Some(each_unit * beat_element.subdivisions);
                 }
             } else {
                 // Regular beat processing

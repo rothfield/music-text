@@ -177,6 +177,7 @@ pub fn convert_elements_to_vexflow_js(
     let mut note_count = 0;
     let mut beam_groups = Vec::new();
     let mut current_beam_group = Vec::new();
+    let mut tuplet_count = 0;
     
     // Collect beats from elements
     let mut beats = Vec::new();
@@ -192,20 +193,53 @@ pub fn convert_elements_to_vexflow_js(
     // Process beats to generate VexFlow JavaScript
     for (i, beat) in beats.iter().enumerate() {
         let beat_start_note = note_count;
+        let mut beat_notes = Vec::new(); // Track notes in this beat for tuplets
         
         for beat_element in &beat.elements {
             if beat_element.is_note() {
                 let degree = beat_element.degree.unwrap();
                 let (pitch_key, _) = transposer.transpose_pitch(degree, 0);
                 
-                // Get VexFlow duration
-                let vf_duration = match beat_element.tuplet_duration.to_string().as_str() {
-                    "1/4" => "q",
-                    "1/8" => "8", 
-                    "1/16" => "16",
-                    "1/2" => "h",
-                    "1/1" => "w",
-                    _ => "q",
+                // For tuplets, use the bracket base duration; for regular notes, use actual duration
+                let vf_duration = if beat.is_tuplet {
+                    // For tuplets, use the power-of-2 base duration (what shows in the bracket)
+                    if let Some((_tuplet_num, tuplet_den)) = beat.tuplet_ratio {
+                        match tuplet_den {
+                            1 => "w",      // whole note bracket
+                            2 => "h",      // half note bracket
+                            4 => "q",      // quarter note bracket  
+                            8 => "8",      // eighth note bracket
+                            16 => "16",    // sixteenth note bracket
+                            32 => "32",    // thirty-second bracket
+                            _ => "q",      // default to quarter
+                        }
+                    } else {
+                        "q" // fallback
+                    }
+                } else {
+                    // For regular notes, use the actual fractional duration
+                    let numer = beat_element.tuplet_duration.numer().unwrap_or(&1);
+                    let denom = beat_element.tuplet_duration.denom().unwrap_or(&4);
+                    
+                    match denom {
+                        1 => "w",      // whole note
+                        2 => "h",      // half note  
+                        4 => "q",      // quarter note
+                        8 => "8",      // eighth note
+                        16 => "16",    // sixteenth note
+                        32 => "32",    // thirty-second note
+                        64 => "64",    // sixty-fourth note
+                        _ => {
+                            // Find closest power of 2 denominator
+                            let decimal = *numer as f64 / *denom as f64;
+                            if decimal >= 0.5 { "h" }
+                            else if decimal >= 0.25 { "q" }
+                            else if decimal >= 0.125 { "8" }
+                            else if decimal >= 0.0625 { "16" }
+                            else if decimal >= 0.03125 { "32" }
+                            else { "64" }
+                        }
+                    }
                 };
                 
                 notes_js.push_str(&format!(
@@ -213,10 +247,12 @@ pub fn convert_elements_to_vexflow_js(
                     note_count, pitch_key, vf_duration
                 ));
                 
-                // Handle beaming for eighth notes
-                if vf_duration == "8" {
+                beat_notes.push(note_count); // Track this note for tuplet grouping
+                
+                // Handle beaming for eighth notes (but not in tuplets)
+                if vf_duration == "8" && !beat.is_tuplet {
                     current_beam_group.push(note_count);
-                } else {
+                } else if !beat.is_tuplet {
                     if current_beam_group.len() >= 2 {
                         beam_groups.push(current_beam_group.clone());
                     }
@@ -224,6 +260,21 @@ pub fn convert_elements_to_vexflow_js(
                 }
                 
                 note_count += 1;
+            }
+        }
+        
+        // Generate tuplet if this beat is a tuplet
+        if beat.is_tuplet && beat_notes.len() > 1 {
+            if let Some((tuplet_num, tuplet_den)) = beat.tuplet_ratio {
+                let note_refs: Vec<String> = beat_notes.iter().map(|n| format!("note{}", n)).collect();
+                beams_js.push_str(&format!(
+                    "const tuplet{} = new VF.Tuplet([{}], {{\n",
+                    tuplet_count, note_refs.join(", ")
+                ));
+                beams_js.push_str(&format!("  num_notes: {},\n", tuplet_num));
+                beams_js.push_str(&format!("  notes_occupied: {}\n", tuplet_den));
+                beams_js.push_str("});\n");
+                tuplet_count += 1;
             }
         }
         
@@ -294,6 +345,11 @@ pub fn convert_elements_to_vexflow_js(
     // Draw ties
     for i in 0..tie_points.len() {
         js_code.push_str(&format!("if (typeof tie{} !== 'undefined') tie{}.setContext(ctx).draw();\n", i, i));
+    }
+    
+    // Draw tuplets
+    for i in 0..tuplet_count {
+        js_code.push_str(&format!("if (typeof tuplet{} !== 'undefined') tuplet{}.setContext(ctx).draw();\n", i, i));
     }
     
     Ok(js_code)
@@ -381,8 +437,9 @@ fn process_beat_v2(
     
     for (_i, beat_element) in beat.elements.iter().enumerate() {
         if beat_element.is_note() {
-                // Use FSM-calculated tuplet_duration for VexFlow
-                let vexflow_durations = RhythmConverter::fraction_to_vexflow(beat_element.tuplet_duration);
+                // Use display duration for tuplets, tuplet_duration for regular notes
+                let duration_to_use = beat_element.tuplet_display_duration.unwrap_or(beat_element.tuplet_duration);
+                let vexflow_durations = RhythmConverter::fraction_to_vexflow(duration_to_use);
                 
                 // Transpose pitch
                 let (key, accidentals) = transposer.transpose_pitch(beat_element.degree.unwrap(), beat_element.octave.unwrap());
@@ -397,21 +454,22 @@ fn process_beat_v2(
                         dots: *dots,
                         accidentals: accidentals.clone(),
                         tied: should_tie,
-                        original_duration: Some(format!("{}", beat_element.tuplet_duration)),
+                        original_duration: Some(format!("{}", duration_to_use)),
                         beam_start: false,
                         beam_end: false,
                         syl: None,
                     });
                 }
         } else if beat_element.is_rest() {
-                // Use FSM-calculated tuplet_duration for rests
-                let vexflow_durations = RhythmConverter::fraction_to_vexflow(beat_element.tuplet_duration);
+                // Use display duration for tuplets, tuplet_duration for regular notes
+                let duration_to_use = beat_element.tuplet_display_duration.unwrap_or(beat_element.tuplet_duration);
+                let vexflow_durations = RhythmConverter::fraction_to_vexflow(duration_to_use);
                 
                 for (vexflow_duration, dots) in vexflow_durations {
                     beat_notes.push(StaffNotationElement::Rest {
                         duration: vexflow_duration,
                         dots,
-                        original_duration: Some(format!("{}", beat_element.tuplet_duration)),
+                        original_duration: Some(format!("{}", duration_to_use)),
                     });
                 }
         } 
