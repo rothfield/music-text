@@ -99,3 +99,7 @@ web_live_*
 # Server test files (should be in temp directory)
 server_test_*
 temp_server_tests/
+
+# Playwright test reports and results
+playwright-report/
+test-results/

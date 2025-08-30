@@ -137,6 +137,16 @@ The dash (-) character has **DUAL BEHAVIOR** that is essential to understand:
 - Dash as extension (tied note creation)  
 - Dash as rest (when extension chain is broken)
 
+## IMPORTANT: Slur Notation
+
+⚠️ **SLUR NOTATION CHANGE** ⚠️
+
+- **Parentheses () are NO LONGER supported for slurs**
+- **Use underscores (_____) above the notes for slurs**
+- Example: `1_2_3` creates a slur over notes 1, 2, and 3
+- Multiple underscores can span multiple notes within a slur
+- This change prevents confusion with other notation elements
+
 ## IMPORTANT IMPORTANT IMPORTANT: Rhythm System Understanding
 
 ⚠️ **IMPORTANT: READ RHYTHM_SYSTEM.md FIRST** ⚠️  
