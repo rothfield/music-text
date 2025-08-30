@@ -158,20 +158,20 @@ impl<'a> HandwrittenLexer<'a> {
                 })
             }
 
-            // Slur start
+            // Parentheses - treated as generic symbols (no semantic meaning)
             '(' => {
                 Some(Token {
-                    token_type: "SLUR_START".to_string(),
+                    token_type: TokenType::Symbols.as_str().to_string(),
                     value: "(".to_string(),
                     line: 0, // Will be set by caller
                     col: 0,  // Will be set by caller
                 })
             }
 
-            // Slur end
+            // Parentheses - treated as generic symbols (no semantic meaning)
             ')' => {
                 Some(Token {
-                    token_type: "SLUR_END".to_string(),
+                    token_type: TokenType::Symbols.as_str().to_string(),
                     value: ")".to_string(),
                     line: 0, // Will be set by caller
                     col: 0,  // Will be set by caller

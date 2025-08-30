@@ -1,4 +1,4 @@
-# Notation Parser - V2 Architecture
+# music-text Parser - V2 Architecture
 
 A **revolutionary multi-notation music parser** with V2 clean-slate architecture, supporting Western, Sargam (Indian), and Numeric notation systems. The parser features **mathematical tuplet processing**, **AI-first documentation**, and **dual converter rewrites** for LilyPond and VexFlow output.
 

@@ -2,11 +2,11 @@
 
 ## Current State Analysis
 
-### Existing Test Structure (from doremi-script)
+### Existing Test Structure (from music-text)
 ```
-doremi-script/
+music-text/
 ├── test/                         # Clojure unit tests
-│   └── doremi_script/
+│   └── music_text/
 │       ├── core_test.clj        # Parser tests
 │       └── grammar_test.clj     # Grammar tests
 │
@@ -150,7 +150,7 @@ impl TestCase {
 
 ### Phase 1: Foundation (Week 1-2)
 - [ ] Create test directory structure
-- [ ] Port existing doremi-script test cases to new format
+- [ ] Port existing music-text test cases to new format
 - [ ] Implement basic test runner script
 - [ ] Set up LilyPond → PNG generation pipeline
 - [ ] Create initial baseline PNGs for core tests
@@ -221,11 +221,11 @@ impl TestCase {
 - <100ms parse time for typical files
 - <1s parse time for large files
 - Visual diffs <5% for minor changes
-- 100% backward compatibility with doremi-script fixtures
+- 100% backward compatibility with music-text fixtures
 - Zero memory leaks in WASM
 
 ## Notes
-- Prioritize backward compatibility with existing doremi-script tests
+- Prioritize backward compatibility with existing music-text tests
 - Visual testing is critical for ensuring LilyPond output quality
 - Performance benchmarks should run on consistent hardware
 - Consider using property-based testing for edge case discovery

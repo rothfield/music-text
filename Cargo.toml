@@ -1,5 +1,5 @@
 [package]
-name = "notation_parser"
+name = "music_text_parser"
 version = "0.1.0"
 edition = "2021"
 

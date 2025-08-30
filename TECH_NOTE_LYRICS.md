@@ -3,7 +3,7 @@
 ## Date: 2025-01-25
 
 ## Overview
-This document captures the analysis and discussion about lyrics handling in the notation parser compared to doremi-script's implementation.
+This document captures the analysis and discussion about lyrics handling in the notation parser compared to music-text's implementation.
 
 ## Current Implementation
 
@@ -26,7 +26,7 @@ This document captures the analysis and discussion about lyrics handling in the 
 ## DoremiScript Comparison
 
 ### Initial Observations
-Initially, it appeared that doremi-script used a different approach with:
+Initially, it appeared that music-text used a different approach with:
 - Lyrics placed above musical notation
 - Pre-hyphenated syllables
 - Spatial alignment for syllable-to-note mapping
@@ -96,4 +96,4 @@ The key insight is that both systems recognize lyrics must be **attached to note
 4. **Spatial Hints**: Use column positions as hints but not sole determinant
 
 ---
-*Generated from discussion about lyrics handling approaches, comparing current implementation with doremi-script's Clojure-based system.*
+*Generated from discussion about lyrics handling approaches, comparing current implementation with music-text's Clojure-based system.*

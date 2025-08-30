@@ -4,7 +4,7 @@
 
 This document explains the rhythm/tuplet system that is **FUNDAMENTAL** to this music notation parser. LLMs typically lack understanding of these music notation implementation details.
 
-**IMPORTANT**: This system was "already working in doremi-script V1" - the V2 system must match this logic exactly.
+**IMPORTANT**: This system was "already working in music-text V1" - the V2 system must match this logic exactly.
 
 ## IMPORTANT: Consolidation of Rhythm Knowledge
 
@@ -115,7 +115,7 @@ while tuplet_den * 2 < beat.divisions {
 
 **IMPORTANT**: The FSM determines rhythm structure. The converters map subdivisions to appropriate visual durations. Always use fractional arithmetic, never floating point.
 
-**IMPORTANT**: This system was "already working in doremi-script V1" - the V2 system must match this logic exactly.
+**IMPORTANT**: This system was "already working in music-text V1" - the V2 system must match this logic exactly.
 
 ## IMPORTANT: Key Insights from LESSONS_LEARNED_V2.md
 

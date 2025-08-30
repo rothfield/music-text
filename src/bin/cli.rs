@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::io::{self, Read};
 use serde_yaml;
 
-use notation_parser::{
+use music_text_parser::{
     lex_text, generate_flattened_spatial_view, 
     generate_outline,
     tokenize_with_handwritten_lexer
@@ -42,10 +42,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Handle --to-lilypond flag
     if args.to_lilypond {
-        let (document_v2, _) = notation_parser::unified_parser(&raw_text)?;
-        let elements = notation_parser::get_last_elements();
+        let (document_v2, _) = music_text_parser::unified_parser(&raw_text)?;
+        let elements = music_text_parser::get_last_elements();
         
-        let lilypond_output = notation_parser::converters::lilypond::convert_elements_to_lilypond_src(
+        let lilypond_output = music_text_parser::converters::lilypond::convert_elements_to_lilypond_src(
             &elements,
             &document_v2.metadata,
             Some(&raw_text)
@@ -82,12 +82,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lines = lex_text(&raw_text);
 
     // Parse with V2 parser to get elements
-    let (document_v2, _spatial_analysis_yaml) = notation_parser::unified_parser(&raw_text)?;
-    let document: notation_parser::Document = document_v2.clone().into();
+    let (document_v2, _spatial_analysis_yaml) = music_text_parser::unified_parser(&raw_text)?;
+    let document: music_text_parser::Document = document_v2.clone().into();
     
     // Get FSM output that was already processed by unified_parser
     // Don't run FSM again - use the stored output
-    let elements = notation_parser::get_last_elements();
+    let elements = music_text_parser::get_last_elements();
 
     // --- Use handwritten lexer for tokenization ---
     let all_tokens = tokenize_with_handwritten_lexer(&raw_text);
@@ -120,7 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Wrote flatten spatial relationships output to {}", flattened_spatial_path.display());
 
     // --- LilyPond Output using V2 converter with FSM output ---
-    let lilypond_output = notation_parser::converters::lilypond::convert_elements_to_lilypond_src(
+    let lilypond_output = music_text_parser::converters::lilypond::convert_elements_to_lilypond_src(
         &elements,
         &document_v2.metadata,
         Some(&raw_text)
@@ -152,8 +152,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "_".repeat(15));
     
     // Print VexFlow JSON output for testing - use V2 converter with FSM output
-    let elements = notation_parser::get_last_elements();
-    match notation_parser::convert_elements_to_staff_notation(&elements, &document.metadata) {
+    let elements = music_text_parser::get_last_elements();
+    match music_text_parser::convert_elements_to_staff_notation(&elements, &document.metadata) {
         Ok(staves) => {
             match serde_json::to_string(&staves) {
                 Ok(vexflow_json) => {

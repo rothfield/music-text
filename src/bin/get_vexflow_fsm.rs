@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use notation_parser::{parse_notation, convert_elements_to_staff_notation};
+use music_text_parser::{parse_notation, convert_elements_to_staff_notation};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -26,7 +26,7 @@ fn main() {
     }
     
     // Get FSM output and convert using V2 converter
-    let elements = notation_parser::get_last_elements();
+    let elements = music_text_parser::get_last_elements();
     let document = result.get_document().expect("Document should exist");
     
     match convert_elements_to_staff_notation(&elements, &document.metadata) {

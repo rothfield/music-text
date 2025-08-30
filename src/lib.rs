@@ -185,16 +185,7 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
                     position,
                 });
             },
-            "SLUR_START" => {
-                elements.push(ParsedElement::SlurStart {
-                    position,
-                });
-            },
-            "SLUR_END" => {
-                elements.push(ParsedElement::SlurEnd {
-                    position,
-                });
-            },
+            // SLUR_START and SLUR_END tokens removed - ( ) are now generic symbols
             _ => {
                 elements.push(ParsedElement::Symbol {
                     value: token.value.clone(),
