@@ -15,10 +15,10 @@ mod lyrics; // New lyrics processor for ParsedElement
 mod pitch;
 mod display;
 // mod lilypond_converter; // DELETED - V1 converter unused
-pub mod to_lilypond_src; // LilyPond source code generation
+pub mod converters; // Unified converter modules (LilyPond, VexFlow, shared utilities)
 mod lilypond_templates; // Still used by V2 converter
 mod outline;
-pub mod to_staff_notation; // Staff notation rendering (VexFlow)
+pub mod vexflow_js_generator; // Modular VexFlow JavaScript generator
 mod rhythm;
 mod notation_detector;
 // mod lyrics; // DELETED - replaced with lyrics
@@ -32,7 +32,7 @@ pub use pitch::LilyPondNoteNames;
 pub use display::generate_flattened_spatial_view;
 pub use outline::{generate_outline, ToOutline};
 pub use pitch::{lookup_pitch, Notation}; // guess_notation DELETED - unused
-pub use to_staff_notation::{convert_elements_to_staff_notation, convert_elements_to_vexflow_js, StaffNotationStave, StaffNotationElement, StaffNotationAccidental};
+pub use converters::vexflow::{convert_elements_to_staff_notation, convert_elements_to_vexflow_js, StaffNotationStave, StaffNotationElement, StaffNotationAccidental};
 
 /// Complete parsing result structure for WASM API
 #[wasm_bindgen]
@@ -185,6 +185,16 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
                     position,
                 });
             },
+            "SLUR_START" => {
+                elements.push(ParsedElement::SlurStart {
+                    position,
+                });
+            },
+            "SLUR_END" => {
+                elements.push(ParsedElement::SlurEnd {
+                    position,
+                });
+            },
             _ => {
                 elements.push(ParsedElement::Symbol {
                     value: token.value.clone(),
@@ -195,6 +205,21 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
     }
     
     elements
+}
+
+/// Parse a key string to a degree for transposition
+fn parse_key_to_degree(key_str: &str) -> Option<crate::pitch::Degree> {
+    use crate::pitch::Degree;
+    match key_str.to_uppercase().as_str() {
+        "C" => Some(Degree::N1),
+        "D" => Some(Degree::N2), 
+        "E" => Some(Degree::N3),
+        "F" => Some(Degree::N4),
+        "G" => Some(Degree::N5),
+        "A" => Some(Degree::N6),
+        "B" => Some(Degree::N7),
+        _ => None,
+    }
 }
 
 /// V2 Parser using ParsedElement instead of Node
@@ -263,7 +288,30 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
         }
         (output, processed_elements)
     } else {
-        let elements = rhythm_fsm::group_elements_with_fsm_full(&elements, &lines_of_music);
+        let mut elements = rhythm_fsm::group_elements_with_fsm_full(&elements, &lines_of_music);
+        
+        // Check for Key in metadata and inject Tonic item at the beginning
+        eprintln!("DEBUG: Metadata attributes: {:?}", metadata.attributes);
+        
+        // Try both "Key" and "key" for case-insensitive match
+        let key_str = metadata.attributes.get("Key")
+            .or_else(|| metadata.attributes.get("key"));
+            
+        if let Some(key_str) = key_str {
+            eprintln!("DEBUG: Found Key in metadata: {}", key_str);
+            // Parse the key string to get the tonic degree
+            if let Some(tonic_degree) = parse_key_to_degree(key_str) {
+                eprintln!("DEBUG: Parsed key '{}' to degree {:?}", key_str, tonic_degree);
+                // Insert Tonic item at the beginning
+                elements.insert(0, rhythm_fsm::Item::Tonic(tonic_degree));
+                eprintln!("DEBUG: Inserted Tonic item at beginning of elements");
+            } else {
+                eprintln!("DEBUG: Failed to parse key '{}' to degree", key_str);
+            }
+        } else {
+            eprintln!("DEBUG: No Key found in metadata");
+        }
+        
         let structured_elements = rhythm_fsm::convert_elements_to_elements_public(elements.clone());
         (elements, structured_elements)
     };
@@ -328,7 +376,7 @@ pub fn parse_notation(input_text: &str) -> ParseResult {
             };
             
             // Generate LilyPond output using V2 converter
-            let lilypond_output = match to_lilypond_src::convert_elements_to_lilypond_src(
+            let lilypond_output = match converters::lilypond::convert_elements_to_lilypond_src(
                 &get_last_elements(),
                 &document.metadata,
                 Some(input_text)

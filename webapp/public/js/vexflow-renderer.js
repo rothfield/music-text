@@ -30,6 +30,7 @@ async function loadVexFlow() {
 }
 
 function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlaceholder }) {
+    console.log('🚀 renderVexFlowFromFSM called with 2000px width configuration');
     const { Renderer, Stave, Formatter, Voice, Beam, Tuplet, StaveTie, Curve, Accidental, BarNote } = Vex.Flow;
     
     liveVexflowNotation.innerHTML = '';
@@ -37,16 +38,17 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
     liveVexflowNotation.style.display = 'block';
     
     const renderer = new Renderer(liveVexflowNotation, Renderer.Backends.SVG);
-    const estimatedHeight = Math.max(150, staves.length * 100);
+    // Since we're scaling by 0.5, we need to double the logical height
+    const estimatedHeight = Math.max(300, staves.length * 200);
     
-    // Get container width to make VexFlow responsive
-    const containerWidth = liveVexflowNotation.parentElement.offsetWidth || 1200;
-    const renderWidth = Math.max(containerWidth - 30, 800); // Account for padding, minimum 800px
+    // Set fixed width to 2000px
+    const renderWidth = 2000;
     
     renderer.resize(renderWidth, estimatedHeight);
     const context = renderer.getContext();
-    // Remove fixed scaling - let CSS handle sizing
-    // context.scale(0.7, 0.7);
+    
+    // Scale everything to half size
+    context.scale(0.5, 0.5);
     
     let currentY = 20;
     
@@ -58,8 +60,9 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
             return;
         }
         
-        const staveWidth = renderWidth - 40; // Leave margin on both sides
-        const stave = new Stave(20, currentY, staveWidth);
+        // Since we're scaling by 0.5, we need to double the logical dimensions
+        const staveWidth = (renderWidth - 40) * 2; // Double the width to account for 0.5 scale
+        const stave = new Stave(40, currentY * 2, staveWidth); // Double positions for 0.5 scale
         if (staveIndex === 0) {
             stave.addClef('treble');
             
@@ -300,7 +303,7 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
             }
         });
         
-        const formatterWidth = staveWidth - 100; // Account for clef and margins
+        const formatterWidth = staveWidth - 200; // Double margins for 0.5 scale
         new Formatter().joinVoices([voice]).format([voice], formatterWidth);
         voice.draw(context, stave);
         beams.forEach(beam => beam.draw());
@@ -308,8 +311,19 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
         ties.forEach(tie => tie.draw());
         curves.forEach(curve => curve.draw());
         
-        currentY += 100;
+        currentY += 200; // Double the increment for 0.5 scale
     });
+    
+    // After all rendering is complete, force SVG to be 2000px wide
+    setTimeout(() => {
+        const svg = liveVexflowNotation.querySelector('svg');
+        if (svg) {
+            svg.setAttribute('width', '2000');
+            svg.setAttribute('height', estimatedHeight.toString());
+            svg.setAttribute('viewBox', `0 0 2000 ${estimatedHeight}`);
+            console.log(`🔧 Final SVG dimensions: width=${svg.getAttribute('width')}, viewBox=${svg.getAttribute('viewBox')}`);
+        }
+    }, 50);
 }
 
 export async function renderLiveVexFlowPreview(notation, { liveVexflowPlaceholder, liveVexflowNotation }, { staffPreviewEnabled, isLiveVexflowEnabled }) {

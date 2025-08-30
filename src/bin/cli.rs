@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (document_v2, _) = notation_parser::unified_parser(&raw_text)?;
         let elements = notation_parser::get_last_elements();
         
-        let lilypond_output = notation_parser::to_lilypond_src::convert_elements_to_lilypond_src(
+        let lilypond_output = notation_parser::converters::lilypond::convert_elements_to_lilypond_src(
             &elements,
             &document_v2.metadata,
             Some(&raw_text)
@@ -120,7 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Wrote flatten spatial relationships output to {}", flattened_spatial_path.display());
 
     // --- LilyPond Output using V2 converter with FSM output ---
-    let lilypond_output = notation_parser::to_lilypond_src::convert_elements_to_lilypond_src(
+    let lilypond_output = notation_parser::converters::lilypond::convert_elements_to_lilypond_src(
         &elements,
         &document_v2.metadata,
         Some(&raw_text)

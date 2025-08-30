@@ -6,6 +6,8 @@
 - **Testing Requirement**: The job is not done until the web UI is actually tested
 - Always verify fixes work in the browser interface, not just in backend code
 - Check console output and visual rendering to confirm solutions
+- **Use Playwright as primary testing tool**: Run `npx playwright test` for automated browser testing
+- **Playwright for general browser automation**: Use Playwright for any browser interaction, debugging, or testing needs
 
 ### V2 Hybrid Architecture
 
@@ -34,42 +36,72 @@ Single Rust Codebase → {
 - **Server-Side**: LilyPond SVG generation (professional output)
 - **Hybrid Benefits**: Fast client interaction + high-quality server rendering
 
+## 🎼 CRITICAL: TONIC-BASED MOVABLE-DO SYSTEM
+
+⚠️ **THIS IS A TONIC-CENTERED SYSTEM, NOT A KEY SIGNATURE SYSTEM** ⚠️
+
+### Core Philosophy: TONIC as Reference Pitch
+This system treats all pitches as **relative to a tonic**, not as absolute pitches:
+
+- **Scale degree 1 = TONIC** (whatever pitch is declared as tonic)
+- **Scale degree 2 = second degree above tonic** 
+- **Scale degree 7 = seventh degree above tonic**
+- **Tonic can be ANY pitch** (C, D, F#, Bb, etc.)
+
+### TONIC Examples:
+```
+key: C  →  1 = C, 2 = D, 3 = E, 4 = F, 5 = G, 6 = A, 7 = B
+key: D  →  1 = D, 2 = E, 3 = F#, 4 = G, 5 = A, 6 = B, 7 = C#  
+key: G  →  1 = G, 2 = A, 3 = B, 4 = C, 5 = D, 6 = E, 7 = F#
+key: Bb →  1 = Bb, 2 = C, 3 = D, 4 = Eb, 5 = F, 6 = G, 7 = A
+```
+
+**CRITICAL**: This is **NOT** about major/minor modes or traditional key signatures. It's purely about **TONIC as the reference pitch**.
+
+### ❌ WRONG Thinking: "D Major Scale"  
+### ✅ CORRECT Thinking: "D as Tonic"
+
+When `key: D` and input `1` → output `D` because **1 = tonic = D**
+
 ## IMPORTANT: Notation Systems Overview
 
 ### Supported Input Notation Systems
-This parser supports multiple musical notation input systems:
+This parser supports multiple musical notation input systems, **ALL work with tonic transposition**:
 
 1. **Western Notation**: C D E F G A B (standard western notes)
-2. **Sargam Notation**: S R G M P D N (Indian classical music)
+2. **Sargam Notation**: S R G M P D N (Indian classical music)  
 3. **Number Notation**: 1 2 3 4 5 6 7 (numeric system, most common in examples)
 
-### Key Mapping (Number → Western → Sargam)
+### Default Mapping (when NO tonic specified - defaults to C/S/1 as tonic)
 ```
-1 → C → S (Do)
-2 → D → R (Re)  
-3 → E → G (Mi)
-4 → F → M (Fa)
-5 → G → P (Sol)
-6 → A → D (La)
-7 → B → N (Ti)
+Number → Western → Sargam
+1      → C       → S     (tonic/Do/Sa)
+2      → D       → R     (second degree/Re)  
+3      → E       → G     (third degree/Mi/Ga)
+4      → F       → M     (fourth degree/Fa/Ma)
+5      → G       → P     (fifth degree/Sol/Pa)
+6      → A       → D     (sixth degree/La/Dha)
+7      → B       → N     (seventh degree/Ti/Ni)
 ```
 
-### Internal Representation: PitchCode Enum
-All pitches are normalized to internal `PitchCode` enum:
+### Internal Representation: Degree Enum
+All pitches are normalized to internal `Degree` enum (scale degrees):
 ```rust
-pub enum PitchCode {
-    N1, N2, N3, N4, N5, N6, N7  // Normalized representation
+pub enum Degree {
+    N1, N2, N3, N4, N5, N6, N7  // Scale degrees 1-7
+    N1s, N1b, N2s, N2b, ...    // With sharps and flats
 }
 ```
 
-### Conversion Flow
+### Tonic Transposition Flow
 ```
-Input: "1-2" → Parse: [Note{N1}, Dash, Note{N2}] → FSM → Output: "C4 D8 tuplet"
-Input: "S-R" → Parse: [Note{N1}, Dash, Note{N2}] → FSM → Output: "C4 D8 tuplet"  
-Input: "C-D" → Parse: [Note{N1}, Dash, Note{N2}] → FSM → Output: "C4 D8 tuplet"
+Input: "key: D" → Sets tonic to D (N2)
+Input: "1-2"    → Parse: [Tonic(N2), Note{N1}, Dash, Note{N2}] 
+                → FSM processes with tonic context
+                → Output: "d4 e8" (D-E, not C-D!)
 ```
 
-**IMPORTANT**: All three input systems produce identical internal representation and output!
+**CRITICAL**: Scale degrees are **RELATIVE TO TONIC**, not absolute pitches!
 
 ## CRITICAL CRITICAL CRITICAL: Dash (-) Behavior
 
@@ -168,9 +200,13 @@ For any tuplet with N divisions (where N is not a power of 2):
 - `cargo build --release` - Build backend
 - `wasm-pack build --target web --out-dir webapp/pkg` - Build WASM for web UI
 - `cd webapp && node server.js` - Start web server (port 3000)
+- **PRIMARY TESTING**: `npx playwright test` - Run automated browser tests
+- **Playwright Test Development**: Use Playwright for all browser testing needs:
+  - `npx playwright test --headed` - Run tests with visible browser
+  - `npx playwright test --debug` - Debug tests interactively
+  - `npx playwright codegen` - Generate test code by recording browser interactions
 - Test tuplets like "1-2" in the web interface
 - Verify both VexFlow rendering and LilyPond source output
-- **Use Playwright for automated browser testing when needed** - `npx playwright test`
 
 ### Current Status
 - ✅ Fixed V2 LilyPond tuplet generation to use standard durations

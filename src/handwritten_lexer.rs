@@ -158,6 +158,26 @@ impl<'a> HandwrittenLexer<'a> {
                 })
             }
 
+            // Slur start
+            '(' => {
+                Some(Token {
+                    token_type: "SLUR_START".to_string(),
+                    value: "(".to_string(),
+                    line: 0, // Will be set by caller
+                    col: 0,  // Will be set by caller
+                })
+            }
+
+            // Slur end
+            ')' => {
+                Some(Token {
+                    token_type: "SLUR_END".to_string(),
+                    value: ")".to_string(),
+                    line: 0, // Will be set by caller
+                    col: 0,  // Will be set by caller
+                })
+            }
+
             // Symbols (breath markers, octave markers, etc.)
             '\'' | '.' | ':' | '~' | '#' | 'b' => {
                 Some(Token {

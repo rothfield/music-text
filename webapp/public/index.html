@@ -97,7 +97,7 @@
             background: var(--bg-primary);
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-lg);
-            overflow: hidden;
+            overflow: visible;  /* Allow wide content */
             margin-bottom: 2rem;
         }
 
@@ -163,13 +163,14 @@
         /* VexFlow Output */
         #vexflow-canvas {
             width: 100%;
+            min-width: 2000px;  /* Force minimum width to match SVG */
             min-height: 200px;
             border-radius: var(--radius-md);
             background: var(--bg-primary);
             border: 2px dashed var(--border-color);
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;  /* Left-align the wide content */
             overflow-x: auto;
             transition: border-color 0.2s ease;
         }
@@ -180,7 +181,8 @@
         }
 
         #vexflow-canvas svg {
-            max-width: 100%;
+            /* Allow SVG to be its full 2000px width */
+            max-width: none;
             height: auto;
         }
 

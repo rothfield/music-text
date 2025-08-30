@@ -141,6 +141,7 @@ pub enum Item {
     Breathmark,
     SlurStart,
     SlurEnd,
+    Tonic(Degree), // Tonic/Key declaration (e.g., "key: D" -> Degree::N2)
 }
 
 #[derive(Debug, PartialEq)]
@@ -155,6 +156,7 @@ struct FSMV2 {
     output: Vec<Item>,
     current_beat: Option<Beat>,
     inside_beat_bracket: bool,
+    pending_tie_pitch: Option<Degree>, // Track pitch that needs tying across barlines
 }
 
 impl FSMV2 {
@@ -164,6 +166,7 @@ impl FSMV2 {
             output: vec![],
             current_beat: None,
             inside_beat_bracket: false,
+            pending_tie_pitch: None,
         }
     }
 
@@ -224,10 +227,32 @@ impl FSMV2 {
     }
 
     fn start_beat_pitch(&mut self, element: &ParsedElement) {
-        let mut beat = Beat { divisions: 1, elements: vec![], tied_to_previous: false, is_tuplet: false, tuplet_ratio: None };
+        // Check if this note should be tied to previous beat
+        let tied_to_previous = if let Some(pending_pitch) = self.pending_tie_pitch {
+            // Check if this note matches the pending tie pitch
+            match element {
+                ParsedElement::Note { degree, .. } => *degree == pending_pitch,
+                _ => false,
+            }
+        } else {
+            false
+        };
+        
+        let mut beat = Beat { 
+            divisions: 1, 
+            elements: vec![], 
+            tied_to_previous, 
+            is_tuplet: false, 
+            tuplet_ratio: None 
+        };
         beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
         self.current_beat = Some(beat);
         self.state = State::InBeat;
+        
+        // Clear pending tie after processing
+        if tied_to_previous {
+            self.pending_tie_pitch = None;
+        }
     }
 
     fn start_beat_dash(&mut self, dash_element: &ParsedElement) {
@@ -381,6 +406,15 @@ impl FSMV2 {
                 }
             }
             
+            // Check if this beat should create a pending tie (was extended by dashes)
+            if let Some(last_element) = beat.elements.last() {
+                if last_element.is_note() && beat.divisions > 1 {
+                    // Beat with divisions > 1 indicates it was extended by dashes
+                    // Set pending tie for the next note of same pitch
+                    self.pending_tie_pitch = last_element.degree;
+                }
+            }
+            
             self.output.push(Item::Beat(beat));
         }
     }
@@ -398,6 +432,8 @@ impl FSMV2 {
     }
 
     fn emit_breathmark(&mut self) {
+        // Breath marks break tie chains
+        self.pending_tie_pitch = None;
         self.output.push(Item::Breathmark);
     }
 
@@ -473,6 +509,10 @@ fn convert_elements_to_elements(output: Vec<Item>) -> Vec<ParsedElement> {
                 result.push(ParsedElement::SlurEnd {
                     position: Position::new(0, 0),
                 });
+            },
+            Item::Tonic(_tonic_degree) => {
+                // Tonic is for internal transposition, not displayed in parsed elements
+                // Could optionally create a Symbol or Comment element if we want to show it
             },
         }
     }
