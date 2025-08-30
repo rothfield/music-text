@@ -473,7 +473,7 @@ Try Happy Birthday:
     </main>
 
     <script type="module">
-        import init, { parse_notation } from './pkg/notation_parser.js';
+        import init, { parse_notation } from './pkg/music_text_parser.js';
         
         let vexflowRenderer = null;
         let context = null;
@@ -737,7 +737,7 @@ Try Happy Birthday:
                 // Check server status periodically
                 setInterval(checkServerStatus, 5000);
                 
-                await init({ module_or_path: './pkg/notation_parser_bg.wasm' });
+                await init({ module_or_path: './pkg/music_text_parser_bg.wasm' });
                 isInitialized = true;
                 
                 const input = document.getElementById('notation-input');

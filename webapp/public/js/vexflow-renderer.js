@@ -278,30 +278,44 @@ function renderVexFlowFromFSM(staves, { liveVexflowNotation, liveVexflowPlacehol
         });
 
         const curves = [];
-        let slurStartNoteIndex = -1;
+        let slurStartPending = false;
+        let slurEndPending = false;
         let noteOnlyIndex = 0;
+        
+        // First pass: identify slur markers and count notes
         staveData.notes.forEach((element) => {
             if (element.type === 'SlurStart') {
-                slurStartNoteIndex = noteOnlyIndex;
-            } else if (element.type === 'SlurEnd' && slurStartNoteIndex >= 0) {
-                const endNoteIndex = noteOnlyIndex - 1;
-                if (endNoteIndex > slurStartNoteIndex && endNoteIndex < noteOnlyArray.length) {
-                    const startNote = noteOnlyArray[slurStartNoteIndex];
-                    const endNote = noteOnlyArray[endNoteIndex];
-                    let canCreateCurve = true;
-                    try { startNote.getStem(); } catch (e) { canCreateCurve = false; }
-                    try { if (!endNote.getStem()) { if (typeof endNote.buildStem === 'function') endNote.buildStem(); if (!endNote.getStem()) canCreateCurve = false; } } catch (e) { canCreateCurve = false; }
-                    if (canCreateCurve) {
-                        curves.push(new Curve(startNote, endNote, { cps: [{ x: 0, y: 10 }, { x: 0, y: 10 }] }).setContext(context));
-                    }
-                }
-                slurStartNoteIndex = -1;
+                slurStartPending = true;
+                console.log('VexFlow: SlurStart found, marking pending');
+            } else if (element.type === 'SlurEnd') {
+                slurEndPending = true;
+                console.log('VexFlow: SlurEnd found, marking pending');
             } else if (element.type === 'Note') {
                 noteOnlyIndex++;
             } else if (element.type === 'Tuplet') {
                 noteOnlyIndex += element.notes.filter(n => n.type === 'Note').length;
             }
         });
+        
+        // Create slur if both markers are pending and we have enough notes
+        if (slurStartPending && slurEndPending && noteOnlyIndex > 1) {
+            const startNote = noteOnlyArray[0];  // First note
+            const endNote = noteOnlyArray[noteOnlyIndex - 1];  // Last note
+            console.log(`VexFlow: Creating slur from first note (index 0) to last note (index ${noteOnlyIndex - 1})`);
+            
+            let canCreateCurve = true;
+            try { startNote.getStem(); } catch (e) { canCreateCurve = false; }
+            try { if (!endNote.getStem()) { if (typeof endNote.buildStem === 'function') endNote.buildStem(); if (!endNote.getStem()) canCreateCurve = false; } } catch (e) { canCreateCurve = false; }
+            
+            if (canCreateCurve) {
+                curves.push(new Curve(startNote, endNote, { cps: [{ x: 0, y: 10 }, { x: 0, y: 10 }] }).setContext(context));
+                console.log('VexFlow: Slur created successfully');
+            } else {
+                console.log('VexFlow: Could not create slur - stem issues');
+            }
+        } else if (slurStartPending || slurEndPending) {
+            console.log(`VexFlow: Incomplete slur markers - Start: ${slurStartPending}, End: ${slurEndPending}, Notes: ${noteOnlyIndex}`);
+        }
         
         const formatterWidth = staveWidth - 200; // Double margins for 0.5 scale
         new Formatter().joinVoices([voice]).format([voice], formatterWidth);
