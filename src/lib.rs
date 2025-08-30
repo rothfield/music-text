@@ -362,8 +362,19 @@ pub fn parse_notation(input_text: &str) -> ParseResult {
             
             // Generate VexFlow JavaScript code using V2 converter
             let vexflow_js = match convert_elements_to_vexflow_js(&get_last_elements(), &document.metadata) {
-                Ok(js_code) => js_code,
-                Err(_) => String::new(),
+                Ok(js_code) => {
+                    // Debug: Log first few lines of generated JS to verify it's the 2-pass generator
+                    let first_lines: Vec<&str> = js_code.lines().take(5).collect();
+                    eprintln!("WASM DEBUG: Generated VexFlow JS (first 5 lines):");
+                    for line in &first_lines {
+                        eprintln!("WASM DEBUG: {}", line);
+                    }
+                    js_code
+                },
+                Err(e) => {
+                    eprintln!("WASM DEBUG: VexFlow JS generation failed: {}", e);
+                    String::new()
+                },
             };
             
             // Generate LilyPond output using V2 converter
