@@ -20,6 +20,10 @@ struct Args {
     /// Convert to LilyPond format, read from stdin and output to stdout
     #[arg(long)]
     to_lilypond: bool,
+    
+    /// Generate VexFlow JavaScript, read from stdin and output to stdout
+    #[arg(long)]
+    to_vexflow: bool,
 }
 
 
@@ -52,6 +56,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         
         println!("{}", lilypond_output);
+        return Ok(());
+    }
+    
+    // Handle --to-vexflow flag
+    if args.to_vexflow {
+        let (document_v2, _) = music_text_parser::unified_parser(&raw_text)?;
+        let elements = music_text_parser::get_last_elements();
+        
+        let vexflow_js = music_text_parser::converters::vexflow::convert_elements_to_vexflow_js(
+            &elements,
+            &document_v2.metadata
+        ).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        
+        println!("{}", vexflow_js);
         return Ok(());
     }
     

@@ -6,8 +6,10 @@ test.describe('Cross-Beat Slurs', () => {
   });
 
   test('renders slurs spanning across beat boundaries', async ({ page }) => {
-    // Test slur that starts in one beat and ends in another: (1-2 3)
-    await page.fill('#notation-input', '(1-2 3)');
+    // Test slur that starts in one beat and ends in another:
+    // ___
+    // 1-2 3
+    await page.fill('#notation-input', '___\n1-2 3');
     
     await page.click('#generate-lilypond-btn');
     await page.waitForTimeout(3000);
@@ -25,8 +27,10 @@ test.describe('Cross-Beat Slurs', () => {
   });
 
   test('renders slurs spanning across different beats', async ({ page }) => {
-    // Test slur across completely separate beats: (1 2) 3
-    await page.fill('#notation-input', '(1 2) 3');
+    // Test slur across completely separate beats:
+    // __
+    // 1 2 3
+    await page.fill('#notation-input', '__\n1 2 3');
     
     await page.click('#generate-lilypond-btn');
     await page.waitForTimeout(3000);
@@ -43,8 +47,10 @@ test.describe('Cross-Beat Slurs', () => {
   });
 
   test('renders slurs spanning barlines', async ({ page }) => {
-    // Test slur that spans across a barline: (1 2 | 3)
-    await page.fill('#notation-input', '(1 2 | 3)');
+    // Test slur that spans across a barline:
+    // ___
+    // 1 2 | 3
+    await page.fill('#notation-input', '___\n1 2 | 3');
     
     await page.click('#generate-lilypond-btn');
     await page.waitForTimeout(3000);
@@ -63,8 +69,10 @@ test.describe('Cross-Beat Slurs', () => {
   });
 
   test('renders complex mixed slurs and beats', async ({ page }) => {
-    // Test complex pattern: (1-2) (3 4-5)
-    await page.fill('#notation-input', '(1-2) (3 4-5)');
+    // Test complex pattern:
+    // ___  ___
+    // 1-2  3 4-5
+    await page.fill('#notation-input', '___  ___\n1-2  3 4-5');
     
     await page.click('#generate-lilypond-btn');
     await page.waitForTimeout(3000);

@@ -6,6 +6,14 @@ use serde::{Deserialize, Serialize};
 use crate::models::{Document, Node, Metadata}; // Keep using existing for compatibility
 use crate::pitch::Degree;
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SlurRole {
+    Start,
+    Middle,
+    End,
+    StartEnd,
+}
+
 /// Shared position information for all parsed elements
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Position {
@@ -65,6 +73,7 @@ pub enum ParsedElement {
         position: Position,
         children: Vec<ParsedChild>, // Attached ornaments, octave markers, lyrics
         duration: Option<(usize, usize)>, // Duration fraction (numerator, denominator) from FSM
+        slur: Option<SlurRole>, // Assigned by vertical_parser
     },
     
     /// Rest note
@@ -202,7 +211,7 @@ impl Position {
 impl From<ParsedElement> for Node {
     fn from(element: ParsedElement) -> Self {
         match element {
-            ParsedElement::Note { degree, octave, value, position, children, duration } => {
+            ParsedElement::Note { degree, octave, value, position, children, duration, slur: _ } => {
                 let mut node = Node::new(
                     "PITCH".to_string(),
                     value,

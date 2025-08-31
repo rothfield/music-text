@@ -6,8 +6,10 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
   });
 
   test('renders cross-beat slur spanning tuplet to next note', async ({ page }) => {
-    // Test: (1-2 3) - slur from tuplet to next beat
-    await page.fill('#notation-input', '(1-2 3)');
+    // Test: slur from tuplet to next beat
+    // ___
+    // 1-2 3
+    await page.fill('#notation-input', '___\n1-2 3');
     
     // Wait for VexFlow auto-rendering
     await page.waitForTimeout(2000);
@@ -18,7 +20,7 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
     
     // Log the actual SVG content to debug slur rendering
     const svgContent = await page.innerHTML('#vexflow-canvas');
-    console.log('VexFlow SVG content for (1-2 3):', svgContent.substring(0, 500));
+    console.log('VexFlow SVG content for overline slur:', svgContent.substring(0, 500));
     
     // Check for VexFlow slur elements in the SVG - slurs are typically curves or paths
     const slurElements = await page.locator('#vexflow-canvas svg path, #vexflow-canvas svg curve');
@@ -30,8 +32,10 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
   });
 
   test('renders slur spanning different beats', async ({ page }) => {
-    // Test: (1 2) 3 - slur within single beat
-    await page.fill('#notation-input', '(1 2) 3');
+    // Test: slur within single beat
+    // __
+    // 1 2 3
+    await page.fill('#notation-input', '__\n1 2 3');
     
     await page.waitForTimeout(2000);
     
@@ -39,14 +43,16 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
     await expect(vexflowCanvas).toBeVisible();
     
     const svgContent = await page.innerHTML('#vexflow-canvas');
-    console.log('VexFlow SVG content for (1 2) 3:', svgContent.substring(0, 300));
+    console.log('VexFlow SVG content for overline slur:', svgContent.substring(0, 300));
     
     await expect(vexflowCanvas).toBeVisible();
   });
 
   test('renders slur spanning barlines', async ({ page }) => {
-    // Test: (1 2 | 3) - slur across barline
-    await page.fill('#notation-input', '(1 2 | 3)');
+    // Test: slur across barline
+    // ___
+    // 1 2 | 3
+    await page.fill('#notation-input', '___\n1 2 | 3');
     
     await page.waitForTimeout(2000);
     
@@ -54,14 +60,16 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
     await expect(vexflowCanvas).toBeVisible();
     
     const svgContent = await page.innerHTML('#vexflow-canvas');
-    console.log('VexFlow SVG content for (1 2 | 3):', svgContent.substring(0, 300));
+    console.log('VexFlow SVG content for overline slur:', svgContent.substring(0, 300));
     
     await expect(vexflowCanvas).toBeVisible();
   });
 
   test('renders complex mixed slurs and beats', async ({ page }) => {
-    // Test: (1-2) (3 4-5) - multiple cross-beat slurs
-    await page.fill('#notation-input', '(1-2) (3 4-5)');
+    // Test: multiple cross-beat slurs
+    // ___  ___
+    // 1-2  3 4-5
+    await page.fill('#notation-input', '___  ___\n1-2  3 4-5');
     
     await page.waitForTimeout(2000);
     
@@ -69,14 +77,14 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
     await expect(vexflowCanvas).toBeVisible();
     
     const svgContent = await page.innerHTML('#vexflow-canvas');
-    console.log('VexFlow SVG content for (1-2) (3 4-5):', svgContent.substring(0, 400));
+    console.log('VexFlow SVG content for overline slurs:', svgContent.substring(0, 400));
     
     await expect(vexflowCanvas).toBeVisible();
   });
 
   test('compares VexFlow with LilyPond slur consistency', async ({ page }) => {
     // Test that VexFlow and LilyPond produce consistent slur behavior
-    const testPattern = '(1-2 3)';
+    const testPattern = '___\n1-2 3';
     await page.fill('#notation-input', testPattern);
     
     // Wait for VexFlow auto-rendering

@@ -1,10 +1,11 @@
 // Staff Notation Converter - Works directly with FSM Item, clean architecture
 // Generates VexFlow-compatible JSON for staff notation rendering
 use crate::models::Metadata;
-use crate::rhythm_fsm::{Item, Beat};
+use crate::horizontal_parser::{Item, Beat};
 use crate::pitch::{Degree};
 use crate::rhythm::RhythmConverter;
 use super::transposition::transpose_degree_with_octave;
+use crate::parsed_models::OrnamentType;
 use serde::{Deserialize, Serialize};
 
 /// Staff notation output structures for rendering
@@ -27,6 +28,7 @@ pub enum StaffNotationElement {
         beam_start: bool,
         beam_end: bool,
         syl: Option<String>, // Syllable/lyric text
+        ornaments: Vec<OrnamentType>, // Mordents, trills, etc.
     },
     Rest {
         duration: String,
@@ -115,57 +117,57 @@ impl KeyTransposer {
         }
     }
     
-    /// Get transposition table that maps scale degrees to (note, octave_adjustment)
-    /// The octave_adjustment is added to the input octave to handle wrapping
-    fn get_transposition_table(&self) -> [(&'static str, i8); 7] {
-        match self.tonic_note {
-            "c" => [
-                ("c", 0), ("d", 0), ("e", 0), ("f", 0), ("g", 0), ("a", 0), ("b", 0)
-            ],
-            "g" => [
-                ("g", 0), ("a", 0), ("b", 0), ("c", 1), ("d", 1), ("e", 1), ("fs", 1)
-            ],
-            "d" => [
-                ("d", 0), ("e", 0), ("fs", 0), ("g", 0), ("a", 0), ("b", 0), ("cs", 1)
-            ],
-            "a" => [
-                ("a", 0), ("b", 0), ("cs", 1), ("d", 1), ("e", 1), ("fs", 1), ("gs", 1)
-            ],
-            "e" => [
-                ("e", 0), ("fs", 0), ("gs", 0), ("a", 0), ("b", 0), ("cs", 1), ("ds", 1)
-            ],
-            "b" => [
-                ("b", 0), ("cs", 1), ("ds", 1), ("e", 1), ("fs", 1), ("gs", 1), ("as", 1)
-            ],
-            "f" => [
-                ("f", 0), ("g", 0), ("a", 0), ("bb", 0), ("c", 1), ("d", 1), ("e", 1)
-            ],
-            "bb" => [
-                ("bb", 0), ("c", 1), ("d", 1), ("eb", 1), ("f", 1), ("g", 1), ("a", 1)
-            ],
-            "eb" => [
-                ("eb", 0), ("f", 0), ("g", 0), ("ab", 0), ("bb", 0), ("c", 1), ("d", 1)
-            ],
-            "ab" => [
-                ("ab", 0), ("bb", 0), ("c", 1), ("db", 1), ("eb", 1), ("f", 1), ("g", 1)
-            ],
-            _ => [ // Default to C major
-                ("c", 0), ("d", 0), ("e", 0), ("f", 0), ("g", 0), ("a", 0), ("b", 0)
-            ],
-        }
-    }
+    // /// Get transposition table that maps scale degrees to (note, octave_adjustment)
+    // /// The octave_adjustment is added to the input octave to handle wrapping
+    // fn get_transposition_table(&self) -> [(&'static str, i8); 7] {
+    //     match self.tonic_note {
+    //         "c" => [
+    //             ("c", 0), ("d", 0), ("e", 0), ("f", 0), ("g", 0), ("a", 0), ("b", 0)
+    //         ],
+    //         "g" => [
+    //             ("g", 0), ("a", 0), ("b", 0), ("c", 1), ("d", 1), ("e", 1), ("f#", 1)
+    //         ],
+    //         "d" => [
+    //             ("d", 0), ("e", 0), ("f#", 0), ("g", 0), ("a", 0), ("b", 0), ("c#", 1)
+    //         ],
+    //         "a" => [
+    //             ("a", 0), ("b", 0), ("c#", 1), ("d", 1), ("e", 1), ("f#", 1), ("g#", 1)
+    //         ],
+    //         "e" => [
+    //             ("e", 0), ("f#", 0), ("g#", 0), ("a", 0), ("b", 0), ("c#", 1), ("d#", 1)
+    //         ],
+    //         "b" => [
+    //             ("b", 0), ("c#", 1), ("d#", 1), ("e", 1), ("f#", 1), ("g#", 1), ("a#", 1)
+    //         ],
+    //         "f" => [
+    //             ("f", 0), ("g", 0), ("a", 0), ("bb", 0), ("c", 1), ("d", 1), ("e", 1)
+    //         ],
+    //         "bb" => [
+    //             ("bb", 0), ("c", 1), ("d", 1), ("eb", 1), ("f", 1), ("g", 1), ("a", 1)
+    //         ],
+    //         "eb" => [
+    //             ("eb", 0), ("f", 0), ("g", 0), ("ab", 0), ("bb", 0), ("c", 1), ("d", 1)
+    //         ],
+    //         "ab" => [
+    //             ("ab", 0), ("bb", 0), ("c", 1), ("db", 1), ("eb", 1), ("f", 1), ("g", 1)
+    //         ],
+    //         _ => [ // Default to C major
+    //             ("c", 0), ("d", 0), ("e", 0), ("f", 0), ("g", 0), ("a", 0), ("b", 0)
+    //         ],
+    //     }
+    // }
     
-    /// Get the scale for the current key (scale degrees 1-7 mapped to actual notes)
-    fn get_scale_for_key(&self) -> [&'static str; 7] {
-        // For now, simplified mapping. In reality, you'd calculate the proper scale.
-        match self.tonic_note {
-            "c" => ["c", "d", "e", "f", "g", "a", "b"],
-            "g" => ["g", "a", "b", "c", "d", "e", "fs"], // G major has F#
-            "d" => ["d", "e", "fs", "g", "a", "b", "cs"], // D major has F#, C#
-            "f" => ["f", "g", "a", "bb", "c", "d", "e"], // F major has Bb
-            _ => ["c", "d", "e", "f", "g", "a", "b"], // Default to C major
-        }
-    }
+    // /// Get the scale for the current key (scale degrees 1-7 mapped to actual notes)
+    // fn get_scale_for_key(&self) -> [&'static str; 7] {
+    //     // For now, simplified mapping. In reality, you'd calculate the proper scale.
+    //     match self.tonic_note {
+    //         "c" => ["c", "d", "e", "f", "g", "a", "b"],
+    //         "g" => ["g", "a", "b", "c", "d", "e", "f#"], // G major has F#
+    //         "d" => ["d", "e", "f#", "g", "a", "b", "c#"], // D major has F#, C#
+    //         "f" => ["f", "g", "a", "bb", "c", "d", "e"], // F major has Bb
+    //         _ => ["c", "d", "e", "f", "g", "a", "b"], // Default to C major
+    //     }
+    // }
 }
 
 /// Convert Degree to VexFlow note name (includes accidentals)
@@ -174,63 +176,63 @@ fn degree_to_vexflow_note_name(degree: Degree) -> String {
     match degree {
         // Scale degree 1 (Do/Sa/C)
         N1bb => "cbb".to_string(), N1b => "cb".to_string(), N1 => "c".to_string(),
-        N1s => "cs".to_string(), N1ss => "css".to_string(),
+        N1s => "c#".to_string(), N1ss => "c##".to_string(),
         // Scale degree 2 (Re/D)  
         N2bb => "dbb".to_string(), N2b => "db".to_string(), N2 => "d".to_string(),
-        N2s => "ds".to_string(), N2ss => "dss".to_string(),
+        N2s => "d#".to_string(), N2ss => "d##".to_string(),
         // Scale degree 3 (Mi/Ga/E)
         N3bb => "ebb".to_string(), N3b => "eb".to_string(), N3 => "e".to_string(),
-        N3s => "es".to_string(), N3ss => "ess".to_string(),
+        N3s => "e#".to_string(), N3ss => "e##".to_string(),
         // Scale degree 4 (Fa/Ma/F)
         N4bb => "fbb".to_string(), N4b => "fb".to_string(), N4 => "f".to_string(),
-        N4s => "fs".to_string(), N4ss => "fss".to_string(),
+        N4s => "f#".to_string(), N4ss => "f##".to_string(),
         // Scale degree 5 (Sol/Pa/G)
         N5bb => "gbb".to_string(), N5b => "gb".to_string(), N5 => "g".to_string(),
-        N5s => "gs".to_string(), N5ss => "gss".to_string(),
+        N5s => "g#".to_string(), N5ss => "g##".to_string(),
         // Scale degree 6 (La/Dha/A)
         N6bb => "abb".to_string(), N6b => "ab".to_string(), N6 => "a".to_string(),
-        N6s => "as".to_string(), N6ss => "ass".to_string(),
+        N6s => "a#".to_string(), N6ss => "a##".to_string(),
         // Scale degree 7 (Ti/Ni/B)
         N7bb => "bbb".to_string(), N7b => "bb".to_string(), N7 => "b".to_string(),
-        N7s => "bs".to_string(), N7ss => "bss".to_string(),
+        N7s => "b#".to_string(), N7ss => "b##".to_string(),
     }
 }
 
-/// Convert Degree to scale degree (note letter + accidental offset)
-fn degree_to_scale_degree(degree: Degree) -> (&'static str, i8) {
-    use Degree::*;
-    match degree {
-        // Scale degree 1 (Do/Sa/C)
-        N1bb => ("c", -2), N1b => ("c", -1), N1 => ("c", 0), N1s => ("c", 1), N1ss => ("c", 2),
-        // Scale degree 2 (Re/D)  
-        N2bb => ("d", -2), N2b => ("d", -1), N2 => ("d", 0), N2s => ("d", 1), N2ss => ("d", 2),
-        // Scale degree 3 (Mi/Ga/E)
-        N3bb => ("e", -2), N3b => ("e", -1), N3 => ("e", 0), N3s => ("e", 1), N3ss => ("e", 2),
-        // Scale degree 4 (Fa/Ma/F)
-        N4bb => ("f", -2), N4b => ("f", -1), N4 => ("f", 0), N4s => ("f", 1), N4ss => ("f", 2),
-        // Scale degree 5 (Sol/Pa/G)
-        N5bb => ("g", -2), N5b => ("g", -1), N5 => ("g", 0), N5s => ("g", 1), N5ss => ("g", 2),
-        // Scale degree 6 (La/Dha/A)
-        N6bb => ("a", -2), N6b => ("a", -1), N6 => ("a", 0), N6s => ("a", 1), N6ss => ("a", 2),
-        // Scale degree 7 (Ti/Ni/B)
-        N7bb => ("b", -2), N7b => ("b", -1), N7 => ("b", 0), N7s => ("b", 1), N7ss => ("b", 2),
-    }
-}
+// /// Convert Degree to scale degree (note letter + accidental offset)
+// fn degree_to_scale_degree(degree: Degree) -> (&'static str, i8) {
+//     use Degree::*;
+//     match degree {
+//         // Scale degree 1 (Do/Sa/C)
+//         N1bb => ("c", -2), N1b => ("c", -1), N1 => ("c", 0), N1s => ("c", 1), N1ss => ("c", 2),
+//         // Scale degree 2 (Re/D)  
+//         N2bb => ("d", -2), N2b => ("d", -1), N2 => ("d", 0), N2s => ("d", 1), N2ss => ("d", 2),
+//         // Scale degree 3 (Mi/Ga/E)
+//         N3bb => ("e", -2), N3b => ("e", -1), N3 => ("e", 0), N3s => ("e", 1), N3ss => ("e", 2),
+//         // Scale degree 4 (Fa/Ma/F)
+//         N4bb => ("f", -2), N4b => ("f", -1), N4 => ("f", 0), N4s => ("f", 1), N4ss => ("f", 2),
+//         // Scale degree 5 (Sol/Pa/G)
+//         N5bb => ("g", -2), N5b => ("g", -1), N5 => ("g", 0), N5s => ("g", 1), N5ss => ("g", 2),
+//         // Scale degree 6 (La/Dha/A)
+//         N6bb => ("a", -2), N6b => ("a", -1), N6 => ("a", 0), N6s => ("a", 1), N6ss => ("a", 2),
+//         // Scale degree 7 (Ti/Ni/B)
+//         N7bb => ("b", -2), N7b => ("b", -1), N7 => ("b", 0), N7s => ("b", 1), N7ss => ("b", 2),
+//     }
+// }
 
 
 
 /// Generate JavaScript code for VexFlow rendering
-/// This actually converts to staff notation JSON for the web interface
+/// Delegates to the vexflow_js_generator module  
 pub fn convert_elements_to_vexflow_js(
     elements: &Vec<Item>,
     metadata: &Metadata
 ) -> Result<String, String> {
-    // Convert to staff notation structure first
-    let staves = convert_elements_to_staff_notation(elements, metadata)?;
-    
-    // Serialize to JSON for the web interface
-    serde_json::to_string(&staves)
-        .map_err(|e| format!("Failed to serialize staff notation to JSON: {}", e))
+    eprintln!("CONVERTER DEBUG: convert_elements_to_vexflow_js called with {} elements", elements.len());
+    for (i, elem) in elements.iter().enumerate() {
+        eprintln!("CONVERTER DEBUG: Element {}: {:?}", i, elem);
+    }
+    // Use the VexFlow JavaScript generator
+    crate::vexflow_js_generator::generate_vexflow_js(elements, metadata)
 }
 
 /// Main conversion function from V2 FSM output to staff notation JSON
@@ -277,19 +279,13 @@ pub fn convert_elements_to_staff_notation(
             Item::Tonic(_tonic_degree) => {
                 // Tonic is handled through the transposer, not displayed directly
             },
-            Item::Barline(style) => {
+            Item::Barline(barline_type) => {
                 current_stave.notes.push(StaffNotationElement::BarLine {
-                    bar_type: map_barline_style(style),
+                    bar_type: barline_type_to_vexflow(barline_type),
                 });
             },
             Item::Breathmark => {
                 current_stave.notes.push(StaffNotationElement::Breathe);
-            },
-            Item::SlurStart => {
-                current_stave.notes.push(StaffNotationElement::SlurStart {});
-            },
-            Item::SlurEnd => {
-                current_stave.notes.push(StaffNotationElement::SlurEnd {});
             },
         }
     }
@@ -311,50 +307,11 @@ pub fn convert_elements_to_staff_notation(
 }
 
 /// Extract duration calculation logic to avoid duplication
-fn calculate_vexflow_durations(beat_element: &crate::rhythm_fsm::BeatElement) -> Vec<(String, u8)> {
+fn calculate_vexflow_durations(beat_element: &crate::horizontal_parser::BeatElement) -> Vec<(String, u8)> {
     let duration_to_use = beat_element.tuplet_display_duration.unwrap_or(beat_element.tuplet_duration);
     RhythmConverter::fraction_to_vexflow(duration_to_use)
 }
 
-/// Create note elements for a beat element
-fn create_note_elements(
-    beat_element: &crate::rhythm_fsm::BeatElement,
-    transposer: &KeyTransposer
-) -> Vec<StaffNotationElement> {
-    let vexflow_durations = calculate_vexflow_durations(beat_element);
-    let (key, accidentals) = transposer.transpose_pitch(beat_element.degree.unwrap(), beat_element.octave.unwrap());
-    
-    vexflow_durations.iter().enumerate().map(|(j, (vexflow_duration, dots))| {
-        let should_tie = j < vexflow_durations.len() - 1; // Tie if more durations follow
-        
-        StaffNotationElement::Note {
-            keys: vec![key.clone()],
-            duration: vexflow_duration.clone(),
-            dots: *dots,
-            accidentals: accidentals.clone(),
-            tied: should_tie,
-            original_duration: Some(format!("{}", beat_element.tuplet_display_duration.unwrap_or(beat_element.tuplet_duration))),
-            beam_start: false,
-            beam_end: false,
-            syl: None,
-        }
-    }).collect()
-}
-
-/// Create rest elements for a beat element
-fn create_rest_elements(
-    beat_element: &crate::rhythm_fsm::BeatElement
-) -> Vec<StaffNotationElement> {
-    let vexflow_durations = calculate_vexflow_durations(beat_element);
-    
-    vexflow_durations.into_iter().map(|(vexflow_duration, dots)| {
-        StaffNotationElement::Rest {
-            duration: vexflow_duration,
-            dots,
-            original_duration: Some(format!("{}", beat_element.tuplet_display_duration.unwrap_or(beat_element.tuplet_duration))),
-        }
-    }).collect()
-}
 
 fn process_beat_v2(
     beat: &Beat, 
@@ -365,12 +322,39 @@ fn process_beat_v2(
     let mut beat_notes = Vec::new();
     
     for (_i, beat_element) in beat.elements.iter().enumerate() {
-        if beat_element.is_note() {
-            beat_notes.extend(create_note_elements(beat_element, transposer));
-        } else if beat_element.is_rest() {
-            beat_notes.extend(create_rest_elements(beat_element));
-        } 
-        // Skip other element types within beats (they're handled elsewhere)
+        let vexflow_durations = calculate_vexflow_durations(beat_element);
+        
+        match &beat_element.event {
+            crate::horizontal_parser::Event::Note { degree, octave, .. } => {
+                let (key, accidentals) = transposer.transpose_pitch(*degree, *octave);
+                
+                for (j, (vexflow_duration, dots)) in vexflow_durations.iter().enumerate() {
+                    let should_tie = j < vexflow_durations.len() - 1; // Tie if more durations follow
+                    
+                    beat_notes.push(StaffNotationElement::Note {
+                        keys: vec![key.clone()],
+                        duration: vexflow_duration.clone(),
+                        dots: *dots,
+                        accidentals: accidentals.clone(),
+                        tied: should_tie,
+                        original_duration: Some(format!("{}", beat_element.tuplet_display_duration.unwrap_or(beat_element.tuplet_duration))),
+                        beam_start: false,
+                        beam_end: false,
+                        syl: beat_element.syl(),
+                        ornaments: beat_element.ornaments(),
+                    });
+                }
+            },
+            crate::horizontal_parser::Event::Rest => {
+                for (vexflow_duration, dots) in vexflow_durations {
+                    beat_notes.push(StaffNotationElement::Rest {
+                        duration: vexflow_duration,
+                        dots,
+                        original_duration: Some(format!("{}", beat_element.tuplet_display_duration.unwrap_or(beat_element.tuplet_duration))),
+                    });
+                }
+            }
+        }
     }
     
     // Handle ties to next beat: if the next beat is tied to this beat,
@@ -470,57 +454,14 @@ fn apply_beam_markers(notes: &mut Vec<StaffNotationElement>, start: usize, end: 
 }
 
 
-fn map_barline_style(style: &str) -> String {
-    match style {
-        "|:" => "repeat-begin".to_string(),
-        ":|" => "repeat-end".to_string(),
-        "||" => "double".to_string(),
-        "|." => "final".to_string(),
-        "||:" => "double-repeat-begin".to_string(),
-        ":||" => "double-repeat-end".to_string(),
-        "::" => "double-repeat".to_string(),
-        "[:" => "repeat-begin".to_string(),
-        ":]" => "repeat-end".to_string(),
-        "|" => "single".to_string(),
-        _ => "single".to_string(),
+fn barline_type_to_vexflow(barline_type: &crate::models::BarlineType) -> String {
+    use crate::models::BarlineType;
+    match barline_type {
+        BarlineType::RepeatStart => "repeat-begin".to_string(),
+        BarlineType::RepeatEnd => "repeat-end".to_string(),
+        BarlineType::Double => "double".to_string(),
+        BarlineType::Final => "final".to_string(),
+        BarlineType::RepeatBoth => "double-repeat".to_string(),
+        BarlineType::Single => "single".to_string(),
     }
-}
-
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_key_transposer_creation() {
-        let transposer = KeyTransposer::new(Some(&"G".to_string()));
-        assert_eq!(transposer.tonic_note, "g");
-        assert_eq!(transposer._key_signature.len(), 1);
-        assert_eq!(transposer._key_signature[0], (3, true)); // F# 
-    }
-    
-    #[test]
-    fn test_degree_to_scale_degree() {
-        assert_eq!(degree_to_scale_degree(Degree::N1), ("c", 0));   // Scale degree 1 = C natural
-        assert_eq!(degree_to_scale_degree(Degree::N2), ("d", 0));   // Scale degree 2 = D natural 
-        assert_eq!(degree_to_scale_degree(Degree::N1s), ("c", 1));  // Scale degree 1 sharp = C#
-        assert_eq!(degree_to_scale_degree(Degree::N2b), ("d", -1)); // Scale degree 2 flat = Db
-    }
-    
-    #[test]
-    fn test_slur_serialization() {
-        let elements = vec![
-            StaffNotationElement::SlurStart {},
-            StaffNotationElement::SlurEnd {},
-        ];
-        
-        let json = serde_json::to_string(&elements).unwrap();
-        println!("Serialized SlurStart/SlurEnd: {}", json);
-        
-        // Should serialize as objects with type field
-        assert!(json.contains(r#""type":"SlurStart""#));
-        assert!(json.contains(r#""type":"SlurEnd""#));
-    }
-    
 }

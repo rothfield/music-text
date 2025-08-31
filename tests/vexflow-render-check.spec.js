@@ -19,7 +19,9 @@ test.describe('VexFlow Rendering Check', () => {
   });
 
   test('renders cross-beat slur pattern', async ({ page }) => {
-    await page.fill('#notation-input', '(1-2 3)');
+    // ___
+    // 1-2 3
+    await page.fill('#notation-input', '___\n1-2 3');
     await page.waitForTimeout(3000);
     
     const vexflowContainer = await page.locator('#vexflow-canvas');
@@ -41,10 +43,10 @@ test.describe('VexFlow Rendering Check', () => {
 
   test('renders different slur patterns', async ({ page }) => {
     const patterns = [
-      '(1 2) 3',      // Working pattern
-      '(1 2 | 3)',    // Working pattern  
-      '(1-2 3)',      // Cross-beat pattern
-      '(1-2) (3 4-5)' // Complex pattern
+      '__\n1 2 3',      // Working pattern
+      '___\n1 2 | 3',    // Working pattern  
+      '___\n1-2 3',      // Cross-beat pattern
+      '___  ___\n1-2  3 4-5' // Complex pattern
     ];
     
     for (const pattern of patterns) {

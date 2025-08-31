@@ -1,107 +1,77 @@
 // Rhythm FSM V2 - Works with ParsedElement instead of Node
-use crate::parsed_models::{ParsedElement, ParsedChild, OrnamentType, Position};
+use crate::parsed_models::{ParsedElement, ParsedChild, OrnamentType, Position, SlurRole};
 use crate::pitch::Degree;
 use fraction::Fraction;
 
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParsedElementType {
-    Note,
-    Rest, 
-    Dash,
-    Barline,
-    SlurStart,
-    SlurEnd,
-    Whitespace,
-    Newline,
-    Word,
-    Symbol,
-    Unknown,
+#[derive(Debug, Clone)]
+pub enum Event {
+    Note {
+        degree: Degree,
+        octave: i8,
+        children: Vec<ParsedChild>,  // syllables, ornaments, octave markers
+        slur: Option<SlurRole>,
+    },
+    Rest,  // Rests have no additional data
 }
 
 #[derive(Debug, Clone)]
 pub struct BeatElement {
-    // Beat-specific fields
+    pub event: Event,
     pub subdivisions: usize,
     pub duration: Fraction,               // Actual beat fraction: subdivisions/divisions  
     pub tuplet_duration: Fraction,        // Mathematical tuplet duration (1/6, 1/3, etc.)
     pub tuplet_display_duration: Option<Fraction>, // Display duration for tuplets (1/16, 1/8, etc.), None for regular notes
-    
-    // All ParsedElement fields copied directly (bit copy approach)
-    pub degree: Option<Degree>, // Note/Dash: Some(code), Others: None
-    pub octave: Option<i8>,            // Note/Dash: Some(octave), Others: None  
-    pub value: String,                 // Original text value from all elements
-    pub position: Position,            // Position from all elements
-    pub children: Vec<ParsedChild>,    // Note: actual children, Others: empty vec
-    pub element_duration: Option<(usize, usize)>, // Original ParsedElement duration (replaced by Fraction durations)
-    
-    // Extracted convenience fields
-    pub syl: Option<String>,           // Extracted from children
-    pub ornaments: Vec<OrnamentType>,  // Extracted from children  
-    pub octave_markers: Vec<String>,   // Extracted from children
-    
-    // Element type (instead of multiple boolean flags)
-    pub element_type: ParsedElementType,
+    pub value: String,                    // Original text value
+    pub position: Position,               // Source position
 }
 
 impl From<ParsedElement> for BeatElement {
     fn from(element: ParsedElement) -> Self {
-        let (degree, octave, value, position, children, element_duration, element_type) = match element {
-            ParsedElement::Note { degree, octave, value, position, children, duration } => 
-                (Some(degree), Some(octave), value, position, children, duration, ParsedElementType::Note),
-            ParsedElement::Rest { value, position, duration } => 
-                (None, None, value, position, vec![], duration, ParsedElementType::Rest),
-            ParsedElement::Dash { degree, octave, position, duration } => 
-                (degree, octave, "-".to_string(), position, vec![], duration, ParsedElementType::Dash),
-            ParsedElement::Barline { style, position } => 
-                (None, None, style, position, vec![], None, ParsedElementType::Barline),
-            ParsedElement::SlurStart { position } => 
-                (None, None, "(".to_string(), position, vec![], None, ParsedElementType::SlurStart),
-            ParsedElement::SlurEnd { position } => 
-                (None, None, ")".to_string(), position, vec![], None, ParsedElementType::SlurEnd),
-            ParsedElement::Whitespace { width: _, position } => 
-                (None, None, " ".to_string(), position, vec![], None, ParsedElementType::Whitespace),
-            ParsedElement::Newline { position } => 
-                (None, None, "\n".to_string(), position, vec![], None, ParsedElementType::Newline),
-            ParsedElement::Word { text, position } => 
-                (None, None, text, position, vec![], None, ParsedElementType::Word),
-            ParsedElement::Symbol { value, position } => 
-                (None, None, value, position, vec![], None, ParsedElementType::Symbol),
-            ParsedElement::Unknown { value, position } => 
-                (None, None, value, position, vec![], None, ParsedElementType::Unknown),
+        let (event, value, position) = match element {
+            ParsedElement::Note { degree, octave, value, position, children, slur, .. } => {
+                let event = Event::Note { degree, octave, children, slur };
+                (event, value, position)
+            },
+            ParsedElement::Rest { value, position, .. } => {
+                (Event::Rest, value, position)
+            },
+            ParsedElement::Dash { degree, octave, position, .. } => {
+                // Dash creates a tied note if it has degree/octave, otherwise it's handled as rest
+                if let (Some(deg), Some(oct)) = (degree, octave) {
+                    let event = Event::Note { 
+                        degree: deg, 
+                        octave: oct, 
+                        children: vec![], 
+                        slur: None 
+                    };
+                    (event, "-".to_string(), position)
+                } else {
+                    (Event::Rest, "-".to_string(), position)
+                }
+            },
+            _ => {
+                // Other elements (Barline, Whitespace, etc.) shouldn't reach here
+                // but we'll handle them as rests for safety
+                return BeatElement {
+                    event: Event::Rest,
+                    subdivisions: 1,
+                    duration: Fraction::new(0u64, 1u64),
+                    tuplet_duration: Fraction::new(0u64, 1u64),
+                    tuplet_display_duration: None,
+                    value: "".to_string(),
+                    position: Position { row: 0, col: 0 },
+                };
+            }
         };
         
-        // Extract convenience fields from children
-        let syl = children.iter().find_map(|child| match child {
-            ParsedChild::Syllable { text, .. } => Some(text.clone()),
-            _ => None
-        });
-        
-        let ornaments = children.iter().filter_map(|child| match child {
-            ParsedChild::Ornament { kind, .. } => Some(kind.clone()),
-            _ => None
-        }).collect();
-        
-        let octave_markers = children.iter().filter_map(|child| match child {
-            ParsedChild::OctaveMarker { symbol, .. } => Some(symbol.clone()),
-            _ => None
-        }).collect();
-        
         Self {
+            event,
             subdivisions: 1, // Default, will be set by FSM
             duration: Fraction::new(0u64, 1u64), // Default, will be calculated in finish_beat
             tuplet_duration: Fraction::new(0u64, 1u64), // Default, will be calculated in finish_beat
             tuplet_display_duration: None, // None for regular notes, Some() for tuplets
-            degree,
-            octave,
             value,
             position,
-            children,
-            element_duration,
-            syl,
-            ornaments,
-            octave_markers,
-            element_type,
         }
     }
 }
@@ -117,12 +87,44 @@ impl BeatElement {
     }
     
     // Helper methods for element type checking
-    pub fn is_note(&self) -> bool { self.element_type == ParsedElementType::Note }
-    pub fn is_rest(&self) -> bool { self.element_type == ParsedElementType::Rest }
-    pub fn is_dash(&self) -> bool { self.element_type == ParsedElementType::Dash }
-    pub fn is_barline(&self) -> bool { self.element_type == ParsedElementType::Barline }
-    pub fn is_slur_start(&self) -> bool { self.element_type == ParsedElementType::SlurStart }
-    pub fn is_slur_end(&self) -> bool { self.element_type == ParsedElementType::SlurEnd }
+    pub fn is_note(&self) -> bool { 
+        matches!(self.event, Event::Note { .. })
+    }
+    
+    pub fn is_rest(&self) -> bool { 
+        matches!(self.event, Event::Rest)
+    }
+    
+    // Get note data if this is a note
+    pub fn as_note(&self) -> Option<(&Degree, i8, &Vec<ParsedChild>, &Option<SlurRole>)> {
+        match &self.event {
+            Event::Note { degree, octave, children, slur } => Some((degree, *octave, children, slur)),
+            Event::Rest => None,
+        }
+    }
+    
+    // Extract convenience fields from children (for compatibility)
+    pub fn syl(&self) -> Option<String> {
+        if let Event::Note { children, .. } = &self.event {
+            children.iter().find_map(|child| match child {
+                ParsedChild::Syllable { text, .. } => Some(text.clone()),
+                _ => None
+            })
+        } else {
+            None
+        }
+    }
+    
+    pub fn ornaments(&self) -> Vec<OrnamentType> {
+        if let Event::Note { children, .. } = &self.event {
+            children.iter().filter_map(|child| match child {
+                ParsedChild::Ornament { kind, .. } => Some(kind.clone()),
+                _ => None
+            }).collect()
+        } else {
+            vec![]
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -137,10 +139,8 @@ pub struct Beat {
 #[derive(Debug, Clone)]
 pub enum Item {
     Beat(Beat),
-    Barline(String),
+    Barline(crate::models::BarlineType),
     Breathmark,
-    SlurStart,
-    SlurEnd,
     Tonic(Degree), // Tonic/Key declaration (e.g., "key: D" -> Degree::N2)
 }
 
@@ -170,8 +170,66 @@ impl FSMV2 {
         }
     }
 
+    // /// Pre-process elements to detect ~note~ patterns and convert them to notes with mordent ornaments
+    // fn preprocess_mordents(&self, elements: Vec<&ParsedElement>) -> Vec<ParsedElement> {
+    //     eprintln!("🎵 MORDENT DEBUG: preprocess_mordents called with {} elements", elements.len());
+    //     for (idx, elem) in elements.iter().enumerate() {
+    //         eprintln!("🎵 MORDENT DEBUG: Element {}: {:?}", idx, elem);
+    //     }
+    //     
+    //     let mut result = Vec::new();
+    //     let mut i = 0;
+    //     
+    //     while i < elements.len() {
+    //         // Check for ~note~ pattern
+    //         if i + 2 < elements.len() {
+    //             if let (
+    //                 ParsedElement::Symbol { value: tilde1, .. },
+    //                 note @ ParsedElement::Note { .. },
+    //                 ParsedElement::Symbol { value: tilde2, .. }
+    //             ) = (&elements[i], &elements[i + 1], &elements[i + 2]) {
+    //                 if tilde1 == "~" && tilde2 == "~" {
+    //                     eprintln!("🎵 MORDENT DEBUG: Found ~note~ pattern at indices {}, {}, {}", i, i+1, i+2);
+    //                     // Create a new note with a mordent ornament
+    //                     if let ParsedElement::Note { degree, octave, value, position, children, duration, slur } = note {
+    //                         let mut new_children = children.clone();
+    //                         new_children.push(crate::parsed_models::ParsedChild::Ornament {
+    //                             kind: crate::parsed_models::OrnamentType::Mordent,
+    //                             distance: 0,
+    //                         });
+    //                         
+    //                         let mordent_note = ParsedElement::Note {
+    //                             degree: *degree,
+    //                             octave: *octave,
+    //                             value: value.clone(),
+    //                             position: position.clone(),
+    //                             children: new_children,
+    //                             duration: *duration,
+    //                             slur: slur.clone(),
+    //                         };
+    //                         eprintln!("🎵 MORDENT DEBUG: Created mordent note: {:?}", mordent_note);
+    //                         result.push(mordent_note);
+    //                         
+    //                         i += 3; // Skip the ~ note ~ pattern
+    //                         continue;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         
+    //         // No pattern matched, copy element as-is
+    //         result.push(elements[i].clone());
+    //         i += 1;
+    //     }
+    //     
+    //     result
+    // }
+
     fn process(&mut self, elements: Vec<&ParsedElement>) {
-        let mut iter = elements.into_iter().peekable();
+        // Note: Ornament processing now handled by vertical_parser.rs region processor
+        // No need for preprocessing here as ornaments are attached to notes before FSM
+        let processed_elements: Vec<ParsedElement> = elements.iter().map(|e| (*e).clone()).collect();
+        let mut iter = processed_elements.iter().peekable();
         while let Some(element) = iter.next() {
             match self.state {
                 State::S0 => {
@@ -181,10 +239,6 @@ impl FSMV2 {
                         // beat_separator, no-op
                     } else if self.is_breathmark(element) {
                         self.emit_breathmark();
-                    } else if self.is_slur_start(element) {
-                        self.emit_slur_start();
-                    } else if self.is_slur_end(element) {
-                        self.emit_slur_end();
                     } else if self.is_dash(element) {
                         self.start_beat_dash(element);
                     } else if self.is_pitch(element) {
@@ -204,10 +258,6 @@ impl FSMV2 {
                         self.finish_beat();
                         self.emit_breathmark();
                         self.state = State::S0;
-                    } else if self.is_slur_start(element) {
-                        self.emit_slur_start();
-                    } else if self.is_slur_end(element) {
-                        self.emit_slur_end();
                     } else if self.is_dash(element) {
                         self.extend_last_element();
                     } else if self.is_pitch(element) {
@@ -258,15 +308,17 @@ impl FSMV2 {
     fn start_beat_dash(&mut self, dash_element: &ParsedElement) {
         let last_element = self.find_last_non_dash_element();
         if let Some(prev_beat_element) = last_element {
-            // Found previous pitch - create a tied note
-            if prev_beat_element.is_note() && prev_beat_element.degree.is_some() {
+            // Found previous element - check if it's a note
+            if let Some((degree, octave, _, _)) = prev_beat_element.as_note() {
+                // Create a tied note with same pitch
                 let tied_note = ParsedElement::Note {
-                    degree: prev_beat_element.degree.unwrap(),
-                    octave: prev_beat_element.octave.unwrap(),
-                    value: format!("{:?}", prev_beat_element.degree.unwrap()), // Convert degree to debug representation
+                    degree: *degree,
+                    octave: octave,
+                    value: format!("{:?}", degree), // Convert degree to debug representation
                     position: dash_element.position().clone(),
                     children: vec![], // No children for tied notes
                     duration: None,
+                    slur: None, // Tied notes don't inherit slur
                 };
 
                 let mut beat = Beat { 
@@ -318,13 +370,12 @@ impl FSMV2 {
     }
 
     fn find_last_non_dash_element(&self) -> Option<&BeatElement> {
-        // Look through the output to find the last non-dash element
+        // Look through the output to find the last element
+        // (We no longer have "dash" elements - dashes create notes or rests)
         for output_item in self.output.iter().rev() {
             if let Item::Beat(beat) = output_item {
-                for beat_element in beat.elements.iter().rev() {
-                    if !beat_element.is_dash() {
-                        return Some(beat_element);
-                    }
+                if let Some(last) = beat.elements.last() {
+                    return Some(last);
                 }
             }
         }
@@ -361,13 +412,13 @@ impl FSMV2 {
         matches!(element, ParsedElement::Note { .. })
     }
 
-    fn is_slur_start(&self, element: &ParsedElement) -> bool {
-        matches!(element, ParsedElement::SlurStart { .. })
-    }
+    // fn is_slur_start(&self, element: &ParsedElement) -> bool {
+    //     matches!(element, ParsedElement::SlurStart { .. })
+    // }
 
-    fn is_slur_end(&self, element: &ParsedElement) -> bool {
-        matches!(element, ParsedElement::SlurEnd { .. })
-    }
+    // fn is_slur_end(&self, element: &ParsedElement) -> bool {
+    //     matches!(element, ParsedElement::SlurEnd { .. })
+    // }
 
     fn update_beat_bracket_state(&mut self, _element: &ParsedElement) {
         // TODO: Beat bracket logic needs to be implemented
@@ -411,7 +462,9 @@ impl FSMV2 {
                 if last_element.is_note() && beat.divisions > 1 {
                     // Beat with divisions > 1 indicates it was extended by dashes
                     // Set pending tie for the next note of same pitch
-                    self.pending_tie_pitch = last_element.degree;
+                    if let Some((degree, _, _, _)) = last_element.as_note() {
+                        self.pending_tie_pitch = Some(*degree);
+                    }
                 }
             }
             
@@ -428,7 +481,10 @@ impl FSMV2 {
     }
 
     fn emit_barline(&mut self, value: String) {
-        self.output.push(Item::Barline(value));
+        match crate::models::BarlineType::from_str(&value) {
+            Ok(barline_type) => self.output.push(Item::Barline(barline_type)),
+            Err(err) => eprintln!("Warning: {}", err), // Log warning but continue
+        }
     }
 
     fn emit_breathmark(&mut self) {
@@ -437,13 +493,6 @@ impl FSMV2 {
         self.output.push(Item::Breathmark);
     }
 
-    fn emit_slur_start(&mut self) {
-        self.output.push(Item::SlurStart);
-    }
-
-    fn emit_slur_end(&mut self) {
-        self.output.push(Item::SlurEnd);
-    }
 }
 
 // Convert FSM output back to ParsedElements
@@ -460,29 +509,24 @@ fn convert_elements_to_elements(output: Vec<Item>) -> Vec<ParsedElement> {
                 // Create a beat container or just add elements directly
                 for beat_element in beat.elements {
                     // Reconstruct ParsedElement from BeatElement
-                    let reconstructed_element = match beat_element.element_type {
-                        ParsedElementType::Note => ParsedElement::Note {
-                            degree: beat_element.degree.unwrap(),
-                            octave: beat_element.octave.unwrap(),
-                            value: beat_element.value,
-                            position: beat_element.position,
-                            children: beat_element.children,
-                            duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),
+                    let reconstructed_element = match &beat_element.event {
+                        Event::Note { degree, octave, children, slur } => {
+                            ParsedElement::Note {
+                                degree: *degree,
+                                octave: *octave,
+                                value: beat_element.value,
+                                position: beat_element.position,
+                                children: children.clone(),
+                                duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),
+                                slur: slur.clone(),
+                            }
                         },
-                        ParsedElementType::Rest => ParsedElement::Rest {
-                            value: beat_element.value,
-                            position: beat_element.position,
-                            duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),
-                        },
-                        ParsedElementType::Dash => ParsedElement::Dash {
-                            degree: beat_element.degree,
-                            octave: beat_element.octave,
-                            position: beat_element.position,
-                            duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),
-                        },
-                        _ => ParsedElement::Symbol {
-                            value: beat_element.value,
-                            position: beat_element.position,
+                        Event::Rest => {
+                            ParsedElement::Rest {
+                                value: beat_element.value,
+                                position: beat_element.position,
+                                duration: Some((*beat_element.tuplet_duration.numer().unwrap() as usize, *beat_element.tuplet_duration.denom().unwrap() as usize)),
+                            }
                         }
                     };
                     result.push(reconstructed_element);
@@ -490,23 +534,13 @@ fn convert_elements_to_elements(output: Vec<Item>) -> Vec<ParsedElement> {
             },
             Item::Barline(value) => {
                 result.push(ParsedElement::Barline {
-                    style: value,
+                    style: value.to_str().to_string(),
                     position: Position::new(0, 0), // Position will need to be preserved better
                 });
             },
             Item::Breathmark => {
                 result.push(ParsedElement::Symbol {
                     value: "'".to_string(),
-                    position: Position::new(0, 0),
-                });
-            },
-            Item::SlurStart => {
-                result.push(ParsedElement::SlurStart {
-                    position: Position::new(0, 0),
-                });
-            },
-            Item::SlurEnd => {
-                result.push(ParsedElement::SlurEnd {
                     position: Position::new(0, 0),
                 });
             },

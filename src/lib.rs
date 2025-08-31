@@ -7,10 +7,9 @@ pub use models::Document;
 mod models;
 mod parsed_models; // New type-safe parser AST
 mod lexer;
-pub mod handwritten_lexer;
-mod region_processor; // New region processor for ParsedElement
-pub mod rhythm_fsm;
-pub mod rhythm_fsm_clean; // New FSM for ParsedElement
+pub mod tokenizer;
+mod vertical_parser; // Processes vertical spatial relationships
+pub mod horizontal_parser; // Processes horizontal temporal relationships
 mod lyrics; // New lyrics processor for ParsedElement
 mod pitch;
 mod display;
@@ -25,7 +24,7 @@ mod notation_detector;
 
 pub use parsed_models::*;
 pub use lexer::lex_text; // tokenize_chunk DELETED - unused
-pub use handwritten_lexer::tokenize_with_handwritten_lexer;
+pub use tokenizer::tokenize_with_handwritten_lexer;
 // pub use lilypond_converter::{convert_to_lilypond, convert_to_lilypond_with_template}; // DELETED - V1 converter unused
 // pub use lilypond_templates::{LilyPondTemplate, TemplateContext}; // DELETED - V1 templates unused
 pub use pitch::LilyPondNoteNames;
@@ -139,6 +138,7 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
                         position,
                         children: Vec::new(),
                         duration: None,
+                        slur: None, // Will be set by vertical_parser
                     });
                 } else {
                     elements.push(ParsedElement::Unknown {
@@ -185,7 +185,17 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
                     position,
                 });
             },
-            // SLUR_START and SLUR_END tokens removed - ( ) are now generic symbols
+            "SLUR_START" => {
+                elements.push(ParsedElement::SlurStart {
+                    position,
+                });
+            },
+            "SLUR_END" => {
+                elements.push(ParsedElement::SlurEnd {
+                    position,
+                });
+            },
+            // All other tokens become generic symbols
             _ => {
                 elements.push(ParsedElement::Symbol {
                     value: token.value.clone(),
@@ -219,7 +229,7 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
     let detected_notation = notation_detector::detect_notation_type(input_text);
     
     // Use handwritten lexer for tokenization
-    let all_tokens = handwritten_lexer::tokenize_with_handwritten_lexer(input_text);
+    let all_tokens = tokenizer::tokenize_with_handwritten_lexer(input_text);
     
     // Create lines for spatial analysis compatibility
     let _lines = lex_text(input_text);
@@ -239,7 +249,7 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
     let mut elements = convert_tokens_to_parsed_elements(&remaining_tokens, global_notation);
     
     // Phase 2: Apply slur regions and beat brackets
-    region_processor::apply_slurs_and_regions_to_elements(&mut elements, &remaining_tokens);
+    vertical_parser::apply_slurs_and_regions_to_elements(&mut elements, &remaining_tokens);
     
     // Save spatial analysis output for debugging
     let spatial_analysis_yaml = serde_yaml::to_string(&elements).unwrap_or_else(|e| format!("YAML serialization error: {}", e));
@@ -247,39 +257,7 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
     // Phase 3: Group elements into lines and beats using FSM
     let lines_of_music = find_musical_lines(&remaining_tokens);
     
-    // Check if we should use the clean FSM
-    let use_clean_fsm = std::env::var("USE_CLEAN_FSM").is_ok();
-    
-    let (elements, mut structured_elements) = if use_clean_fsm {
-        eprintln!("Using CLEAN FSM for rhythm processing in lib");
-        // Process with clean FSM
-        let processed_elements = rhythm_fsm_clean::process_rhythm_clean(elements.clone());
-        
-        // Convert to Item for compatibility - simplified version for lib
-        let mut output = Vec::new();
-        for elem in &processed_elements {
-            match elem {
-                parsed_models::ParsedElement::Note { .. } |
-                parsed_models::ParsedElement::Rest { .. } |
-                parsed_models::ParsedElement::Dash { .. } => {
-                    let beat = rhythm_fsm::Beat {
-                        divisions: 1,
-                        elements: vec![rhythm_fsm::BeatElement::from(elem.clone()).with_subdivisions(1)],
-                        tied_to_previous: false,
-                        is_tuplet: false,
-                        tuplet_ratio: None,
-                    };
-                    output.push(rhythm_fsm::Item::Beat(beat));
-                }
-                parsed_models::ParsedElement::Barline { .. } => {
-                    output.push(rhythm_fsm::Item::Barline(elem.value()));
-                }
-                _ => {}
-            }
-        }
-        (output, processed_elements)
-    } else {
-        let mut elements = rhythm_fsm::group_elements_with_fsm_full(&elements, &lines_of_music);
+    let mut elements = horizontal_parser::group_elements_with_fsm_full(&elements, &lines_of_music);
         
         // Check for Key in metadata and inject Tonic item at the beginning
         eprintln!("DEBUG: Metadata attributes: {:?}", metadata.attributes);
@@ -294,7 +272,7 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
             if let Some(tonic_degree) = parse_key_to_degree(key_str) {
                 eprintln!("DEBUG: Parsed key '{}' to degree {:?}", key_str, tonic_degree);
                 // Insert Tonic item at the beginning
-                elements.insert(0, rhythm_fsm::Item::Tonic(tonic_degree));
+                elements.insert(0, horizontal_parser::Item::Tonic(tonic_degree));
                 eprintln!("DEBUG: Inserted Tonic item at beginning of elements");
             } else {
                 eprintln!("DEBUG: Failed to parse key '{}' to degree", key_str);
@@ -303,9 +281,7 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
             eprintln!("DEBUG: No Key found in metadata");
         }
         
-        let structured_elements = rhythm_fsm::convert_elements_to_elements_public(elements.clone());
-        (elements, structured_elements)
-    };
+    let mut structured_elements = horizontal_parser::convert_elements_to_elements_public(elements.clone());
     
     // Store FSM output for LilyPond conversion
     LAST_FSM_OUTPUT.with(|s| *s.borrow_mut() = elements);
@@ -361,7 +337,12 @@ pub fn parse_notation(input_text: &str) -> ParseResult {
             let document: Document = document_v2.into();
             
             // Generate VexFlow JavaScript code using V2 converter
-            let vexflow_js = match convert_elements_to_vexflow_js(&get_last_elements(), &document.metadata) {
+            let fsm_elements = get_last_elements();
+            eprintln!("WASM DEBUG: FSM elements for VexFlow: {} items", fsm_elements.len());
+            for (i, elem) in fsm_elements.iter().enumerate() {
+                eprintln!("WASM DEBUG: Element {}: {:?}", i, elem);
+            }
+            let vexflow_js = match convert_elements_to_vexflow_js(&fsm_elements, &document.metadata) {
                 Ok(js_code) => {
                     // Debug: Log first few lines of generated JS to verify it's the 2-pass generator
                     let first_lines: Vec<&str> = js_code.lines().take(5).collect();
@@ -451,7 +432,7 @@ thread_local! {
     static LAST_COLORIZED_OUTPUT: RefCell<String> = RefCell::new(String::new());
     static LAST_OUTLINE_OUTPUT: RefCell<String> = RefCell::new(String::new());
     static LAST_YAML_OUTPUT: RefCell<String> = RefCell::new(String::new());
-    static LAST_FSM_OUTPUT: RefCell<Vec<rhythm_fsm::Item>> = RefCell::new(Vec::new());
+    static LAST_FSM_OUTPUT: RefCell<Vec<horizontal_parser::Item>> = RefCell::new(Vec::new());
     static LAST_ERROR_MESSAGE: RefCell<String> = RefCell::new(String::new());
 }
 
@@ -461,7 +442,7 @@ pub fn get_detected_system() -> String {
 }
 
 /// Get the last FSM output for CLI use (avoid running FSM twice)
-pub fn get_last_elements() -> Vec<rhythm_fsm::Item> {
+pub fn get_last_elements() -> Vec<horizontal_parser::Item> {
     LAST_FSM_OUTPUT.with(|s| s.borrow().clone())
 }
 

@@ -92,37 +92,40 @@
             padding: 2rem 1rem;
         }
 
-        /* Card Components */
-        .card {
+        /* Simple Rectangle Components */
+        .section {
             background: var(--bg-primary);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-lg);
-            overflow: visible;  /* Allow wide content */
-            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+            margin-bottom: 1px; /* Minimal gap between sections */
+            overflow: visible; /* Allow wide content */
         }
 
-        .card-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid var(--border-color);
+        .section-content {
+            padding: 1rem;
+            overflow-x: auto; /* Enable horizontal scrolling */
+            scrollbar-width: auto; /* Firefox */
+            -ms-overflow-style: scrollbar; /* IE/Edge */
+        }
+        
+        /* Webkit scrollbar styling for section content */
+        .section-content::-webkit-scrollbar {
+            height: 12px;
+        }
+        .section-content::-webkit-scrollbar-track {
             background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
         }
-
-        .card-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+        .section-content::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: var(--radius-sm);
         }
-
-        .card-content {
-            padding: 1.5rem;
+        .section-content::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
         }
 
         /* Input Section */
         .input-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 0; /* Remove gap between textarea and canvas */
         }
 
         .label {
@@ -162,16 +165,15 @@
 
         /* VexFlow Output */
         #vexflow-canvas {
-            width: 100%;
-            min-width: 2000px;  /* Force minimum width to match SVG */
-            min-height: 200px;
+            width: fit-content;  /* Size to content - can expand freely */
+            min-height: 175px;
+            margin: 0; /* Remove all margins */
             border-radius: var(--radius-md);
             background: var(--bg-primary);
             border: 2px dashed var(--border-color);
             display: flex;
             align-items: center;
             justify-content: flex-start;  /* Left-align the wide content */
-            overflow-x: auto;
             transition: border-color 0.2s ease;
         }
 
@@ -181,9 +183,11 @@
         }
 
         #vexflow-canvas svg {
-            /* Allow SVG to be its full 2000px width */
-            max-width: none;
+            /* Prevent SVG from scaling down - maintain original size */
+            max-width: none !important;
+            width: auto !important;
             height: auto;
+            flex-shrink: 0; /* Don't shrink the SVG in flexbox */
         }
 
         .placeholder {
@@ -392,8 +396,8 @@
     <!-- Main Content -->
     <main class="container">
         <!-- Input Card -->
-        <div class="card">
-            <div class="card-content">
+        <div class="section">
+            <div class="section-content">
                 <div class="input-group">
                     <textarea 
                         id="notation-input" 
@@ -415,16 +419,6 @@ Try Happy Birthday:
             </div>
         </div>
 
-        <!-- VexFlow Output Card -->
-        <div class="card">
-            <div class="card-header">
-                <h2 class="card-title">
-                    <span>🎼</span>
-                    Live Staff Preview
-                    <span id="loading-indicator" class="loading" style="display: none;"></span>
-                </h2>
-            </div>
-            <div class="card-content">
                 <div id="vexflow-canvas">
                     <div class="placeholder">
                         <span class="placeholder-icon">🎵</span>
@@ -434,19 +428,17 @@ Try Happy Birthday:
                         </div>
                     </div>
                 </div>
+                <span id="loading-indicator" class="loading" style="display: none;"></span>
                 <div id="error-container"></div>
             </div>
         </div>
 
-        <!-- LilyPond Generation Card -->
-        <div class="card">
-            <div class="card-header">
-                <h2 class="card-title">
-                    <span>📄</span>
-                    Professional Staff Notation
+        <!-- LilyPond Generation Section -->
+        <div class="section">
+            <div class="section-content">
+                <h2 style="margin: 0 0 1rem 0; font-size: 1.25rem; font-weight: 600; color: var(--text-primary);">
+                    📄 Professional Staff Notation
                 </h2>
-            </div>
-            <div class="card-content">
                 <div style="text-align: center; margin-bottom: 1rem;">
                     <button id="generate-lilypond-btn" class="lilypond-btn">
                         Generate LilyPond
@@ -548,6 +540,11 @@ Try Happy Birthday:
                     }
                     
                     const vexflowOutput = result.vexflow_output;
+                    console.log('🔧 VexFlow Output Length:', vexflowOutput?.length || 'undefined');
+                    console.log('🔧 VexFlow Output Preview:', vexflowOutput?.substring(0, 200) || 'empty');
+                    
+                    // Store full JavaScript for debugging
+                    window.lastVexFlowJS = vexflowOutput;
                     if (!vexflowOutput) {
                         resetCanvas();
                         showError('No notation to display from the parsed input.');

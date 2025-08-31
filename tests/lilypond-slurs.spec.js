@@ -6,8 +6,10 @@ test.describe('LilyPond Slur Rendering', () => {
   });
 
   test('renders slurs in LilyPond source', async ({ page }) => {
-    // Test simple slur notation - use (S R G) since FSM has issues with (S R) G
-    await page.fill('#notation-input', '(S R G)');
+    // Test simple slur notation - use overline notation
+    // ___
+    // S R G
+    await page.fill('#notation-input', '___\nS R G');
     
     // Click the Generate LilyPond button
     await page.click('#generate-lilypond-btn');
@@ -23,14 +25,17 @@ test.describe('LilyPond Slur Rendering', () => {
     expect(lilypondSource).toContain('(');
     expect(lilypondSource).toContain(')');
     
-    // Verify the expected pattern with slur - (S R G) creates slur from S to R
+    // Verify the expected pattern with slur - overline creates slur from S to R
     expect(lilypondSource).toMatch(/c\d+\(/); // Opening slur after first note (c4()
     expect(lilypondSource).toMatch(/d\d+\)/); // Closing slur after second note (d4))
   });
 
   test('renders nested slurs correctly', async ({ page }) => {
     // Test nested slur notation
-    await page.fill('#notation-input', '((S R) G)');
+    // ___
+    // __ 
+    // S R G
+    await page.fill('#notation-input', '___\n__ \nS R G');
     await page.click('#generate-lilypond-btn');
     
     await page.waitForTimeout(3000);
@@ -48,7 +53,9 @@ test.describe('LilyPond Slur Rendering', () => {
 
   test('renders slurs spanning multiple beats', async ({ page }) => {
     // Test slur across beat boundaries
-    await page.fill('#notation-input', '(S R | G M)');
+    // _____
+    // S R | G M
+    await page.fill('#notation-input', '_____\nS R | G M');
     await page.click('#generate-lilypond-btn');
     
     await page.waitForTimeout(3000);
@@ -59,14 +66,16 @@ test.describe('LilyPond Slur Rendering', () => {
     expect(lilypondSource).toContain('(');
     expect(lilypondSource).toContain(')');
     
-    // Verify slur starts with S (c) and ends with G (e) - slur is (S R | G)
+    // Verify slur starts with S (c) and ends with G (e) - slur spans S R | G
     expect(lilypondSource).toMatch(/c\d+\(/); // Opening slur at S
     expect(lilypondSource).toMatch(/e\d+\)/); // Closing slur at G
   });
 
   test('renders slurs with tuplets', async ({ page }) => {
     // Test slur with tuplet notation
-    await page.fill('#notation-input', '(1-2)');
+    // ___
+    // 1-2
+    await page.fill('#notation-input', '___\n1-2');
     await page.click('#generate-lilypond-btn');
     
     await page.waitForTimeout(3000);

@@ -1,17 +1,28 @@
 # Converters Module
 
-This module contains all notation format converters that transform the FSM output into various musical notation formats. The converters share common musical logic while handling format-specific rendering.
+This directory contains both active converter modules and reference implementations.
+
+## Active Modules
+
+- `lilypond.rs` - Shared LilyPond transposition logic
+- `vexflow.rs` - VexFlow converter with KeyTransposer for tonic-based transposition
+
+## Reference Implementations
+
+- `vexflow-renderer.js` - **REFERENCE**: Old JavaScript VexFlow implementation with comprehensive beaming logic
+
+## Usage Notes
+
+**Refer to the old JS code when necessary** - The `vexflow-renderer.js` file contains proven beaming algorithms, tuplet handling, slur creation, and other VexFlow integration patterns that should be consulted when enhancing the Rust VexFlow generators.
+
+Key features to reference from the old JS code:
+- Automatic beaming detection and grouping
+- Beam breaking logic (rests, barlines, tuplets)
+- VexFlow `Beam` class usage patterns
+- Note grouping algorithms
+- Tuplet beam handling within complex rhythms
 
 ## Architecture
-
-```
-src/converters/
-├── README.md           # This file
-├── mod.rs              # Module exports and re-exports
-├── transposition.rs    # Shared musical transposition logic
-├── lilypond.rs         # LilyPond text format converter  
-└── vexflow.rs          # VexFlow JSON format converter
-```
 
 ## Shared Components
 

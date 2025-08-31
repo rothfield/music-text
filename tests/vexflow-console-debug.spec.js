@@ -13,7 +13,9 @@ test.describe('VexFlow Console Debug', () => {
     await page.goto('http://localhost:3000');
     
     // Test cross-beat slur pattern
-    await page.fill('#notation-input', '(1-2 3)');
+    // ___
+    // 1-2 3
+    await page.fill('#notation-input', '___\n1-2 3');
     await page.waitForTimeout(3000);
     
     // Log all VexFlow console messages
@@ -42,8 +44,10 @@ test.describe('VexFlow Console Debug', () => {
     
     await page.goto('http://localhost:3000');
     
-    // Test simple slur pattern  
-    await page.fill('#notation-input', '(1 2) 3');
+    // Test simple slur pattern
+    // __
+    // 1 2 3
+    await page.fill('#notation-input', '__\n1 2 3');
     await page.waitForTimeout(3000);
     
     console.log('=== Simple Slur Console Messages ===');

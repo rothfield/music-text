@@ -2,7 +2,7 @@
 use crate::models::{Metadata}; // Keep using existing metadata
 use crate::pitch::{Degree};
 use crate::lilypond_templates::{TemplateContext, render_lilypond};
-use crate::rhythm_fsm::{Item, Beat};
+use crate::horizontal_parser::{Item, Beat};
 use super::transposition::transpose_degree_with_octave;
 
 /// Find the index of the last actual note (not barline, breathmark, etc.) in lilypond_notes
@@ -27,10 +27,8 @@ pub fn convert_elements_to_lilypond_src(
     let mut lilypond_notes: Vec<String> = Vec::new();
     let mut previous_beat_notes: Vec<String> = Vec::new();
     let mut current_tonic: Option<Degree> = None;
-    let mut pending_slur_start = false;
-    let mut pending_slur_end = false;
     
-    for (element_index, item) in elements.iter().enumerate() {
+    for (_element_index, item) in elements.iter().enumerate() {
         match item {
             Item::Tonic(tonic_degree) => {
                 // Store the tonic for transposition
@@ -38,33 +36,10 @@ pub fn convert_elements_to_lilypond_src(
                 // Could optionally add a key signature command here
             },
             Item::Beat(beat) => {
-                let mut beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
-                
-                // Apply pending slur end to the last note of this beat
-                if pending_slur_end && !beat_notes.is_empty() {
-                    if beat.is_tuplet {
-                        // For tuplets, insert slur after the last note inside the braces
-                        beat_notes[0] = add_slur_end_to_tuplet(&beat_notes[0]);
-                    } else {
-                        beat_notes.last_mut().unwrap().push(')');
-                    }
-                    pending_slur_end = false;
-                }
-                
-                // Apply pending slur start to the first note of this beat
-                if pending_slur_start && !beat_notes.is_empty() {
-                    if beat.is_tuplet {
-                        // For tuplets, insert slur after the first actual note inside the braces
-                        beat_notes[0] = add_slur_start_to_tuplet(&beat_notes[0]);
-                    } else {
-                        beat_notes[0].push('(');
-                    }
-                    pending_slur_start = false;
-                }
+                let beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
                 
                 // Handle ties: if this beat is tied to previous, add tie to last note of previous beat
                 if beat.tied_to_previous && !previous_beat_notes.is_empty() && !beat_notes.is_empty() {
-                    // ✅ SAFE: Find last actual note, not just last item
                     if let Some(last_note_index) = find_last_note_index(&lilypond_notes) {
                         let last_note = &mut lilypond_notes[last_note_index];
                         if !last_note.ends_with('~') && !last_note.ends_with(')') {
@@ -80,53 +55,13 @@ pub fn convert_elements_to_lilypond_src(
                 lilypond_notes.extend(beat_notes.clone());
                 previous_beat_notes = beat_notes;
             },
-            Item::Barline(style) => {
-                lilypond_notes.push(format!("\\bar \"{}\"", style));
+            Item::Barline(barline_type) => {
+                let lily_barline = barline_type_to_lilypond(barline_type, _element_index == 0);
+                lilypond_notes.push(lily_barline);
             },
             Item::Breathmark => {
                 lilypond_notes.push("\\breathe".to_string());
             },
-            Item::SlurStart => {
-                pending_slur_start = true;
-            },
-            Item::SlurEnd => {
-                // Check the context: what was the last processed item and what's next?
-                let has_next_beat = elements.iter().skip(element_index + 1).any(|item| matches!(item, Item::Beat(_)));
-                let last_was_tuplet = if let Some(last_note_index) = find_last_note_index(&lilypond_notes) {
-                    lilypond_notes[last_note_index].contains("\\tuplet")
-                } else { 
-                    false 
-                };
-                
-                if has_next_beat && last_was_tuplet {
-                    // SlurEnd after tuplet with next beat - likely cross-beat slur, defer to next beat
-                    pending_slur_end = true;
-                } else {
-                    // SlurEnd after regular beat or at end - apply to last note immediately  
-                    if !lilypond_notes.is_empty() {
-                        if let Some(last_note_index) = find_last_note_index(&lilypond_notes) {
-                            let last_note = &lilypond_notes[last_note_index];
-                            if last_note.contains("\\tuplet") {
-                                lilypond_notes[last_note_index] = add_slur_end_to_tuplet(last_note);
-                            } else {
-                                lilypond_notes[last_note_index].push(')');
-                            }
-                        }
-                    }
-                }
-            },
-        }
-    }
-    
-    // Handle any remaining pending slur end at the end of the song
-    if pending_slur_end && !lilypond_notes.is_empty() {
-        if let Some(last_note_index) = find_last_note_index(&lilypond_notes) {
-            let last_note = &lilypond_notes[last_note_index];
-            if last_note.contains("\\tuplet") {
-                lilypond_notes[last_note_index] = add_slur_end_to_tuplet(last_note);
-            } else {
-                lilypond_notes[last_note_index].push(')');
-            }
         }
     }
     
@@ -162,15 +97,47 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
         let duration_string = fraction_to_lilypond_note(beat_element.tuplet_duration);
         
         if beat_element.is_note() {
-            let lily_note = degree_to_lilypond(beat_element.degree.unwrap(), beat_element.octave.unwrap(), current_tonic)?;
+            let (degree, octave, _, _) = beat_element.as_note().unwrap();
+            let lily_note = degree_to_lilypond(*degree, octave, current_tonic)?;
             eprintln!("V2 LILYPOND: Note {} with tuplet_duration {} -> {}{}", 
                 beat_element.value, beat_element.tuplet_duration, lily_note, duration_string);
             
-            notes.push(format!("{}{}", lily_note, duration_string));
+            let mut note_str = format!("{}{}", lily_note, duration_string);
+            
+            // Add slur markers based on note's slur attribute
+            use crate::parsed_models::SlurRole;
+            let slur = if let Some((_, _, _, slur_role)) = beat_element.as_note() {
+                slur_role
+            } else {
+                &None
+            };
+            match slur {
+                Some(SlurRole::Start) => note_str.push('('),
+                Some(SlurRole::End) => note_str.push(')'),
+                Some(SlurRole::StartEnd) => note_str.push_str("()"),
+                Some(SlurRole::Middle) => {}, // No marker for middle notes
+                None => {},
+            }
+            
+            // Add ornament markers
+            use crate::parsed_models::OrnamentType;
+            for ornament in &beat_element.ornaments() {
+                match ornament {
+                    OrnamentType::Mordent => note_str.push_str("\\mordent"),
+                    OrnamentType::Trill => note_str.push_str("\\trill"),
+                    OrnamentType::Turn => note_str.push_str("\\turn"),
+                    OrnamentType::Grace => {}, // Grace notes handled differently
+                }
+            }
+            
+            notes.push(note_str);
         } else if beat_element.is_rest() {
             notes.push(format!("r{}", duration_string));
         } // Skip other element types within beats
     }
+    
+    // Add manual beaming for eighth notes and shorter
+    add_manual_beaming(&mut notes)?;
     
     // Use FSM-provided tuplet information
     if beat.is_tuplet {
@@ -180,6 +147,16 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
     } else {
         Ok(notes)
     }
+}
+
+/// Add manual beam brackets to notes in a beat - if beat has more than one note, add [ to first and ] to last
+fn add_manual_beaming(notes: &mut Vec<String>) -> Result<(), String> {
+    if notes.len() > 1 {
+        notes[0].push('[');
+        let last_idx = notes.len() - 1;
+        notes[last_idx].push(']');
+    }
+    Ok(())
 }
 
 // Removed unused heuristic functions:
@@ -236,47 +213,19 @@ fn degree_to_lilypond(degree: Degree, octave: i8, current_tonic: Option<Degree>)
     Ok(format!("{}{}", base_note, octave_marks))
 }
 
-/// Add slur start marker to the first note inside a tuplet
-/// \tuplet 3/2 { c4 d8 } -> \tuplet 3/2 { c4( d8 }
-fn add_slur_start_to_tuplet(tuplet_str: &str) -> String {
-    // Find the first note after the opening brace
-    if let Some(brace_pos) = tuplet_str.find("{ ") {
-        let before_brace = &tuplet_str[..brace_pos + 2]; // Include "{ "
-        let after_brace = &tuplet_str[brace_pos + 2..];
-        
-        // Find the end of the first note (look for space or closing brace)
-        if let Some(first_note_end) = after_brace.find(|c: char| c == ' ' || c == '}') {
-            let first_note = &after_brace[..first_note_end];
-            let rest = &after_brace[first_note_end..];
-            return format!("{}{}({}", before_brace, first_note, rest);
-        }
-    }
-    // Fallback - just append to the end if parsing fails
-    format!("{}(", tuplet_str)
-}
 
-/// Add slur end marker to the last note inside a tuplet
-/// \tuplet 3/2 { c4 d8 } -> \tuplet 3/2 { c4 d8) }
-fn add_slur_end_to_tuplet(tuplet_str: &str) -> String {
-    // Find the closing brace
-    if let Some(brace_pos) = tuplet_str.rfind(" }") {
-        let before_brace = &tuplet_str[..brace_pos];
-        let after_brace = &tuplet_str[brace_pos..]; // " }"
-        
-        // Find the last note before the closing brace
-        // Work backwards from the brace position to find the last note
-        let content_before_brace = before_brace.trim_end();
-        if let Some(last_space) = content_before_brace.rfind(' ') {
-            let before_last_note = &content_before_brace[..last_space + 1];
-            let last_note = &content_before_brace[last_space + 1..];
-            return format!("{}{}){}", before_last_note, last_note, after_brace);
-        } else {
-            // Only one note in tuplet
-            return format!("{}){}", before_brace, after_brace);
-        }
+/// Convert barline type to proper LilyPond syntax
+fn barline_type_to_lilypond(barline_type: &crate::models::BarlineType, is_at_beginning: bool) -> String {
+    use crate::models::BarlineType;
+    match (barline_type, is_at_beginning) {
+        (BarlineType::RepeatStart, true) => "\\bar \".|:\"".to_string(),
+        (BarlineType::RepeatStart, false) => "\\bar \"|:\"".to_string(),
+        (BarlineType::RepeatEnd, _) => "\\bar \":|.\"".to_string(),
+        (BarlineType::Double, _) => "\\bar \"||\"".to_string(),
+        (BarlineType::Final, _) => "\\bar \"|.\"".to_string(),
+        (BarlineType::RepeatBoth, _) => "\\bar \":|:\"".to_string(),
+        (BarlineType::Single, _) => "\\bar \"|\"".to_string(),
     }
-    // Fallback - just append to the end if parsing fails  
-    format!("{})", tuplet_str)
 }
 
 // Transposition functions moved to shared module: src/converters/transposition.rs

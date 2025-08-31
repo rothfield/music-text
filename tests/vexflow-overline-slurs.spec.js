@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./test-helpers');
 
 test.describe('VexFlow Overline Slurs', () => {
   test.beforeEach(async ({ page }) => {
@@ -6,23 +6,35 @@ test.describe('VexFlow Overline Slurs', () => {
   });
 
   test('FAILING: 2 overlines should slur only first 2 notes', async ({ page }) => {
-    // Test pattern: __\n123 - overline over first 2 notes should create slur over just those 2 notes
-    // Capture console messages for slur debugging
-    const consoleMessages = [];
+    // Test pattern: __\n124 - overline over first 2 notes should create slur over just those 2 notes
+    // Console errors are automatically detected by test helper
+    
+    // Capture ALL console messages for debugging
+    const allConsoleMessages = [];
     page.on('console', msg => {
-      if (msg.text().includes('VexFlow:') || msg.text().includes('Drawing slur')) {
-        consoleMessages.push(msg.text());
-      }
+      allConsoleMessages.push(msg.text());
     });
     
-    await page.fill('#notation-input', '__\n123');
+    // Check if WASM is loaded and what functions are available
+    const wasmStatus = await page.evaluate(() => {
+      return {
+        wasmLoaded: typeof window.wasm !== 'undefined' && window.wasm !== null,
+        parseNotationAvailable: typeof window.parse_notation === 'function',
+        wasmType: typeof window.wasm,
+        initError: window.wasmInitError || 'none'
+      };
+    });
+    console.log(`🔧 WASM Status:`, JSON.stringify(wasmStatus, null, 2));
+    
+    await page.fill('#notation-input', '__\n124');
     await page.waitForTimeout(3000);
     
-    console.log('=== 2-Overline Slur Console Messages ===');
-    for (const msg of consoleMessages) {
+    // Log all console messages to see what's actually happening
+    console.log('\n=== ALL CONSOLE MESSAGES ===');
+    for (const msg of allConsoleMessages) {
       console.log(msg);
     }
-    console.log('=== End Console Messages ===');
+    console.log('=== END CONSOLE MESSAGES ===\n');
     
     const vexflowContainer = await page.locator('#vexflow-canvas');
     const content = await vexflowContainer.innerHTML();
@@ -31,10 +43,17 @@ test.describe('VexFlow Overline Slurs', () => {
     const hasVexFlow = content.includes('svg');
     expect(hasVexFlow).toBe(true);
     
-    // FAILING ASSERTION: Currently this will show "Slur 0 from note0 to note2"
-    // but it SHOULD show "Slur 0 from note0 to note1" (only first 2 notes)
-    console.log('\n🔍 EXPECTED: Slur from note0 to note1 (first 2 notes only)');
-    console.log('📋 ACTUAL: Check console output above');
+    // Check if slur curves are present in the SVG
+    const hasSlurCurves = content.includes('path') && content.includes('curve');
+    console.log(`\n✅ VexFlow rendered: ${hasVexFlow}`);
+    console.log(`🎵 Slur curves detected: ${hasSlurCurves}`);
+    
+    // For debugging: log VexFlow debug messages from 2-pass generator
+    const debugMessages = await page.evaluate(() => {
+      // Access console history (if available)
+      return window.lastVexFlowDebugMessages || 'No debug messages found';
+    });
+    console.log(`🔧 VexFlow Generator Messages: ${debugMessages}`);
     
     // This test will pass but shows the wrong behavior
     // The real test is in the console output verification

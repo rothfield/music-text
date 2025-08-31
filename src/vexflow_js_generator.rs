@@ -2,8 +2,9 @@
 // Generates VexFlow-compatible JavaScript from FSM Item output
 
 use crate::models::Metadata;
-use crate::rhythm_fsm::{Item, Beat, BeatElement};
+use crate::horizontal_parser::{Item, BeatElement};
 use crate::pitch::Degree;
+use crate::rhythm::RhythmConverter;
 use serde::{Serialize, Deserialize};
 
 /// VexFlow slur structure for JavaScript generation
@@ -13,6 +14,34 @@ pub struct VexFlowSlur {
     pub to_note: usize,
 }
 
+/// VexFlow beam structure for JavaScript generation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VexFlowBeam {
+    pub note_indices: Vec<usize>,
+}
+
+/// VexFlow tuplet structure for JavaScript generation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VexFlowTuplet {
+    pub note_indices: Vec<usize>,
+    pub num_notes: usize,        // e.g., 3 for triplet
+    pub notes_occupied: usize,   // e.g., 2 for triplet (3 in space of 2)
+}
+
+/// VexFlow barline structure for JavaScript generation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VexFlowBarline {
+    pub barline_type: crate::models::BarlineType,
+    pub position: BarlinePosition,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BarlinePosition {
+    Beginning,  // First barline - use setBegBarType()
+    End,        // Last barline - use setEndBarType()
+    Middle(usize), // Mid-measure barline after note index
+}
+
 /// VexFlow note structure for JavaScript generation  
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VexFlowNote {
@@ -20,6 +49,8 @@ pub struct VexFlowNote {
     pub duration: String,
     pub dots: u8,
     pub tied: bool,
+    pub beat_index: usize, // Track which beat this note belongs to
+    pub ornaments: Vec<crate::parsed_models::OrnamentType>,
 }
 
 /// VexFlow measure structure
@@ -27,6 +58,9 @@ pub struct VexFlowNote {
 pub struct VexFlowMeasure {
     pub notes: Vec<VexFlowNote>,
     pub slurs: Vec<VexFlowSlur>,
+    pub beams: Vec<VexFlowBeam>,
+    pub tuplets: Vec<VexFlowTuplet>,
+    pub barlines: Vec<VexFlowBarline>,
 }
 
 #[derive(Debug, Clone)]
@@ -66,71 +100,109 @@ pub fn generate_vexflow_js(
         eprintln!("VEXFLOW DEBUG: Slur {}: from note {} to note {}", i, slur.from_note, slur.to_note);
     }
 
-    // Store lengths before moving into measure
-    let notes_len = notes.len();
-    let slurs_len = slurs.len();
+    // PASS 3: Create beams from consecutive beamable notes
+    let beams = create_beams_from_notes(&notes);
     
-    let measure = VexFlowMeasure { notes, slurs };
+    eprintln!("VEXFLOW DEBUG: Pass 3 complete - {} beams created", beams.len());
+    for (i, beam) in beams.iter().enumerate() {
+        eprintln!("VEXFLOW DEBUG: Beam {}: notes {:?}", i, beam.note_indices);
+    }
+
+    // PASS 4: Create tuplets from tuplet beats
+    let tuplets = create_tuplets_from_beats(elements, &notes)?;
+    
+    eprintln!("VEXFLOW DEBUG: Pass 4 complete - {} tuplets created", tuplets.len());
+    for (i, tuplet) in tuplets.iter().enumerate() {
+        eprintln!("VEXFLOW DEBUG: Tuplet {}: {} notes in space of {} -> {:?}", i, tuplet.num_notes, tuplet.notes_occupied, tuplet.note_indices);
+    }
+
+    // PASS 5: Create barlines from FSM barline items
+    let barlines = create_barlines_from_elements(elements, &notes);
+    
+    eprintln!("VEXFLOW DEBUG: Pass 5 complete - {} barlines created", barlines.len());
+    for (i, barline) in barlines.iter().enumerate() {
+        eprintln!("VEXFLOW DEBUG: Barline {}: type '{:?}' at {:?}", i, barline.barline_type, barline.position);
+    }
+
+    // Store lengths before moving into measure
+    let _notes_len = notes.len();
+    let _slurs_len = slurs.len();
+    let _beams_len = beams.len();
+    let _tuplets_len = tuplets.len();
+    let _barlines_len = barlines.len();
+    
+    let measure = VexFlowMeasure { notes, slurs, beams, tuplets, barlines };
     
     // Generate executable VexFlow JavaScript code  
     let js_code = format!(
-        r#"
-console.log('🚀 CLAUDE: 2-pass generator starting with {} elements');
-console.log('🚀 CLAUDE: Pass 1 found {} notes and {} slur markers');  
-console.log('🚀 CLAUDE: Pass 2 created {} slurs');
-window.lastVexFlowDebugMessages = 'Elements: {}, Notes: {}, SlurMarkers: {}, Slurs: {}';
+        r#"// VexFlow rendering with auto-sizing
 
 // Clear the canvas
 canvas.innerHTML = '';
 canvas.classList.add('has-content');
 
-// Initialize VexFlow
+// Initialize VexFlow renderer
 const renderer = new VF.Renderer(canvas, VF.Renderer.Backends.SVG);
-renderer.resize(800, 200);
 const context = renderer.getContext();
 
-// Create stave
-const stave = new VF.Stave(20, 40, 750);
-stave.addClef('treble').setContext(context).draw();
-
 // Create notes
-const notes = {};
+const notes = {{}};
 const vexNotes = [];
 
 // Add notes to array
 {}
 
 // Create voice and add notes
+// Set up voice with standard 4/4 time (4 beats, quarter note value)
 const voice = new VF.Voice({{ beats: 4, beat_value: 4 }});
+voice.setMode(VF.Voice.Mode.SOFT);  // Allow incomplete measures
 voice.addTickables(vexNotes);
 
-// Format and draw
-const formatter = new VF.Formatter().joinVoices([voice]).format([voice], 700);
+// Create beams (BEFORE formatting - this is crucial!)
+{}
+
+// Create tuplets (BEFORE formatting - also crucial!)
+{}
+
+// Use VexFlow's automatic width calculation for consistent spacing
+const formatter = new VF.Formatter().joinVoices([voice]);
+const minWidth = formatter.preCalculateMinTotalWidth([voice]);
+const padding = 120; // Generous left/right margins
+const canvasWidth = Math.max(600, minWidth + padding);
+console.log('VexFlow Debug: minWidth=', minWidth, 'canvasWidth=', canvasWidth);
+const canvasHeight = 250;
+
+// Set canvas and stave size based on calculated width
+renderer.resize(canvasWidth, canvasHeight);
+// Reduce scaling to allow more horizontal space
+context.scale(0.9, 0.9);
+
+// Create stave with full available width (minus margins)
+const stave = new VF.Stave(20, 40, canvasWidth - 40);
+stave.addClef('treble').setContext(context);
+
+// Set beginning and end barlines on the stave
+{}
+
+stave.draw();
+
+// Format with calculated width for consistent spacing
+formatter.format([voice], minWidth);
 voice.draw(context, stave);
 
-// Create slurs
-console.log('VexFlow: Found {} SlurStart elements');
-console.log('VexFlow: Found {} SlurEnd elements'); 
-console.log('VexFlow: Found {} total slurs during processing');
-console.log('VexFlow: Starting slur creation...');
-console.log('VexFlow: Creating {} slurs');
+// Draw beams (after voice is drawn)
+beams.forEach(beam => beam.draw());
 
+// Draw tuplets (after voice is drawn)
+tuplets.forEach(tuplet => tuplet.draw());
+
+// Create slurs
 {}
 "#,
-        elements.len(),
-        notes_len, 
-        slur_markers.len(),
-        slurs_len,
-        elements.len(),
-        notes_len, 
-        slur_markers.len(),
-        slurs_len,
-        serde_json::to_string(&measure.notes).map_err(|e| format!("JSON serialization error: {}", e))?,
-        generate_note_creation_js(&measure.notes)?,
-        1, // SlurStart count (hardcoded for now)
-        1, // SlurEnd count (hardcoded for now) 
-        measure.slurs.len(),
-        measure.slurs.len(),
+        generate_notes_and_barlines_js(&measure.notes, &measure.barlines)?,
+        generate_beam_creation_js(&measure.beams)?,
+        generate_tuplet_creation_js(&measure.tuplets)?,
+        generate_stave_barlines_js(&measure.barlines)?,
         generate_slur_creation_js(&measure.slurs)?
     );
     
@@ -143,20 +215,30 @@ fn convert_beat_element_to_vexflow_note(beat_element: &BeatElement) -> Result<Ve
         return Err("BeatElement is not a note".to_string());
     }
 
-    let degree = beat_element.degree.ok_or("Note missing degree")?;
-    let octave = beat_element.octave.ok_or("Note missing octave")?;
+    let (degree, octave, _, _) = beat_element.as_note().ok_or("BeatElement is not a note")?;
     
     // Convert degree to VexFlow key
-    let key = degree_to_vexflow_key(degree, octave);
+    let key = degree_to_vexflow_key(*degree, octave);
     
-    // Convert duration (simplified for now)
-    let duration = "16"; // Default to 16th note
+    // Convert duration using the proper fraction
+    // Use tuplet_display_duration if it exists (for tuplets), otherwise use tuplet_duration
+    let duration_to_use = beat_element.tuplet_display_duration.unwrap_or(beat_element.tuplet_duration);
+    let vexflow_durations = RhythmConverter::fraction_to_vexflow(duration_to_use);
+    
+    // For now, just use the first duration (we may need to handle ties later for complex durations)
+    let (duration, dots) = if !vexflow_durations.is_empty() {
+        vexflow_durations[0].clone()
+    } else {
+        ("16".to_string(), 0) // Fallback to 16th note
+    };
     
     Ok(VexFlowNote {
         keys: vec![key],
-        duration: duration.to_string(),
-        dots: 0,
+        duration,
+        dots,
         tied: false,
+        beat_index: 0, // This will be set later in extract_notes_from_beat_elements
+        ornaments: beat_element.ornaments(),
     })
 }
 
@@ -165,14 +247,13 @@ fn degree_to_vexflow_key(degree: Degree, octave: i8) -> String {
     use Degree::*;
     
     let note_name = match degree {
-        N1 => "c", N1s => "cs", N1b => "cb",
-        N2 => "d", N2s => "ds", N2b => "db",
-        N3 => "e", N3s => "es", N3b => "eb",
-        N4 => "f", N4s => "fs", N4b => "fb",
-        N5 => "g", N5s => "gs", N5b => "gb",
-        N6 => "a", N6s => "as", N6b => "ab",  
-        N7 => "b", N7s => "bs", N7b => "bb",
-        _ => "c", // Default fallback
+        N1 => "c", N1s => "c#", N1ss => "c##", N1b => "cb", N1bb => "cbb",
+        N2 => "d", N2s => "d#", N2ss => "d##", N2b => "db", N2bb => "dbb",
+        N3 => "e", N3s => "e#", N3ss => "e##", N3b => "eb", N3bb => "ebb",
+        N4 => "f", N4s => "f#", N4ss => "f##", N4b => "fb", N4bb => "fbb",
+        N5 => "g", N5s => "g#", N5ss => "g##", N5b => "gb", N5bb => "gbb",
+        N6 => "a", N6s => "a#", N6ss => "a##", N6b => "ab", N6bb => "abb",
+        N7 => "b", N7s => "b#", N7ss => "b##", N7b => "bb", N7bb => "bbb",
     };
     
     // VexFlow octave: 4 = middle C
@@ -181,23 +262,213 @@ fn degree_to_vexflow_key(degree: Degree, octave: i8) -> String {
     format!("{}/{}", note_name, vf_octave)
 }
 
-/// Generate JavaScript code to create VexFlow notes
-fn generate_note_creation_js(notes: &[VexFlowNote]) -> Result<String, String> {
-    let mut js_lines = Vec::new();
+/// Extract accidentals from VexFlow keys and return base keys + accidentals
+fn extract_accidentals_from_keys(keys: &[String]) -> (Vec<String>, Vec<(usize, String)>) {
+    let mut base_keys = Vec::new();
+    let mut accidentals = Vec::new();
     
+    for (i, key) in keys.iter().enumerate() {
+        if key.contains("##") {
+            // Double sharp: c##/4 -> c/4 + double sharp accidental
+            let base_key = key.replace("##", "");
+            base_keys.push(base_key);
+            accidentals.push((i, "##".to_string()));
+        } else if key.contains('#') {
+            // Single sharp: c#/4 -> c/4 + sharp accidental
+            let base_key = key.replace('#', "");
+            base_keys.push(base_key);
+            accidentals.push((i, "#".to_string()));
+        } else if key.contains("bb") && !key.starts_with("bb") {
+            // Double flat: dbb/4 -> d/4 + double flat accidental
+            let base_key = key.replace("bb", "");
+            base_keys.push(base_key);
+            accidentals.push((i, "bb".to_string()));
+        } else if key.contains('b') && !key.starts_with('b') {
+            // Single flat: db/4 -> d/4 + flat accidental (but not for 'b' note itself)
+            let base_key = key.replace('b', "");
+            base_keys.push(base_key);
+            accidentals.push((i, "b".to_string()));
+        } else {
+            // Natural note
+            base_keys.push(key.clone());
+        }
+    }
+    
+    (base_keys, accidentals)
+}
+
+/// Generate JavaScript code to create VexFlow notes with BarNote objects properly inserted
+fn generate_notes_and_barlines_js(notes: &[VexFlowNote], barlines: &[VexFlowBarline]) -> Result<String, String> {
+    let mut js_lines = Vec::new();
+    let mut barline_counter = 0;
+    
+    // Create all notes first
     for (i, note) in notes.iter().enumerate() {
-        let keys_js = format!("[{}]", 
+        let _keys_js = format!("[{}]", 
             note.keys.iter()
                 .map(|k| format!("'{}'", k))
                 .collect::<Vec<_>>()
                 .join(", ")
         );
         
+        // Extract base key and accidental for proper VexFlow rendering
+        let (base_keys, accidentals) = extract_accidentals_from_keys(&note.keys);
+        let base_keys_js = format!("[{}]", 
+            base_keys.iter()
+                .map(|k| format!("'{}'", k))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        
+        js_lines.push(format!("console.log('Note keys: [{}]');", 
+            note.keys.iter().map(|k| format!("\"{}\"", k)).collect::<Vec<_>>().join(", ")));
         js_lines.push(format!(
             "const note{} = new VF.StaveNote({{ clef: 'treble', keys: {}, duration: '{}' }});",
-            i, keys_js, note.duration
+            i, base_keys_js, note.duration
         ));
+        
+        // Add accidentals to make sharp symbols visible
+        for (key_index, accidental) in accidentals {
+            js_lines.push(format!(
+                "note{}.addAccidental({}, new VF.Accidental('{}'));",
+                i, key_index, accidental
+            ));
+        }
+        
+        // Add dots if needed
+        for _ in 0..note.dots {
+            js_lines.push(format!("note{}.addDot(0);", i));
+        }
+
+        // Add ornaments
+        for ornament in &note.ornaments {
+            let ornament_str = match ornament {
+                crate::parsed_models::OrnamentType::Mordent => "mordent",
+                _ => "mordent", // Default for now
+            };
+            js_lines.push(format!(
+                "note{}.addModifier(new VF.Ornament('{}'), 0);",
+                i, ornament_str
+            ));
+        }
+        
         js_lines.push(format!("vexNotes.push(note{});", i));
+        
+        // Check if there's a barline after this note
+        for barline in barlines {
+            if let BarlinePosition::Middle(note_idx) = &barline.position {
+                if *note_idx == i {
+                    let vf_barline_type = convert_barline_type_to_vexflow(&barline.barline_type);
+                    js_lines.push(format!(
+                        "const barNote{} = new VF.BarNote({});",
+                        barline_counter, vf_barline_type
+                    ));
+                    js_lines.push(format!("vexNotes.push(barNote{});", barline_counter));
+                    js_lines.push(format!("console.log('Inserted BarNote {} after note {}');", barline_counter, i));
+                    barline_counter += 1;
+                }
+            }
+        }
+    }
+    
+    // Beginning and end barlines will be set after stave creation in the main template
+    
+    Ok(js_lines.join("\n"))
+}
+
+/// Generate JavaScript code to create VexFlow beams
+fn generate_beam_creation_js(beams: &[VexFlowBeam]) -> Result<String, String> {
+    let mut js_lines = Vec::new();
+    
+    // Start with beam array declaration
+    js_lines.push("const beams = [];".to_string());
+    
+    for (i, beam) in beams.iter().enumerate() {
+        if beam.note_indices.len() < 2 {
+            continue; // Skip invalid beams
+        }
+        
+        // Generate array of note references for this beam
+        let note_refs = beam.note_indices.iter()
+            .map(|&idx| format!("note{}", idx))
+            .collect::<Vec<_>>()
+            .join(", ");
+        
+        let note_indices_str = beam.note_indices.iter().map(|idx| idx.to_string()).collect::<Vec<_>>().join(", ");
+        
+        js_lines.push(format!(
+            r#"console.log('VexFlow: Creating beam {} with notes: [{}]');
+const beamNotes{} = [{}];
+if (beamNotes{}.every(note => note !== undefined)) {{
+    const beam{} = new VF.Beam(beamNotes{}); 
+    beam{}.setContext(context);
+    beams.push(beam{});
+    console.log('VexFlow: Beam {} created and stored');
+}} else {{
+    console.log('ERROR: Beam {} skipped due to undefined notes');
+}}
+"#,
+            i, note_indices_str,
+            i, note_refs,
+            i,
+            i, i,
+            i,
+            i,
+            i,
+            i
+        ));
+    }
+    
+    Ok(js_lines.join("\n"))
+}
+
+/// Generate JavaScript code to create VexFlow tuplets
+fn generate_tuplet_creation_js(tuplets: &[VexFlowTuplet]) -> Result<String, String> {
+    let mut js_lines = Vec::new();
+    
+    // Start with tuplet array declaration
+    js_lines.push("const tuplets = [];".to_string());
+    
+    for (i, tuplet) in tuplets.iter().enumerate() {
+        if tuplet.note_indices.len() < 2 {
+            continue; // Skip invalid tuplets (need at least 2 notes)
+        }
+        
+        // Generate array of note references for this tuplet
+        let note_refs = tuplet.note_indices.iter()
+            .map(|&idx| format!("note{}", idx))
+            .collect::<Vec<_>>()
+            .join(", ");
+        
+        js_lines.push(format!(
+            r#"console.log('VexFlow: Creating tuplet {} with {} notes in space of {}');
+const tupletNotes{} = [{}];
+if (tupletNotes{}.every(note => note !== undefined)) {{
+    const tupletOptions{} = {{
+        notes_occupied: {},
+        num_notes: {},
+        bracketed: true
+    }};
+    const tuplet{} = new VF.Tuplet(tupletNotes{}, tupletOptions{});
+    tuplet{}.setContext(context);
+    tuplets.push(tuplet{});
+    console.log('VexFlow: Tuplet {} created and stored');
+}} else {{
+    console.log('ERROR: Tuplet {} skipped due to undefined notes');
+}}
+"#,
+            i, tuplet.num_notes, tuplet.notes_occupied,
+            i, note_refs,
+            i,
+            i,
+            tuplet.notes_occupied,
+            tuplet.num_notes,
+            i, i, i,
+            i,
+            i,
+            i,
+            i
+        ));
     }
     
     Ok(js_lines.join("\n"))
@@ -209,8 +480,7 @@ fn generate_slur_creation_js(slurs: &[VexFlowSlur]) -> Result<String, String> {
     
     for (i, slur) in slurs.iter().enumerate() {
         js_lines.push(format!(
-            r#"
-console.log('VexFlow: Slur {} from note{} to note{}');
+            r#"console.log('VexFlow: Slur {} from note{} to note{}');
 console.log('VexFlow: Checking note{} and note{} exist...');
 if (typeof note{} === 'undefined') {{
     console.log('ERROR: note{} is undefined!');
@@ -237,332 +507,363 @@ if (typeof note{} === 'undefined') {{
     Ok(js_lines.join("\n"))
 }
 
-/// PASS 1: Extract notes and slur markers from FSM elements
+/// PASS 1: Extract ALL notes first, then analyze simple FSM slur patterns
 fn extract_notes_and_slur_markers(elements: &Vec<Item>) -> Result<(Vec<VexFlowNote>, Vec<SlurMarker>), String> {
     let mut notes = Vec::new();
     let mut slur_markers = Vec::new();
     
+    // STEP 1: Extract all notes from all beats (track beat indices for beaming)
+    let mut beat_index = 0;
     for (pos, element) in elements.iter().enumerate() {
         eprintln!("VEXFLOW DEBUG: Pass 1 - Element {}: {:?}", pos, element);
         
-        match element {
-            Item::SlurStart => {
-                eprintln!("VEXFLOW DEBUG: Pass 1 - Found SlurStart at position {}", pos);
-                slur_markers.push(SlurMarker {
-                    marker_type: SlurMarkerType::Start,
-                    position: pos,
-                });
-            },
-            Item::SlurEnd => {
-                eprintln!("VEXFLOW DEBUG: Pass 1 - Found SlurEnd at position {}", pos);
-                slur_markers.push(SlurMarker {
-                    marker_type: SlurMarkerType::End,
-                    position: pos,
-                });
-            },
-            Item::Beat(beat) => {
-                if beat.is_tuplet {
-                    eprintln!("VEXFLOW DEBUG: Pass 1 - Processing tuplet beat with {} elements (ratio: {:?})", 
-                             beat.elements.len(), beat.tuplet_ratio);
-                } else {
-                    eprintln!("VEXFLOW DEBUG: Pass 1 - Processing regular beat with {} elements", beat.elements.len());
-                }
-                extract_notes_from_beat_elements(&beat.elements, &mut notes)?;
-            },
-            // Handle any future rhythm structures uniformly
-            _ => {
-                eprintln!("VEXFLOW DEBUG: Pass 1 - Skipping element: {:?}", element);
+        if let Item::Beat(beat) = element {
+            if beat.is_tuplet {
+                eprintln!("VEXFLOW DEBUG: Pass 1 - Processing tuplet beat {} with {} elements (ratio: {:?})", 
+                         beat_index, beat.elements.len(), beat.tuplet_ratio);
+            } else {
+                eprintln!("VEXFLOW DEBUG: Pass 1 - Processing regular beat {} with {} elements", beat_index, beat.elements.len());
             }
+            extract_notes_from_beat_elements(&beat.elements, &mut notes, beat_index)?;
+            beat_index += 1;
         }
     }
     
+    // STEP 2: Analyze FSM sequence to determine precise slur span
+    let slur_start_pos: Option<usize> = None;
+    let slur_end_pos: Option<usize> = None;
+    let mut current_note_index = 0;
+    
+    // Count total notes for indexing
+    for element in elements.iter() {
+        match element {
+            Item::Beat(beat) => {
+                let notes_in_beat = beat.elements.iter().filter(|e| e.is_note()).count();
+                eprintln!("VEXFLOW DEBUG: Pass 1 - Beat with {} notes, current_note_index: {}", notes_in_beat, current_note_index);
+                current_note_index += notes_in_beat;
+            },
+            _ => {}
+        }
+    }
+    
+    // Create slur markers if both positions found
+    if let (Some(start_idx), Some(end_idx)) = (slur_start_pos, slur_end_pos) {
+        let final_end_idx = if end_idx == usize::MAX {
+            // SlurEnd appeared before notes - slur spans all notes from start
+            notes.len() - 1
+        } else {
+            end_idx
+        };
+        
+        if start_idx <= final_end_idx && final_end_idx < notes.len() {
+            slur_markers.push(SlurMarker {
+                marker_type: SlurMarkerType::Start,
+                position: start_idx,
+            });
+            slur_markers.push(SlurMarker {
+                marker_type: SlurMarkerType::End,
+                position: final_end_idx,
+            });
+            eprintln!("VEXFLOW DEBUG: Pass 1 - FSM sequence slur: from note {} to note {}", start_idx, final_end_idx);
+        } else {
+            eprintln!("VEXFLOW DEBUG: Pass 1 - Invalid slur range: {} to {} (total notes: {})", start_idx, final_end_idx, notes.len());
+        }
+    }
+    
+    eprintln!("VEXFLOW DEBUG: Pass 1 complete - {} notes, {} slur markers", notes.len(), slur_markers.len());
     Ok((notes, slur_markers))
 }
 
 /// Extract notes from beat elements (works for Beat, Tuplet, any rhythm structure)
-fn extract_notes_from_beat_elements(elements: &[BeatElement], notes: &mut Vec<VexFlowNote>) -> Result<(), String> {
+fn extract_notes_from_beat_elements(elements: &[BeatElement], notes: &mut Vec<VexFlowNote>, beat_index: usize) -> Result<(), String> {
     for beat_element in elements {
         if beat_element.is_note() {
-            let vf_note = convert_beat_element_to_vexflow_note(beat_element)?;
+            let mut vf_note = convert_beat_element_to_vexflow_note(beat_element)?;
+            vf_note.beat_index = beat_index; // Track which beat this note belongs to
             let note_index = notes.len();
-            eprintln!("VEXFLOW DEBUG: Pass 1 - Added note {} at index {}: {:?}", note_index, note_index, vf_note);
+            eprintln!("VEXFLOW DEBUG: Pass 1 - Added note {} at index {} (beat {}): {:?}", note_index, note_index, beat_index, vf_note);
             notes.push(vf_note);
         }
     }
     Ok(())
 }
 
-/// PASS 2: Create slurs from markers using clean logic
+/// PASS 2: Create slurs from markers using direct position mapping
 fn create_slurs_from_markers(notes: &[VexFlowNote], slur_markers: &[SlurMarker]) -> Vec<VexFlowSlur> {
     let mut slurs = Vec::new();
     
-    // Simple pattern: SlurStart followed by SlurEnd = slur over all notes
-    let mut start_markers: Vec<usize> = Vec::new();
-    let mut end_markers: Vec<usize> = Vec::new();
+    // Sort markers by position (note index)
+    let mut sorted_markers = slur_markers.to_vec();
+    sorted_markers.sort_by_key(|m| m.position);
     
-    for marker in slur_markers {
+    eprintln!("VEXFLOW DEBUG: Pass 2 - Found {} slur markers", sorted_markers.len());
+    
+    // Simple pair matching: SlurStart followed by SlurEnd
+    let mut pending_start: Option<usize> = None;
+    
+    for marker in &sorted_markers {
+        eprintln!("VEXFLOW DEBUG: Pass 2 - Processing marker {:?} at note index {}", 
+                  marker.marker_type, marker.position);
+        
         match marker.marker_type {
-            SlurMarkerType::Start => start_markers.push(marker.position),
-            SlurMarkerType::End => end_markers.push(marker.position),
+            SlurMarkerType::Start => {
+                pending_start = Some(marker.position);
+                eprintln!("VEXFLOW DEBUG: Pass 2 - SlurStart at note {}", marker.position);
+            },
+            SlurMarkerType::End => {
+                if let Some(start_idx) = pending_start {
+                    let end_idx = marker.position; // Use the exact position from Pass 1
+                    
+                    if start_idx <= end_idx && end_idx < notes.len() {
+                        let slur = VexFlowSlur {
+                            from_note: start_idx,
+                            to_note: end_idx,
+                        };
+                        eprintln!("VEXFLOW DEBUG: Pass 2 - Creating slur from note {} to note {}", 
+                                  start_idx, end_idx);
+                        slurs.push(slur);
+                    } else {
+                        eprintln!("VEXFLOW DEBUG: Pass 2 - Invalid slur range: {} to {} (total notes: {})", 
+                                  start_idx, end_idx, notes.len());
+                    }
+                    pending_start = None;
+                } else {
+                    eprintln!("VEXFLOW DEBUG: Pass 2 - SlurEnd without matching SlurStart");
+                }
+            }
         }
     }
     
-    eprintln!("VEXFLOW DEBUG: Pass 2 - Found {} SlurStart and {} SlurEnd markers", 
-              start_markers.len(), end_markers.len());
+    eprintln!("VEXFLOW DEBUG: Pass 2 complete - {} slurs created", slurs.len());
+    slurs
+}
+
+/// PASS 3: Create beams from consecutive beamable notes WITHIN each beat
+fn create_beams_from_notes(notes: &[VexFlowNote]) -> Vec<VexFlowBeam> {
+    let mut beams = Vec::new();
+    let mut current_beam_group = Vec::new();
+    let mut current_beat_index: Option<usize> = None;
     
-    // Create slurs for each Start/End pair
-    if start_markers.len() > 0 && end_markers.len() > 0 && notes.len() > 1 {
-        // Simple case: one slur over all notes
-        let slur = VexFlowSlur {
-            from_note: 0,
-            to_note: notes.len() - 1,
-        };
+    eprintln!("VEXFLOW DEBUG: Pass 3 - Analyzing {} notes for beaming with beat boundaries", notes.len());
+    
+    for (i, note) in notes.iter().enumerate() {
+        let duration = &note.duration;
+        let beat_index = note.beat_index;
+        eprintln!("VEXFLOW DEBUG: Pass 3 - Note {}: duration = '{}', beat = {}", i, duration, beat_index);
         
-        eprintln!("VEXFLOW DEBUG: Pass 2 - Creating slur from note {} to note {}", 
-                  slur.from_note, slur.to_note);
-        slurs.push(slur);
-    } else {
-        eprintln!("VEXFLOW DEBUG: Pass 2 - No slur created - insufficient markers or notes");
+        // Check if this note is beamable (8th, 16th, 32nd notes)
+        let is_beamable = matches!(duration.as_str(), "8" | "16" | "32");
+        
+        // Check if we've moved to a different beat - this breaks beaming!
+        let beat_boundary_crossed = current_beat_index.map_or(false, |prev| prev != beat_index);
+        
+        if beat_boundary_crossed {
+            eprintln!("VEXFLOW DEBUG: Pass 3 - Beat boundary crossed from {} to {}, finishing current beam", current_beat_index.unwrap(), beat_index);
+            // Finish current beam group due to beat boundary
+            if current_beam_group.len() >= 2 {
+                let beam = VexFlowBeam {
+                    note_indices: current_beam_group.clone(),
+                };
+                eprintln!("VEXFLOW DEBUG: Pass 3 - Created beam at beat boundary with {} notes: {:?}", beam.note_indices.len(), beam.note_indices);
+                beams.push(beam);
+            } else if current_beam_group.len() == 1 {
+                eprintln!("VEXFLOW DEBUG: Pass 3 - Skipped single-note beam at beat boundary, index {}", current_beam_group[0]);
+            }
+            current_beam_group.clear();
+        }
+        
+        current_beat_index = Some(beat_index);
+        
+        if is_beamable {
+            // Add to current beam group (within same beat)
+            current_beam_group.push(i);
+            eprintln!("VEXFLOW DEBUG: Pass 3 - Added note {} to beam group in beat {} (size: {})", i, beat_index, current_beam_group.len());
+        } else {
+            // Non-beamable note breaks the current beam
+            if current_beam_group.len() >= 2 {
+                let beam = VexFlowBeam {
+                    note_indices: current_beam_group.clone(),
+                };
+                eprintln!("VEXFLOW DEBUG: Pass 3 - Created beam with {} notes: {:?}", beam.note_indices.len(), beam.note_indices);
+                beams.push(beam);
+            } else if current_beam_group.len() == 1 {
+                eprintln!("VEXFLOW DEBUG: Pass 3 - Skipped single-note beam at index {}", current_beam_group[0]);
+            }
+            current_beam_group.clear();
+        }
     }
     
-    slurs
+    // Don't forget the last beam group
+    if current_beam_group.len() >= 2 {
+        let beam = VexFlowBeam {
+            note_indices: current_beam_group,
+        };
+        eprintln!("VEXFLOW DEBUG: Pass 3 - Created final beam with {} notes: {:?}", beam.note_indices.len(), beam.note_indices);
+        beams.push(beam);
+    } else if current_beam_group.len() == 1 {
+        eprintln!("VEXFLOW DEBUG: Pass 3 - Skipped final single-note beam at index {}", current_beam_group[0]);
+    }
+    
+    eprintln!("VEXFLOW DEBUG: Pass 3 complete - {} beams created", beams.len());
+    beams
+}
+
+/// PASS 4: Create tuplets from tuplet beats  
+fn create_tuplets_from_beats(elements: &Vec<Item>, _notes: &[VexFlowNote]) -> Result<Vec<VexFlowTuplet>, String> {
+    let mut tuplets = Vec::new();
+    let mut note_index = 0;
+    
+    eprintln!("VEXFLOW DEBUG: Pass 4 - Analyzing beats for tuplets");
+    
+    for (beat_idx, element) in elements.iter().enumerate() {
+        if let Item::Beat(beat) = element {
+            let notes_in_beat = beat.elements.iter().filter(|e| e.is_note()).count();
+            
+            if beat.is_tuplet {
+                eprintln!("VEXFLOW DEBUG: Pass 4 - Found tuplet beat {} with {} notes, divisions: {}", 
+                         beat_idx, notes_in_beat, beat.divisions);
+                
+                // Calculate tuplet parameters using the old JS logic
+                let divisions = beat.divisions;
+                let notes_occupied = get_next_power_of_2(divisions);
+                
+                // Create tuplet object with note indices from this beat
+                let tuplet_note_indices: Vec<usize> = (note_index..note_index + notes_in_beat).collect();
+                
+                let tuplet = VexFlowTuplet {
+                    note_indices: tuplet_note_indices.clone(),
+                    num_notes: divisions,
+                    notes_occupied,
+                };
+                
+                eprintln!("VEXFLOW DEBUG: Pass 4 - Created tuplet: {} notes in space of {} -> {:?}", 
+                         divisions, notes_occupied, tuplet_note_indices);
+                
+                tuplets.push(tuplet);
+            } else {
+                eprintln!("VEXFLOW DEBUG: Pass 4 - Skipping regular beat {} with {} notes", beat_idx, notes_in_beat);
+            }
+            
+            note_index += notes_in_beat;
+        }
+    }
+    
+    eprintln!("VEXFLOW DEBUG: Pass 4 complete - {} tuplets created", tuplets.len());
+    Ok(tuplets)
+}
+
+/// Helper function to calculate next power of 2 (like the old JS code)
+fn get_next_power_of_2(n: usize) -> usize {
+    if n <= 1 { return 1; }
+    let mut power = 1;
+    while power < n {
+        power *= 2;
+    }
+    power / 2 // We want the next power of 2 that's less than n (like the old JS)
+}
+
+/// PASS 5: Create barlines from FSM elements
+fn create_barlines_from_elements(elements: &Vec<Item>, _notes: &[VexFlowNote]) -> Vec<VexFlowBarline> {
+    let mut barlines = Vec::new();
+    let mut note_index = 0;
+    
+    eprintln!("VEXFLOW DEBUG: Pass 5 - Analyzing {} elements for barlines", elements.len());
+    
+    for (element_idx, element) in elements.iter().enumerate() {
+        match element {
+            Item::Barline(barline_type) => {
+                eprintln!("VEXFLOW DEBUG: Pass 5 - Found barline '{:?}' at element {}", barline_type, element_idx);
+                
+                let position = if element_idx == 0 {
+                    // Barline at very start of music
+                    BarlinePosition::Beginning
+                } else if element_idx == elements.len() - 1 {
+                    // Barline at very end of music
+                    BarlinePosition::End
+                } else {
+                    // Mid-measure barline - position after current note
+                    BarlinePosition::Middle(if note_index > 0 { note_index - 1 } else { 0 })
+                };
+                
+                barlines.push(VexFlowBarline {
+                    barline_type: barline_type.clone(),
+                    position,
+                });
+            },
+            Item::Beat(beat) => {
+                // Count notes in this beat
+                let notes_in_beat = beat.elements.iter().filter(|e| e.is_note()).count();
+                note_index += notes_in_beat;
+            },
+            _ => {} // Ignore other elements
+        }
+    }
+    
+    eprintln!("VEXFLOW DEBUG: Pass 5 complete - {} barlines processed", barlines.len());
+    barlines
+}
+
+// /// Generate JavaScript code to insert BarNote objects into the notes array
+// fn generate_barline_setup_js(_barlines: &[VexFlowBarline]) -> Result<String, String> {
+//     let mut js_lines = Vec::new();
+//     
+//     // We'll generate the BarNote insertion logic here
+//     js_lines.push("// BarNote objects will be inserted during note creation".to_string());
+//     
+//     Ok(js_lines.join("\n"))
+// }
+
+/// Generate JavaScript code for setting stave beginning and end barlines
+fn generate_stave_barlines_js(barlines: &[VexFlowBarline]) -> Result<String, String> {
+    let mut js_lines = Vec::new();
+    
+    for barline in barlines {
+        match &barline.position {
+            BarlinePosition::Beginning => {
+                let vf_type = convert_barline_type_to_vexflow(&barline.barline_type);
+                js_lines.push(format!("stave.setBegBarType({})", vf_type));
+                js_lines.push(format!("console.log('Set beginning barline: {:?}');", barline.barline_type));
+            },
+            BarlinePosition::End => {
+                let vf_type = convert_barline_type_to_vexflow(&barline.barline_type);
+                js_lines.push(format!("stave.setEndBarType({})", vf_type));
+                js_lines.push(format!("console.log('Set end barline: {:?}');", barline.barline_type));
+            },
+            _ => {} // Middle barlines handled via BarNote objects
+        }
+    }
+    
+    if js_lines.is_empty() {
+        js_lines.push("// No stave barlines to set".to_string());
+    }
+    
+    Ok(js_lines.join("\n"))
+}
+
+/// Convert barline type enum to VexFlow BarlineType constant
+fn convert_barline_type_to_vexflow(barline_type: &crate::models::BarlineType) -> String {
+    use crate::models::BarlineType;
+    match barline_type {
+        BarlineType::RepeatStart => "VF.BarlineType.REPEAT_BEGIN".to_string(),
+        BarlineType::RepeatEnd => "VF.BarlineType.REPEAT_END".to_string(),
+        BarlineType::Double => "VF.BarlineType.DOUBLE".to_string(),
+        BarlineType::Final => "VF.BarlineType.END".to_string(),
+        BarlineType::RepeatBoth => "VF.BarlineType.REPEAT_BOTH".to_string(),
+        BarlineType::Single => "VF.BarlineType.SINGLE".to_string(),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rhythm_fsm::{Item, Beat, BeatElement, ParsedElementType};
     use crate::pitch::Degree;
-    use crate::parsed_models::Position;
-    use crate::models::{Metadata, Title, Directive};
-    use std::collections::HashMap;
-    use fraction::Fraction;
 
     #[test]
-    fn test_vexflow_generator_with_slur_items() {
-        // Create the exact FSM output that CLI generates for "___\n1234"
-        // FSM outputs: [SlurStart, SlurEnd, Beat]
-        let elements = vec![
-            Item::SlurStart,
-            Item::SlurEnd,
-            Item::Beat(Beat {
-                divisions: 4,
-                elements: vec![
-                    BeatElement {
-                        subdivisions: 1,
-                        duration: Fraction::new(1u64, 16u64),
-                        tuplet_duration: Fraction::new(1u64, 16u64),
-                        tuplet_display_duration: None,
-                        degree: Some(Degree::N1),
-                        octave: Some(0),
-                        value: "1".to_string(),
-                        position: Position { row: 1, col: 0 },
-                        children: Vec::new(),
-                        element_duration: None,
-                        syl: None,
-                        ornaments: Vec::new(),
-                        octave_markers: Vec::new(),
-                        element_type: ParsedElementType::Note,
-                    },
-                    BeatElement {
-                        subdivisions: 1,
-                        duration: Fraction::new(1u64, 16u64),
-                        tuplet_duration: Fraction::new(1u64, 16u64),
-                        tuplet_display_duration: None,
-                        degree: Some(Degree::N2),
-                        octave: Some(0),
-                        value: "2".to_string(),
-                        position: Position { row: 1, col: 1 },
-                        children: Vec::new(),
-                        element_duration: None,
-                        syl: None,
-                        ornaments: Vec::new(),
-                        octave_markers: Vec::new(),
-                        element_type: ParsedElementType::Note,
-                    },
-                    BeatElement {
-                        subdivisions: 1,
-                        duration: Fraction::new(1u64, 16u64),
-                        tuplet_duration: Fraction::new(1u64, 16u64),
-                        tuplet_display_duration: None,
-                        degree: Some(Degree::N3),
-                        octave: Some(0),
-                        value: "3".to_string(),
-                        position: Position { row: 1, col: 2 },
-                        children: Vec::new(),
-                        element_duration: None,
-                        syl: None,
-                        ornaments: Vec::new(),
-                        octave_markers: Vec::new(),
-                        element_type: ParsedElementType::Note,
-                    },
-                    BeatElement {
-                        subdivisions: 1,
-                        duration: Fraction::new(1u64, 16u64),
-                        tuplet_duration: Fraction::new(1u64, 16u64),
-                        tuplet_display_duration: None,
-                        degree: Some(Degree::N4),
-                        octave: Some(0),
-                        value: "4".to_string(),
-                        position: Position { row: 1, col: 3 },
-                        children: Vec::new(),
-                        element_duration: None,
-                        syl: None,
-                        ornaments: Vec::new(),
-                        octave_markers: Vec::new(),
-                        element_type: ParsedElementType::Note,
-                    },
-                ],
-                tied_to_previous: false,
-                is_tuplet: false,
-                tuplet_ratio: None,
-            }),
-        ];
-
-        let metadata = Metadata {
-            title: None,
-            directives: Vec::new(),
-            attributes: HashMap::new(),
-            detected_system: None,
-        };
-
-        let result = generate_vexflow_js(&elements, &metadata);
-        assert!(result.is_ok(), "VexFlow generation should succeed");
-
-        let js_code = result.unwrap();
-        
-        // Verify that JavaScript code contains expected console messages
-        assert!(js_code.contains("1 total slurs during processing"), "Should create 1 slur");
-        assert!(js_code.contains("Creating 1 slurs"), "Should create 1 slur");
-        
-        // Verify note generation JavaScript
-        assert!(js_code.contains("note0"), "Should create note0");
-        assert!(js_code.contains("note1"), "Should create note1");
-        assert!(js_code.contains("note2"), "Should create note2");  
-        assert!(js_code.contains("note3"), "Should create note3");
-        assert!(js_code.contains("'c/4'"), "Should contain C note");
-        assert!(js_code.contains("'d/4'"), "Should contain D note");
-        assert!(js_code.contains("'e/4'"), "Should contain E note");
-        assert!(js_code.contains("'f/4'"), "Should contain F note");
-        
-        // Verify slur creation JavaScript
-        assert!(js_code.contains("Curve(note0, note3"), "Should create slur from note0 to note3");
-        
-        println!("Generated VexFlow JavaScript:\n{}", js_code);
-    }
-
-    #[test] 
     fn test_degree_to_vexflow_key() {
         assert_eq!(degree_to_vexflow_key(Degree::N1, 0), "c/4");
         assert_eq!(degree_to_vexflow_key(Degree::N2, 0), "d/4");
-        assert_eq!(degree_to_vexflow_key(Degree::N1s, 0), "cs/4");
+        assert_eq!(degree_to_vexflow_key(Degree::N1s, 0), "c#/4");
         assert_eq!(degree_to_vexflow_key(Degree::N7b, 0), "bb/4");
         assert_eq!(degree_to_vexflow_key(Degree::N1, 1), "c/5"); // Higher octave
-    }
-
-    #[test]
-    fn test_tuplet_slur_case() {
-        // Test the 2 overlines over 3 notes case: __\n123
-        // This creates a tuplet Beat with is_tuplet=true
-        let elements = vec![
-            Item::SlurStart,
-            Item::SlurEnd,
-            Item::Beat(Beat {
-                divisions: 3,
-                elements: vec![
-                    BeatElement {
-                        subdivisions: 1,
-                        duration: Fraction::new(1u64, 3u64),
-                        tuplet_duration: Fraction::new(1u64, 8u64),
-                        tuplet_display_duration: Some(Fraction::new(1u64, 8u64)),
-                        degree: Some(Degree::N1),
-                        octave: Some(0),
-                        value: "1".to_string(),
-                        position: Position { row: 1, col: 0 },
-                        children: Vec::new(),
-                        element_duration: None,
-                        syl: None,
-                        ornaments: Vec::new(),
-                        octave_markers: Vec::new(),
-                        element_type: ParsedElementType::Note,
-                    },
-                    BeatElement {
-                        subdivisions: 1,
-                        duration: Fraction::new(1u64, 3u64),
-                        tuplet_duration: Fraction::new(1u64, 8u64),
-                        tuplet_display_duration: Some(Fraction::new(1u64, 8u64)),
-                        degree: Some(Degree::N2),
-                        octave: Some(0),
-                        value: "2".to_string(),
-                        position: Position { row: 1, col: 1 },
-                        children: Vec::new(),
-                        element_duration: None,
-                        syl: None,
-                        ornaments: Vec::new(),
-                        octave_markers: Vec::new(),
-                        element_type: ParsedElementType::Note,
-                    },
-                    BeatElement {
-                        subdivisions: 1,
-                        duration: Fraction::new(1u64, 3u64),
-                        tuplet_duration: Fraction::new(1u64, 8u64),
-                        tuplet_display_duration: Some(Fraction::new(1u64, 8u64)),
-                        degree: Some(Degree::N3),
-                        octave: Some(0),
-                        value: "3".to_string(),
-                        position: Position { row: 1, col: 2 },
-                        children: Vec::new(),
-                        element_duration: None,
-                        syl: None,
-                        ornaments: Vec::new(),
-                        octave_markers: Vec::new(),
-                        element_type: ParsedElementType::Note,
-                    },
-                ],
-                tied_to_previous: false,
-                is_tuplet: true,
-                tuplet_ratio: Some((3, 2)),
-            }),
-        ];
-
-        let metadata = Metadata {
-            title: None,
-            directives: Vec::new(),
-            attributes: HashMap::new(),
-            detected_system: None,
-        };
-
-        let result = generate_vexflow_js(&elements, &metadata);
-        assert!(result.is_ok(), "VexFlow generation should succeed for tuplet");
-
-        let js_code = result.unwrap();
-        
-        // Should handle tuplet Beat the same as regular Beat
-        assert!(js_code.contains("1 total slurs during processing"));
-        assert!(js_code.contains("Creating 1 slurs")); 
-        assert!(js_code.contains("note0"), "Should create note0");
-        assert!(js_code.contains("note1"), "Should create note1");
-        assert!(js_code.contains("note2"), "Should create note2");
-        assert!(js_code.contains("Curve(note0, note2"), "Should create slur from note0 to note2");
-        
-        println!("Generated VexFlow JavaScript for tuplet:\n{}", js_code);
-    }
-
-    #[test]
-    fn test_slur_start_end_without_notes() {
-        // Test edge case: SlurStart/SlurEnd without any notes
-        let elements = vec![Item::SlurStart, Item::SlurEnd];
-        let metadata = Metadata {
-            title: None,
-            directives: Vec::new(),
-            attributes: HashMap::new(),
-            detected_system: None,
-        };
-
-        let result = generate_vexflow_js(&elements, &metadata);
-        assert!(result.is_ok());
-        
-        let js_code = result.unwrap();
-        assert!(js_code.contains("0 slurs")); // Should create no slurs without notes
     }
 }

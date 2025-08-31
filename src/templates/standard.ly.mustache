@@ -39,7 +39,10 @@
     \relative c' {
       \key c \major
       {{#time_signature}}{{{time_signature}}}{{/time_signature}}{{^time_signature}}\time 4/4{{/time_signature}}
-      \set Score.barCheckSynchronize = ##f
+      \autoBeamOff
+      \set Score.measureBarType = #""
+      \set Score.startRepeatBarType = #""
+      \set Score.endRepeatBarType = #""
       {{#key_signature}}{{{key_signature}}}{{/key_signature}}
       {{{staves}}}
     }

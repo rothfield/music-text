@@ -42,6 +42,41 @@ pub struct Directive {
     pub col: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum BarlineType {
+    Single,      // "|"
+    Double,      // "||" 
+    Final,       // "|."
+    RepeatStart, // "|:"
+    RepeatEnd,   // ":|"
+    RepeatBoth,  // ":|:"
+}
+
+impl BarlineType {
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "|" => Ok(BarlineType::Single),
+            "||" => Ok(BarlineType::Double),
+            "|." => Ok(BarlineType::Final),
+            "|:" => Ok(BarlineType::RepeatStart),
+            ":|" => Ok(BarlineType::RepeatEnd),
+            ":|:" => Ok(BarlineType::RepeatBoth),
+            _ => Err(format!("Unknown barline type: '{}'", s)),
+        }
+    }
+
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            BarlineType::Single => "|",
+            BarlineType::Double => "||",
+            BarlineType::Final => "|.",
+            BarlineType::RepeatStart => "|:",
+            BarlineType::RepeatEnd => ":|",
+            BarlineType::RepeatBoth => ":|:",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Metadata {
     pub title: Option<Title>,
@@ -138,8 +173,8 @@ pub enum TokenType {
     Word,
     Unknown,
     Whitespace,
-    SlurStart,
-    SlurEnd,
+    // SlurStart,
+    // SlurEnd,
     Dash,
 }
 
@@ -152,8 +187,8 @@ impl TokenType {
             TokenType::Word => "WORD",
             TokenType::Unknown => "UNKNOWN",
             TokenType::Whitespace => "WHITESPACE",
-            TokenType::SlurStart => "SLUR_START",
-            TokenType::SlurEnd => "SLUR_END",
+            // TokenType::SlurStart => "SLUR_START",
+            // TokenType::SlurEnd => "SLUR_END",
             TokenType::Dash => "DASH",
         }
     }
