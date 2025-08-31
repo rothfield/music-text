@@ -289,5 +289,47 @@ pub fn tokenize_with_handwritten_lexer(input: &str) -> Vec<Token> {
     // First detect the notation type
     let notation_type = crate::notation_detector::detect_notation_type(input);
     let mut lexer = HandwrittenLexer::new(input, notation_type);
-    lexer.tokenize()
+    let mut tokens = lexer.tokenize();
+    
+    // Add simple lyrics detection: tokenize words in lines containing hyphens
+    add_lyrics_tokens(&mut tokens, input);
+    
+    tokens
+}
+
+/// Simple hardcoded lyrics detection: if a line contains hyphens, tokenize words in it
+fn add_lyrics_tokens(tokens: &mut Vec<Token>, input: &str) {
+    let lines: Vec<&str> = input.lines().collect();
+    
+    for (line_num, line) in lines.iter().enumerate() {
+        // Simple rule: if line contains a word with hyphen, treat as lyrics
+        if line.contains('-') && contains_lyrics_pattern(line) {
+            // Tokenize words in this line
+            let mut col = 0;
+            for word in line.split_whitespace() {
+                // Find the actual column position of this word
+                if let Some(word_start) = line[col..].find(word) {
+                    col += word_start;
+                    
+                    // Add word token
+                    tokens.push(Token {
+                        token_type: TokenType::Word.as_str().to_string(),
+                        value: word.to_string(),
+                        line: line_num,
+                        col,
+                    });
+                    
+                    col += word.len();
+                }
+            }
+        }
+    }
+}
+
+/// Check if line looks like lyrics (contains hyphenated words)
+fn contains_lyrics_pattern(line: &str) -> bool {
+    line.split_whitespace().any(|word| {
+        // Look for words ending in hyphen (syllables) or containing hyphens
+        word.ends_with('-') || (word.contains('-') && word.len() > 2)
+    })
 }

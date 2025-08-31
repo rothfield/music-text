@@ -49,7 +49,11 @@
   }
   
   {{#lyrics}}
-  \addlyrics { {{{lyrics}}} }
+  \addlyrics { 
+    \override LyricText.font-size = #-2
+    \override LyricText.font-shape = #'italic
+    {{{lyrics}}} 
+  }
   {{/lyrics}}
   
   \layout {

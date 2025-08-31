@@ -126,13 +126,10 @@ impl TemplateContextBuilder {
     }
     */
     
-    // DELETED - unused method
-    /*
     pub fn lyrics<S: Into<String>>(mut self, lyrics: S) -> Self {
         self.context.lyrics = Some(lyrics.into());
         self
     }
-    */
     
     pub fn build(self) -> TemplateContext {
         self.context

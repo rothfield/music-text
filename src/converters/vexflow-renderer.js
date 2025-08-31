@@ -751,11 +751,27 @@ function createVexFlowNote(element) {
         note.addModifier(new Vex.Flow.Dot(), 0);
     }
     
-    // Add lyrics/syllable
+    // Add lyrics/syllable with SOP styling (small, italic)
     if (element.syl) {
         console.log('🎵 Adding lyric:', element.syl);
         const annotation = new Vex.Flow.Annotation(element.syl);
         annotation.setVerticalJustification(Vex.Flow.Annotation.VerticalJustify.BOTTOM);
+        try {
+            annotation.setJustification(Vex.Flow.Annotation.Justify.CENTER);
+        } catch (e) {
+            console.warn('VexFlow CENTER justification not available:', e);
+        }
+        // Try simpler font setting approach
+        try {
+            annotation.setFontSize(10);
+        } catch (e) {
+            console.warn('VexFlow setFontSize not available:', e);
+        }
+        try {
+            annotation.setFont('Arial', 10, 'italic');
+        } catch (e) {
+            console.warn('VexFlow setFont not available:', e);
+        }
         note.addModifier(annotation, 0);
     }
     
@@ -874,11 +890,27 @@ function processTuplet(element) {
             }
         }
         
-        // Add lyrics/syllable (for non-rests)
+        // Add lyrics/syllable (for non-rests) with SOP styling (small, italic)
         if (!isRest && noteData.syl) {
             console.log('🎵 Adding tuplet lyric:', noteData.syl);
             const annotation = new Vex.Flow.Annotation(noteData.syl);
             annotation.setVerticalJustification(Vex.Flow.Annotation.VerticalJustify.BOTTOM);
+            try {
+                annotation.setJustification(Vex.Flow.Annotation.Justify.CENTER);
+            } catch (e) {
+                console.warn('VexFlow CENTER justification not available:', e);
+            }
+            // Try simpler font setting approach
+            try {
+                annotation.setFontSize(10);
+            } catch (e) {
+                console.warn('VexFlow setFontSize not available:', e);
+            }
+            try {
+                annotation.setFont('Arial', 10, 'italic');
+            } catch (e) {
+                console.warn('VexFlow setFont not available:', e);
+            }
             note.addModifier(annotation, 0);
         }
         

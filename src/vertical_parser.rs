@@ -8,6 +8,9 @@ use crate::parsed_models::{ParsedElement, ParsedChild, OrnamentType, SlurRole};
 pub fn apply_slurs_and_regions_to_elements(elements: &mut Vec<ParsedElement>, tokens: &[Token]) {
     // Apply ornaments first, as they are simpler attachments and can be removed from the stream.
     apply_ornaments_to_elements(elements);
+    
+    // Apply syllables to notes using spatial snapping (same algorithm as ornaments)
+    apply_syllables_to_elements(elements);
 
     let mut tokens_by_line: HashMap<usize, Vec<&Token>> = HashMap::new();
     
@@ -156,6 +159,52 @@ fn apply_slur_roles_to_elements(elements: &mut Vec<ParsedElement>, slur_regions:
                     }
                 }
             }
+        }
+    }
+}
+
+/// Finds word elements (syllables) and attaches them as children to notes using simple left-to-right order matching.
+/// Manual positioning: matches syllables to notes in order without complex spatial calculations.
+fn apply_syllables_to_elements(elements: &mut Vec<ParsedElement>) {
+    let mut syllables: Vec<(usize, String)> = Vec::new();
+    let mut notes: Vec<usize> = Vec::new();
+
+    // Collect syllables and notes in document order
+    for (i, element) in elements.iter().enumerate() {
+        if let ParsedElement::Word { text, .. } = element {
+            syllables.push((i, text.clone()));
+        } else if let ParsedElement::Note { .. } = element {
+            notes.push(i);
+        }
+    }
+
+    let mut consumed_syllable_indices = std::collections::HashSet::new();
+
+    // Simple left-to-right matching: assign syllables to notes in order
+    for (syllable_index, (syllable_idx, syllable_text)) in syllables.iter().enumerate() {
+        if consumed_syllable_indices.contains(syllable_idx) {
+            continue;
+        }
+
+        // Match syllable to note at same index, or closest available note
+        if let Some(&note_idx) = notes.get(syllable_index) {
+            if let ParsedElement::Note { children, .. } = &mut elements[note_idx] {
+                children.push(ParsedChild::Syllable {
+                    text: syllable_text.clone(),
+                    distance: 1, // Indicates it was below the note.
+                });
+                consumed_syllable_indices.insert(*syllable_idx);
+            }
+        }
+    }
+
+    // Remove the consumed syllable elements from the main element list.
+    let mut i = 0;
+    while i < elements.len() {
+        if consumed_syllable_indices.contains(&i) {
+            elements.remove(i);
+        } else {
+            i += 1;
         }
     }
 }

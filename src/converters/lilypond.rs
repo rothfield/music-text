@@ -67,9 +67,30 @@ pub fn convert_elements_to_lilypond_src(
     
     let staves = lilypond_notes.join(" ");
     
+    // Extract lyrics from beat elements
+    let mut lyrics_parts: Vec<String> = Vec::new();
+    for item in elements.iter() {
+        if let Item::Beat(beat) = item {
+            for beat_element in &beat.elements {
+                if let Some(syllable) = beat_element.syl() {
+                    lyrics_parts.push(syllable);
+                } else if beat_element.is_note() || beat_element.is_rest() {
+                    // Add placeholder for notes/rests without syllables
+                    lyrics_parts.push("_".to_string());
+                }
+            }
+        }
+    }
+    
     // Build template context
     let mut context = TemplateContext::builder()
         .staves(staves);
+    
+    // Add lyrics if any syllables were found
+    if !lyrics_parts.is_empty() && lyrics_parts.iter().any(|s| s != "_") {
+        let lyrics_string = lyrics_parts.join(" ");
+        context = context.lyrics(lyrics_string);
+    }
     
     if let Some(title) = &metadata.title {
         context = context.title(&title.text);

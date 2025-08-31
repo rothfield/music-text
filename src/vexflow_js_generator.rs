@@ -51,6 +51,7 @@ pub struct VexFlowNote {
     pub tied: bool,
     pub beat_index: usize, // Track which beat this note belongs to
     pub ornaments: Vec<crate::parsed_models::OrnamentType>,
+    pub syl: Option<String>, // Syllable/lyric text
 }
 
 /// VexFlow measure structure
@@ -167,18 +168,20 @@ voice.addTickables(vexNotes);
 // Use VexFlow's automatic width calculation for consistent spacing
 const formatter = new VF.Formatter().joinVoices([voice]);
 const minWidth = formatter.preCalculateMinTotalWidth([voice]);
-const padding = 120; // Generous left/right margins
-const canvasWidth = Math.max(600, minWidth + padding);
-console.log('VexFlow Debug: minWidth=', minWidth, 'canvasWidth=', canvasWidth);
-const canvasHeight = 250;
+const padding = 80; // Minimal margins for full width
+// Use full viewport width for canvas
+const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 800;
+const canvasWidth = Math.max(viewportWidth - 20, minWidth + padding); // Nearly full width with 20px margin
+console.log('VexFlow Debug: minWidth=', minWidth, 'viewportWidth=', viewportWidth, 'canvasWidth=', canvasWidth);
+const canvasHeight = 200; // Compact height for better layout
 
 // Set canvas and stave size based on calculated width
 renderer.resize(canvasWidth, canvasHeight);
 // Reduce scaling to allow more horizontal space
 context.scale(0.9, 0.9);
 
-// Create stave with full available width (minus margins)
-const stave = new VF.Stave(20, 40, canvasWidth - 40);
+// Create stave with full available width (minimal margins)
+const stave = new VF.Stave(10, 40, canvasWidth - 20);
 stave.addClef('treble').setContext(context);
 
 // Set beginning and end barlines on the stave
@@ -198,6 +201,41 @@ tuplets.forEach(tuplet => tuplet.draw());
 
 // Create slurs
 {}
+
+// Draw syllables at consistent Y position below staff
+if (window.vexflowSyllables && window.vexflowSyllables.length > 0) {{
+    // Calculate maximum Y extent of all rendered elements
+    let maxY = stave.getYForLine(4) + 10; // Start with staff bottom + small margin
+    
+    // Check note extents (stems, beams, etc.)
+    vexNotes.forEach((note, index) => {{
+        if (note.getBoundingBox) {{
+            const bbox = note.getBoundingBox();
+            maxY = Math.max(maxY, bbox.y + bbox.h + 5);
+        }}
+    }});
+    
+    // Add extra space for syllables
+    const syllableY = maxY + 20;
+    
+    // Draw each syllable at the calculated Y position
+    window.vexflowSyllables.forEach(syl => {{
+        const note = vexNotes[syl.noteIndex];
+        if (note && note.getAbsoluteX) {{
+            const noteX = note.getAbsoluteX();
+            context.save();
+            context.font = 'italic 0.8em Arial';
+            context.textAlign = 'center';
+            context.fillStyle = '#000';
+            context.fillText(syl.text, noteX, syllableY);
+            context.restore();
+            console.log('🎵 Drew syllable "' + syl.text + '" at x=' + noteX + ', y=' + syllableY);
+        }}
+    }});
+    
+    // Clear syllables for next render
+    window.vexflowSyllables = [];
+}}
 "#,
         generate_notes_and_barlines_js(&measure.notes, &measure.barlines)?,
         generate_beam_creation_js(&measure.beams)?,
@@ -239,6 +277,7 @@ fn convert_beat_element_to_vexflow_note(beat_element: &BeatElement) -> Result<Ve
         tied: false,
         beat_index: 0, // This will be set later in extract_notes_from_beat_elements
         ornaments: beat_element.ornaments(),
+        syl: beat_element.syl(),
     })
 }
 
@@ -349,6 +388,18 @@ fn generate_notes_and_barlines_js(notes: &[VexFlowNote], barlines: &[VexFlowBarl
             js_lines.push(format!(
                 "note{}.addModifier(new VF.Ornament('{}'), 0);",
                 i, ornament_str
+            ));
+        }
+        
+        // Store syllable data for later rendering at fixed Y position
+        if let Some(syllable) = &note.syl {
+            js_lines.push(format!("console.log('🎵 Storing lyric for note {}: {}');", i, syllable));
+            js_lines.push(format!(
+                "if (!window.vexflowSyllables) window.vexflowSyllables = [];",
+            ));
+            js_lines.push(format!(
+                "window.vexflowSyllables.push({{ noteIndex: {}, text: '{}', note: null }});",
+                i, syllable
             ));
         }
         
