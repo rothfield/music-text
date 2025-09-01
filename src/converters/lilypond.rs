@@ -55,7 +55,18 @@ pub fn convert_elements_to_lilypond_src(
                 lilypond_notes.extend(beat_notes.clone());
                 previous_beat_notes = beat_notes;
             },
-            Item::Barline(barline_type) => {
+            Item::Barline(barline_type, tala) => {
+                // Add tala marker to the last note before adding the barline
+                if let Some(tala_num) = tala {
+                    let tala_display = if *tala_num == 255 { "+" } else { &tala_num.to_string() };
+                    let tala_text = &format!(r#"^\markup {{ "{}" }}"#, tala_display);
+                    
+                    // Attach tala markup to the last note
+                    if let Some(last_note) = lilypond_notes.last_mut() {
+                        *last_note = format!("{}{}", last_note, tala_text);
+                    }
+                }
+                
                 let lily_barline = barline_type_to_lilypond(barline_type, _element_index == 0);
                 lilypond_notes.push(lily_barline);
             },
