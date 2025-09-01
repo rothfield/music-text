@@ -188,6 +188,11 @@ impl<'a> HandwrittenLexer<'a> {
                 })
             }
 
+            // Numbers (tala markers 0-6)
+            c if c.is_ascii_digit() => {
+                self.parse_number(c)
+            }
+
             // Words/metadata (anything else alphabetic)
             c if c.is_alphabetic() => {
                 self.parse_word(c)
@@ -221,6 +226,20 @@ impl<'a> HandwrittenLexer<'a> {
         Some(Token {
             token_type: TokenType::Pitch.as_str().to_string(),
             value: self.chars[start_pos..self.pos].iter().collect(),
+            line: 0, // Will be set by caller
+            col: 0,  // Will be set by caller
+        })
+    }
+
+    fn parse_number(&mut self, _first_char: char) -> Option<Token> {
+        let start_pos = self.pos - 1;
+        let number_value = self.chars[start_pos];
+        
+        // All numbers are treated as symbols (could be pitches or tala markers)
+        // The vertical parser will determine context based on position
+        Some(Token {
+            token_type: TokenType::Symbols.as_str().to_string(),
+            value: number_value.to_string(),
             line: 0, // Will be set by caller
             col: 0,  // Will be set by caller
         })

@@ -95,6 +95,7 @@ pub enum ParsedElement {
     Barline { 
         style: String, // "|", "||", etc.
         position: Position,
+        tala: Option<u8>, // Associated tala marker (0-6)
     },
     
     /// Start of slur (created by spatial analysis of overlines)
@@ -121,6 +122,12 @@ pub enum ParsedElement {
     /// Text word (lyrics, titles, etc.)
     Word { 
         text: String,
+        position: Position,
+    },
+    
+    /// Tala marker (beat numbers 0-6)
+    Tala { 
+        number: u8, // 0-6
         position: Position,
     },
     
@@ -160,6 +167,7 @@ impl ParsedElement {
             ParsedElement::Whitespace { position, .. } => position,
             ParsedElement::Newline { position } => position,
             ParsedElement::Word { position, .. } => position,
+            ParsedElement::Tala { position, .. } => position,
             ParsedElement::Symbol { position, .. } => position,
             ParsedElement::Unknown { position, .. } => position,
         }
@@ -177,6 +185,7 @@ impl ParsedElement {
             ParsedElement::Whitespace { width, .. } => " ".repeat(*width),
             ParsedElement::Newline { .. } => "\n".to_string(),
             ParsedElement::Word { text, .. } => text.clone(),
+            ParsedElement::Tala { number, .. } => number.to_string(),
             ParsedElement::Symbol { value, .. } => value.clone(),
             ParsedElement::Unknown { value, .. } => value.clone(),
         }
@@ -269,8 +278,15 @@ impl From<ParsedElement> for Node {
                 node
             },
             
-            ParsedElement::Barline { style, position } => {
-                Node::new("BARLINE".to_string(), style, position.row, position.col)
+            ParsedElement::Barline { style, position, tala } => {
+                let mut node = Node::new("BARLINE".to_string(), style.clone(), position.row, position.col);
+                // Store tala as an attribute in the legacy Node
+                if let Some(tala_num) = tala {
+                    // We'll need to extend the Node structure or use the unused fields
+                    // For now, we can store it in the value field with a prefix
+                    node.value = format!("{}|tala:{}", style, tala_num);
+                }
+                node
             },
             
             ParsedElement::SlurStart { position } => {
@@ -291,6 +307,10 @@ impl From<ParsedElement> for Node {
             
             ParsedElement::Word { text, position } => {
                 Node::new("WORD".to_string(), text, position.row, position.col)
+            },
+            
+            ParsedElement::Tala { number, position } => {
+                Node::new("TALA".to_string(), number.to_string(), position.row, position.col)
             },
             
             ParsedElement::Symbol { value, position } => {

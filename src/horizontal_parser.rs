@@ -139,7 +139,7 @@ pub struct Beat {
 #[derive(Debug, Clone)]
 pub enum Item {
     Beat(Beat),
-    Barline(crate::models::BarlineType),
+    Barline(crate::models::BarlineType, Option<u8>), // BarlineType and optional tala (0-6)
     Breathmark,
     Tonic(Degree), // Tonic/Key declaration (e.g., "key: D" -> Degree::N2)
 }
@@ -234,7 +234,7 @@ impl FSMV2 {
             match self.state {
                 State::S0 => {
                     if self.is_barline(element) {
-                        self.emit_barline(element.value());
+                        self.emit_barline(element);
                     } else if self.is_beat_separator(element) {
                         // beat_separator, no-op
                     } else if self.is_breathmark(element) {
@@ -251,7 +251,7 @@ impl FSMV2 {
                     if self.is_barline(element) || self.is_beat_separator(element) {
                         self.finish_beat();
                         if self.is_barline(element) {
-                            self.emit_barline(element.value());
+                            self.emit_barline(element);
                         }
                         self.state = State::S0;
                     } else if self.is_breathmark(element) {
@@ -480,10 +480,12 @@ impl FSMV2 {
         power.max(2)
     }
 
-    fn emit_barline(&mut self, value: String) {
-        match crate::models::BarlineType::from_str(&value) {
-            Ok(barline_type) => self.output.push(Item::Barline(barline_type)),
-            Err(err) => eprintln!("Warning: {}", err), // Log warning but continue
+    fn emit_barline(&mut self, element: &ParsedElement) {
+        if let ParsedElement::Barline { style, tala, .. } = element {
+            match crate::models::BarlineType::from_str(style) {
+                Ok(barline_type) => self.output.push(Item::Barline(barline_type, *tala)),
+                Err(err) => eprintln!("Warning: {}", err), // Log warning but continue
+            }
         }
     }
 
@@ -532,10 +534,11 @@ fn convert_elements_to_elements(output: Vec<Item>) -> Vec<ParsedElement> {
                     result.push(reconstructed_element);
                 }
             },
-            Item::Barline(value) => {
+            Item::Barline(value, tala) => {
                 result.push(ParsedElement::Barline {
                     style: value.to_str().to_string(),
                     position: Position::new(0, 0), // Position will need to be preserved better
+                    tala: tala.clone(),
                 });
             },
             Item::Breathmark => {

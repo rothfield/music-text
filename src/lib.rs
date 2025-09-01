@@ -151,6 +151,7 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
                 elements.push(ParsedElement::Barline {
                     style: token.value.clone(),
                     position,
+                    tala: None, // Will be set by vertical_parser
                 });
             },
             "REST" => {
@@ -185,6 +186,7 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
                     position,
                 });
             },
+            // "TALA" token type removed - numbers handled via context in vertical parser
             "SLUR_START" => {
                 elements.push(ParsedElement::SlurStart {
                     position,
@@ -249,7 +251,7 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
     let mut elements = convert_tokens_to_parsed_elements(&remaining_tokens, global_notation);
     
     // Phase 2: Apply slur regions and beat brackets
-    vertical_parser::apply_slurs_and_regions_to_elements(&mut elements, &remaining_tokens);
+    vertical_parser::apply_slurs_and_regions_to_elements(&mut elements, &remaining_tokens, global_notation);
     
     // Save spatial analysis output for debugging
     let spatial_analysis_yaml = serde_yaml::to_string(&elements).unwrap_or_else(|e| format!("YAML serialization error: {}", e));

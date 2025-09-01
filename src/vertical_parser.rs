@@ -11,6 +11,12 @@ pub fn apply_slurs_and_regions_to_elements(elements: &mut Vec<ParsedElement>, to
     
     // Apply syllables to notes using spatial snapping (same algorithm as ornaments)
     apply_syllables_to_elements(elements);
+    
+    // Convert tala markers (+ and numbers) for all notation systems
+    convert_numbers_above_pitches_to_talas(elements);
+    
+    // Assign tala markers sequentially to barlines
+    assign_talas(elements);
 
     let mut tokens_by_line: HashMap<usize, Vec<&Token>> = HashMap::new();
     
@@ -163,6 +169,68 @@ fn apply_slur_roles_to_elements(elements: &mut Vec<ParsedElement>, slur_regions:
     }
 }
 
+/// Converts numbers above pitches to tala markers (only for Number notation system)
+fn convert_numbers_above_pitches_to_talas(elements: &mut Vec<ParsedElement>) {
+    let mut symbol_indices = Vec::new();
+    let mut pitch_indices = Vec::new();
+
+    // Collect indices of symbols (numbers) and pitches
+    for (i, element) in elements.iter().enumerate() {
+        match element {
+            ParsedElement::Symbol { value, .. } => {
+                // Consider tala markers: + and numbers 0-6 
+                if value.len() == 1 && matches!(value.chars().next(), Some('+' | '0'..='6')) {
+                    symbol_indices.push(i);
+                }
+            }
+            ParsedElement::Note { .. } => {
+                pitch_indices.push(i);
+            }
+            _ => {}
+        }
+    }
+
+    let mut to_convert: Vec<usize> = Vec::new();
+
+    // Check each symbol to see if it's above a pitch
+    for &symbol_idx in &symbol_indices {
+        let symbol_pos = elements[symbol_idx].position();
+        
+        // Look for pitches on lines below this symbol (within 3 lines)
+        for &pitch_idx in &pitch_indices {
+            let pitch_pos = elements[pitch_idx].position();
+            
+            // Check if symbol is above the pitch (higher line, lower row number)
+            if symbol_pos.row < pitch_pos.row {
+                let vertical_distance = pitch_pos.row - symbol_pos.row;
+                let horizontal_distance = (symbol_pos.col as isize - pitch_pos.col as isize).abs();
+                
+                // If symbol is reasonably close vertically (1-3 lines) and horizontally (within 10 chars)
+                if vertical_distance >= 1 && vertical_distance <= 3 && horizontal_distance <= 10 {
+                    to_convert.push(symbol_idx);
+                    break; // Found a pitch below, convert this symbol
+                }
+            }
+        }
+    }
+
+    // Convert symbols to tala markers
+    for &idx in &to_convert {
+        if let ParsedElement::Symbol { value, position } = &elements[idx] {
+            let tala_number = match value.chars().next().unwrap() {
+                '+' => 255, // Special marker for + (use max u8 value as special case)
+                ch => ch.to_digit(10).unwrap() as u8,
+            };
+            elements[idx] = ParsedElement::Tala { 
+                number: tala_number, 
+                position: position.clone()
+            };
+        }
+    }
+}
+
+
+
 /// Finds word elements (syllables) and attaches them as children to notes using simple left-to-right order matching.
 /// Manual positioning: matches syllables to notes in order without complex spatial calculations.
 fn apply_syllables_to_elements(elements: &mut Vec<ParsedElement>) {
@@ -207,4 +275,66 @@ fn apply_syllables_to_elements(elements: &mut Vec<ParsedElement>) {
             i += 1;
         }
     }
+}
+
+/// Assigns tala markers sequentially to barlines.
+fn assign_talas(elements: &mut Vec<ParsedElement>) {
+    let mut tala_indices = Vec::new();
+    let mut barline_indices = Vec::new();
+
+    // Collect all tala markers and barlines
+    for (i, element) in elements.iter().enumerate() {
+        match element {
+            ParsedElement::Tala { .. } => {
+                tala_indices.push(i);
+            }
+            ParsedElement::Barline { .. } => {
+                barline_indices.push(i);
+            }
+            _ => {}
+        }
+    }
+
+    // Sort talas by position (row first, then column)
+    tala_indices.sort_by_key(|&idx| {
+        let pos = elements[idx].position();
+        (pos.row, pos.col)
+    });
+
+    // Sort barlines by position (row first, then column)  
+    barline_indices.sort_by_key(|&idx| {
+        let pos = elements[idx].position();
+        (pos.row, pos.col)
+    });
+
+    let mut consumed_tala_indices = std::collections::HashSet::new();
+
+    // Assign talas sequentially to barlines
+    for (tala_idx, &barline_idx) in tala_indices.iter().zip(barline_indices.iter()) {
+        // Get the tala number
+        if let ParsedElement::Tala { number, .. } = &elements[*tala_idx] {
+            let tala_number = *number;
+            eprintln!("DEBUG: Assigning tala {} to barline at index {}", tala_number, barline_idx);
+            
+            // Set the tala field on the barline
+            if let ParsedElement::Barline { tala, .. } = &mut elements[barline_idx] {
+                *tala = Some(tala_number);
+                eprintln!("DEBUG: Successfully set tala {} on barline", tala_number);
+            }
+            consumed_tala_indices.insert(*tala_idx);
+        }
+    }
+
+    // Mark any leftover talas as consumed (they will be discarded)
+    for &tala_idx in &tala_indices {
+        consumed_tala_indices.insert(tala_idx);
+    }
+
+    // Remove all tala elements from the main element list
+    let mut i = 0;
+    elements.retain(|_| {
+        let keep = !consumed_tala_indices.contains(&i);
+        i += 1;
+        keep
+    });
 }
