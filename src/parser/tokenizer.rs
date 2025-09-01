@@ -380,9 +380,40 @@ impl<'a> HandwrittenLexer<'a> {
                 // For tabla, we need to look ahead to see if this starts a tabla bol
                 self.starts_tabla_bol(ch)
             }
+            NotationType::Bhatkhande => {
+                // Bhatkhande supports both Devanagari and Roman characters
+                matches!(ch, 'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N') ||
+                matches!(ch, 'स' | 'र' | 'ग' | 'म' | 'प' | 'ध' | 'न') ||
+                self.starts_devanagari_swara(ch)
+            }
         }
     }
     
+    fn starts_devanagari_swara(&self, ch: char) -> bool {
+        // Check if current position could start a Devanagari swara
+        let devanagari_swaras = ["स", "रे", "ग", "म", "प", "ध", "नि"];
+        
+        for swara in &devanagari_swaras {
+            let swara_chars: Vec<char> = swara.chars().collect();
+            if !swara_chars.is_empty() && swara_chars[0] == ch {
+                // Check if we have enough characters left to match this swara
+                if self.pos + swara_chars.len() <= self.chars.len() {
+                    let mut matches = true;
+                    for (i, &swara_ch) in swara_chars.iter().enumerate() {
+                        if self.chars[self.pos + i] != swara_ch {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    if matches {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     fn starts_tabla_bol(&self, ch: char) -> bool {
         // Check if current position could start a tabla bol
         let tabla_bols = ["dha", "ge", "na", "ka", "ta", "trka", "terekita", "dhin"];

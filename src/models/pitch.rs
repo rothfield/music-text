@@ -6,6 +6,7 @@ pub enum Notation {
     Number,
     Sargam,
     Tabla,
+    Bhatkhande,
 }
 
 impl fmt::Display for Notation {
@@ -21,6 +22,7 @@ impl Notation {
             Notation::Number => "Number", 
             Notation::Sargam => "Sargam",
             Notation::Tabla => "Tabla",
+            Notation::Bhatkhande => "Bhatkhande",
         }
     }
 }
@@ -215,6 +217,33 @@ pub fn lookup_pitch(symbol: &str, notation: Notation) -> Option<Degree> {
             "trka" => Some(Degree::N1),
             "terekita" => Some(Degree::N1),
             "dhin" => Some(Degree::N1),
+            _ => None,
+        },
+        Notation::Bhatkhande => match symbol {
+            // Basic Bhatkhande sargam notes
+            "स" | "S" => Some(Degree::N1),    // Sa
+            "रे" | "R" => Some(Degree::N2),   // Re  
+            "ग" | "G" => Some(Degree::N3),    // Ga
+            "म" | "M" => Some(Degree::N4),    // Ma
+            "प" | "P" => Some(Degree::N5),    // Pa
+            "ध" | "D" => Some(Degree::N6),    // Dha
+            "नि" | "N" => Some(Degree::N7),   // Ni
+            // Sharp accidentals 
+            "स#" | "S#" => Some(Degree::N1s),  // Sa sharp
+            "रे#" | "R#" => Some(Degree::N2s), // Re sharp  
+            "ग#" | "G#" => Some(Degree::N3s),  // Ga sharp
+            "म#" | "M#" => Some(Degree::N4s),  // Ma sharp (corresponds to F#)
+            "प#" | "P#" => Some(Degree::N5s),  // Pa sharp
+            "ध#" | "D#" => Some(Degree::N6s),  // Dha sharp
+            "नि#" | "N#" => Some(Degree::N7s), // Ni sharp
+            // Flat accidentals
+            "सb" | "Sb" => Some(Degree::N1b),  // Sa flat
+            "रेb" | "Rb" => Some(Degree::N2b), // Re flat
+            "गb" | "Gb" => Some(Degree::N3b),  // Ga flat
+            "मb" | "Mb" => Some(Degree::N4b),  // Ma flat
+            "पb" | "Pb" => Some(Degree::N5b),  // Pa flat
+            "धb" | "Db" => Some(Degree::N6b),  // Dha flat
+            "निb" | "Nb" => Some(Degree::N7b), // Ni flat
             _ => None,
         },
     }
@@ -464,6 +493,38 @@ mod tests {
         
         // Test unknown tabla bol
         assert_eq!(lookup_pitch("unknown", Notation::Tabla), None);
+    }
+
+    #[test]
+    fn test_bhatkhande_pitch_lookup() {
+        // Test basic Bhatkhande sargam notes (Devanagari)
+        assert_eq!(lookup_pitch("स", Notation::Bhatkhande), Some(Degree::N1)); // Sa
+        assert_eq!(lookup_pitch("रे", Notation::Bhatkhande), Some(Degree::N2)); // Re
+        assert_eq!(lookup_pitch("ग", Notation::Bhatkhande), Some(Degree::N3)); // Ga
+        assert_eq!(lookup_pitch("म", Notation::Bhatkhande), Some(Degree::N4)); // Ma
+        assert_eq!(lookup_pitch("प", Notation::Bhatkhande), Some(Degree::N5)); // Pa
+        assert_eq!(lookup_pitch("ध", Notation::Bhatkhande), Some(Degree::N6)); // Dha
+        assert_eq!(lookup_pitch("नि", Notation::Bhatkhande), Some(Degree::N7)); // Ni
+        
+        // Test basic Bhatkhande sargam notes (Roman)
+        assert_eq!(lookup_pitch("S", Notation::Bhatkhande), Some(Degree::N1)); // Sa
+        assert_eq!(lookup_pitch("R", Notation::Bhatkhande), Some(Degree::N2)); // Re
+        assert_eq!(lookup_pitch("G", Notation::Bhatkhande), Some(Degree::N3)); // Ga
+        assert_eq!(lookup_pitch("M", Notation::Bhatkhande), Some(Degree::N4)); // Ma
+        assert_eq!(lookup_pitch("P", Notation::Bhatkhande), Some(Degree::N5)); // Pa
+        assert_eq!(lookup_pitch("D", Notation::Bhatkhande), Some(Degree::N6)); // Dha
+        assert_eq!(lookup_pitch("N", Notation::Bhatkhande), Some(Degree::N7)); // Ni
+
+        // Test accidentals
+        assert_eq!(lookup_pitch("S#", Notation::Bhatkhande), Some(Degree::N1s));
+        assert_eq!(lookup_pitch("स#", Notation::Bhatkhande), Some(Degree::N1s));
+        assert_eq!(lookup_pitch("M#", Notation::Bhatkhande), Some(Degree::N4s)); // Ma sharp = F#
+        assert_eq!(lookup_pitch("म#", Notation::Bhatkhande), Some(Degree::N4s)); // Ma sharp = F#
+        assert_eq!(lookup_pitch("Db", Notation::Bhatkhande), Some(Degree::N6b));
+        assert_eq!(lookup_pitch("धb", Notation::Bhatkhande), Some(Degree::N6b));
+        
+        // Test unknown symbol
+        assert_eq!(lookup_pitch("X", Notation::Bhatkhande), None);
     }
 }
 

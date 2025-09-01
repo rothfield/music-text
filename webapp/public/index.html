@@ -464,12 +464,36 @@
         <!-- Input Card -->
         <div class="section">
             <div class="section-content">
+                <!-- Notation System Selector -->
+                <div class="notation-selector" style="margin-bottom: 1rem;">
+                    <select id="notation-system" style="
+                        padding: 0.5rem 0.75rem;
+                        border: 2px solid var(--border-color);
+                        border-radius: var(--radius-md);
+                        background-color: var(--bg-primary);
+                        color: var(--text-primary);
+                        font-size: 1rem;
+                        font-weight: 500;
+                        cursor: pointer;
+                        font-family: monospace;
+                        min-width: 150px;
+                    ">
+                        <option disabled>Notation System</option>
+                        <option value="auto">Auto-detect</option>
+                        <option value="Number">1234567</option>
+                        <option value="Western">CDEFGAB</option>
+                        <option value="Sargam">SRGMPDn</option>
+                        <option value="Bhatkhande">स रे ग म प ध नि</option>
+                        <option value="Tabla">dha-ge-na</option>
+                    </select>
+                </div>
                 <div class="input-group">
                     <textarea 
                         id="notation-input" 
                         placeholder="Numbers: 1-2-3-4-5-6-7
 Letters: C-D-E-F-G-A-B  
 Sargam: S-R-G-M-P-D-N
+Bhatkhande: स-रे-ग-म-प-ध-नि
 Tabla: dha-ge-na-ka-ta
 
 Try Happy Birthday:
@@ -478,7 +502,9 @@ Try Happy Birthday:
 • Letters: G-G | A G C | B - - | G-G | A G D | C - - |
           , ,   , ,     ,       , ,   , ,
 • Sargam: P-P | D P S | N - - | P-P | D P R | S - - |
-         , ,   , ,     ,       , ,   , ,"
+         , ,   , ,     ,       , ,   , ,
+• Bhatkhande: प-प | ध प स | नि - - | प-प | ध प रे | स - - |
+            , ,   , ,     ,       , ,   , ,"
                         autocomplete="off"
                         spellcheck="false"
                     ></textarea>
@@ -540,7 +566,7 @@ Try Happy Birthday:
     </main>
 
     <script type="module">
-        import init, { parse_notation, toggle_slurs } from './pkg/music_text_parser.js';
+        import init, { parse_notation, parse_notation_with_system, toggle_slurs } from './pkg/music_text_parser.js';
         
         let vexflowRenderer = null;
         let context = null;
@@ -606,7 +632,11 @@ Try Happy Birthday:
                         return;
                     }
                     
-                    const result = parse_notation(input);
+                    // Get selected notation system
+                    const notationSelector = document.getElementById('notation-system');
+                    const selectedNotation = notationSelector ? notationSelector.value : 'auto';
+                    
+                    const result = parse_notation_with_system(input, selectedNotation);
                     if (!result.success) {
                         resetCanvas();
                         showError('Could not parse the notation. Please check your syntax.');
@@ -933,13 +963,15 @@ Try Happy Birthday:
         function saveToLocalStorage(notation, selectionStart, selectionEnd) {
             try {
                 const textarea = document.getElementById('notation-input');
+                const notationSelector = document.getElementById('notation-system');
                 const settings = {
                     notation: notation || textarea.value,
                     selectionStart: selectionStart !== undefined ? selectionStart : textarea.selectionStart,
                     selectionEnd: selectionEnd !== undefined ? selectionEnd : textarea.selectionEnd,
+                    notationSystem: notationSelector ? notationSelector.value : 'auto',
                     timestamp: Date.now()
                 };
-                console.log(`Saving cursor position: ${settings.selectionStart}-${settings.selectionEnd}`);
+                console.log(`Saving cursor position: ${settings.selectionStart}-${settings.selectionEnd}, notation: ${settings.notationSystem}`);
                 localStorage.setItem('musicNotationSettings', JSON.stringify(settings));
             } catch (e) {
                 console.error("Failed to save to local storage:", e);
@@ -952,6 +984,13 @@ Try Happy Birthday:
                 if (savedSettings) {
                     const settings = JSON.parse(savedSettings);
                     const input = document.getElementById('notation-input');
+                    const notationSelector = document.getElementById('notation-system');
+                    
+                    // Restore notation system selection
+                    if (settings.notationSystem && notationSelector) {
+                        notationSelector.value = settings.notationSystem;
+                    }
+                    
                     if (settings.notation && input) {
                         input.value = settings.notation;
                         
@@ -963,7 +1002,7 @@ Try Happy Birthday:
                                 const start = Math.min(settings.selectionStart, maxPos);
                                 const end = Math.min(settings.selectionEnd, maxPos);
                                 input.setSelectionRange(start, end);
-                                console.log(`Restored cursor position: ${start}-${end} (max: ${maxPos})`);
+                                console.log(`Restored cursor position: ${start}-${end} (max: ${maxPos}), notation: ${settings.notationSystem || 'auto'}`);
                             }, 100); // Longer timeout to ensure DOM is ready
                         }
                         
@@ -1048,6 +1087,35 @@ Try Happy Birthday:
                 // Slur toggle button
                 const slurBtn = document.getElementById('slur-btn');
                 slurBtn.addEventListener('click', toggleSlur);
+                
+                // Notation system selector
+                const notationSelector = document.getElementById('notation-system');
+                
+                // Set default selection to Auto-detect if no localStorage value
+                const savedSettings = localStorage.getItem('notationParser_settings');
+                if (!savedSettings) {
+                    notationSelector.value = 'auto';
+                } else {
+                    // If there are saved settings but no notation system, default to auto
+                    try {
+                        const settings = JSON.parse(savedSettings);
+                        if (!settings.notationSystem) {
+                            notationSelector.value = 'auto';
+                        }
+                    } catch (e) {
+                        notationSelector.value = 'auto';
+                    }
+                }
+                
+                notationSelector.addEventListener('change', () => {
+                    // Save the new selection
+                    saveToLocalStorage();
+                    
+                    // Re-parse the content with the new notation system
+                    if (input.value.trim()) {
+                        renderNotation(input.value);
+                    }
+                });
                 
                 showLoading(false);
             } catch (error) {

@@ -216,8 +216,19 @@ fn parse_key_to_degree(key_str: &str) -> Option<crate::models::Degree> {
 
 /// V2 Parser using ParsedElement instead of Node
 pub fn unified_parser(input_text: &str) -> Result<(models::ParsedDocument, String), Box<dyn std::error::Error>> {
-    // First detect the notation type
-    let detected_notation = parser::notation_detector::detect_notation_type(input_text);
+    unified_parser_with_notation_override(input_text, None)
+}
+
+/// V2 Parser with optional notation system override
+pub fn unified_parser_with_notation_override(input_text: &str, notation_override: Option<&str>) -> Result<(models::ParsedDocument, String), Box<dyn std::error::Error>> {
+    // Determine notation type (either override or detect)
+    let detected_notation = match notation_override {
+        Some("Number") => parser::NotationType::Number,
+        Some("Western") => parser::NotationType::Western,
+        Some("Sargam") => parser::NotationType::Sargam,
+        Some("Tabla") => parser::NotationType::Tabla,
+        _ => parser::notation_detector::detect_notation_type(input_text), // auto-detect or fallback
+    };
     
     // Use handwritten lexer for tokenization
     let all_tokens = parser::tokenize_with_handwritten_lexer(input_text);
@@ -235,6 +246,7 @@ pub fn unified_parser(input_text: &str) -> Result<(models::ParsedDocument, Strin
         parser::NotationType::Sargam => crate::models::Notation::Sargam,
         parser::NotationType::Number => crate::models::Notation::Number,
         parser::NotationType::Tabla => crate::models::Notation::Tabla,
+        parser::NotationType::Bhatkhande => crate::models::Notation::Bhatkhande,
     };
 
     // Phase 1: Convert tokens to ParsedElement system using global notation detection
@@ -320,11 +332,18 @@ fn find_musical_lines(tokens: &[Token]) -> Vec<usize> {
 
 #[wasm_bindgen]
 pub fn parse_notation(input_text: &str) -> ParseResult {
+    parse_notation_with_system(input_text, "auto")
+}
+
+/// Parse notation with explicit notation system override
+#[wasm_bindgen]
+pub fn parse_notation_with_system(input_text: &str, notation_system: &str) -> ParseResult {
     // Set panic hook for better error messages in WASM
     console_error_panic_hook::set_once();
 
     // V1 parse_notation deprecated - use V2 system instead
-    match unified_parser(input_text) {
+    let notation_override = if notation_system == "auto" { None } else { Some(notation_system) };
+    match unified_parser_with_notation_override(input_text, notation_override) {
         Ok((document_v2, spatial_analysis_yaml)) => {
             let document: Document = document_v2.into();
             
@@ -604,8 +623,8 @@ fn is_musical_char(c: char) -> bool {
     // Check if character is a musical pitch
     matches!(c, 
         '1'..='7' |  // Numbers
-        'A'..='G' |  // Western
-        'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N' |  // Sargam uppercase
+        'A'..='G' |  // Western (includes G and D)
+        'S' | 'R' | 'M' | 'P' | 'N' |  // Sargam uppercase (excluding G, D which are covered by Western)
         's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n'     // Sargam lowercase
     )
 }

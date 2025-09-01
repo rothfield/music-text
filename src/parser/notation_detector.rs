@@ -4,6 +4,7 @@ pub enum NotationType {
     Sargam,
     Number,
     Tabla,
+    Bhatkhande,
 }
 
 impl NotationType {
@@ -13,6 +14,7 @@ impl NotationType {
             NotationType::Sargam => "Sargam",
             NotationType::Number => "Number",
             NotationType::Tabla => "Tabla",
+            NotationType::Bhatkhande => "Bhatkhande",
         }
     }
 }
@@ -22,11 +24,18 @@ pub fn detect_notation_type(text: &str) -> NotationType {
     let mut sargam_count = 0;
     let mut number_count = 0;
     let mut tabla_count = 0;
+    let mut bhatkhande_count = 0;
     
     // Check for tabla bols (multi-character words)
     let tabla_bols = ["dha", "ge", "na", "ka", "ta", "trka", "terekita", "dhin"];
     for bol in &tabla_bols {
         tabla_count += text.matches(bol).count();
+    }
+    
+    // Check for Devanagari characters (Bhatkhande specific)
+    let devanagari_swaras = ["स", "रे", "ग", "म", "प", "ध", "नि"];
+    for swara in &devanagari_swaras {
+        bhatkhande_count += text.matches(swara).count();
     }
     
     for ch in text.chars() {
@@ -55,6 +64,7 @@ pub fn detect_notation_type(text: &str) -> NotationType {
         (NotationType::Sargam, sargam_count),
         (NotationType::Number, number_count),
         (NotationType::Tabla, tabla_count),
+        (NotationType::Bhatkhande, bhatkhande_count),
     ]
     .into_iter()
     .max_by_key(|&(_, count)| count)
