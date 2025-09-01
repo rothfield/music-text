@@ -584,6 +584,12 @@ fn generate_slur_creation_js(slurs: &[VexFlowSlur]) -> Result<String, String> {
     let mut js_lines = Vec::new();
     
     for (i, slur) in slurs.iter().enumerate() {
+        // Skip single-note slurs (where start and end are the same note)
+        if slur.from_note == slur.to_note {
+            eprintln!("VEXFLOW DEBUG: Skipping single-note slur at note {}", slur.from_note);
+            continue;
+        }
+        
         js_lines.push(format!(
             r#"console.log('VexFlow: Slur {} from note{} to note{}');
 console.log('VexFlow: Checking note{} and note{} exist...');
@@ -592,8 +598,25 @@ if (typeof note{} === 'undefined') {{
 }} else if (typeof note{} === 'undefined') {{
     console.log('ERROR: note{} is undefined!');  
 }} else {{
-    const curve{} = new VF.Curve(note{}, note{}, {{ cps: [{{ x: 0, y: 10 }}, {{ x: 0, y: 10 }}] }});
-    curve{}.setContext(context).draw();
+    // For 2-note slurs, adjust control points to make the curve more visible
+    const noteDistance{} = {} - {};
+    let cps;
+    if (noteDistance{} === 1) {{
+        // 2-note slur: optimized values from testing
+        cps = [{{ x: 10, y: 7 }}, {{ x: -7, y: 11 }}];
+        const curve{} = new VF.Curve(note{}, note{}, {{ 
+            cps: cps,
+            thickness: 2,
+            x_shift: -18,
+            y_shift: 12
+        }});
+        curve{}.setContext(context).draw();
+    }} else {{
+        // Longer slurs: standard control points
+        cps = [{{ x: 0, y: 20 }}, {{ x: 0, y: 20 }}];
+        const curve{} = new VF.Curve(note{}, note{}, {{ cps: cps }});
+        curve{}.setContext(context).draw();
+    }}
     console.log('VexFlow: Slur {} created successfully');
 }}
 "#,
@@ -603,6 +626,10 @@ if (typeof note{} === 'undefined') {{
             slur.from_note,
             slur.to_note,
             slur.to_note,
+            i, slur.to_note, slur.from_note,
+            i,
+            i, slur.from_note, slur.to_note,
+            i,
             i, slur.from_note, slur.to_note,
             i,
             i
@@ -619,6 +646,8 @@ fn extract_notes_and_slur_markers(elements: &Vec<Item>) -> Result<(Vec<VexFlowNo
     
     // STEP 1: Extract all notes from all beats (track beat indices for beaming)
     let mut beat_index = 0;
+    let mut current_note_index = 0;
+    
     for (pos, element) in elements.iter().enumerate() {
         eprintln!("VEXFLOW DEBUG: Pass 1 - Element {}: {:?}", pos, element);
         
@@ -629,49 +658,59 @@ fn extract_notes_and_slur_markers(elements: &Vec<Item>) -> Result<(Vec<VexFlowNo
             } else {
                 eprintln!("VEXFLOW DEBUG: Pass 1 - Processing regular beat {} with {} elements", beat_index, beat.elements.len());
             }
-            extract_notes_from_beat_elements(&beat.elements, &mut notes, beat_index)?;
+            
+            // Extract notes and check for slur markers
+            for beat_element in &beat.elements {
+                if beat_element.is_note() {
+                    // Get the slur role from the note
+                    if let Some((_, _, _, slur_role)) = beat_element.as_note() {
+                        use crate::models::SlurRole;
+                        match slur_role {
+                            Some(SlurRole::Start) => {
+                                slur_markers.push(SlurMarker {
+                                    marker_type: SlurMarkerType::Start,
+                                    position: current_note_index,
+                                });
+                                eprintln!("VEXFLOW DEBUG: Pass 1 - Found slur START at note index {}", current_note_index);
+                            },
+                            Some(SlurRole::End) => {
+                                slur_markers.push(SlurMarker {
+                                    marker_type: SlurMarkerType::End,
+                                    position: current_note_index,
+                                });
+                                eprintln!("VEXFLOW DEBUG: Pass 1 - Found slur END at note index {}", current_note_index);
+                            },
+                            Some(SlurRole::StartEnd) => {
+                                // Handle single-note slur (rare case)
+                                slur_markers.push(SlurMarker {
+                                    marker_type: SlurMarkerType::Start,
+                                    position: current_note_index,
+                                });
+                                slur_markers.push(SlurMarker {
+                                    marker_type: SlurMarkerType::End,
+                                    position: current_note_index,
+                                });
+                                eprintln!("VEXFLOW DEBUG: Pass 1 - Found slur START+END at note index {}", current_note_index);
+                            },
+                            Some(SlurRole::Middle) => {
+                                // Middle notes don't need markers
+                                eprintln!("VEXFLOW DEBUG: Pass 1 - Found slur MIDDLE at note index {} (no marker needed)", current_note_index);
+                            },
+                            None => {
+                                // No slur role
+                            }
+                        }
+                    }
+                    
+                    // Now add the note
+                    let mut vf_note = convert_beat_element_to_vexflow_note(beat_element)?;
+                    vf_note.beat_index = beat_index;
+                    notes.push(vf_note);
+                    current_note_index += 1;
+                }
+            }
+            
             beat_index += 1;
-        }
-    }
-    
-    // STEP 2: Analyze FSM sequence to determine precise slur span
-    let slur_start_pos: Option<usize> = None;
-    let slur_end_pos: Option<usize> = None;
-    let mut current_note_index = 0;
-    
-    // Count total notes for indexing
-    for element in elements.iter() {
-        match element {
-            Item::Beat(beat) => {
-                let notes_in_beat = beat.elements.iter().filter(|e| e.is_note()).count();
-                eprintln!("VEXFLOW DEBUG: Pass 1 - Beat with {} notes, current_note_index: {}", notes_in_beat, current_note_index);
-                current_note_index += notes_in_beat;
-            },
-            _ => {}
-        }
-    }
-    
-    // Create slur markers if both positions found
-    if let (Some(start_idx), Some(end_idx)) = (slur_start_pos, slur_end_pos) {
-        let final_end_idx = if end_idx == usize::MAX {
-            // SlurEnd appeared before notes - slur spans all notes from start
-            notes.len() - 1
-        } else {
-            end_idx
-        };
-        
-        if start_idx <= final_end_idx && final_end_idx < notes.len() {
-            slur_markers.push(SlurMarker {
-                marker_type: SlurMarkerType::Start,
-                position: start_idx,
-            });
-            slur_markers.push(SlurMarker {
-                marker_type: SlurMarkerType::End,
-                position: final_end_idx,
-            });
-            eprintln!("VEXFLOW DEBUG: Pass 1 - FSM sequence slur: from note {} to note {}", start_idx, final_end_idx);
-        } else {
-            eprintln!("VEXFLOW DEBUG: Pass 1 - Invalid slur range: {} to {} (total notes: {})", start_idx, final_end_idx, notes.len());
         }
     }
     
@@ -679,19 +718,6 @@ fn extract_notes_and_slur_markers(elements: &Vec<Item>) -> Result<(Vec<VexFlowNo
     Ok((notes, slur_markers))
 }
 
-/// Extract notes from beat elements (works for Beat, Tuplet, any rhythm structure)
-fn extract_notes_from_beat_elements(elements: &[BeatElement], notes: &mut Vec<VexFlowNote>, beat_index: usize) -> Result<(), String> {
-    for beat_element in elements {
-        if beat_element.is_note() {
-            let mut vf_note = convert_beat_element_to_vexflow_note(beat_element)?;
-            vf_note.beat_index = beat_index; // Track which beat this note belongs to
-            let note_index = notes.len();
-            eprintln!("VEXFLOW DEBUG: Pass 1 - Added note {} at index {} (beat {}): {:?}", note_index, note_index, beat_index, vf_note);
-            notes.push(vf_note);
-        }
-    }
-    Ok(())
-}
 
 /// PASS 2: Create slurs from markers using direct position mapping
 fn create_slurs_from_markers(notes: &[VexFlowNote], slur_markers: &[SlurMarker]) -> Vec<VexFlowSlur> {
