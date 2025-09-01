@@ -462,6 +462,146 @@ pub fn get_error_message() -> String {
     LAST_ERROR_MESSAGE.with(|s| s.borrow().clone())
 }
 
+/// Toggle slurs on selected text in a textarea
+/// Returns modified text with slurs added/removed/toggled
+#[wasm_bindgen]
+pub fn toggle_slurs(text: &str, selection_start: usize, selection_end: usize) -> String {
+    console_error_panic_hook::set_once();
+    
+    // Split text into lines
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.is_empty() {
+        return text.to_string();
+    }
+    
+    // Find which line contains the selection
+    let mut char_count = 0;
+    let mut target_line_idx = None;
+    let mut line_start_pos = 0;
+    
+    for (line_idx, line) in lines.iter().enumerate() {
+        let line_end = char_count + line.len();
+        
+        if selection_start >= char_count && selection_start <= line_end {
+            target_line_idx = Some(line_idx);
+            line_start_pos = char_count;
+            break;
+        }
+        
+        char_count = line_end + 1; // +1 for newline
+    }
+    
+    let target_line_idx = match target_line_idx {
+        Some(idx) => idx,
+        None => return text.to_string(), // Selection not found
+    };
+    
+    // Check if target line is a musical line (contains pitches)
+    if !is_musical_line(lines[target_line_idx]) {
+        return text.to_string(); // Not a musical line
+    }
+    
+    // Calculate selection relative to the line
+    let line_selection_start = selection_start - line_start_pos;
+    let line_selection_end = (selection_end - line_start_pos).min(lines[target_line_idx].len());
+    
+    // Process slur toggling
+    toggle_slur_on_line(lines, target_line_idx, line_selection_start, line_selection_end)
+}
+
+fn is_musical_line(line: &str) -> bool {
+    // Check if line contains musical pitches (2+ pitch characters)
+    let tokens = crate::parser::tokenizer::tokenize_with_handwritten_lexer(line);
+    let pitch_count = tokens.iter().filter(|t| t.token_type == "PITCH").count();
+    pitch_count >= 2
+}
+
+fn toggle_slur_on_line(lines: Vec<&str>, target_line: usize, sel_start: usize, sel_end: usize) -> String {
+    let mut result_lines = lines.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+    
+    // Look for existing slur line above target line
+    let slur_line_idx = if target_line > 0 {
+        // Check if line above has slur characters
+        let above_line = &lines[target_line - 1];
+        if above_line.contains('_') || above_line.contains('╭') || above_line.contains('─') || above_line.contains('╮') {
+            Some(target_line - 1)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    let target_line_str = &lines[target_line];
+    
+    match slur_line_idx {
+        Some(slur_idx) => {
+            // Slur line exists - toggle slurs in the selected region
+            let mut slur_line = result_lines[slur_idx].chars().collect::<Vec<char>>();
+            
+            // Ensure slur line is at least as long as target line
+            while slur_line.len() < target_line_str.len() {
+                slur_line.push(' ');
+            }
+            
+            // Toggle slurs in selection range
+            for pos in sel_start..sel_end.min(slur_line.len()) {
+                if pos < target_line_str.len() {
+                    let target_char = target_line_str.chars().nth(pos).unwrap_or(' ');
+                    
+                    // Only place slurs above musical characters
+                    if is_musical_char(target_char) {
+                        if slur_line[pos] == '_' || slur_line[pos] == '─' {
+                            slur_line[pos] = ' '; // Remove slur
+                        } else {
+                            slur_line[pos] = '_'; // Add slur
+                        }
+                    }
+                }
+            }
+            
+            // Clean up slur line - remove if empty
+            let slur_line_str: String = slur_line.iter().collect();
+            if slur_line_str.trim().is_empty() {
+                result_lines.remove(slur_idx);
+            } else {
+                result_lines[slur_idx] = slur_line_str.trim_end().to_string();
+            }
+        }
+        None => {
+            // No slur line exists - create one with slurs for selection
+            let mut slur_line = vec![' '; target_line_str.len()];
+            
+            for pos in sel_start..sel_end.min(slur_line.len()) {
+                if pos < target_line_str.len() {
+                    let target_char = target_line_str.chars().nth(pos).unwrap_or(' ');
+                    
+                    if is_musical_char(target_char) {
+                        slur_line[pos] = '_';
+                    }
+                }
+            }
+            
+            let slur_line_str: String = slur_line.iter().collect();
+            if !slur_line_str.trim().is_empty() {
+                result_lines.insert(target_line, slur_line_str.trim_end().to_string());
+            }
+        }
+    }
+    
+    result_lines.join("\n")
+}
+
+fn is_musical_char(c: char) -> bool {
+    // Check if character is a musical pitch
+    matches!(c, 
+        '1'..='7' |  // Numbers
+        'A'..='G' |  // Western
+        'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N' |  // Sargam uppercase
+        's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n'     // Sargam lowercase
+    )
+}
+
 // parse_notation_internal deleted - V2 system used instead
 
 

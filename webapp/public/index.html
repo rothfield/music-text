@@ -309,6 +309,33 @@
         .source-toggle-btn:active {
             transform: translateY(0);
         }
+        
+        /* Slur Button */
+        .slur-btn {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.2s ease;
+        }
+        .slur-btn:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+        .slur-btn:active {
+            transform: translateY(0);
+        }
+        .slur-btn:disabled {
+            background-color: #9ca3af;
+            transform: none;
+            cursor: not-allowed;
+        }
 
         .lilypond-source {
             margin-top: 1rem;
@@ -454,6 +481,14 @@ Try Happy Birthday:
                         autocomplete="off"
                         spellcheck="false"
                     ></textarea>
+                    <div class="slur-controls" style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                        <button id="slur-btn" class="slur-btn" title="Select text on a musical line and click to toggle slurs">
+                            🎵 Add Slur
+                        </button>
+                        <span class="slur-help" style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">
+                            Select notes on a musical line and click to toggle slurs
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -504,7 +539,7 @@ Try Happy Birthday:
     </main>
 
     <script type="module">
-        import init, { parse_notation } from './pkg/music_text_parser.js';
+        import init, { parse_notation, toggle_slurs } from './pkg/music_text_parser.js';
         
         let vexflowRenderer = null;
         let context = null;
@@ -646,6 +681,70 @@ Try Happy Birthday:
                 sourceSection.classList.add('visible');
                 toggleBtn.textContent = 'Hide Source';
                 isSourceVisible = true;
+            }
+        }
+        
+        function toggleSlur() {
+            const textarea = document.getElementById('notation-input');
+            const slurBtn = document.getElementById('slur-btn');
+            
+            // Get selection
+            const selectionStart = textarea.selectionStart;
+            const selectionEnd = textarea.selectionEnd;
+            
+            // Check if there's a selection
+            if (selectionStart === selectionEnd) {
+                // No selection - show helper message
+                const helpSpan = document.querySelector('.slur-help');
+                const originalText = helpSpan.textContent;
+                helpSpan.textContent = 'Please select some text first!';
+                helpSpan.style.color = 'var(--error-color)';
+                
+                setTimeout(() => {
+                    helpSpan.textContent = originalText;
+                    helpSpan.style.color = 'var(--text-muted)';
+                }, 2000);
+                return;
+            }
+            
+            // Disable button during processing
+            slurBtn.disabled = true;
+            const originalText = slurBtn.textContent;
+            slurBtn.textContent = '⏳ Processing...';
+            
+            try {
+                // Call WASM function to toggle slurs
+                const originalContent = textarea.value;
+                const newContent = toggle_slurs(originalContent, selectionStart, selectionEnd);
+                
+                // Update textarea
+                textarea.value = newContent;
+                
+                // Reset selection to the same position
+                textarea.setSelectionRange(selectionStart, selectionEnd);
+                textarea.focus();
+                
+                // Trigger parsing update
+                parseAndRender();
+                
+                // Save to localStorage
+                saveToLocalStorage();
+                
+            } catch (error) {
+                console.error('Error toggling slur:', error);
+                const helpSpan = document.querySelector('.slur-help');
+                const originalHelpText = helpSpan.textContent;
+                helpSpan.textContent = 'Error processing slur. Please try again.';
+                helpSpan.style.color = 'var(--error-color)';
+                
+                setTimeout(() => {
+                    helpSpan.textContent = originalHelpText;
+                    helpSpan.style.color = 'var(--text-muted)';
+                }, 2000);
+            } finally {
+                // Re-enable button
+                slurBtn.disabled = false;
+                slurBtn.textContent = originalText;
             }
         }
         
@@ -813,6 +912,10 @@ Try Happy Birthday:
                 // Source toggle button
                 const toggleBtn = document.getElementById('toggle-source-btn');
                 toggleBtn.addEventListener('click', toggleSource);
+                
+                // Slur toggle button
+                const slurBtn = document.getElementById('slur-btn');
+                slurBtn.addEventListener('click', toggleSlur);
                 
                 showLoading(false);
             } catch (error) {
