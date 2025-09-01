@@ -470,6 +470,7 @@
                         placeholder="Numbers: 1-2-3-4-5-6-7
 Letters: C-D-E-F-G-A-B  
 Sargam: S-R-G-M-P-D-N
+Tabla: dha-ge-na-ka-ta
 
 Try Happy Birthday:
 • Numbers: 5-5 | 6 5 1 | 7 - - | 5-5 | 6 5 2 | 1 - - |
@@ -691,14 +692,19 @@ Try Happy Birthday:
             // Get selection
             const selectionStart = textarea.selectionStart;
             const selectionEnd = textarea.selectionEnd;
+            let finalSelectionStart = selectionStart;
+            let finalSelectionEnd = selectionEnd;
             
             // Check if there's a selection
             if (selectionStart === selectionEnd) {
-                // No selection - show helper message
+                // No selection - show helper message and maintain focus
                 const helpSpan = document.querySelector('.slur-help');
                 const originalText = helpSpan.textContent;
                 helpSpan.textContent = 'Please select some text first!';
                 helpSpan.style.color = 'var(--error-color)';
+                
+                // Keep focus on textarea
+                textarea.focus();
                 
                 setTimeout(() => {
                     helpSpan.textContent = originalText;
@@ -717,18 +723,91 @@ Try Happy Birthday:
                 const originalContent = textarea.value;
                 const newContent = toggle_slurs(originalContent, selectionStart, selectionEnd);
                 
+                // Find the exact same selected text in the new content
+                const selectedText = originalContent.substring(selectionStart, selectionEnd);
+                console.log('🔧 Original selected text:', JSON.stringify(selectedText));
+                console.log('🔧 Original positions:', selectionStart, '-', selectionEnd);
+                console.log('🔧 New content:', JSON.stringify(newContent));
+                
+                // Find where this exact text appears in the new content
+                let newSelectionStart = newContent.indexOf(selectedText);
+                let newSelectionEnd = newSelectionStart + selectedText.length;
+                
+                // If we can't find the exact text, try to find the line containing it
+                if (newSelectionStart === -1) {
+                    console.log('🔧 Exact text not found, looking for line...');
+                    // Split both old and new content into lines
+                    const originalLines = originalContent.split('\n');
+                    const newLines = newContent.split('\n');
+                    
+                    // Find which line contained our selection
+                    let currentPos = 0;
+                    let targetLine = -1;
+                    let lineStartPos = 0;
+                    let relativeStart = selectionStart;
+                    let relativeEnd = selectionEnd;
+                    
+                    for (let i = 0; i < originalLines.length; i++) {
+                        const lineEnd = currentPos + originalLines[i].length;
+                        if (selectionStart >= currentPos && selectionStart <= lineEnd) {
+                            targetLine = i;
+                            lineStartPos = currentPos;
+                            relativeStart = selectionStart - currentPos;
+                            relativeEnd = selectionEnd - currentPos;
+                            break;
+                        }
+                        currentPos = lineEnd + 1; // +1 for newline
+                    }
+                    
+                    console.log('🔧 Found target line:', targetLine, 'relative pos:', relativeStart, '-', relativeEnd);
+                    
+                    // Find the same line in new content and calculate new positions
+                    if (targetLine >= 0 && targetLine < newLines.length) {
+                        let newCurrentPos = 0;
+                        for (let i = 0; i < targetLine; i++) {
+                            newCurrentPos += newLines[i].length + 1; // +1 for newline
+                        }
+                        newSelectionStart = newCurrentPos + relativeStart;
+                        newSelectionEnd = newCurrentPos + relativeEnd;
+                        console.log('🔧 New positions:', newSelectionStart, '-', newSelectionEnd);
+                    }
+                } else {
+                    console.log('🔧 Found exact text at position:', newSelectionStart, '-', newSelectionEnd);
+                }
+                
+                // CRITICAL: Bounds checking for new content length
+                const maxPos = newContent.length;
+                if (newSelectionStart < 0 || newSelectionStart >= maxPos) {
+                    console.log('⚠️ Selection start out of bounds, using 0');
+                    newSelectionStart = 0;
+                }
+                if (newSelectionEnd < 0 || newSelectionEnd > maxPos) {
+                    console.log('⚠️ Selection end out of bounds, using max position');
+                    newSelectionEnd = maxPos;
+                }
+                if (newSelectionEnd < newSelectionStart) {
+                    console.log('⚠️ Selection end before start, swapping');
+                    [newSelectionStart, newSelectionEnd] = [newSelectionEnd, newSelectionStart];
+                }
+                
+                console.log('🔧 Final safe selection:', newSelectionStart, '-', newSelectionEnd, 'of', maxPos);
+                
+                // Store the adjusted selection for final restoration
+                finalSelectionStart = newSelectionStart;
+                finalSelectionEnd = newSelectionEnd;
+                
                 // Update textarea
                 textarea.value = newContent;
                 
-                // Reset selection to the same position
-                textarea.setSelectionRange(selectionStart, selectionEnd);
+                // Always restore focus and selection after slur operation
                 textarea.focus();
+                textarea.setSelectionRange(newSelectionStart, newSelectionEnd);
                 
                 // Trigger parsing update
-                parseAndRender();
+                renderNotation(textarea.value);
                 
-                // Save to localStorage
-                saveToLocalStorage();
+                // Save to localStorage (cursor position will be captured after text is updated)
+                setTimeout(() => saveToLocalStorage(), 0);
                 
             } catch (error) {
                 console.error('Error toggling slur:', error);
@@ -737,14 +816,28 @@ Try Happy Birthday:
                 helpSpan.textContent = 'Error processing slur. Please try again.';
                 helpSpan.style.color = 'var(--error-color)';
                 
+                // Restore focus and selection even on error (use original positions since change failed)
+                textarea.focus();
+                textarea.setSelectionRange(selectionStart, selectionEnd);
+                
                 setTimeout(() => {
                     helpSpan.textContent = originalHelpText;
                     helpSpan.style.color = 'var(--text-muted)';
                 }, 2000);
             } finally {
-                // Re-enable button
+                // Re-enable button and ensure focus is on textarea
                 slurBtn.disabled = false;
                 slurBtn.textContent = originalText;
+                
+                // Final focus insurance - makes sure user can continue typing with correct selection
+                setTimeout(() => {
+                    textarea.focus();
+                    // Double-check bounds before final selection restore
+                    const currentLength = textarea.value.length;
+                    const safeStart = Math.max(0, Math.min(finalSelectionStart, currentLength));
+                    const safeEnd = Math.max(safeStart, Math.min(finalSelectionEnd, currentLength));
+                    textarea.setSelectionRange(safeStart, safeEnd);
+                }, 50);
             }
         }
         
@@ -837,12 +930,16 @@ Try Happy Birthday:
         }
 
         // Local storage functions
-        function saveToLocalStorage(notation) {
+        function saveToLocalStorage(notation, selectionStart, selectionEnd) {
             try {
+                const textarea = document.getElementById('notation-input');
                 const settings = {
-                    notation: notation,
+                    notation: notation || textarea.value,
+                    selectionStart: selectionStart !== undefined ? selectionStart : textarea.selectionStart,
+                    selectionEnd: selectionEnd !== undefined ? selectionEnd : textarea.selectionEnd,
                     timestamp: Date.now()
                 };
+                console.log(`Saving cursor position: ${settings.selectionStart}-${settings.selectionEnd}`);
                 localStorage.setItem('musicNotationSettings', JSON.stringify(settings));
             } catch (e) {
                 console.error("Failed to save to local storage:", e);
@@ -857,6 +954,19 @@ Try Happy Birthday:
                     const input = document.getElementById('notation-input');
                     if (settings.notation && input) {
                         input.value = settings.notation;
+                        
+                        // Restore cursor position if saved
+                        if (settings.selectionStart !== undefined && settings.selectionEnd !== undefined) {
+                            // Use setTimeout to ensure the textarea has processed the value change
+                            setTimeout(() => {
+                                const maxPos = input.value.length;
+                                const start = Math.min(settings.selectionStart, maxPos);
+                                const end = Math.min(settings.selectionEnd, maxPos);
+                                input.setSelectionRange(start, end);
+                                console.log(`Restored cursor position: ${start}-${end} (max: ${maxPos})`);
+                            }, 100); // Longer timeout to ensure DOM is ready
+                        }
+                        
                         return settings.notation;
                     }
                 }
@@ -880,10 +990,12 @@ Try Happy Birthday:
                 const input = document.getElementById('notation-input');
                 const lilypondBtn = document.getElementById('generate-lilypond-btn');
                 
-                // Load saved notation from localStorage
+                // Load saved notation from localStorage (this also restores cursor position)
                 const savedNotation = loadFromLocalStorage();
+                
+                // Set focus to textarea for cursor positioning
                 if (savedNotation) {
-                    input.value = savedNotation;
+                    input.focus();
                 }
                 
                 // Render initial notation only if there's content
@@ -901,9 +1013,29 @@ Try Happy Birthday:
                     }, 150);
                 });
                 
-                // Handle focus and blur for mobile
+                // Handle focus and blur for mobile (but don't select all if cursor position was restored)
+                let initialFocusHandled = false;
                 input.addEventListener('focus', () => {
-                    input.select();
+                    if (!initialFocusHandled && savedNotation) {
+                        // Don't select all text on initial focus if we restored content
+                        initialFocusHandled = true;
+                    } else {
+                        // Normal behavior for subsequent focuses
+                        input.select();
+                    }
+                });
+                
+                // Save cursor position on key events and focus changes
+                input.addEventListener('keyup', () => {
+                    saveToLocalStorage();
+                });
+                
+                input.addEventListener('mouseup', () => {
+                    saveToLocalStorage();
+                });
+                
+                input.addEventListener('blur', () => {
+                    saveToLocalStorage();
                 });
                 
                 // LilyPond generation button
