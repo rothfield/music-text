@@ -157,6 +157,7 @@ struct FSMV2 {
     current_beat: Option<Beat>,
     inside_beat_bracket: bool,
     pending_tie_pitch: Option<Degree>, // Track pitch that needs tying across barlines
+    last_was_dash: bool, // Track if last processed element was a dash/extender
 }
 
 impl FSMV2 {
@@ -167,6 +168,7 @@ impl FSMV2 {
             current_beat: None,
             inside_beat_bracket: false,
             pending_tie_pitch: None,
+            last_was_dash: false,
         }
     }
 
@@ -239,10 +241,13 @@ impl FSMV2 {
                         // beat_separator, no-op
                     } else if self.is_breathmark(element) {
                         self.emit_breathmark();
+                        self.last_was_dash = false;
                     } else if self.is_dash(element) {
                         self.start_beat_dash(element);
+                        self.last_was_dash = true;
                     } else if self.is_pitch(element) {
                         self.start_beat_pitch(element);
+                        self.last_was_dash = false;
                         self.update_beat_bracket_state(element);
                     }
                     // Unknown tokens stay in same state (S0)
@@ -257,11 +262,14 @@ impl FSMV2 {
                     } else if self.is_breathmark(element) {
                         self.finish_beat();
                         self.emit_breathmark();
+                        self.last_was_dash = false;
                         self.state = State::S0;
                     } else if self.is_dash(element) {
                         self.extend_last_element();
+                        self.last_was_dash = true;
                     } else if self.is_pitch(element) {
                         self.add_pitch_to_beat(element);
+                        self.last_was_dash = false;
                         self.update_beat_bracket_state(element);
                     }
                     // Unknown tokens stay in same state (InBeat)
@@ -457,11 +465,10 @@ impl FSMV2 {
                 }
             }
             
-            // Check if this beat should create a pending tie (was extended by dashes)
+            // Check if this beat should create a pending tie (last element was dash/extender)
             if let Some(last_element) = beat.elements.last() {
-                if last_element.is_note() && beat.divisions > 1 {
-                    // Beat with divisions > 1 indicates it was extended by dashes
-                    // Set pending tie for the next note of same pitch
+                if last_element.is_note() && self.last_was_dash {
+                    // Last element was a dash, so this note should tie to next same pitch
                     if let Some((degree, _, _, _)) = last_element.as_note() {
                         self.pending_tie_pitch = Some(*degree);
                     }
@@ -469,6 +476,9 @@ impl FSMV2 {
             }
             
             self.output.push(Item::Beat(beat));
+            
+            // Reset dash tracking when finishing beat
+            self.last_was_dash = false;
         }
     }
     
