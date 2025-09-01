@@ -33,6 +33,7 @@ pub struct VexFlowTuplet {
 pub struct VexFlowBarline {
     pub barline_type: crate::models::BarlineType,
     pub position: BarlinePosition,
+    pub tala: Option<u8>, // Tala marker (0-6) to display above barline
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,13 +137,17 @@ pub fn generate_vexflow_js(
     
     // Generate executable VexFlow JavaScript code  
     let js_code = format!(
-        r#"// VexFlow rendering with auto-sizing
+        r#"(function() {{ // IIFE Start
+// VexFlow rendering with auto-sizing
 
 // Clear the canvas
+const canvas = document.getElementById('vexflow-canvas');
+if (!canvas) {{ console.error('VexFlow canvas not found'); return; }}
 canvas.innerHTML = '';
 canvas.classList.add('has-content');
 
 // Initialize VexFlow renderer
+const VF = Vex.Flow;
 const renderer = new VF.Renderer(canvas, VF.Renderer.Backends.SVG);
 const context = renderer.getContext();
 
@@ -155,7 +160,7 @@ const vexNotes = [];
 
 // Create voice and add notes
 // Set up voice with standard 4/4 time (4 beats, quarter note value)
-const voice = new VF.Voice({{ beats: 4, beat_value: 4 }});
+const voice = new VF.Voice({{ num_beats: 4, beat_value: 4 }});
 voice.setMode(VF.Voice.Mode.SOFT);  // Allow incomplete measures
 voice.addTickables(vexNotes);
 
@@ -167,12 +172,23 @@ voice.addTickables(vexNotes);
 
 // Use VexFlow's automatic width calculation for consistent spacing
 const formatter = new VF.Formatter().joinVoices([voice]);
-const minWidth = formatter.preCalculateMinTotalWidth([voice]);
+let minWidth = formatter.preCalculateMinTotalWidth([voice]);
+console.log('VexFlow Debug: Raw minWidth=', minWidth);
+
+// Safety check: if minWidth is NaN (VexFlow bug), use fallback calculation
+if (isNaN(minWidth) || minWidth <= 0) {{
+    console.log('VexFlow Debug: minWidth is invalid, using fallback calculation');
+    // Estimate width: ~40px per quarter note + margins
+    const noteCount = vexNotes.length;
+    minWidth = noteCount * 50 + 100; // Conservative estimate
+    console.log('VexFlow Debug: Fallback minWidth=', minWidth);
+}}
+
 const padding = 80; // Minimal margins for full width
-// Use full viewport width for canvas
+// Use full viewport width for canvas  
 const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 800;
 const canvasWidth = Math.max(viewportWidth - 20, minWidth + padding); // Nearly full width with 20px margin
-console.log('VexFlow Debug: minWidth=', minWidth, 'viewportWidth=', viewportWidth, 'canvasWidth=', canvasWidth);
+console.log('VexFlow Debug: Final minWidth=', minWidth, 'viewportWidth=', viewportWidth, 'canvasWidth=', canvasWidth);
 const canvasHeight = 200; // Compact height for better layout
 
 // Set canvas and stave size based on calculated width
@@ -190,7 +206,18 @@ stave.addClef('treble').setContext(context);
 stave.draw();
 
 // Format with calculated width for consistent spacing
-formatter.format([voice], minWidth);
+try {{
+    formatter.format([voice], minWidth);
+    console.log('VexFlow Debug: Formatting successful');
+}} catch (error) {{
+    console.log('VexFlow Debug: Formatting failed, using basic formatting:', error.message);
+    // Fallback: try formatting without explicit width
+    try {{
+        formatter.format([voice]);
+    }} catch (fallbackError) {{
+        console.log('VexFlow Debug: Basic formatting also failed:', fallbackError.message);
+    }}
+}}
 voice.draw(context, stave);
 
 // Draw beams (after voice is drawn)
@@ -236,12 +263,16 @@ if (window.vexflowSyllables && window.vexflowSyllables.length > 0) {{
     // Clear syllables for next render
     window.vexflowSyllables = [];
 }}
-"#,
+
+// Render tala markers (after all VexFlow formatting is complete)
+{}
+}})(); // IIFE End"#,
         generate_notes_and_barlines_js(&measure.notes, &measure.barlines)?,
         generate_beam_creation_js(&measure.beams)?,
         generate_tuplet_creation_js(&measure.tuplets)?,
         generate_stave_barlines_js(&measure.barlines)?,
-        generate_slur_creation_js(&measure.slurs)?
+        generate_slur_creation_js(&measure.slurs)?,
+        generate_tala_rendering_js(&measure.barlines)?
     );
     
     Ok(js_code)
@@ -407,17 +438,40 @@ fn generate_notes_and_barlines_js(notes: &[VexFlowNote], barlines: &[VexFlowBarl
         
         // Check if there's a barline after this note
         for barline in barlines {
-            if let BarlinePosition::Middle(note_idx) = &barline.position {
-                if *note_idx == i {
-                    let vf_barline_type = convert_barline_type_to_vexflow(&barline.barline_type);
+            let should_create_barnote = match &barline.position {
+                BarlinePosition::Middle(note_idx) => *note_idx == i,
+                BarlinePosition::End => {
+                    // FIXED: Don't create BarNote for end barlines with tala
+                    // VexFlow has width calculation issues with BarNote objects
+                    // Tala rendering will be handled separately via canvas drawing
+                    false
+                },
+                BarlinePosition::Beginning => false, // Beginning barlines don't get BarNotes
+            };
+            
+            if should_create_barnote {
+                let vf_barline_type = convert_barline_type_to_vexflow(&barline.barline_type);
+                js_lines.push(format!(
+                    "const barNote{} = new VF.BarNote({});",
+                    barline_counter, vf_barline_type
+                ));
+                
+                // Add tala to the BarNote if present
+                if let Some(tala_num) = barline.tala {
                     js_lines.push(format!(
-                        "const barNote{} = new VF.BarNote({});",
-                        barline_counter, vf_barline_type
+                        "barNote{}.tala = {};  // Store tala on BarNote",
+                        barline_counter, tala_num
                     ));
-                    js_lines.push(format!("vexNotes.push(barNote{});", barline_counter));
-                    js_lines.push(format!("console.log('Inserted BarNote {} after note {}');", barline_counter, i));
-                    barline_counter += 1;
                 }
+                
+                js_lines.push(format!("vexNotes.push(barNote{});", barline_counter));
+                js_lines.push(format!("console.log('Inserted BarNote {} {} note {} (tala: {:?})');", barline_counter, 
+                    match &barline.position { 
+                        BarlinePosition::Middle(_) => "after", 
+                        BarlinePosition::End => "after", 
+                        BarlinePosition::Beginning => "before" 
+                    }, i, barline.tala));
+                barline_counter += 1;
             }
         }
     }
@@ -822,8 +876,8 @@ fn create_barlines_from_elements(elements: &Vec<Item>, _notes: &[VexFlowNote]) -
     
     for (element_idx, element) in elements.iter().enumerate() {
         match element {
-            Item::Barline(barline_type) => {
-                eprintln!("VEXFLOW DEBUG: Pass 5 - Found barline '{:?}' at element {}", barline_type, element_idx);
+            Item::Barline(barline_type, tala) => {
+                eprintln!("VEXFLOW DEBUG: Pass 5 - Found barline '{:?}' with tala {:?} at element {}", barline_type, tala, element_idx);
                 
                 let position = if element_idx == 0 {
                     // Barline at very start of music
@@ -839,6 +893,7 @@ fn create_barlines_from_elements(elements: &Vec<Item>, _notes: &[VexFlowNote]) -
                 barlines.push(VexFlowBarline {
                     barline_type: barline_type.clone(),
                     position,
+                    tala: *tala,
                 });
             },
             Item::Beat(beat) => {
@@ -902,6 +957,77 @@ fn convert_barline_type_to_vexflow(barline_type: &crate::models::BarlineType) ->
         BarlineType::RepeatBoth => "VF.BarlineType.REPEAT_BOTH".to_string(),
         BarlineType::Single => "VF.BarlineType.SINGLE".to_string(),
     }
+}
+
+/// Generate JavaScript code for rendering tala markers above barlines
+fn generate_tala_rendering_js(barlines: &[VexFlowBarline]) -> Result<String, String> {
+    let mut js_lines = Vec::new();
+    
+    // Re-enabled: Tala rendering after all VexFlow elements are drawn
+    js_lines.push("// Tala rendering after all VexFlow elements".to_string());
+
+    // Only render tala markers if there are barlines with tala
+    let has_talas = barlines.iter().any(|b| b.tala.is_some());
+    if !has_talas {
+        js_lines.push("// No tala markers to render".to_string());
+        return Ok(js_lines.join("\n"));
+    }
+    
+    js_lines.push("// Render tala markers above barlines".to_string());
+    
+    for (i, barline) in barlines.iter().enumerate() {
+        if let Some(tala_num) = barline.tala {
+            let barline_x = match &barline.position {
+                BarlinePosition::Beginning => "stave.getX()".to_string(), // At start barline
+                BarlinePosition::End => {
+                    // For end barlines, get the position of the last note and add some spacing
+                    "(vexNotes[vexNotes.length - 1].getAbsoluteX() + vexNotes[vexNotes.length - 1].getWidth() + 20)".to_string()
+                },
+                BarlinePosition::Middle(note_idx) => {
+                    // For middle barlines, find the BarNote that has this tala
+                    // The BarNote should have the tala stored on it
+                    format!("(function() {{ 
+                        // Find BarNote with tala {}
+                        for (let i = 0; i < vexNotes.length; i++) {{
+                            if (vexNotes[i].attrs && vexNotes[i].attrs.type === 'BarNote' && vexNotes[i].tala === {}) {{
+                                return vexNotes[i].getAbsoluteX();
+                            }}
+                        }}
+                        // Fallback: find any BarNote after note {}
+                        for (let i = {}; i < vexNotes.length; i++) {{
+                            if (vexNotes[i].attrs && vexNotes[i].attrs.type === 'BarNote') {{
+                                return vexNotes[i].getAbsoluteX();
+                            }}
+                        }}
+                        // Final fallback
+                        return stave.getX() + stave.getWidth()/2;
+                    }})()", tala_num, tala_num, note_idx, note_idx + 1)
+                },
+            };
+            
+            let tala_display = if tala_num == 255 { "+".to_string() } else { tala_num.to_string() };
+            let tala_text = format!(
+                r#"
+// Draw tala marker {} at barline {}
+console.log('Drawing tala {} at barline {}');
+context.save();
+context.font = 'bold 14px Arial';
+context.textAlign = 'center';
+context.fillStyle = 'black';
+const talaX{} = {};
+const talaY{} = stave.getYForLine(-1) - 10; // Above staff
+console.log('Tala {} position: x=' + talaX{} + ', y=' + talaY{});
+context.fillText('{}', talaX{}, talaY{});
+context.restore();
+console.log('Tala {} drawn successfully');"#,
+                tala_display, i, tala_display, i, i, barline_x, i, tala_display, i, i, tala_display, i, i, tala_display
+            );
+            
+            js_lines.push(tala_text);
+        }
+    }
+    
+    Ok(js_lines.join("\n"))
 }
 
 #[cfg(test)]

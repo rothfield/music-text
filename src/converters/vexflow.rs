@@ -37,6 +37,7 @@ pub enum StaffNotationElement {
     },
     BarLine {
         bar_type: String,
+        tala: Option<u8>,
     },
     Breathe,
     SlurStart {
@@ -279,9 +280,10 @@ pub fn convert_elements_to_staff_notation(
             Item::Tonic(_tonic_degree) => {
                 // Tonic is handled through the transposer, not displayed directly
             },
-            Item::Barline(barline_type) => {
+            Item::Barline(barline_type, tala) => {
                 current_stave.notes.push(StaffNotationElement::BarLine {
                     bar_type: barline_type_to_vexflow(barline_type),
+                    tala: *tala,
                 });
             },
             Item::Breathmark => {
