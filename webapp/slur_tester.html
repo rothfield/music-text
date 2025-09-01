@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VexFlow 2-Note Slur Tester</title>
+    <script src="public/lib/vexflow.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .control-group {
+            display: inline-block;
+            margin: 10px 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="range"] {
+            width: 100px;
+        }
+        input[type="number"] {
+            width: 60px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #notation {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .values {
+            background: #e8f4f8;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>VexFlow 2-Note Slur Control Point Tester</h1>
+    
+    <div class="controls">
+        <h3>Adjust Control Points for 2-Note Slurs:</h3>
+        
+        <div class="control-group">
+            <label>First Control Point X:</label>
+            <input type="range" id="cp1x" min="-50" max="50" value="10" oninput="updateSlur()">
+            <input type="number" id="cp1x_num" min="-50" max="50" value="10" oninput="updateSlur()">
+        </div>
+        
+        <div class="control-group">
+            <label>First Control Point Y:</label>
+            <input type="range" id="cp1y" min="-30" max="50" value="15" oninput="updateSlur()">
+            <input type="number" id="cp1y_num" min="-30" max="50" value="15" oninput="updateSlur()">
+        </div>
+        
+        <div class="control-group">
+            <label>Second Control Point X:</label>
+            <input type="range" id="cp2x" min="-50" max="50" value="-10" oninput="updateSlur()">
+            <input type="number" id="cp2x_num" min="-50" max="50" value="-10" oninput="updateSlur()">
+        </div>
+        
+        <div class="control-group">
+            <label>Second Control Point Y:</label>
+            <input type="range" id="cp2y" min="-30" max="50" value="15" oninput="updateSlur()">
+            <input type="number" id="cp2y_num" min="-30" max="50" value="15" oninput="updateSlur()">
+        </div>
+        
+        <div class="control-group">
+            <label>X Shift:</label>
+            <input type="range" id="x_shift" min="-50" max="50" value="0" oninput="updateSlur()">
+            <input type="number" id="x_shift_num" min="-50" max="50" value="0" oninput="syncSlider('x_shift')">
+        </div>
+        
+        <div class="control-group">
+            <label>Y Shift:</label>
+            <input type="range" id="y_shift" min="-50" max="50" value="0" oninput="updateSlur()">
+            <input type="number" id="y_shift_num" min="-50" max="50" value="0" oninput="syncSlider('y_shift')">
+        </div>
+        
+        <div class="control-group">
+            <label>Thickness:</label>
+            <input type="range" id="thickness" min="1" max="10" value="2" oninput="updateSlur()">
+            <input type="number" id="thickness_num" min="1" max="10" value="2" oninput="syncSlider('thickness')">
+        </div>
+        
+        <div class="values">
+            <strong>Current Values:</strong> <span id="current-values">cps: [{x: 10, y: 15}, {x: -10, y: 15}], x_shift: 0, y_shift: 0, thickness: 2</span>
+        </div>
+    </div>
+    
+    <div id="notation"></div>
+
+    <script>
+        let VF, renderer, context, stave, notes, slur;
+        
+        // Wait for VexFlow to load
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (typeof Vex !== 'undefined' && Vex.Flow) {
+                    VF = Vex.Flow;
+                    initVexFlow();
+                    updateSlur();
+                } else {
+                    document.getElementById('notation').innerHTML = 
+                        '<p style="color: red;">Error: VexFlow failed to load. Please check your internet connection.</p>';
+                }
+            }, 100);
+        });
+        
+        function initVexFlow() {
+            try {
+                const div = document.getElementById("notation");
+                div.innerHTML = ""; // Clear previous content
+                
+                renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
+                renderer.resize(600, 200);
+                context = renderer.getContext();
+                
+                // Apply the same scaling as the main project
+                context.scale(0.7, 0.7);
+                
+                console.log('VexFlow initialized successfully');
+            
+            // Create a staff
+            stave = new VF.Stave(50, 40, 600);
+            stave.addClef("treble").addTimeSignature("4/4");
+            stave.setContext(context).draw();
+            
+            // Create two notes plus rests to fill the measure
+            notes = [
+                new VF.StaveNote({ clef: "treble", keys: ["c/4"], duration: "q" }),
+                new VF.StaveNote({ clef: "treble", keys: ["d/4"], duration: "q" }),
+                new VF.StaveNote({ clef: "treble", keys: ["b/4"], duration: "qr" }),
+                new VF.StaveNote({ clef: "treble", keys: ["b/4"], duration: "qr" })
+            ];
+            
+            // Create a voice and add the notes
+            const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
+            voice.addTickables(notes);
+            
+            // Format and draw with minimal width for tight spacing
+            const formatter = new VF.Formatter().joinVoices([voice]);
+            const minWidth = formatter.preCalculateMinTotalWidth([voice]);
+            formatter.format([voice], minWidth);
+            voice.draw(context, stave);
+            
+            console.log('Notes created:', notes);
+            
+            } catch (error) {
+                console.error('Error in initVexFlow:', error);
+                document.getElementById("notation").innerHTML = 
+                    '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+        
+        function updateSlur() {
+            // Sync range and number inputs
+            document.getElementById('cp1x_num').value = document.getElementById('cp1x').value;
+            document.getElementById('cp1y_num').value = document.getElementById('cp1y').value;
+            document.getElementById('cp2x_num').value = document.getElementById('cp2x').value;
+            document.getElementById('cp2y_num').value = document.getElementById('cp2y').value;
+            
+            // Get control point values
+            const cp1x = parseInt(document.getElementById('cp1x').value);
+            const cp1y = parseInt(document.getElementById('cp1y').value);
+            const cp2x = parseInt(document.getElementById('cp2x').value);
+            const cp2y = parseInt(document.getElementById('cp2y').value);
+            const x_shift = parseInt(document.getElementById('x_shift').value);
+            const y_shift = parseInt(document.getElementById('y_shift').value);
+            const thickness = parseInt(document.getElementById('thickness').value);
+            
+            // Sync all inputs
+            document.getElementById('x_shift_num').value = x_shift;
+            document.getElementById('y_shift_num').value = y_shift;
+            document.getElementById('thickness_num').value = thickness;
+            
+            // Update display
+            document.getElementById('current-values').textContent = 
+                `cps: [{x: ${cp1x}, y: ${cp1y}}, {x: ${cp2x}, y: ${cp2y}}], x_shift: ${x_shift}, y_shift: ${y_shift}, thickness: ${thickness}`;
+            
+            // Redraw everything
+            initVexFlow();
+            
+            // Create slur with current control points and additional parameters
+            const curve = new VF.Curve(notes[0], notes[1], {
+                cps: [
+                    { x: cp1x, y: cp1y },
+                    { x: cp2x, y: cp2y }
+                ],
+                thickness: thickness,
+                x_shift: x_shift,
+                y_shift: y_shift
+            });
+            curve.setContext(context).draw();
+        }
+        
+        // Sync number inputs with range inputs
+        document.getElementById('cp1x_num').addEventListener('input', function() {
+            document.getElementById('cp1x').value = this.value;
+            updateSlur();
+        });
+        document.getElementById('cp1y_num').addEventListener('input', function() {
+            document.getElementById('cp1y').value = this.value;
+            updateSlur();
+        });
+        document.getElementById('cp2x_num').addEventListener('input', function() {
+            document.getElementById('cp2x').value = this.value;
+            updateSlur();
+        });
+        document.getElementById('cp2y_num').addEventListener('input', function() {
+            document.getElementById('cp2y').value = this.value;
+            updateSlur();
+        });
+    </script>
+</body>
+</html>

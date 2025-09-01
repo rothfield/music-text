@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slur Notation Proof-of-Concept</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 2rem;
+        }
+        #toolbar {
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 1rem;
+        }
+        #toolbar button {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+            margin-right: 0.5rem;
+            border: 1px solid #aaa;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #toolbar button:hover {
+            background-color: #e0e0e0;
+        }
+        #editor {
+            border: 1px solid #ccc;
+            padding: 1rem;
+            min-height: 200px;
+            font-size: 1.2rem;
+            line-height: 2.5; /* Extra space for slurs */
+        }
+        
+        /* Approach 1: Simple overline (straight line) */
+        .overline {
+            text-decoration: overline;
+        }
+        
+        /* Approach 2: Border-based arc (more curved) */
+        .slur-border {
+            display: inline-block;
+            position: relative;
+            padding-top: 0.3em;
+        }
+        .slur-border::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -2px;
+            right: -2px;
+            height: 0.4em;
+            border-top: 2px solid black;
+            border-radius: 50% / 100% 100% 0 0;
+        }
+        
+        /* Approach 3: SVG-based slur (most flexible) */
+        .slur-svg {
+            position: relative;
+            display: inline-block;
+        }
+        .slur-svg svg {
+            position: absolute;
+            top: -0.5em;
+            left: -2px;
+            width: calc(100% + 4px);
+            height: 1em;
+            pointer-events: none;
+        }
+        
+        /* Approach 4: Unicode combining character */
+        .slur-unicode::after {
+            content: '\u035C'; /* Combining double breve below - creates arc-like mark */
+            position: relative;
+            left: -1ch;
+        }
+        
+        /* Approach 5: CSS path-based slur (modern browsers) */
+        .slur-path {
+            position: relative;
+            display: inline-block;
+        }
+        .slur-path::before {
+            content: '';
+            position: absolute;
+            top: -0.3em;
+            left: -2px;
+            right: -2px;
+            height: 0.6em;
+            background: none;
+            border-top: 2px solid black;
+            border-radius: 0 0 50% 50% / 0 0 100% 100%;
+            transform: scaleY(-1);
+        }
+        
+        /* Musical note spacing */
+        .music-text {
+            letter-spacing: 0.1em;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Musical Slur Notation PoC</h1>
+    <p>Different approaches to rendering slurs over text:</p>
+
+    <div id="examples">
+        <h2>Static Examples:</h2>
+        
+        <p>1. Simple overline: <span class="overline music-text">C D E F</span></p>
+        
+        <p>2. Border-based arc: <span class="slur-border music-text">C D E F</span></p>
+        
+        <p>3. SVG-based slur: 
+            <span class="slur-svg music-text">C D E F
+                <svg viewBox="0 0 100 20" preserveAspectRatio="none">
+                    <path d="M 2,15 Q 50,2 98,15" stroke="black" stroke-width="2" fill="none"/>
+                </svg>
+            </span>
+        </p>
+        
+        <p>4. CSS curved border: <span class="slur-path music-text">C D E F</span></p>
+        
+        <p>5. Multiple slurs: 
+            <span class="slur-border music-text">C D</span> 
+            <span class="music-text">E</span> 
+            <span class="slur-border music-text">F G A</span>
+        </p>
+    </div>
+
+    <div id="toolbar">
+        <button onclick="format('bold')">Bold</button>
+        <button onclick="format('underline')">Underline</button>
+        <button onclick="applySlur('slur-border')">Add Slur (Arc)</button>
+        <button onclick="applySlur('slur-path')">Add Slur (Path)</button>
+        <button onclick="applySvgSlur()">Add Slur (SVG)</button>
+        <button onclick="removeSlur()">Remove Slur</button>
+        <button onclick="applyOctaveDot('above')">Upper Octave</button>
+        <button onclick="applyOctaveDot('below')">Lower Octave</button>
+    </div>
+
+    <div id="editor" contenteditable="true" spellcheck="false" class="music-text">
+        <p>Select notes and apply slurs: C D E F G A B</p>
+        <p>Try different slur styles on: <strong>1 2 3 4 5 6 7</strong></p>
+        <p>Combine with octave dots: Ċ Ḋ Ė Ḟ Ġ Ȧ Ḃ</p>
+    </div>
+
+    <script>
+        function format(command) {
+            document.execCommand(command, false, null);
+        }
+
+        function applySlur(slurClass) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const selectedText = selection.toString();
+            if (!selectedText) return;
+
+            const range = selection.getRangeAt(0);
+            const span = document.createElement('span');
+            span.className = slurClass + ' music-text';
+            span.textContent = selectedText;
+            
+            range.deleteContents();
+            range.insertNode(span);
+
+            // Reselect the content
+            selection.removeAllRanges();
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            selection.addRange(newRange);
+        }
+
+        function applySvgSlur() {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const selectedText = selection.toString();
+            if (!selectedText) return;
+
+            const range = selection.getRangeAt(0);
+            const span = document.createElement('span');
+            span.className = 'slur-svg music-text';
+            span.textContent = selectedText;
+            
+            // Add SVG arc
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 100 20');
+            svg.setAttribute('preserveAspectRatio', 'none');
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M 2,15 Q 50,2 98,15');
+            path.setAttribute('stroke', 'black');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('fill', 'none');
+            
+            svg.appendChild(path);
+            span.appendChild(svg);
+            
+            range.deleteContents();
+            range.insertNode(span);
+
+            // Reselect the content
+            selection.removeAllRanges();
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            selection.addRange(newRange);
+        }
+
+        function removeSlur() {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.commonAncestorContainer;
+            const parentElement = container.nodeType === Node.ELEMENT_NODE ? container : container.parentNode;
+
+            // Find and unwrap any slur elements
+            const slurClasses = ['slur-border', 'slur-path', 'slur-svg', 'overline'];
+            
+            if (parentElement.nodeName === 'SPAN') {
+                for (let cls of slurClasses) {
+                    if (parentElement.classList.contains(cls)) {
+                        const text = parentElement.textContent;
+                        const textNode = document.createTextNode(text);
+                        parentElement.parentNode.replaceChild(textNode, parentElement);
+                        
+                        // Restore selection
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(textNode);
+                        selection.removeAllRanges();
+                        selection.addRange(newRange);
+                        break;
+                    }
+                }
+            }
+        }
+
+        function applyOctaveDot(position) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const selectedText = selection.toString();
+            if (!selectedText) return;
+
+            const noteChars = 'CDEFGABcdefgab1234567';
+            const dotAbove = '\u0307';
+            const dotBelow = '\u0323';
+            const dot = position === 'above' ? dotAbove : dotBelow;
+            const otherDot = position === 'above' ? dotBelow : dotAbove;
+
+            let newText = '';
+            let i = 0;
+            while (i < selectedText.length) {
+                const char = selectedText[i];
+                const nextChar = (i + 1 < selectedText.length) ? selectedText[i + 1] : null;
+
+                if (noteChars.includes(char)) {
+                    if (nextChar === dot) {
+                        newText += char;
+                        i += 2;
+                    } else if (nextChar === otherDot) {
+                        newText += char + dot;
+                        i += 2;
+                    } else {
+                        newText += char + dot;
+                        i += 1;
+                    }
+                } else {
+                    newText += char;
+                    i += 1;
+                }
+            }
+            
+            document.execCommand('insertText', false, newText);
+        }
+    </script>
+
+</body>
+</html>

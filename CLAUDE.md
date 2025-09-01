@@ -16,6 +16,12 @@
 - **Dual Compilation**: Same code compiles to both native binary and WASM
 - **WASM Generation**: `wasm-pack build --target web --out-dir webapp/pkg` creates client-side artifacts
 
+#### **WYSIWYG Editor Planning** 🚧
+- **Status**: Architecture proposal under consideration (see `WYSIWYG_ARCHITECTURE_PROPOSAL.md`)
+- **Goal**: Add visual slur editing while preserving existing lexer/parser pipeline
+- **Approach**: Visual editor → spatial format generator → existing `unified_parser()`
+- **Key insight**: Convert visual slurs to 2-line spatial format that existing lexer expects
+
 #### **Execution Environments**
 - **CLI**: Native Rust binary for command-line processing
 - **Client-Side Web**: WASM (`notation_parser.js` + `.wasm`) runs V2 parser + VexFlow rendering in browser

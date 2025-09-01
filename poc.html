@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContentEditable Proof-of-Concept</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 2rem;
+        }
+        #toolbar {
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 1rem;
+        }
+        #toolbar button {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+            margin-right: 0.5rem;
+            border: 1px solid #aaa;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #toolbar button:hover {
+            background-color: #e0e0e0;
+        }
+        #editor {
+            border: 1px solid #ccc;
+            padding: 1rem;
+            min-height: 200px;
+            font-size: 1.2rem;
+            line-height: 1.6;
+        }
+        .overline {
+            text-decoration: overline;
+        }
+        .slur {
+            display: inline-block;
+            position: relative;
+            padding-top: 0.3em;
+        }
+        .slur::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -2px;
+            right: -2px;
+            height: 0.4em;
+            border-top: 2px solid black;
+            border-radius: 50% / 100% 100% 0 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Lightweight Rich Text Editor PoC</h1>
+    <p>This editor uses the browser's built-in <code>contenteditable</code> feature. It has no external library dependencies.</p>
+
+    <div id="toolbar">
+        <button onclick="format('bold')">Bold</button>
+        <button onclick="format('underline')">Underline</button>
+        <button onclick="applyStyle('overline')">Overline</button>
+        <button onclick="applyStyle('slur')">Slur</button>
+        <button onclick="applyOctaveDot('above')">Upper Octave</button>
+        <button onclick="applyOctaveDot('below')">Lower Octave</button>
+    </div>
+
+    <div id="editor" contenteditable="true" spellcheck="false">
+        <p>Select some text and try the buttons above.</p>
+        <p>For the octave buttons, try selecting this line: <strong>The quick brown fox jumps over the lazy C D E F G A B dogs.</strong> Only the notes will get dots.</p>
+        <p>Here are some pre-dotted notes: Ċ Ḋ Ė Ḟ Ġ Ȧ Ḃ and C̣ Ḍ Ẹ F̣ G̣ Ạ Ḅ.</p>
+    </div>
+
+    <script>
+        // Simple wrapper for basic browser commands (already toggles)
+        function format(command) {
+            document.execCommand(command, false, null);
+        }
+
+        // Function to toggle custom styles like 'overline'
+        function toggleStyle(styleClass) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const ancestor = range.commonAncestorContainer;
+            const parentElement = ancestor.nodeType === Node.ELEMENT_NODE ? ancestor : ancestor.parentNode;
+
+            // Simple toggle: If the selection's immediate parent is the styled element, unwrap it.
+            // This works best when selecting the entire element.
+            if (parentElement.nodeName === 'SPAN' && parentElement.classList.contains(styleClass) && parentElement.textContent === selection.toString()) {
+                const textNode = document.createTextNode(parentElement.textContent);
+                parentElement.parentNode.replaceChild(textNode, parentElement);
+                
+                // Restore selection
+                const newRange = document.createRange();
+                newRange.selectNodeContents(textNode);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+            } else {
+                // Otherwise, wrap the selection in a new span.
+                const selectedText = selection.toString();
+                if (selectedText) {
+                    const span = document.createElement('span');
+                    span.className = styleClass;
+                    span.textContent = selectedText;
+                    
+                    range.deleteContents();
+                    range.insertNode(span);
+
+                    // Reselect the content of the new span
+                    selection.removeAllRanges();
+                    const newRange = document.createRange();
+                    newRange.selectNodeContents(span);
+                    selection.addRange(newRange);
+                }
+            }
+        }
+
+        // Function to toggle octave dots (above/below) on a character-by-character basis
+        function toggleOctaveDot(position) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const selectedText = selection.toString();
+            if (!selectedText) return;
+
+            const noteChars = 'CDEFGABcdefgab';
+            const dotAbove = '\u0307'; // Combining Dot Above
+            const dotBelow = '\u0323'; // Combining Dot Below
+            const dot = position === 'above' ? dotAbove : dotBelow;
+            const otherDot = position === 'above' ? dotBelow : dotAbove;
+
+            let newText = '';
+            let i = 0;
+            while (i < selectedText.length) {
+                const char = selectedText[i];
+                const nextChar = (i + 1 < selectedText.length) ? selectedText[i + 1] : null;
+
+                if (noteChars.includes(char)) {
+                    if (nextChar === dot) {
+                        // Note is already dotted with the target dot. Remove dot.
+                        newText += char;
+                        i += 2; // Move past char and dot
+                    } else if (nextChar === otherDot) {
+                        // Note is dotted with the other dot. Swap to the target dot.
+                        newText += char + dot;
+                        i += 2; // Move past char and otherDot
+                    } else {
+                        // Note is not dotted. Add the target dot.
+                        newText += char + dot;
+                        i += 1;
+                    }
+                } else {
+                    // Not a note character, just append it.
+                    newText += char;
+                    i += 1;
+                }
+            }
+            
+            document.execCommand('insertText', false, newText);
+        }
+
+        // Update button bindings to use toggle functions
+        document.querySelector('button[onclick*="overline"]').setAttribute('onclick', "toggleStyle('overline')");
+        document.querySelector('button[onclick*="slur"]').setAttribute('onclick', "toggleStyle('slur')");
+        document.querySelector('button[onclick*="above"]').setAttribute('onclick', "toggleOctaveDot('above')");
+        document.querySelector('button[onclick*="below"]').setAttribute('onclick', "toggleOctaveDot('below')");
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Notation Code Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .editor-container {
+            display: flex;
+            height: 100vh;
+            flex-direction: column;
+        }
+        
+        /* Top Menu Bar */
+        .menu-bar {
+            background: #2d2d30;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            border-bottom: 1px solid #3e3e42;
+            font-size: 13px;
+        }
+        
+        .menu-item {
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        
+        .menu-item:hover {
+            background: #3e3e42;
+        }
+        
+        /* Toolbar */
+        .toolbar {
+            background: #252526;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            border-bottom: 1px solid #3e3e42;
+            gap: 10px;
+        }
+        
+        .tool-group {
+            display: flex;
+            gap: 5px;
+            padding-right: 15px;
+            border-right: 1px solid #3e3e42;
+        }
+        
+        .tool-group:last-child {
+            border-right: none;
+        }
+        
+        .tool-btn {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: inherit;
+            transition: background 0.2s;
+        }
+        
+        .tool-btn:hover {
+            background: #1177bb;
+        }
+        
+        .tool-btn:disabled {
+            background: #3e3e42;
+            color: #969696;
+            cursor: not-allowed;
+        }
+        
+        .tool-btn.secondary {
+            background: #3e3e42;
+            color: #d4d4d4;
+        }
+        
+        .tool-btn.secondary:hover {
+            background: #4e4e52;
+        }
+        
+        .tool-label {
+            color: #969696;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+        
+        /* Main Content Area */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Left Panel - Visual Editor */
+        .left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #3e3e42;
+        }
+        
+        .panel-header {
+            background: #2d2d30;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            border-bottom: 1px solid #3e3e42;
+            font-size: 13px;
+            color: #cccccc;
+        }
+        
+        .visual-editor {
+            flex: 1;
+            padding: 20px;
+            background: #1e1e1e;
+            font-size: 18px;
+            line-height: 2.2;
+            outline: none;
+            overflow-y: auto;
+            color: #d4d4d4;
+        }
+        
+        .visual-editor:focus {
+            background: #1f1f1f;
+        }
+        
+        /* Right Panel - Source Code */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .source-editor {
+            flex: 1;
+            background: #1e1e1e;
+            border: none;
+            padding: 20px;
+            font-family: inherit;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #d4d4d4;
+            resize: none;
+            outline: none;
+        }
+        
+        .source-editor:focus {
+            background: #1f1f1f;
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            background: #007acc;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            font-size: 12px;
+            color: white;
+        }
+        
+        .status-left,
+        .status-right {
+            display: flex;
+            gap: 15px;
+        }
+        
+        /* Slur Styling */
+        .slur {
+            position: relative;
+            display: inline-block;
+            border-top: 2px solid #569cd6;
+            border-radius: 50% / 100% 100% 0 0;
+            padding-top: 0.4em;
+            margin-top: -0.4em;
+            color: #d4d4d4;
+        }
+        
+        .slur::before,
+        .slur::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 0.4em;
+            background: #1e1e1e;
+        }
+        
+        .slur::before { left: -2px; }
+        .slur::after { right: -2px; }
+        
+        /* Syntax Highlighting for Music Text */
+        .note {
+            color: #9cdcfe;
+        }
+        
+        .slur-syntax {
+            color: #ce9178;
+        }
+        
+        .octave {
+            color: #4ec9b0;
+        }
+        
+        .barline {
+            color: #d7ba7d;
+            font-weight: bold;
+        }
+        
+        /* Selection */
+        .visual-editor::selection {
+            background: #264f78;
+        }
+        
+        .visual-editor::-moz-selection {
+            background: #264f78;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #424242;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4f4f4f;
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-container">
+        <!-- Menu Bar -->
+        <div class="menu-bar">
+            <div class="menu-item">File</div>
+            <div class="menu-item">Edit</div>
+            <div class="menu-item">Selection</div>
+            <div class="menu-item">View</div>
+            <div class="menu-item">Help</div>
+        </div>
+        
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="tool-group">
+                <span class="tool-label">Slurs:</span>
+                <button class="tool-btn" id="slurBtn" onclick="addSlur()" disabled>
+                    Add Slur
+                </button>
+                <button class="tool-btn secondary" onclick="removeSlur()">
+                    Remove
+                </button>
+            </div>
+            
+            <div class="tool-group">
+                <span class="tool-label">Octaves:</span>
+                <button class="tool-btn secondary" onclick="addOctave('upper')">
+                    Upper ˙
+                </button>
+                <button class="tool-btn secondary" onclick="addOctave('lower')">
+                    Lower ₒ
+                </button>
+            </div>
+            
+            <div class="tool-group">
+                <span class="tool-label">Insert:</span>
+                <button class="tool-btn secondary" onclick="insertText('|')">
+                    Barline |
+                </button>
+                <button class="tool-btn secondary" onclick="insertText('-')">
+                    Dash -
+                </button>
+            </div>
+            
+            <div class="tool-group">
+                <button class="tool-btn secondary" onclick="formatCode()">
+                    Format
+                </button>
+                <button class="tool-btn secondary" onclick="copySource()">
+                    Copy
+                </button>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel - Visual Editor -->
+            <div class="left-panel">
+                <div class="panel-header">
+                    📝 Visual Editor - music.notation
+                </div>
+                <div id="visualEditor" 
+                     class="visual-editor" 
+                     contenteditable="true" 
+                     spellcheck="false">1 2 3 4 5 6 7
+C D E F G A B
+S R G M P D N</div>
+            </div>
+            
+            <!-- Right Panel - Source Code -->
+            <div class="right-panel">
+                <div class="panel-header">
+                    📄 Source Code - music.txt
+                </div>
+                <textarea id="sourceEditor" 
+                          class="source-editor" 
+                          readonly>1 2 3 4 5 6 7
+C D E F G A B
+S R G M P D N</textarea>
+            </div>
+        </div>
+        
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-left">
+                <span id="cursorPos">Ln 1, Col 1</span>
+                <span>Music Notation</span>
+                <span id="selectionInfo">No selection</span>
+            </div>
+            <div class="status-right">
+                <span>UTF-8</span>
+                <span>🎵 Ready</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const visualEditor = document.getElementById('visualEditor');
+        const sourceEditor = document.getElementById('sourceEditor');
+        const slurBtn = document.getElementById('slurBtn');
+        const selectionInfo = document.getElementById('selectionInfo');
+        
+        // Initialize
+        visualEditor.addEventListener('input', updateSource);
+        visualEditor.addEventListener('selectionchange', updateSelectionUI);
+        document.addEventListener('selectionchange', updateSelectionUI);
+        visualEditor.addEventListener('keyup', updateCursorPosition);
+        visualEditor.addEventListener('click', updateCursorPosition);
+        
+        function updateSelectionUI() {
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+            
+            if (selectedText && hasMusicalContent(selectedText)) {
+                slurBtn.disabled = false;
+                slurBtn.textContent = `Add Slur (${selectedText.length} chars)`;
+                selectionInfo.textContent = `Selected: "${selectedText.substring(0, 20)}${selectedText.length > 20 ? '...' : ''}"`;
+            } else if (selectedText) {
+                slurBtn.disabled = true;
+                slurBtn.textContent = 'Add Slur';
+                selectionInfo.textContent = `Selected: ${selectedText.length} chars (no notes)`;
+            } else {
+                slurBtn.disabled = true;
+                slurBtn.textContent = 'Add Slur';
+                selectionInfo.textContent = 'No selection';
+            }
+        }
+        
+        function updateCursorPosition() {
+            // Simplified cursor position tracking
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                document.getElementById('cursorPos').textContent = `Ln 1, Col ${selection.focusOffset + 1}`;
+            }
+        }
+        
+        function hasMusicalContent(text) {
+            return /[1-7CDEFGABSRGMPDNcdefgabsrgmpdn]/.test(text);
+        }
+        
+        function addSlur() {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const selectedText = selection.toString().trim();
+            
+            if (!selectedText || !hasMusicalContent(selectedText)) return;
+            
+            // Check if already slurred
+            const container = range.commonAncestorContainer;
+            const parentElement = container.nodeType === Node.ELEMENT_NODE ? container : container.parentNode;
+            
+            if (parentElement.classList && parentElement.classList.contains('slur')) {
+                return; // Already slurred
+            }
+            
+            // Add slur
+            const span = document.createElement('span');
+            span.className = 'slur';
+            span.textContent = selectedText;
+            
+            range.deleteContents();
+            range.insertNode(span);
+
+            // Reselect
+            selection.removeAllRanges();
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            selection.addRange(newRange);
+            
+            updateSource();
+            updateSelectionUI();
+        }
+        
+        function removeSlur() {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const container = range.commonAncestorContainer;
+            const parentElement = container.nodeType === Node.ELEMENT_NODE ? container : container.parentNode;
+            
+            if (parentElement.classList && parentElement.classList.contains('slur')) {
+                // Remove slur
+                const textNode = document.createTextNode(parentElement.textContent);
+                parentElement.parentNode.replaceChild(textNode, parentElement);
+                
+                // Restore selection
+                const newRange = document.createRange();
+                newRange.selectNodeContents(textNode);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+                
+                updateSource();
+                updateSelectionUI();
+            }
+        }
+        
+        function addOctave(direction) {
+            // Placeholder for octave functionality
+            console.log(`Add ${direction} octave`);
+        }
+        
+        function insertText(text) {
+            document.execCommand('insertText', false, text);
+            updateSource();
+        }
+        
+        function updateSource() {
+            try {
+                let result = '';
+                
+                function processNode(node) {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        result += node.textContent;
+                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                        if (node.classList.contains('slur')) {
+                            // Convert slur: replace spaces with underscores
+                            const slurContent = node.textContent.replace(/\s+/g, '_');
+                            result += slurContent;
+                        } else {
+                            // Process child nodes
+                            for (let child of node.childNodes) {
+                                processNode(child);
+                            }
+                        }
+                    }
+                }
+                
+                // Process all content
+                for (let node of visualEditor.childNodes) {
+                    processNode(node);
+                }
+                
+                sourceEditor.value = result;
+                
+            } catch (error) {
+                sourceEditor.value = `Error: ${error.message}`;
+            }
+        }
+        
+        function formatCode() {
+            // Auto-format the source code
+            const lines = sourceEditor.value.split('\n');
+            const formatted = lines.map(line => line.trim()).join('\n');
+            sourceEditor.value = formatted;
+        }
+        
+        function copySource() {
+            sourceEditor.select();
+            document.execCommand('copy');
+            
+            // Status feedback
+            const statusRight = document.querySelector('.status-right');
+            const originalContent = statusRight.innerHTML;
+            statusRight.innerHTML = '<span>📋 Copied to clipboard</span>';
+            setTimeout(() => {
+                statusRight.innerHTML = originalContent;
+            }, 2000);
+        }
+        
+        // Initialize
+        updateSource();
+        updateCursorPosition();
+    </script>
+</body>
+</html>

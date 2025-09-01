@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Styled Spatial Music Editor</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 2rem;
+            max-width: 1000px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .editor-container {
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+        
+        .toolbar {
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            padding: 12px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #dee2e6;
+        }
+        
+        .btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #0056b3;
+        }
+        
+        .spatial-editor {
+            position: relative;
+            font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
+            font-size: 20px;
+            line-height: 1;
+        }
+        
+        .octave-line {
+            height: 1.2em;
+            padding: 0 20px;
+            color: #666;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            outline: none;
+            white-space: pre;
+            overflow: hidden;
+        }
+        
+        .octave-line:focus {
+            background: #e3f2fd;
+        }
+        
+        .main-editor {
+            padding: 20px;
+            min-height: 2.5em;
+            outline: none;
+            white-space: pre-wrap;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .main-editor:focus {
+            background: #fafafa;
+        }
+        
+        .slur-line {
+            height: 1.2em;
+            padding: 0 20px;
+            color: #666;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            outline: none;
+            white-space: pre;
+            overflow: hidden;
+        }
+        
+        .slur-line:focus {
+            background: #e3f2fd;
+        }
+        
+        /* Text formatting styles */
+        .bold {
+            font-weight: bold;
+        }
+        
+        .underline {
+            text-decoration: underline;
+            text-decoration-thickness: 2px;
+        }
+        
+        .italic {
+            font-style: italic;
+        }
+        
+        .barline {
+            color: #666;
+            font-weight: bold;
+            margin: 0 0.2em;
+            padding: 0 0.1em;
+            border-left: 1px solid #999;
+            border-right: 1px solid #999;
+            background: #f0f0f0;
+        }
+        
+        .instructions {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 2rem;
+            font-size: 14px;
+        }
+        
+        .output-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 20px;
+        }
+        
+        .output-content {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', Consolas, monospace;
+            white-space: pre-wrap;
+            border: 1px solid #dee2e6;
+            margin-top: 10px;
+        }
+        
+        .line-label {
+            position: absolute;
+            left: -80px;
+            font-size: 12px;
+            color: #666;
+            width: 70px;
+            text-align: right;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .labeled-line {
+            position: relative;
+            margin-left: 60px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎼 Styled Spatial Music Editor</h1>
+    
+    <div class="instructions">
+        <h3>How to use:</h3>
+        <p><strong>Upper line:</strong> Add dots (.) above main notes for upper octave</p>
+        <p><strong>Main editor:</strong> Type and format your music notation (supports bold, underline, italic)</p>
+        <p><strong>Lower line:</strong> Add dashes (-) for slurs, dots (.) for lower octave</p>
+        <p><strong>Select text</strong> in main editor and use toolbar for formatting</p>
+        <p><strong>Alignment matters!</strong> Characters in upper/lower lines align with main text</p>
+    </div>
+    
+    <div class="editor-container">
+        <div class="toolbar">
+            <button class="btn" onclick="format('bold')" title="Bold"><strong>B</strong></button>
+            <button class="btn" onclick="format('italic')" title="Italic"><em>I</em></button>
+            <button class="btn" onclick="toggleStyle('underline')" title="Underline"><u>U</u></button>
+            <span style="border-left: 1px solid #ccc; margin: 0 10px;"></span>
+            <button class="btn" onclick="insertAtCursor('|')" title="Insert barline">|</button>
+            <button class="btn" onclick="insertAtCursor(' - ')" title="Insert dash">-</button>
+            <button class="btn" onclick="insertAtCursor(' ')" title="Insert space">⎵</button>
+            <span style="border-left: 1px solid #ccc; margin: 0 10px;"></span>
+            <button class="btn" onclick="alignAllLines()" title="Align all lines">⟷ Align</button>
+            <button class="btn" onclick="loadExample()" title="Load example">📝 Example</button>
+            <button class="btn" onclick="clearAll()" title="Clear all">✖ Clear</button>
+        </div>
+        
+        <div class="spatial-editor">
+            <!-- Upper octave line -->
+            <div class="labeled-line">
+                <div class="line-label">Upper:</div>
+                <div class="octave-line" 
+                     contenteditable="true" 
+                     id="upperLine" 
+                     spellcheck="false"
+                     placeholder="Dots for upper octave: . . ."></div>
+            </div>
+            
+            <!-- Main styled editor -->
+            <div class="labeled-line">
+                <div class="line-label">Music:</div>
+                <div class="main-editor" 
+                     contenteditable="true" 
+                     id="mainEditor" 
+                     spellcheck="false"
+                     placeholder="Type your music here: 1 2 3 4 5 (select text to format)"></div>
+            </div>
+            
+            <!-- Lower slur/octave line -->
+            <div class="labeled-line">
+                <div class="line-label">Lower:</div>
+                <div class="slur-line" 
+                     contenteditable="true" 
+                     id="lowerLine" 
+                     spellcheck="false"
+                     placeholder="Dashes for slurs, dots for lower octave: - - - ."></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="output-section">
+        <h3>Live Music-Text Output:</h3>
+        <div id="outputContent" class="output-content">
+Type in the editor above to see live conversion...
+        </div>
+    </div>
+
+    <script>
+        let currentEditor = null;
+        
+        // Initialize
+        document.getElementById('mainEditor').addEventListener('focus', () => {
+            currentEditor = document.getElementById('mainEditor');
+        });
+        document.getElementById('mainEditor').addEventListener('input', convertToMusicText);
+        document.getElementById('upperLine').addEventListener('input', convertToMusicText);
+        document.getElementById('lowerLine').addEventListener('input', convertToMusicText);
+        
+        // Handle arrow keys for line navigation
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowUp' && event.ctrlKey) {
+                event.preventDefault();
+                document.getElementById('upperLine').focus();
+            } else if (event.key === 'ArrowDown' && event.ctrlKey) {
+                event.preventDefault();
+                document.getElementById('lowerLine').focus();
+            } else if (event.key === 'Enter' && event.ctrlKey) {
+                event.preventDefault();
+                document.getElementById('mainEditor').focus();
+            }
+        });
+        
+        function format(command) {
+            if (document.activeElement.id === 'mainEditor') {
+                document.execCommand(command, false, null);
+                setTimeout(convertToMusicText, 100);
+            }
+        }
+        
+        function toggleStyle(styleClass) {
+            if (document.activeElement.id !== 'mainEditor') return;
+            
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const selectedText = selection.toString();
+            
+            if (!selectedText) return;
+            
+            const container = range.commonAncestorContainer;
+            const parentElement = container.nodeType === Node.ELEMENT_NODE ? container : container.parentNode;
+            
+            if (parentElement.classList && parentElement.classList.contains(styleClass)) {
+                // Remove style
+                const textNode = document.createTextNode(parentElement.textContent);
+                parentElement.parentNode.replaceChild(textNode, parentElement);
+                
+                const newRange = document.createRange();
+                newRange.selectNodeContents(textNode);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+            } else {
+                // Add style
+                const span = document.createElement('span');
+                span.className = styleClass;
+                span.textContent = selectedText;
+                
+                range.deleteContents();
+                range.insertNode(span);
+
+                selection.removeAllRanges();
+                const newRange = document.createRange();
+                newRange.selectNodeContents(span);
+                selection.addRange(newRange);
+            }
+            
+            setTimeout(convertToMusicText, 100);
+        }
+        
+        function insertAtCursor(text) {
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.contentEditable === 'true') {
+                document.execCommand('insertText', false, text);
+                setTimeout(convertToMusicText, 100);
+            }
+        }
+        
+        function alignAllLines() {
+            const upper = document.getElementById('upperLine').textContent;
+            const main = document.getElementById('mainEditor').textContent;
+            const lower = document.getElementById('lowerLine').textContent;
+            
+            const maxLength = Math.max(upper.length, main.length, lower.length);
+            
+            document.getElementById('upperLine').textContent = upper.padEnd(maxLength, ' ');
+            document.getElementById('lowerLine').textContent = lower.padEnd(maxLength, ' ');
+            
+            convertToMusicText();
+        }
+        
+        function loadExample() {
+            document.getElementById('upperLine').textContent = '. . .     . ';
+            document.getElementById('mainEditor').innerHTML = '<strong>1 2 3</strong> 4 <em>5 6</em> <span class="underline">7</span>';
+            document.getElementById('lowerLine').textContent = '-----   . . ';
+            convertToMusicText();
+        }
+        
+        function clearAll() {
+            document.getElementById('upperLine').textContent = '';
+            document.getElementById('mainEditor').innerHTML = '';
+            document.getElementById('lowerLine').textContent = '';
+            document.getElementById('outputContent').textContent = 'All cleared.';
+        }
+        
+        function convertToMusicText() {
+            const upper = document.getElementById('upperLine').textContent;
+            const mainEditor = document.getElementById('mainEditor');
+            const lower = document.getElementById('lowerLine').textContent;
+            const output = document.getElementById('outputContent');
+            
+            try {
+                // Extract plain text from main editor (ignoring HTML formatting for position mapping)
+                const main = mainEditor.textContent;
+                
+                let result = '';
+                const maxLength = Math.max(upper.length, main.length, lower.length);
+                
+                let inSlur = false;
+                let slurNotes = [];
+                
+                for (let i = 0; i < maxLength; i++) {
+                    const upperChar = i < upper.length ? upper[i] : ' ';
+                    const mainChar = i < main.length ? main[i] : ' ';
+                    const lowerChar = i < lower.length ? lower[i] : ' ';
+                    
+                    // Process main character if it's a note
+                    if (/[1-7CDEFGABSRGMPDNcdefgabsrgmpdn]/.test(mainChar)) {
+                        let noteStr = mainChar;
+                        
+                        // Add octave markings
+                        if (upperChar === '.') {
+                            noteStr += "'";
+                        }
+                        if (lowerChar === '.') {
+                            noteStr += ",";
+                        }
+                        
+                        // Handle slurs
+                        if (lowerChar === '-') {
+                            if (!inSlur) {
+                                inSlur = true;
+                                slurNotes = [noteStr];
+                            } else {
+                                slurNotes.push(noteStr);
+                            }
+                        } else {
+                            if (inSlur && slurNotes.length > 0) {
+                                // End slur
+                                result += slurNotes.join('_') + ' ';
+                                inSlur = false;
+                                slurNotes = [];
+                            }
+                            result += noteStr + ' ';
+                        }
+                    } else if (/[\s\-|]/.test(mainChar)) {
+                        // Handle spaces, dashes, barlines
+                        if (inSlur && slurNotes.length > 0) {
+                            result += slurNotes.join('_') + ' ';
+                            inSlur = false;
+                            slurNotes = [];
+                        }
+                        if (mainChar.trim()) {
+                            result += mainChar + ' ';
+                        } else if (i < main.length) {
+                            result += ' ';
+                        }
+                    }
+                }
+                
+                // Close any remaining slur
+                if (inSlur && slurNotes.length > 0) {
+                    result += slurNotes.join('_');
+                }
+                
+                // Clean up result
+                result = result.replace(/\s+/g, ' ').trim();
+                
+                // Add formatting info
+                const formattingInfo = extractFormattingInfo(mainEditor);
+                
+                output.innerHTML = `
+<strong>Music-Text Output:</strong>
+${result || 'No music notation detected'}
+
+<strong>Formatting detected:</strong>
+${formattingInfo}
+                `;
+                
+            } catch (error) {
+                output.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        function extractFormattingInfo(editor) {
+            const formatted = [];
+            
+            // Find bold text
+            editor.querySelectorAll('strong, b, .bold').forEach(el => {
+                formatted.push(`Bold: "${el.textContent}"`);
+            });
+            
+            // Find italic text
+            editor.querySelectorAll('em, i, .italic').forEach(el => {
+                formatted.push(`Italic: "${el.textContent}"`);
+            });
+            
+            // Find underlined text
+            editor.querySelectorAll('.underline, u').forEach(el => {
+                formatted.push(`Underlined: "${el.textContent}"`);
+            });
+            
+            return formatted.length > 0 ? formatted.join('\n') : 'None';
+        }
+        
+        // Auto-convert
+        setInterval(convertToMusicText, 1000);
+        
+        // Load example on start
+        loadExample();
+    </script>
+</body>
+</html>

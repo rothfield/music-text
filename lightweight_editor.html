@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lightweight Music Notation Editor</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .editor-section {
+            margin-bottom: 2rem;
+        }
+        
+        .toolbar {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px 6px 0 0;
+            padding: 12px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #dee2e6;
+        }
+        
+        .btn:active {
+            background: #ced4da;
+        }
+        
+        .music-editor {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            padding: 20px;
+            min-height: 150px;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 18px;
+            line-height: 2.2;
+            outline: none;
+            background: white;
+        }
+        
+        .music-editor:focus {
+            background: #fdfdfd;
+            border-color: #80bdff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+        
+        /* Simple underline for slurs */
+        .underline {
+            text-decoration: underline;
+            text-decoration-color: #333;
+            text-decoration-thickness: 2px;
+            text-underline-offset: 3px;
+        }
+        
+        /* Simple overline for upper octave */
+        .overline {
+            text-decoration: overline;
+            text-decoration-color: #333;
+            text-decoration-thickness: 2px;
+        }
+        
+        /* Double underline for lower octave */
+        .double-underline {
+            text-decoration: underline;
+            text-decoration-style: double;
+            text-decoration-color: #333;
+            text-underline-offset: 4px;
+        }
+        
+        .output-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 2rem;
+        }
+        
+        .output-content {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', Consolas, monospace;
+            white-space: pre-wrap;
+            border: 1px solid #dee2e6;
+            margin-top: 10px;
+        }
+        
+        .instructions {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 2rem;
+            font-size: 14px;
+        }
+        
+        .instructions h3 {
+            margin-top: 0;
+            color: #1565c0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎵 Lightweight Music Editor</h1>
+    
+    <div class="instructions">
+        <h3>How to use:</h3>
+        <p><strong>Type music notation:</strong> 1 2 3 4 5 6 7 (or C D E F G A B)</p>
+        <p><strong>Select text and click:</strong></p>
+        <ul>
+            <li><strong>Underline:</strong> Creates slurs over selected notes</li>
+            <li><strong>Overline:</strong> Upper octave marking</li>
+            <li><strong>Double Under:</strong> Lower octave marking</li>
+        </ul>
+        <p><strong>Example:</strong> Type "1 2 3 4 5", select "1 2 3", click "Underline" for slur</p>
+    </div>
+    
+    <div class="editor-section">
+        <div class="toolbar">
+            <button class="btn" onclick="toggleDecoration('underline')" title="Slur (underline)">
+                <u>Slur</u>
+            </button>
+            <button class="btn" onclick="toggleDecoration('overline')" title="Upper octave (overline)">
+                <span style="text-decoration: overline;">Upper</span>
+            </button>
+            <button class="btn" onclick="toggleDecoration('double-underline')" title="Lower octave (double underline)">
+                <span style="text-decoration: underline double;">Lower</span>
+            </button>
+            <button class="btn" onclick="clearFormatting()" title="Clear all formatting">
+                Clear
+            </button>
+        </div>
+        
+        <div id="musicEditor" class="music-editor" contenteditable="true" spellcheck="false">
+Type your music here: 1 2 3 4 5 6 7
+Select notes and use buttons above to add markings.
+        </div>
+    </div>
+    
+    <div class="output-section">
+        <h3>Converted Music-Text Output:</h3>
+        <button class="btn" onclick="convertToMusicText()">Convert to Music-Text</button>
+        <div id="outputContent" class="output-content">
+Click "Convert to Music-Text" to see the linear notation format...
+        </div>
+    </div>
+
+    <script>
+        // Simple toggle decoration function
+        function toggleDecoration(decorationClass) {
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+
+            const range = selection.getRangeAt(0);
+            const selectedText = selection.toString().trim();
+            
+            if (!selectedText) return;
+            
+            // Check if selection is already decorated
+            const container = range.commonAncestorContainer;
+            const parentElement = container.nodeType === Node.ELEMENT_NODE ? container : container.parentNode;
+            
+            if (parentElement.classList && parentElement.classList.contains(decorationClass)) {
+                // Remove decoration
+                const textNode = document.createTextNode(parentElement.textContent);
+                parentElement.parentNode.replaceChild(textNode, parentElement);
+                
+                // Restore selection on new text node
+                const newRange = document.createRange();
+                newRange.selectNodeContents(textNode);
+                selection.removeAllRanges();
+                selection.addRange(newRange);
+            } else {
+                // Add decoration
+                const span = document.createElement('span');
+                span.className = decorationClass;
+                span.textContent = selectedText;
+                
+                range.deleteContents();
+                range.insertNode(span);
+
+                // Reselect the decorated text
+                selection.removeAllRanges();
+                const newRange = document.createRange();
+                newRange.selectNodeContents(span);
+                selection.addRange(newRange);
+            }
+            
+            // Auto-convert after any change
+            setTimeout(convertToMusicText, 100);
+        }
+        
+        function clearFormatting() {
+            const editor = document.getElementById('musicEditor');
+            const plainText = editor.textContent;
+            editor.innerHTML = plainText;
+            convertToMusicText();
+        }
+        
+        function convertToMusicText() {
+            const editor = document.getElementById('musicEditor');
+            const outputContent = document.getElementById('outputContent');
+            
+            let result = '';
+            let position = 0;
+            
+            try {
+                function processNode(node) {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        // Process text character by character
+                        const text = node.textContent;
+                        for (let char of text) {
+                            if (/[1-7CDEFGABSRGMPDNcdefgabsrgmpdn]/.test(char)) {
+                                result += char;
+                            } else if (/[\s\-|]/.test(char)) {
+                                result += char;
+                            }
+                        }
+                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                        const element = node;
+                        
+                        if (element.classList.contains('underline')) {
+                            // Slur: convert spaces to underscores within span
+                            const content = element.textContent;
+                            const slurContent = content.replace(/\s+/g, '_');
+                            result += slurContent;
+                            
+                        } else if (element.classList.contains('overline')) {
+                            // Upper octave: add ' after each note
+                            const content = element.textContent;
+                            for (let char of content) {
+                                if (/[1-7CDEFGABSRGMPDNcdefgabsrgmpdn]/.test(char)) {
+                                    result += char + "'";
+                                } else if (/[\s\-|]/.test(char)) {
+                                    result += char;
+                                }
+                            }
+                            
+                        } else if (element.classList.contains('double-underline')) {
+                            // Lower octave: add , after each note
+                            const content = element.textContent;
+                            for (let char of content) {
+                                if (/[1-7CDEFGABSRGMPDNcdefgabsrgmpdn]/.test(char)) {
+                                    result += char + ",";
+                                } else if (/[\s\-|]/.test(char)) {
+                                    result += char;
+                                }
+                            }
+                            
+                        } else {
+                            // Process child nodes recursively
+                            for (let child of element.childNodes) {
+                                processNode(child);
+                            }
+                        }
+                    }
+                }
+                
+                // Process all content
+                for (let node of editor.childNodes) {
+                    processNode(node);
+                }
+                
+                // Clean up the result
+                result = result.replace(/\s+/g, ' ').trim();
+                
+                outputContent.textContent = result || 'No music notation detected';
+                
+            } catch (error) {
+                outputContent.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Auto-convert on typing
+        document.getElementById('musicEditor').addEventListener('input', function() {
+            setTimeout(convertToMusicText, 300);
+        });
+        
+        // Initial conversion
+        convertToMusicText();
+    </script>
+</body>
+</html>

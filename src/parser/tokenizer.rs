@@ -143,10 +143,14 @@ impl<'a> HandwrittenLexer<'a> {
                 })
             }
 
-            // Underscores - slur markers (consume consecutive underscores)
+            // Underscores - slur markers (consume consecutive underscores and optional box drawing end)
             '_' => {
                 let slur_start_pos = start_pos;
                 while let Some('_') = self.peek() {
+                    self.advance();
+                }
+                // Check for box drawing end character
+                if let Some('╮') = self.peek() {
                     self.advance();
                 }
                 let slur_value: String = self.chars[slur_start_pos..self.pos].iter().collect();
@@ -180,6 +184,21 @@ impl<'a> HandwrittenLexer<'a> {
 
             // Symbols (breath markers, octave markers, etc.)
             '\'' | '.' | ':' | '~' | '#' | 'b' => {
+                Some(Token {
+                    token_type: TokenType::Symbols.as_str().to_string(),
+                    value: ch.to_string(),
+                    line: 0, // Will be set by caller
+                    col: 0,  // Will be set by caller
+                })
+            }
+
+            // Box drawing slur start
+            '╭' => {
+                self.parse_box_drawing_slur()
+            }
+
+            // Isolated box drawing characters - treat as symbols for now  
+            '─' | '╮' => {
                 Some(Token {
                     token_type: TokenType::Symbols.as_str().to_string(),
                     value: ch.to_string(),
@@ -240,6 +259,35 @@ impl<'a> HandwrittenLexer<'a> {
         Some(Token {
             token_type: TokenType::Symbols.as_str().to_string(),
             value: number_value.to_string(),
+            line: 0, // Will be set by caller
+            col: 0,  // Will be set by caller
+        })
+    }
+
+    fn parse_box_drawing_slur(&mut self) -> Option<Token> {
+        let mut slur_value = String::from("╭");
+        
+        // Consume middle characters (─ or _)
+        while let Some(ch) = self.peek() {
+            match ch {
+                '─' | '_' => {
+                    self.advance();
+                    slur_value.push(ch);
+                }
+                _ => break,
+            }
+        }
+        
+        // Check for valid ending (╮ or just end of mixed pattern)
+        if let Some('╮') = self.peek() {
+            self.advance();
+            slur_value.push('╮');
+        }
+        
+        // Accept ╭ followed by any combination of ─ and _ (mixed patterns ok)
+        Some(Token {
+            token_type: "SLUR".to_string(),
+            value: slur_value,
             line: 0, // Will be set by caller
             col: 0,  // Will be set by caller
         })

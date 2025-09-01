@@ -327,8 +327,19 @@ fn process_beat_v2(
         let vexflow_durations = calculate_vexflow_durations(beat_element);
         
         match &beat_element.event {
-            crate::parser::horizontal::Event::Note { degree, octave, .. } => {
+            crate::parser::horizontal::Event::Note { degree, octave, slur, .. } => {
                 let (key, accidentals) = transposer.transpose_pitch(*degree, *octave);
+                
+                // Add slur start marker before the note if needed
+                if let Some(slur_role) = slur {
+                    use crate::models::SlurRole;
+                    match slur_role {
+                        SlurRole::Start | SlurRole::StartEnd => {
+                            beat_notes.push(StaffNotationElement::SlurStart {});
+                        },
+                        _ => {}
+                    }
+                }
                 
                 for (j, (vexflow_duration, dots)) in vexflow_durations.iter().enumerate() {
                     let should_tie = j < vexflow_durations.len() - 1; // Tie if more durations follow
@@ -345,6 +356,17 @@ fn process_beat_v2(
                         syl: beat_element.syl(),
                         ornaments: beat_element.ornaments(),
                     });
+                }
+                
+                // Add slur end marker after the note if needed
+                if let Some(slur_role) = slur {
+                    use crate::models::SlurRole;
+                    match slur_role {
+                        SlurRole::End | SlurRole::StartEnd => {
+                            beat_notes.push(StaffNotationElement::SlurEnd {});
+                        },
+                        _ => {}
+                    }
                 }
             },
             crate::parser::horizontal::Event::Rest => {
