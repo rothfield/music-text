@@ -5,8 +5,11 @@ use std::collections::HashMap;
 use crate::models::Token;
 use crate::models::{ParsedElement, ParsedChild, OrnamentType, SlurRole};
 
-pub fn apply_slurs_and_regions_to_elements(elements: &mut Vec<ParsedElement>, tokens: &[Token]) {
-    // Apply ornaments first, as they are simpler attachments and can be removed from the stream.
+pub fn apply_slurs_and_regions_to_elements(elements: &mut Vec<ParsedElement>, _tokens: &[Token]) {
+    // Apply octave markers first - symbols above/below notes that modify octave
+    apply_octave_markers_to_elements(elements);
+    
+    // Apply ornaments next, as they are simpler attachments and can be removed from the stream.
     apply_ornaments_to_elements(elements);
     
     // Apply syllables to notes using spatial snapping (same algorithm as ornaments)
@@ -18,28 +21,16 @@ pub fn apply_slurs_and_regions_to_elements(elements: &mut Vec<ParsedElement>, to
     // Assign tala markers sequentially to barlines
     assign_talas(elements);
 
-    let mut tokens_by_line: HashMap<usize, Vec<&Token>> = HashMap::new();
-    
-    // Group tokens by line
-    for token in tokens {
-        tokens_by_line.entry(token.line).or_default().push(token);
-    }
-    
-    // Find underscore sequences on each line for slurs
+    // Find slur symbols directly from ParsedElements (not tokens)
     let mut slur_regions: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
     
-    for (line_num, line_tokens) in &tokens_by_line {
-        let slur_tokens: Vec<_> = line_tokens.iter()
-            .filter(|t| t.token_type == "SLUR" || (t.token_type == "SYMBOLS" && t.value == "_"))
-            .collect();
-            
-        if !slur_tokens.is_empty() {
-            for token in &slur_tokens {
-                if token.token_type == "SLUR" {
-                    let start_col = token.col;
-                    let end_col = token.col + token.value.len() - 1;
-                    slur_regions.entry(*line_num).or_default().push((start_col, end_col));
-                }
+    for element in elements.iter() {
+        if let ParsedElement::Symbol { value, position } = element {
+            // Check if this is a slur symbol (underscores or box drawing)
+            if value.starts_with('_') || value.contains('╭') || value.contains('─') || value.contains('╮') {
+                let start_col = position.col;
+                let end_col = position.col + value.chars().count() - 1;
+                slur_regions.entry(position.row).or_default().push((start_col, end_col));
             }
         }
     }
@@ -124,24 +115,19 @@ fn apply_slur_roles_to_elements(elements: &mut Vec<ParsedElement>, slur_regions:
         }
     }
     
-    // Assign slur roles to notes in regions
+    // Process each slur region independently  
     for (slur_line, regions) in slur_regions {
-        for (start_col, end_col) in regions {
-            // Find notes that should have slur markers
+        for (_region_idx, (start_col, end_col)) in regions.iter().enumerate() {
+            
+            // Find notes that should have slur markers for THIS specific region
             let mut notes_in_region: Vec<(usize, usize, usize)> = Vec::new(); // (index, row, col)
             
             for &(idx, note_row, note_col) in &note_positions {
                 // Look for notes on lines below the slur region (check up to 3 lines below)
                 for distance in 1..=3 {
                     if note_row == slur_line + distance {
-                        // Check if note falls within or near the slur region
+                        // Check if note falls within THIS specific slur region
                         if note_col >= *start_col && note_col <= *end_col {
-                            notes_in_region.push((idx, note_row, note_col));
-                        } else if note_col <= *start_col && (*start_col - note_col) <= 3 {
-                            // Note slightly before region (for slur start)
-                            notes_in_region.push((idx, note_row, note_col));
-                        } else if note_col > *end_col && (note_col - *end_col) <= 3 {
-                            // Note slightly after region (for slur end)
                             notes_in_region.push((idx, note_row, note_col));
                         }
                         break;
@@ -153,15 +139,20 @@ fn apply_slur_roles_to_elements(elements: &mut Vec<ParsedElement>, slur_regions:
                 // Sort by column position
                 notes_in_region.sort_by_key(|(_, _, col)| *col);
                 
-                // Assign slur roles directly to the notes
-                for (i, (note_idx, _, _)) in notes_in_region.iter().enumerate() {
+                // Assign slur roles for THIS region only
+                for (i, (note_idx, _, _note_col)) in notes_in_region.iter().enumerate() {
                     if let ParsedElement::Note { slur, .. } = &mut elements[*note_idx] {
-                        *slur = Some(match (i, notes_in_region.len()) {
+                        let role = match (i, notes_in_region.len()) {
                             (0, 1) => SlurRole::StartEnd,  // Single note slur
                             (0, _) => SlurRole::Start,     // First note
                             (n, len) if n == len - 1 => SlurRole::End, // Last note  
                             _ => SlurRole::Middle,         // Middle notes
-                        });
+                        };
+                        
+                        // Only assign if note doesn't already have a slur role
+                        if slur.is_none() {
+                            *slur = Some(role);
+                        }
                     }
                 }
             }
@@ -274,6 +265,83 @@ fn apply_syllables_to_elements(elements: &mut Vec<ParsedElement>) {
         } else {
             i += 1;
         }
+    }
+}
+
+/// Apply octave markers (dots) above or below notes to modify their octave
+fn apply_octave_markers_to_elements(elements: &mut Vec<ParsedElement>) {
+    let mut symbol_indices = Vec::new();
+    let mut note_indices = Vec::new();
+    
+    // Collect symbols and notes
+    for (i, element) in elements.iter().enumerate() {
+        match element {
+            ParsedElement::Symbol { value, .. } if value == "." => {
+                symbol_indices.push(i);
+            }
+            ParsedElement::Note { .. } => {
+                note_indices.push(i);
+            }
+            _ => {}
+        }
+    }
+    
+    let mut consumed_symbol_indices = std::collections::HashSet::new();
+    
+    // For each note, find nearby octave markers (dots)
+    for &note_idx in &note_indices {
+        let note_pos = elements[note_idx].position();
+        let mut best_symbol_idx: Option<usize> = None;
+        let mut min_dist = usize::MAX;
+        
+        // Look for dots above or below this note
+        for &symbol_idx in &symbol_indices {
+            if consumed_symbol_indices.contains(&symbol_idx) {
+                continue;
+            }
+            
+            let symbol_pos = elements[symbol_idx].position();
+            
+            // Check if symbol is vertically adjacent (1 row above or below)
+            let row_diff = (symbol_pos.row as isize - note_pos.row as isize).abs();
+            if row_diff == 1 {
+                // Check horizontal alignment (should be close horizontally)
+                let col_dist = (note_pos.col as isize - symbol_pos.col as isize).abs() as usize;
+                if col_dist < 3 && col_dist < min_dist { // Allow up to 2 characters horizontal drift
+                    min_dist = col_dist;
+                    best_symbol_idx = Some(symbol_idx);
+                }
+            }
+        }
+        
+        // If we found a good octave marker, apply it to the note
+        if let Some(symbol_idx) = best_symbol_idx {
+            // Extract positions before mutable borrow
+            let symbol_row = elements[symbol_idx].position().row;
+            let note_row = elements[note_idx].position().row;
+            let note_pos = elements[note_idx].position().clone();
+            
+            if let ParsedElement::Note { octave, .. } = &mut elements[note_idx] {
+                // Dot above note = higher octave (+1)
+                // Dot below note = lower octave (-1)
+                if symbol_row < note_row {
+                    *octave += 1; // Dot above raises octave
+                    eprintln!("🎵 OCTAVE DEBUG: Applied upper dot to note at {:?}, new octave: {}", note_pos, octave);
+                } else {
+                    *octave -= 1; // Dot below lowers octave
+                    eprintln!("🎵 OCTAVE DEBUG: Applied lower dot to note at {:?}, new octave: {}", note_pos, octave);
+                }
+                consumed_symbol_indices.insert(symbol_idx);
+            }
+        }
+    }
+    
+    // Remove consumed symbol elements (dots that were applied to notes)
+    let mut indices_to_remove: Vec<usize> = consumed_symbol_indices.into_iter().collect();
+    indices_to_remove.sort_by(|a, b| b.cmp(a)); // Sort in reverse order for safe removal
+    
+    for &idx in &indices_to_remove {
+        elements.remove(idx);
     }
 }
 
