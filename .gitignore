@@ -103,3 +103,4 @@ temp_server_tests/
 # Playwright test reports and results
 playwright-report/
 test-results/
+playwright-report/
