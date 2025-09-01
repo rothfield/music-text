@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use crate::models::{Document, Node, Metadata}; // Keep using existing for compatibility
-use crate::pitch::Degree;
+use crate::models::Degree;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SlurRole {

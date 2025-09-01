@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::pitch::Degree;
+use crate::models::Degree;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChunkInfo {

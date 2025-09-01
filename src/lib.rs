@@ -1,36 +1,25 @@
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::models::Token;
 pub use models::Document;
 
 // Import our existing modules
 mod models;
-mod parsed_models; // New type-safe parser AST
-mod lexer;
-pub mod tokenizer;
-mod vertical_parser; // Processes vertical spatial relationships
-pub mod horizontal_parser; // Processes horizontal temporal relationships
-mod lyrics; // New lyrics processor for ParsedElement
-mod pitch;
+mod parser;
 mod display;
-// mod lilypond_converter; // DELETED - V1 converter unused
 pub mod converters; // Unified converter modules (LilyPond, VexFlow, shared utilities)
-mod lilypond_templates; // Still used by V2 converter
 mod outline;
-pub mod vexflow_js_generator; // Modular VexFlow JavaScript generator
-mod rhythm;
-mod notation_detector;
 // mod lyrics; // DELETED - replaced with lyrics
 
-pub use parsed_models::*;
-pub use lexer::lex_text; // tokenize_chunk DELETED - unused
-pub use tokenizer::tokenize_with_handwritten_lexer;
+pub use models::*;
+pub use parser::lex_text; // tokenize_chunk DELETED - unused
+pub use parser::tokenize_with_handwritten_lexer;
+pub use parser::horizontal::*;
 // pub use lilypond_converter::{convert_to_lilypond, convert_to_lilypond_with_template}; // DELETED - V1 converter unused
 // pub use lilypond_templates::{LilyPondTemplate, TemplateContext}; // DELETED - V1 templates unused
-pub use pitch::LilyPondNoteNames;
+pub use models::LilyPondNoteNames;
 pub use display::generate_flattened_spatial_view;
 pub use outline::{generate_outline, ToOutline};
-pub use pitch::{lookup_pitch, Notation}; // guess_notation DELETED - unused
+pub use models::{lookup_pitch, Notation}; // guess_notation DELETED - unused
 pub use converters::vexflow::{convert_elements_to_staff_notation, convert_elements_to_vexflow_js, StaffNotationStave, StaffNotationElement, StaffNotationAccidental};
 
 /// Complete parsing result structure for WASM API
@@ -118,9 +107,9 @@ impl ParseResult {
 // unified_parser V1 deleted - use unified_parser instead
 
 /// Simple conversion from tokens to ParsedElement (replacement for node_builder)
-fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::pitch::Notation) -> Vec<parsed_models::ParsedElement> {
-    use crate::parsed_models::{ParsedElement, Position};
-    use crate::pitch::{lookup_pitch};
+fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::models::Notation) -> Vec<models::ParsedElement> {
+    use crate::models::{ParsedElement, Position};
+    use crate::models::{lookup_pitch};
     
     let mut elements = Vec::new();
     
@@ -211,8 +200,8 @@ fn convert_tokens_to_parsed_elements(tokens: &[Token], global_notation: crate::p
 }
 
 /// Parse a key string to a degree for transposition
-fn parse_key_to_degree(key_str: &str) -> Option<crate::pitch::Degree> {
-    use crate::pitch::Degree;
+fn parse_key_to_degree(key_str: &str) -> Option<crate::models::Degree> {
+    use crate::models::Degree;
     match key_str.to_uppercase().as_str() {
         "C" => Some(Degree::N1),
         "D" => Some(Degree::N2), 
@@ -226,32 +215,32 @@ fn parse_key_to_degree(key_str: &str) -> Option<crate::pitch::Degree> {
 }
 
 /// V2 Parser using ParsedElement instead of Node
-pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument, String), Box<dyn std::error::Error>> {
+pub fn unified_parser(input_text: &str) -> Result<(models::ParsedDocument, String), Box<dyn std::error::Error>> {
     // First detect the notation type
-    let detected_notation = notation_detector::detect_notation_type(input_text);
+    let detected_notation = parser::notation_detector::detect_notation_type(input_text);
     
     // Use handwritten lexer for tokenization
-    let all_tokens = tokenizer::tokenize_with_handwritten_lexer(input_text);
+    let all_tokens = parser::tokenize_with_handwritten_lexer(input_text);
     
     // Create lines for spatial analysis compatibility
     let _lines = lex_text(input_text);
     
     // Parse metadata and detect notation system
-    let (mut metadata, remaining_tokens) = lexer::parse_metadata(&all_tokens);
+    let (mut metadata, remaining_tokens) = parser::parse_metadata(&all_tokens);
     metadata.detected_system = Some(detected_notation.as_str().to_string());
 
     // Convert NotationType to Notation for pitch lookup
     let global_notation = match detected_notation {
-        notation_detector::NotationType::Western => crate::pitch::Notation::Western,
-        notation_detector::NotationType::Sargam => crate::pitch::Notation::Sargam,
-        notation_detector::NotationType::Number => crate::pitch::Notation::Number,
+        parser::NotationType::Western => crate::models::Notation::Western,
+        parser::NotationType::Sargam => crate::models::Notation::Sargam,
+        parser::NotationType::Number => crate::models::Notation::Number,
     };
 
     // Phase 1: Convert tokens to ParsedElement system using global notation detection
     let mut elements = convert_tokens_to_parsed_elements(&remaining_tokens, global_notation);
     
     // Phase 2: Apply slur regions and beat brackets
-    vertical_parser::apply_slurs_and_regions_to_elements(&mut elements, &remaining_tokens, global_notation);
+    parser::vertical::apply_slurs_and_regions_to_elements(&mut elements, &remaining_tokens);
     
     // Save spatial analysis output for debugging
     let spatial_analysis_yaml = serde_yaml::to_string(&elements).unwrap_or_else(|e| format!("YAML serialization error: {}", e));
@@ -259,7 +248,7 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
     // Phase 3: Group elements into lines and beats using FSM
     let lines_of_music = find_musical_lines(&remaining_tokens);
     
-    let mut elements = horizontal_parser::group_elements_with_fsm_full(&elements, &lines_of_music);
+    let mut elements = parser::horizontal::group_elements_with_fsm_full(&elements, &lines_of_music);
         
         // Check for Key in metadata and inject Tonic item at the beginning
         eprintln!("DEBUG: Metadata attributes: {:?}", metadata.attributes);
@@ -274,7 +263,7 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
             if let Some(tonic_degree) = parse_key_to_degree(key_str) {
                 eprintln!("DEBUG: Parsed key '{}' to degree {:?}", key_str, tonic_degree);
                 // Insert Tonic item at the beginning
-                elements.insert(0, horizontal_parser::Item::Tonic(tonic_degree));
+                elements.insert(0, parser::horizontal::Item::Tonic(tonic_degree));
                 eprintln!("DEBUG: Inserted Tonic item at beginning of elements");
             } else {
                 eprintln!("DEBUG: Failed to parse key '{}' to degree", key_str);
@@ -283,19 +272,19 @@ pub fn unified_parser(input_text: &str) -> Result<(parsed_models::ParsedDocument
             eprintln!("DEBUG: No Key found in metadata");
         }
         
-    let mut structured_elements = horizontal_parser::convert_elements_to_elements_public(elements.clone());
+    let mut structured_elements = parser::horizontal::convert_elements_to_elements_public(elements.clone());
     
     // Store FSM output for LilyPond conversion
     LAST_FSM_OUTPUT.with(|s| *s.borrow_mut() = elements);
     
     // Phase 4: Process lyrics if present
-    if lyrics::has_lyrics(&remaining_tokens, &lines_of_music) {
-        let lyrics_lines = lyrics::parse_lyrics_lines(&remaining_tokens, input_text);
-        lyrics::distribute_syllables_to_elements(&mut structured_elements, lyrics_lines);
+    if models::has_lyrics(&remaining_tokens, &lines_of_music) {
+        let lyrics_lines = models::parse_lyrics_lines(&remaining_tokens, input_text);
+        models::distribute_syllables_to_elements(&mut structured_elements, lyrics_lines);
     }
 
     // Create ParsedDocument
-    let document_v2 = parsed_models::ParsedDocument {
+    let document_v2 = models::ParsedDocument {
         metadata: metadata.clone(),
         elements: structured_elements,
         notation_system: metadata.detected_system.clone(),
@@ -434,7 +423,7 @@ thread_local! {
     static LAST_COLORIZED_OUTPUT: RefCell<String> = RefCell::new(String::new());
     static LAST_OUTLINE_OUTPUT: RefCell<String> = RefCell::new(String::new());
     static LAST_YAML_OUTPUT: RefCell<String> = RefCell::new(String::new());
-    static LAST_FSM_OUTPUT: RefCell<Vec<horizontal_parser::Item>> = RefCell::new(Vec::new());
+    static LAST_FSM_OUTPUT: RefCell<Vec<parser::horizontal::Item>> = RefCell::new(Vec::new());
     static LAST_ERROR_MESSAGE: RefCell<String> = RefCell::new(String::new());
 }
 
@@ -444,7 +433,7 @@ pub fn get_detected_system() -> String {
 }
 
 /// Get the last FSM output for CLI use (avoid running FSM twice)
-pub fn get_last_elements() -> Vec<horizontal_parser::Item> {
+pub fn get_last_elements() -> Vec<parser::horizontal::Item> {
     LAST_FSM_OUTPUT.with(|s| s.borrow().clone())
 }
 

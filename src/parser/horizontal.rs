@@ -1,6 +1,6 @@
 // Rhythm FSM V2 - Works with ParsedElement instead of Node
-use crate::parsed_models::{ParsedElement, ParsedChild, OrnamentType, Position, SlurRole};
-use crate::pitch::Degree;
+use crate::models::{ParsedElement, ParsedChild, OrnamentType, Position, SlurRole};
+use crate::models::Degree;
 use fraction::Fraction;
 
 #[derive(Debug, Clone)]

@@ -1,9 +1,9 @@
 // LilyPond Source Code Generator - Works directly with ParsedElement, no conversion needed
 use crate::models::{Metadata}; // Keep using existing metadata
-use crate::pitch::{Degree};
-use crate::lilypond_templates::{TemplateContext, render_lilypond};
-use crate::horizontal_parser::{Item, Beat};
-use super::transposition::transpose_degree_with_octave;
+use crate::models::{Degree};
+use crate::converters::lilypond::templates::{TemplateContext, render_lilypond};
+use crate::parser::horizontal::{Item, Beat};
+use crate::converters::transposition::transpose_degree_with_octave;
 
 /// Find the index of the last actual note (not barline, breathmark, etc.) in lilypond_notes
 fn find_last_note_index(lilypond_notes: &[String]) -> Option<usize> {
@@ -114,7 +114,7 @@ pub fn convert_elements_to_lilypond_src(
     let context = context.build();
     
     // Auto-select template based on document complexity
-    let template = crate::lilypond_templates::auto_select_template_for_metadata(metadata);
+    let template = crate::converters::lilypond::templates::auto_select_template_for_metadata(metadata);
     
     // Render template
     render_lilypond(template, &context)
@@ -137,7 +137,7 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
             let mut note_str = format!("{}{}", lily_note, duration_string);
             
             // Add slur markers based on note's slur attribute
-            use crate::parsed_models::SlurRole;
+            use crate::models::SlurRole;
             let slur = if let Some((_, _, _, slur_role)) = beat_element.as_note() {
                 slur_role
             } else {
@@ -152,7 +152,7 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
             }
             
             // Add ornament markers
-            use crate::parsed_models::OrnamentType;
+            use crate::models::OrnamentType;
             for ornament in &beat_element.ornaments() {
                 match ornament {
                     OrnamentType::Mordent => note_str.push_str("\\mordent"),
@@ -264,7 +264,7 @@ fn barline_type_to_lilypond(barline_type: &crate::models::BarlineType, is_at_beg
 
 /// Convert a Fraction duration to LilyPond note duration string
 fn fraction_to_lilypond_note(duration: fraction::Fraction) -> String {
-    use crate::rhythm::RhythmConverter;
+    use crate::models::RhythmConverter;
     
     // Use the existing rhythm converter to get VexFlow durations, then map to LilyPond
     let vexflow_durations = RhythmConverter::fraction_to_vexflow(duration);

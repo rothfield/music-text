@@ -1,5 +1,5 @@
 use crate::models::{Token, TokenType};
-use crate::notation_detector::NotationType;
+use crate::parser::notation_detector::NotationType;
 
 pub struct HandwrittenLexer<'a> {
     _input: &'a str,
@@ -306,7 +306,7 @@ impl<'a> HandwrittenLexer<'a> {
 // Simple function to replace the regex-based tokenizer
 pub fn tokenize_with_handwritten_lexer(input: &str) -> Vec<Token> {
     // First detect the notation type
-    let notation_type = crate::notation_detector::detect_notation_type(input);
+    let notation_type = crate::parser::notation_detector::detect_notation_type(input);
     let mut lexer = HandwrittenLexer::new(input, notation_type);
     let mut tokens = lexer.tokenize();
     

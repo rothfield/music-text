@@ -2,9 +2,9 @@
 // Generates VexFlow-compatible JavaScript from FSM Item output
 
 use crate::models::Metadata;
-use crate::horizontal_parser::{Item, BeatElement};
-use crate::pitch::Degree;
-use crate::rhythm::RhythmConverter;
+use crate::parser::horizontal::{Item, BeatElement};
+use crate::models::Degree;
+use crate::models::RhythmConverter;
 use serde::{Serialize, Deserialize};
 
 /// VexFlow slur structure for JavaScript generation
@@ -51,7 +51,7 @@ pub struct VexFlowNote {
     pub dots: u8,
     pub tied: bool,
     pub beat_index: usize, // Track which beat this note belongs to
-    pub ornaments: Vec<crate::parsed_models::OrnamentType>,
+    pub ornaments: Vec<crate::models::OrnamentType>,
     pub syl: Option<String>, // Syllable/lyric text
 }
 
@@ -413,7 +413,7 @@ fn generate_notes_and_barlines_js(notes: &[VexFlowNote], barlines: &[VexFlowBarl
         // Add ornaments
         for ornament in &note.ornaments {
             let ornament_str = match ornament {
-                crate::parsed_models::OrnamentType::Mordent => "mordent",
+                crate::models::OrnamentType::Mordent => "mordent",
                 _ => "mordent", // Default for now
             };
             js_lines.push(format!(
@@ -1033,7 +1033,7 @@ console.log('Tala {} drawn successfully');"#,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pitch::Degree;
+    use crate::models::Degree;
 
     #[test]
     fn test_degree_to_vexflow_key() {

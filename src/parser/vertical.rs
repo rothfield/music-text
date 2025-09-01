@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use crate::models::Token;
-use crate::parsed_models::{ParsedElement, ParsedChild, OrnamentType, SlurRole};
+use crate::models::{ParsedElement, ParsedChild, OrnamentType, SlurRole};
 
 pub fn apply_slurs_and_regions_to_elements(elements: &mut Vec<ParsedElement>, tokens: &[Token]) {
     // Apply ornaments first, as they are simpler attachments and can be removed from the stream.

@@ -1,5 +1,5 @@
 /// Shared transposition utilities for both LilyPond and VexFlow converters
-use crate::pitch::Degree;
+use crate::models::Degree;
 
 /// Transpose a degree and octave based on the tonic (movable-do system)
 /// Returns (transposed_degree, adjusted_octave)

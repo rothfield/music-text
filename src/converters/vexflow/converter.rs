@@ -1,11 +1,11 @@
 // Staff Notation Converter - Works directly with FSM Item, clean architecture
 // Generates VexFlow-compatible JSON for staff notation rendering
 use crate::models::Metadata;
-use crate::horizontal_parser::{Item, Beat};
-use crate::pitch::{Degree};
-use crate::rhythm::RhythmConverter;
-use super::transposition::transpose_degree_with_octave;
-use crate::parsed_models::OrnamentType;
+use crate::parser::horizontal::{Item, Beat};
+use crate::models::{Degree};
+use crate::models::RhythmConverter;
+use crate::converters::transposition::transpose_degree_with_octave;
+use crate::models::OrnamentType;
 use serde::{Deserialize, Serialize};
 
 /// Staff notation output structures for rendering
@@ -233,7 +233,7 @@ pub fn convert_elements_to_vexflow_js(
         eprintln!("CONVERTER DEBUG: Element {}: {:?}", i, elem);
     }
     // Use the VexFlow JavaScript generator
-    crate::vexflow_js_generator::generate_vexflow_js(elements, metadata)
+    crate::converters::vexflow::js_generator::generate_vexflow_js(elements, metadata)
 }
 
 /// Main conversion function from V2 FSM output to staff notation JSON
@@ -309,7 +309,7 @@ pub fn convert_elements_to_staff_notation(
 }
 
 /// Extract duration calculation logic to avoid duplication
-fn calculate_vexflow_durations(beat_element: &crate::horizontal_parser::BeatElement) -> Vec<(String, u8)> {
+fn calculate_vexflow_durations(beat_element: &crate::parser::horizontal::BeatElement) -> Vec<(String, u8)> {
     let duration_to_use = beat_element.tuplet_display_duration.unwrap_or(beat_element.tuplet_duration);
     RhythmConverter::fraction_to_vexflow(duration_to_use)
 }
@@ -327,7 +327,7 @@ fn process_beat_v2(
         let vexflow_durations = calculate_vexflow_durations(beat_element);
         
         match &beat_element.event {
-            crate::horizontal_parser::Event::Note { degree, octave, .. } => {
+            crate::parser::horizontal::Event::Note { degree, octave, .. } => {
                 let (key, accidentals) = transposer.transpose_pitch(*degree, *octave);
                 
                 for (j, (vexflow_duration, dots)) in vexflow_durations.iter().enumerate() {
@@ -347,7 +347,7 @@ fn process_beat_v2(
                     });
                 }
             },
-            crate::horizontal_parser::Event::Rest => {
+            crate::parser::horizontal::Event::Rest => {
                 for (vexflow_duration, dots) in vexflow_durations {
                     beat_notes.push(StaffNotationElement::Rest {
                         duration: vexflow_duration,

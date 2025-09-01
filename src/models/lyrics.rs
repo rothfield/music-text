@@ -1,6 +1,6 @@
 // Lyrics processing module V2 - Works with ParsedElement
 use crate::models::Token;
-use crate::parsed_models::{ParsedElement, ParsedChild};
+use crate::models::{ParsedElement, ParsedChild};
 
 /// Check if there are lyrics tokens below music lines
 pub fn has_lyrics(tokens: &[Token], music_lines: &[usize]) -> bool {

@@ -2,7 +2,7 @@
 // HAML-style outline generator for document structure visualization
 
 use crate::models::{Document, Node};
-use crate::pitch::pitchcode_to_string;
+use crate::models::pitchcode_to_string;
 use std::fs::File;
 use std::io::{self, Write};
 
