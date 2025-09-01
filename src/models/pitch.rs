@@ -5,6 +5,7 @@ pub enum Notation {
     Western,
     Number,
     Sargam,
+    Tabla,
 }
 
 impl fmt::Display for Notation {
@@ -19,6 +20,7 @@ impl Notation {
             Notation::Western => "Western",
             Notation::Number => "Number", 
             Notation::Sargam => "Sargam",
+            Notation::Tabla => "Tabla",
         }
     }
 }
@@ -201,6 +203,18 @@ pub fn lookup_pitch(symbol: &str, notation: Notation) -> Option<Degree> {
             "N#" => Some(Degree::N7s),
             "N##" => Some(Degree::N7ss),
             "Nbb" => Some(Degree::N7bb),
+            _ => None,
+        },
+        Notation::Tabla => match symbol {
+            // Tabla bols - all map to degree 1 since tabla is percussion (pitch doesn't matter)
+            "dha" => Some(Degree::N1),
+            "ge" => Some(Degree::N1),
+            "na" => Some(Degree::N1),
+            "ka" => Some(Degree::N1),
+            "ta" => Some(Degree::N1),
+            "trka" => Some(Degree::N1),
+            "terekita" => Some(Degree::N1),
+            "dhin" => Some(Degree::N1),
             _ => None,
         },
     }
@@ -434,6 +448,22 @@ mod tests {
         // Verify they are equivalent
         assert_eq!(lookup_pitch("s", Notation::Sargam), lookup_pitch("S", Notation::Sargam));
         assert_eq!(lookup_pitch("p", Notation::Sargam), lookup_pitch("P", Notation::Sargam));
+    }
+
+    #[test]
+    fn test_tabla_pitch_lookup() {
+        // Test that all tabla bols map to degree N1 (since tabla is percussion)
+        assert_eq!(lookup_pitch("dha", Notation::Tabla), Some(Degree::N1));
+        assert_eq!(lookup_pitch("ge", Notation::Tabla), Some(Degree::N1));
+        assert_eq!(lookup_pitch("na", Notation::Tabla), Some(Degree::N1));
+        assert_eq!(lookup_pitch("ka", Notation::Tabla), Some(Degree::N1));
+        assert_eq!(lookup_pitch("ta", Notation::Tabla), Some(Degree::N1));
+        assert_eq!(lookup_pitch("trka", Notation::Tabla), Some(Degree::N1));
+        assert_eq!(lookup_pitch("terekita", Notation::Tabla), Some(Degree::N1));
+        assert_eq!(lookup_pitch("dhin", Notation::Tabla), Some(Degree::N1));
+        
+        // Test unknown tabla bol
+        assert_eq!(lookup_pitch("unknown", Notation::Tabla), None);
     }
 }
 

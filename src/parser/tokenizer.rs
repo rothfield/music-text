@@ -232,22 +232,51 @@ impl<'a> HandwrittenLexer<'a> {
     fn parse_pitch(&mut self, _first_char: char) -> Option<Token> {
         let start_pos = self.pos - 1;
         
-        // Check for accidentals (sharps/flats) after the pitch
-        while let Some(ch) = self.peek() {
-            match ch {
-                '#' | 'b' => {
-                    self.advance();
+        match self.notation_type {
+            NotationType::Tabla => {
+                // For tabla, consume the full tabla bol
+                let tabla_bols = ["dha", "ge", "na", "ka", "ta", "trka", "terekita", "dhin"];
+                
+                for bol in &tabla_bols {
+                    if start_pos + bol.len() <= self.chars.len() {
+                        let potential_bol: String = self.chars[start_pos..(start_pos + bol.len())].iter().collect();
+                        if potential_bol == *bol {
+                            // Advance position to consume the full bol
+                            self.pos = start_pos + bol.len();
+                            self.col = self.col - 1 + bol.len(); // Adjust column position
+                            
+                            return Some(Token {
+                                token_type: TokenType::Pitch.as_str().to_string(),
+                                value: bol.to_string(),
+                                line: 0, // Will be set by caller
+                                col: 0,  // Will be set by caller
+                            });
+                        }
+                    }
                 }
-                _ => break,
+                
+                // Fallback if no tabla bol matched
+                None
+            }
+            _ => {
+                // Check for accidentals (sharps/flats) after the pitch
+                while let Some(ch) = self.peek() {
+                    match ch {
+                        '#' | 'b' => {
+                            self.advance();
+                        }
+                        _ => break,
+                    }
+                }
+                
+                Some(Token {
+                    token_type: TokenType::Pitch.as_str().to_string(),
+                    value: self.chars[start_pos..self.pos].iter().collect(),
+                    line: 0, // Will be set by caller
+                    col: 0,  // Will be set by caller
+                })
             }
         }
-        
-        Some(Token {
-            token_type: TokenType::Pitch.as_str().to_string(),
-            value: self.chars[start_pos..self.pos].iter().collect(),
-            line: 0, // Will be set by caller
-            col: 0,  // Will be set by caller
-        })
     }
 
     fn parse_number(&mut self, _first_char: char) -> Option<Token> {
@@ -347,7 +376,31 @@ impl<'a> HandwrittenLexer<'a> {
             NotationType::Western => matches!(ch, 'A'..='G'),
             NotationType::Sargam => matches!(ch, 'S' | 's' | 'r' | 'R' | 'g' | 'G' | 'm' | 'M' | 'P' | 'p' | 'd' | 'D' | 'n' | 'N'),
             NotationType::Number => matches!(ch, '1'..='7'),
+            NotationType::Tabla => {
+                // For tabla, we need to look ahead to see if this starts a tabla bol
+                self.starts_tabla_bol(ch)
+            }
         }
+    }
+    
+    fn starts_tabla_bol(&self, ch: char) -> bool {
+        // Check if current position could start a tabla bol
+        let tabla_bols = ["dha", "ge", "na", "ka", "ta", "trka", "terekita", "dhin"];
+        
+        for bol in &tabla_bols {
+            if let Some(first_char) = bol.chars().next() {
+                if ch == first_char {
+                    // Check if we have enough characters remaining
+                    if self.pos - 1 + bol.len() <= self.chars.len() {
+                        let potential_bol: String = self.chars[(self.pos - 1)..(self.pos - 1 + bol.len())].iter().collect();
+                        if potential_bol == *bol {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 }
 

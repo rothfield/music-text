@@ -234,6 +234,7 @@ pub fn unified_parser(input_text: &str) -> Result<(models::ParsedDocument, Strin
         parser::NotationType::Western => crate::models::Notation::Western,
         parser::NotationType::Sargam => crate::models::Notation::Sargam,
         parser::NotationType::Number => crate::models::Notation::Number,
+        parser::NotationType::Tabla => crate::models::Notation::Tabla,
     };
 
     // Phase 1: Convert tokens to ParsedElement system using global notation detection
@@ -536,7 +537,7 @@ fn toggle_slur_on_line(lines: Vec<&str>, target_line: usize, sel_start: usize, s
     
     match slur_line_idx {
         Some(slur_idx) => {
-            // Slur line exists - toggle slurs in the selected region
+            // Slur line exists - check if selection already has slurs above it
             let mut slur_line = result_lines[slur_idx].chars().collect::<Vec<char>>();
             
             // Ensure slur line is at least as long as target line
@@ -544,17 +545,24 @@ fn toggle_slur_on_line(lines: Vec<&str>, target_line: usize, sel_start: usize, s
                 slur_line.push(' ');
             }
             
-            // Toggle slurs in selection range
-            for pos in sel_start..sel_end.min(slur_line.len()) {
-                if pos < target_line_str.len() {
-                    let target_char = target_line_str.chars().nth(pos).unwrap_or(' ');
-                    
-                    // Only place slurs above musical characters
-                    if is_musical_char(target_char) {
-                        if slur_line[pos] == '_' || slur_line[pos] == '─' {
-                            slur_line[pos] = ' '; // Remove slur
-                        } else {
-                            slur_line[pos] = '_'; // Add slur
+            // Check if selection range already has slurs
+            let has_slurs_in_selection = (sel_start..sel_end.min(slur_line.len()))
+                .any(|pos| pos < slur_line.len() && (slur_line[pos] == '_' || slur_line[pos] == '─'));
+            
+            if has_slurs_in_selection {
+                // Remove all slurs in selection range
+                for pos in sel_start..sel_end.min(slur_line.len()) {
+                    if pos < target_line_str.len() {
+                        slur_line[pos] = ' ';
+                    }
+                }
+            } else {
+                // Add slurs only over musical characters (creates separate slur regions)
+                for pos in sel_start..sel_end.min(slur_line.len()) {
+                    if pos < target_line_str.len() {
+                        let target_char = target_line_str.chars().nth(pos).unwrap_or(' ');
+                        if is_musical_char(target_char) {
+                            slur_line[pos] = '_';
                         }
                     }
                 }
@@ -572,10 +580,10 @@ fn toggle_slur_on_line(lines: Vec<&str>, target_line: usize, sel_start: usize, s
             // No slur line exists - create one with slurs for selection
             let mut slur_line = vec![' '; target_line_str.len()];
             
+            // Add slurs only over musical characters (creates separate slur regions)
             for pos in sel_start..sel_end.min(slur_line.len()) {
                 if pos < target_line_str.len() {
                     let target_char = target_line_str.chars().nth(pos).unwrap_or(' ');
-                    
                     if is_musical_char(target_char) {
                         slur_line[pos] = '_';
                     }
