@@ -1,7 +1,7 @@
 # Minimal Syllable Support Implementation Plan
 
 ## Overview
-This document outlines the complete plan for implementing minimal syllable support in the notation parser. Syllables will be snapped to the nearest pitch before or after them, with lyrics lines reparsed as syllables/words and integrated into both VexFlow and LilyPond output with SOP styling (small, italic).
+This document outlines the complete plan for implementing minimal syllable support in the music-text. Syllables will be snapped to the nearest pitch before or after them, with lyrics lines reparsed as syllables/words and integrated into both VexFlow and LilyPond output with SOP styling (small, italic).
 
 ## Key Insights from Analysis
 

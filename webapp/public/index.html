@@ -1,1131 +1,150 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Music Notation Parser - Text to Staff Notation</title>
-    <meta name="description" content="Convert text-based music notation (Numbers, Letters, Sargam) to professional staff notation instantly">
-    
-    <!-- Modern CSS with CSS Variables for theming -->
-    <style>
-        :root {
-            --primary-color: #2563eb;
-            --primary-hover: #1d4ed8;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --error-color: #ef4444;
-            --text-primary: #1f2937;
-            --text-secondary: #6b7280;
-            --text-muted: #9ca3af;
-            --bg-primary: #ffffff;
-            --bg-secondary: #f8fafc;
-            --bg-tertiary: #f1f5f9;
-            --border-color: #e5e7eb;
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-            --radius-sm: 0.375rem;
-            --radius-md: 0.5rem;
-            --radius-lg: 0.75rem;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: var(--text-primary);
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            margin: 0;
-            padding: 0;
-        }
-
-        /* Header Section */
-        .hero {
-            background: var(--bg-primary);
-            padding: 2rem 1rem;
-            text-align: center;
-            box-shadow: var(--shadow-md);
-        }
-
-        .hero h1 {
-            font-size: clamp(1.8rem, 4vw, 2.5rem);
-            font-weight: 800;
-            color: var(--text-primary);
-            margin-bottom: 0.5rem;
-        }
-
-        .hero p {
-            font-size: clamp(1rem, 2vw, 1.125rem);
-            color: var(--text-secondary);
-            max-width: 600px;
-            margin: 0 auto;
-        }
-
-        .notation-badges {
-            display: flex;
-            justify-content: center;
-            gap: 0.75rem;
-            margin-top: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .badge {
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius-md);
-            font-size: 0.875rem;
-            font-weight: 500;
-            border: 1px solid var(--border-color);
-        }
-
-        /* Main Container */
-        .container {
-            width: 100%;
-            margin: 0;
-            padding: 2rem 1rem;
-        }
-
-        /* Simple Rectangle Components */
-        .section {
-            background: var(--bg-primary);
-            border: 1px solid var(--border-color);
-            margin-bottom: 1px; /* Minimal gap between sections */
-            overflow: visible; /* Allow wide content */
-        }
-
-        .section-content {
-            padding: 1rem;
-            overflow-x: auto; /* Enable horizontal scrolling */
-            scrollbar-width: auto; /* Firefox */
-            -ms-overflow-style: scrollbar; /* IE/Edge */
-        }
-        
-        /* Webkit scrollbar styling for section content */
-        .section-content::-webkit-scrollbar {
-            height: 12px;
-        }
-        .section-content::-webkit-scrollbar-track {
-            background: var(--bg-secondary);
-            border-radius: var(--radius-sm);
-        }
-        .section-content::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: var(--radius-sm);
-        }
-        .section-content::-webkit-scrollbar-thumb:hover {
-            background: var(--text-muted);
-        }
-
-        /* Input Section */
-        .input-group {
-            margin-bottom: 0; /* Remove gap between textarea and canvas */
-        }
-
-        .label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-        }
-
-        #notation-input {
-            width: 100%;
-            padding: 1rem;
-            border: 2px solid var(--border-color);
-            border-radius: var(--radius-md);
-            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
-            font-size: 1rem;
-            line-height: 1.5;
-            resize: vertical;
-            min-height: 120px;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-        }
-
-        #notation-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
-        }
-
-        #notation-input::placeholder {
-            color: #000000 !important;
-            opacity: 1 !important;
-            font-weight: 500;
-        }
-
-        /* VexFlow Output */
-        #vexflow-canvas {
-            width: fit-content;  /* Size to content - can expand freely */
-            min-height: 175px;
-            margin: 0; /* Remove all margins */
-            border-radius: var(--radius-md);
-            background: var(--bg-primary);
-            border: 2px dashed var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;  /* Left-align the wide content */
-            transition: border-color 0.2s ease;
-        }
-
-        #vexflow-canvas.has-content {
-            border: 2px solid var(--success-color);
-            border-style: solid;
-        }
-
-        #vexflow-canvas svg {
-            /* Prevent SVG from scaling down - maintain original size */
-            max-width: none !important;
-            width: auto !important;
-            height: auto;
-            flex-shrink: 0; /* Don't shrink the SVG in flexbox */
-        }
-
-        .placeholder {
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 0.875rem;
-            padding: 2rem;
-        }
-
-        .placeholder-icon {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-            display: block;
-        }
-
-        /* Error States */
-        .error-message {
-            background: rgb(254 242 242);
-            border: 1px solid rgb(252 165 165);
-            color: var(--error-color);
-            padding: 1rem;
-            border-radius: var(--radius-md);
-            font-size: 0.875rem;
-            margin-top: 1rem;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
-            }
-            
-            .hero {
-                padding: 1.5rem 1rem;
-            }
-            
-            .card-content {
-                padding: 1rem;
-            }
-            
-            .card-header {
-                padding: 1rem;
-            }
-            
-            .notation-badges {
-                gap: 0.5rem;
-            }
-            
-            .badge {
-                padding: 0.375rem 0.75rem;
-                font-size: 0.75rem;
-            }
-        }
-
-        @media (max-width: 480px) {
-            #notation-input {
-                font-size: 16px; /* Prevent zoom on iOS */
-                padding: 0.875rem;
-            }
-        }
-
-        /* Loading Animation */
-        .loading {
-            display: inline-block;
-            width: 1rem;
-            height: 1rem;
-            border: 2px solid var(--border-color);
-            border-radius: 50%;
-            border-top-color: var(--primary-color);
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        /* LilyPond Button */
-        .lilypond-btn {
-            background-color: var(--success-color);
-            color: white;
-            padding: 12px 24px;
-            font-size: 1rem;
-            font-weight: 600;
-            border: none;
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            transition: background-color 0.2s ease, transform 0.1s ease;
-            margin-right: 0.75rem;
-        }
-
-        .lilypond-btn:hover {
-            background-color: #059669;
-            transform: translateY(-1px);
-        }
-
-        .lilypond-btn:active {
-            transform: translateY(0);
-        }
-
-        .lilypond-btn:disabled {
-            background-color: #9ca3af;
-            transform: none;
-            cursor: not-allowed;
-        }
-
-        .source-toggle-btn {
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
-            padding: 12px 24px;
-            font-size: 1rem;
-            font-weight: 600;
-            border: 2px solid var(--border-color);
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .source-toggle-btn:hover {
-            background-color: var(--bg-tertiary);
-            transform: translateY(-1px);
-        }
-
-        .source-toggle-btn:active {
-            transform: translateY(0);
-        }
-        
-        /* Slur Button */
-        .slur-btn {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 8px 16px;
-            border: none;
-            border-radius: var(--radius-md);
-            font-size: 0.875rem;
-            font-weight: 500;
-            cursor: pointer;
-            box-shadow: var(--shadow-sm);
-            transition: all 0.2s ease;
-        }
-        .slur-btn:hover {
-            background-color: var(--primary-hover);
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-md);
-        }
-        .slur-btn:active {
-            transform: translateY(0);
-        }
-        .slur-btn:disabled {
-            background-color: #9ca3af;
-            transform: none;
-            cursor: not-allowed;
-        }
-
-        .lilypond-source {
-            margin-top: 1rem;
-            display: none;
-        }
-
-        .lilypond-source.visible {
-            display: block;
-        }
-
-        .source-code-display {
-            background: var(--bg-tertiary);
-            padding: 1rem;
-            border-radius: var(--radius-md);
-            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
-            font-size: 0.875rem;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            border: 1px solid var(--border-color);
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Server Status Indicator */
-        .server-status {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            background: var(--bg-primary);
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius-md);
-            font-size: 0.875rem;
-            font-weight: 500;
-            box-shadow: var(--shadow-lg);
-            border: 1px solid var(--border-color);
-            z-index: 1000;
-        }
-
-        .server-status.online {
-            color: var(--success-color);
-            border-color: var(--success-color);
-        }
-
-        .server-status.offline {
-            color: var(--error-color);
-            border-color: var(--error-color);
-        }
-
-        /* Header positioning for status indicator */
-        .hero {
-            position: relative;
-        }
-
-        /* Main Action Button */
-        .main-action-btn {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-            color: white;
-            border: none;
-            padding: 1.5rem 2rem;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border-radius: var(--radius-lg);
-            cursor: pointer;
-            box-shadow: var(--shadow-lg);
-            transition: all 0.2s ease;
-            min-width: 280px;
-            max-width: 400px;
-            aspect-ratio: 2.2/1; /* Squarish but slightly wider */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            line-height: 1.3;
-        }
-
-        .main-action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 15px 25px -3px rgb(0 0 0 / 0.2);
-            background: linear-gradient(135deg, var(--primary-hover), #1e40af);
-        }
-
-        .main-action-btn:active {
-            transform: translateY(0);
-            box-shadow: var(--shadow-md);
-        }
-
-        .main-action-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: var(--shadow-md);
-        }
-
-        /* Dark mode support */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --text-primary: #f9fafb;
-                --text-secondary: #d1d5db;
-                --text-muted: #9ca3af;
-                --bg-primary: #1f2937;
-                --bg-secondary: #374151;
-                --bg-tertiary: #4b5563;
-                --border-color: #4b5563;
-            }
-            
-            body {
-                background: linear-gradient(135deg, #1e3a8a 0%, #581c87 100%);
-            }
-        }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/vexflow@latest/build/vexflow.js"></script>
+    <title>Music-Text Parser</title>
+    <link rel="stylesheet" href="css/app.css?v=73a8d47b">
 </head>
 <body>
-    <!-- Hero Section -->
-    <header class="hero">
-        <div id="server-status" class="server-status">
-            <span id="server-indicator">🟡 Checking server...</span>
-        </div>
-        <h1>🎵 Text to Staff Notation</h1>
-    </header>
-
-    <!-- Main Content -->
-    <main class="container">
-        <!-- Input Card -->
-        <div class="section">
-            <div class="section-content">
-                <!-- Notation System Selector -->
-                <div class="notation-selector" style="margin-bottom: 1rem;">
-                    <select id="notation-system" style="
-                        padding: 0.5rem 0.75rem;
-                        border: 2px solid var(--border-color);
-                        border-radius: var(--radius-md);
-                        background-color: var(--bg-primary);
-                        color: var(--text-primary);
-                        font-size: 1rem;
-                        font-weight: 500;
-                        cursor: pointer;
-                        font-family: monospace;
-                        min-width: 150px;
-                    ">
-                        <option disabled>Notation System</option>
+    <div class="container">
+        <div class="main-content">
+            <div class="input-section">
+                <div class="controls">
+                    <select id="system">
                         <option value="auto">Auto-detect</option>
-                        <option value="Number">1234567</option>
-                        <option value="Western">CDEFGAB</option>
-                        <option value="Sargam">SRGMPDn</option>
-                        <option value="Bhatkhande">स रे ग म प ध नि</option>
-                        <option value="Tabla">dha-ge-na</option>
+                        <option value="number">Number (1 2 3)</option>
+                        <option value="sargam">Sargam (S R G)</option>
+                        <option value="western">Western (C D E)</option>
                     </select>
+                    <button onclick="parse()">Parse</button>
+                    <div id="server-status" class="status offline">Checking...</div>
                 </div>
-                <div class="input-group">
-                    <textarea 
-                        id="notation-input" 
-                        placeholder="Numbers: 1-2-3-4-5-6-7
-Letters: C-D-E-F-G-A-B  
-Sargam: S-R-G-M-P-D-N
-Bhatkhande: स-रे-ग-म-प-ध-नि
-Tabla: dha-ge-na-ka-ta
-
-Try Happy Birthday:
-• Numbers: 5-5 | 6 5 1 | 7 - - | 5-5 | 6 5 2 | 1 - - |
-           , ,   , ,     ,       , ,   , ,     
-• Letters: G-G | A G C | B - - | G-G | A G D | C - - |
-          , ,   , ,     ,       , ,   , ,
-• Sargam: P-P | D P S | N - - | P-P | D P R | S - - |
-         , ,   , ,     ,       , ,   , ,
-• Bhatkhande: प-प | ध प स | नि - - | प-प | ध प रे | स - - |
-            , ,   , ,     ,       , ,   , ,"
-                        autocomplete="off"
-                        spellcheck="false"
-                    ></textarea>
-                    <div class="slur-controls" style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
-                        <button id="slur-btn" class="slur-btn" title="Select text on a musical line and click to toggle slurs">
-                            🎵 Add Slur
-                        </button>
-                        <span class="slur-help" style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">
-                            Select notes on a musical line and click to toggle slurs
-                        </span>
+                <textarea id="input" placeholder="Try: 1-2-3 | S R G M P | C D E F | key: D&#10;1 2 3">1-2-3</textarea>
+            </div>
+            
+            <div class="tabs">
+                <button class="tab active" data-tab="ast" onclick="showTab('ast')">
+                    <span class="tab-number">1</span>Raw AST
+                </button>
+                <button class="tab" data-tab="parser" onclick="showTab('parser')">
+                    <span class="tab-number">2</span>Parser Output
+                </button>
+                <button class="tab" data-tab="spatial" onclick="showTab('spatial')">
+                    <span class="tab-number">3</span>Spatial AST
+                </button>
+                <button class="tab" data-tab="fsm" onclick="showTab('fsm')">
+                    <span class="tab-number">4</span>FSM
+                </button>
+                <button class="tab" data-tab="lilypond-minimal" onclick="showTab('lilypond-minimal')">
+                    <span class="tab-number">5</span>LilyPond (Minimal)
+                </button>
+                <button class="tab" data-tab="lilypond-src" onclick="showTab('lilypond-src')">
+                    <span class="tab-number">6</span>LilyPond (Full)
+                </button>
+                <button class="tab" data-tab="lilypond-png" onclick="showTab('lilypond-png')">
+                    <span class="tab-number">7</span>LilyPond PNG
+                </button>
+                <button class="tab" data-tab="vexflow" onclick="showTab('vexflow')">
+                    <span class="tab-number">8</span>VexFlow
+                </button>
+                <button class="tab" data-tab="raw" onclick="showTab('raw')">
+                    <span class="tab-number">9</span>Raw JSON
+                </button>
+            </div>
+            
+            <div id="ast-content" class="tab-content active">
+                <div class="output-header">
+                    <div>
+                        <div class="output-title">Raw AST (Before Spatial Processing)</div>
                     </div>
+                    <button class="copy-btn" onclick="copyToClipboard('ast-output')">📋 Copy</button>
+                </div>
+                <pre id="ast-output">Waiting for input...</pre>
+            </div>
+            
+            <div id="parser-content" class="tab-content">
+                <div class="output-header">
+                    <div>
+                        <div class="output-title">Parser Output (YAML)</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('parser-output')">📋 Copy</button>
+                </div>
+                <pre id="parser-output">Waiting for input...</pre>
+            </div>
+            
+            <div id="spatial-content" class="tab-content">
+                <div class="output-header">
+                    <div>
+                        <div class="output-title">Spatial AST (After Spatial Processing)</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('spatial-output')">📋 Copy</button>
+                </div>
+                <pre id="spatial-output">Waiting for input...</pre>
+            </div>
+            
+            <div id="fsm-content" class="tab-content">
+                <div class="output-header">
+                    <div>
+                        <div class="output-title">FSM (Finite State Machine) Output</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('fsm-output')">📋 Copy</button>
+                </div>
+                <pre id="fsm-output">Waiting for input...</pre>
+            </div>
+            
+            <div id="lilypond-minimal-content" class="tab-content">
+                <div class="output-header">
+                    <div>
+                        <div class="output-title">LilyPond Source (Minimal)</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('lilypond-minimal-output')">📋 Copy</button>
+                </div>
+                <pre id="lilypond-minimal-output" class="warning">LilyPond converter not yet implemented in pest parser</pre>
+            </div>
+            
+            <div id="lilypond-src-content" class="tab-content">
+                <div class="output-header">
+                    <div>
+                        <div class="output-title">LilyPond Source (Full)</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('lilypond-src-output')">📋 Copy</button>
+                </div>
+                <pre id="lilypond-src-output" class="warning">LilyPond converter not yet implemented in pest parser</pre>
+            </div>
+            
+            <div id="lilypond-png-content" class="tab-content">
+                <div class="output-header">
+                    <div>
+                        <div class="output-title">LilyPond PNG Output</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('lilypond-png-output')">📋 Copy URL</button>
+                </div>
+                <div id="lilypond-png-output" style="text-align: center; padding: 40px;">
+                    <div class="warning">LilyPond PNG rendering not yet implemented</div>
                 </div>
             </div>
-        </div>
-
-                <div id="vexflow-canvas">
-                    <div class="placeholder">
-                        <span class="placeholder-icon">🎵</span>
-                        <div>Your notation will appear here as beautiful staff notation</div>
-                        <div style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.7;">
-                            Start typing in the text area above
-                        </div>
+            
+            <div id="vexflow-content" class="tab-content">
+                <div class="output-header">
+                    <div>
+                        <div class="output-title">VexFlow Rendering</div>
                     </div>
+                    <button class="copy-btn" onclick="copyToClipboard('vexflow-output')">📋 Copy</button>
                 </div>
-                <span id="loading-indicator" class="loading" style="display: none;"></span>
-                <div id="error-container"></div>
+                <pre id="vexflow-output" class="warning">VexFlow converter not yet implemented in pest parser</pre>
+            </div>
+            
+            <div id="raw-content" class="tab-content">
+                <div class="output-header">
+                    <div>
+                        <div class="output-title">Raw JSON Response</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('raw-output')">📋 Copy</button>
+                </div>
+                <pre id="raw-output">Waiting for input...</pre>
             </div>
         </div>
+    </div>
 
-        <!-- LilyPond Generation Section -->
-        <div class="section">
-            <div class="section-content">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <div style="display: flex; gap: 0.75rem;">
-                        <button id="generate-lilypond-btn" class="source-toggle-btn">
-                            📄 Generate High Quality Music Notation
-                        </button>
-                        <button id="toggle-source-btn" class="source-toggle-btn">
-                            Show Source
-                        </button>
-                    </div>
-                    <div id="generation-status" style="color: var(--success-color); font-weight: 500;"></div>
-                </div>
-                <div id="lilypond-output">
-                    <div class="placeholder">
-                        <span class="placeholder-icon">📄</span>
-                        <div>Click Generate LilyPond to create professional staff notation</div>
-                    </div>
-                </div>
-                <div id="lilypond-source" class="lilypond-source">
-                    <div style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">LilyPond Source Code</div>
-                    <div id="source-code" class="source-code-display"></div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">
-                        Copy to LilyPond software for rendering
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <script type="module">
-        import init, { parse_notation, parse_notation_with_system, toggle_slurs } from './pkg/music_text_parser.js';
-        
-        let vexflowRenderer = null;
-        let context = null;
-        let isInitialized = false;
-        
-        function showLoading(show = true) {
-            const indicator = document.getElementById('loading-indicator');
-            indicator.style.display = show ? 'inline-block' : 'none';
-        }
-        
-        function showError(message) {
-            const errorContainer = document.getElementById('error-container');
-            errorContainer.innerHTML = `
-                <div class="error-message">
-                    ⚠️ ${message}
-                </div>
-            `;
-        }
-        
-        function clearError() {
-            const errorContainer = document.getElementById('error-container');
-            errorContainer.innerHTML = '';
-        }
-        
-        function initVexFlow() {
-            const canvas = document.getElementById('vexflow-canvas');
-            canvas.innerHTML = '';
-            canvas.classList.add('has-content');
-            
-            const VF = Vex.Flow;
-            vexflowRenderer = new VF.Renderer(canvas, VF.Renderer.Backends.SVG);
-            vexflowRenderer.resize(800, 200);
-            context = vexflowRenderer.getContext();
-        }
-        
-        function resetCanvas() {
-            const canvas = document.getElementById('vexflow-canvas');
-            canvas.classList.remove('has-content');
-            canvas.innerHTML = `
-                <div class="placeholder">
-                    <span class="placeholder-icon">🎵</span>
-                    <div>Your notation will appear here as beautiful staff notation</div>
-                    <div style="font-size: 0.75rem; margin-top: 0.5rem; opacity: 0.7;">
-                        Start typing in the text area above
-                    </div>
-                </div>
-            `;
-        }
-        
-        
-        function renderNotation(input) {
-            if (!isInitialized) return;
-            
-            showLoading();
-            clearError();
-            
-            // Debounce rendering for better performance
-            setTimeout(() => {
-                try {
-                    if (!input.trim()) {
-                        resetCanvas();
-                        showLoading(false);
-                        return;
-                    }
-                    
-                    // Get selected notation system
-                    const notationSelector = document.getElementById('notation-system');
-                    const selectedNotation = notationSelector ? notationSelector.value : 'auto';
-                    
-                    const result = parse_notation_with_system(input, selectedNotation);
-                    if (!result.success) {
-                        resetCanvas();
-                        showError('Could not parse the notation. Please check your syntax.');
-                        showLoading(false);
-                        return;
-                    }
-                    
-                    const vexflowOutput = result.vexflow_output;
-                    console.log('🔧 VexFlow Output Length:', vexflowOutput?.length || 'undefined');
-                    console.log('🔧 VexFlow Output Preview:', vexflowOutput?.substring(0, 200) || 'empty');
-                    
-                    // Store full JavaScript for debugging
-                    window.lastVexFlowJS = vexflowOutput;
-                    if (!vexflowOutput) {
-                        resetCanvas();
-                        showError('No notation to display from the parsed input.');
-                        showLoading(false);
-                        return;
-                    }
-                    
-                    // Execute Rust-generated VexFlow JavaScript directly
-                    const canvas = document.getElementById('vexflow-canvas');
-                    const renderVexFlow = new Function('canvas', 'VF', vexflowOutput);
-                    renderVexFlow(canvas, Vex.Flow);
-                    
-                    showLoading(false);
-                    
-                } catch (error) {
-                    console.error('Rendering error:', error);
-                    resetCanvas();
-                    showError(`Rendering error: ${error.message || 'Unknown error occurred'}`);
-                    showLoading(false);
-                }
-            }, 300); // Debounce delay
-        }
-        
-        let isServerOnline = false;
-        
-        async function checkServerStatus() {
-            const serverStatus = document.getElementById('server-status');
-            const serverIndicator = document.getElementById('server-indicator');
-            
-            try {
-                const response = await fetch('/api/health', { method: 'GET' });
-                if (response.ok) {
-                    serverIndicator.innerHTML = 'Server Online';
-                    serverStatus.className = 'server-status online';
-                    isServerOnline = true;
-                } else {
-                    serverIndicator.innerHTML = 'Server Offline';
-                    serverStatus.className = 'server-status offline';
-                    isServerOnline = false;
-                }
-            } catch (error) {
-                serverIndicator.innerHTML = 'Server Offline';
-                serverStatus.className = 'server-status offline';
-                isServerOnline = false;
-            }
-        }
-
-        let currentLilypondSource = '';
-        let isSourceVisible = false;
-        
-        function toggleSource() {
-            const sourceSection = document.getElementById('lilypond-source');
-            const toggleBtn = document.getElementById('toggle-source-btn');
-            
-            if (isSourceVisible) {
-                sourceSection.classList.remove('visible');
-                toggleBtn.textContent = 'Show Source';
-                isSourceVisible = false;
-            } else {
-                sourceSection.classList.add('visible');
-                toggleBtn.textContent = 'Hide Source';
-                isSourceVisible = true;
-            }
-        }
-        
-        function toggleSlur() {
-            const textarea = document.getElementById('notation-input');
-            const slurBtn = document.getElementById('slur-btn');
-            
-            // Get selection
-            const selectionStart = textarea.selectionStart;
-            const selectionEnd = textarea.selectionEnd;
-            let finalSelectionStart = selectionStart;
-            let finalSelectionEnd = selectionEnd;
-            
-            // Check if there's a selection
-            if (selectionStart === selectionEnd) {
-                // No selection - show helper message and maintain focus
-                const helpSpan = document.querySelector('.slur-help');
-                const originalText = helpSpan.textContent;
-                helpSpan.textContent = 'Please select some text first!';
-                helpSpan.style.color = 'var(--error-color)';
-                
-                // Keep focus on textarea
-                textarea.focus();
-                
-                setTimeout(() => {
-                    helpSpan.textContent = originalText;
-                    helpSpan.style.color = 'var(--text-muted)';
-                }, 2000);
-                return;
-            }
-            
-            // Disable button during processing
-            slurBtn.disabled = true;
-            const originalText = slurBtn.textContent;
-            slurBtn.textContent = '⏳ Processing...';
-            
-            try {
-                // Call WASM function to toggle slurs
-                const originalContent = textarea.value;
-                const newContent = toggle_slurs(originalContent, selectionStart, selectionEnd);
-                
-                // Find the exact same selected text in the new content
-                const selectedText = originalContent.substring(selectionStart, selectionEnd);
-                console.log('🔧 Original selected text:', JSON.stringify(selectedText));
-                console.log('🔧 Original positions:', selectionStart, '-', selectionEnd);
-                console.log('🔧 New content:', JSON.stringify(newContent));
-                
-                // Find where this exact text appears in the new content
-                let newSelectionStart = newContent.indexOf(selectedText);
-                let newSelectionEnd = newSelectionStart + selectedText.length;
-                
-                // If we can't find the exact text, try to find the line containing it
-                if (newSelectionStart === -1) {
-                    console.log('🔧 Exact text not found, looking for line...');
-                    // Split both old and new content into lines
-                    const originalLines = originalContent.split('\n');
-                    const newLines = newContent.split('\n');
-                    
-                    // Find which line contained our selection
-                    let currentPos = 0;
-                    let targetLine = -1;
-                    let lineStartPos = 0;
-                    let relativeStart = selectionStart;
-                    let relativeEnd = selectionEnd;
-                    
-                    for (let i = 0; i < originalLines.length; i++) {
-                        const lineEnd = currentPos + originalLines[i].length;
-                        if (selectionStart >= currentPos && selectionStart <= lineEnd) {
-                            targetLine = i;
-                            lineStartPos = currentPos;
-                            relativeStart = selectionStart - currentPos;
-                            relativeEnd = selectionEnd - currentPos;
-                            break;
-                        }
-                        currentPos = lineEnd + 1; // +1 for newline
-                    }
-                    
-                    console.log('🔧 Found target line:', targetLine, 'relative pos:', relativeStart, '-', relativeEnd);
-                    
-                    // Find the same line in new content and calculate new positions
-                    if (targetLine >= 0 && targetLine < newLines.length) {
-                        let newCurrentPos = 0;
-                        for (let i = 0; i < targetLine; i++) {
-                            newCurrentPos += newLines[i].length + 1; // +1 for newline
-                        }
-                        newSelectionStart = newCurrentPos + relativeStart;
-                        newSelectionEnd = newCurrentPos + relativeEnd;
-                        console.log('🔧 New positions:', newSelectionStart, '-', newSelectionEnd);
-                    }
-                } else {
-                    console.log('🔧 Found exact text at position:', newSelectionStart, '-', newSelectionEnd);
-                }
-                
-                // CRITICAL: Bounds checking for new content length
-                const maxPos = newContent.length;
-                if (newSelectionStart < 0 || newSelectionStart >= maxPos) {
-                    console.log('⚠️ Selection start out of bounds, using 0');
-                    newSelectionStart = 0;
-                }
-                if (newSelectionEnd < 0 || newSelectionEnd > maxPos) {
-                    console.log('⚠️ Selection end out of bounds, using max position');
-                    newSelectionEnd = maxPos;
-                }
-                if (newSelectionEnd < newSelectionStart) {
-                    console.log('⚠️ Selection end before start, swapping');
-                    [newSelectionStart, newSelectionEnd] = [newSelectionEnd, newSelectionStart];
-                }
-                
-                console.log('🔧 Final safe selection:', newSelectionStart, '-', newSelectionEnd, 'of', maxPos);
-                
-                // Store the adjusted selection for final restoration
-                finalSelectionStart = newSelectionStart;
-                finalSelectionEnd = newSelectionEnd;
-                
-                // Update textarea
-                textarea.value = newContent;
-                
-                // Always restore focus and selection after slur operation
-                textarea.focus();
-                textarea.setSelectionRange(newSelectionStart, newSelectionEnd);
-                
-                // Trigger parsing update
-                renderNotation(textarea.value);
-                
-                // Save to localStorage (cursor position will be captured after text is updated)
-                setTimeout(() => saveToLocalStorage(), 0);
-                
-            } catch (error) {
-                console.error('Error toggling slur:', error);
-                const helpSpan = document.querySelector('.slur-help');
-                const originalHelpText = helpSpan.textContent;
-                helpSpan.textContent = 'Error processing slur. Please try again.';
-                helpSpan.style.color = 'var(--error-color)';
-                
-                // Restore focus and selection even on error (use original positions since change failed)
-                textarea.focus();
-                textarea.setSelectionRange(selectionStart, selectionEnd);
-                
-                setTimeout(() => {
-                    helpSpan.textContent = originalHelpText;
-                    helpSpan.style.color = 'var(--text-muted)';
-                }, 2000);
-            } finally {
-                // Re-enable button and ensure focus is on textarea
-                slurBtn.disabled = false;
-                slurBtn.textContent = originalText;
-                
-                // Final focus insurance - makes sure user can continue typing with correct selection
-                setTimeout(() => {
-                    textarea.focus();
-                    // Double-check bounds before final selection restore
-                    const currentLength = textarea.value.length;
-                    const safeStart = Math.max(0, Math.min(finalSelectionStart, currentLength));
-                    const safeEnd = Math.max(safeStart, Math.min(finalSelectionEnd, currentLength));
-                    textarea.setSelectionRange(safeStart, safeEnd);
-                }, 50);
-            }
-        }
-        
-        async function generateLilyPond() {
-            const input = document.getElementById('notation-input');
-            const lilypondBtn = document.getElementById('generate-lilypond-btn');
-            const lilypondOutput = document.getElementById('lilypond-output');
-            const sourceCode = document.getElementById('source-code');
-            const statusDiv = document.getElementById('generation-status');
-            
-            if (!input.value.trim()) {
-                lilypondOutput.innerHTML = `
-                    <div class="error-message">
-                        ⚠️ Please enter some notation first
-                    </div>
-                `;
-                return;
-            }
-            
-            try {
-                lilypondBtn.disabled = true;
-                lilypondBtn.textContent = 'Generating...';
-                statusDiv.textContent = ''; // Clear previous status
-                
-                const result = parse_notation(input.value.trim());
-                if (!result.success) {
-                    throw new Error('Could not parse notation');
-                }
-                
-                const lilypondCode = result.lilypond_output;
-                if (!lilypondCode || !lilypondCode.trim()) {
-                    throw new Error('No LilyPond output generated');
-                }
-                
-                // Always update source code
-                currentLilypondSource = lilypondCode;
-                sourceCode.textContent = lilypondCode;
-                
-                if (isServerOnline) {
-                    // Server online: Try to generate PNG
-                    try {
-                        const response = await fetch('/api/lilypond-to-png', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ lilypondCode: lilypondCode })
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            statusDiv.textContent = '✅ Professional notation generated';
-                            lilypondOutput.innerHTML = `
-                                <div style="text-align: left;">
-                                    <img src="${data.imageUrl}" alt="LilyPond Staff Notation" style="max-width: 100%; height: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-                                </div>
-                            `;
-                            return;
-                        }
-                    } catch (serverError) {
-                        console.log('Server PNG generation failed:', serverError);
-                    }
-                    
-                    // PNG generation failed
-                    lilypondOutput.innerHTML = `
-                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                            <div style="color: var(--warning-color); font-weight: 500; margin-bottom: 0.5rem;">⚠️ Server error - showing source code instead</div>
-                            <div style="font-size: 0.875rem;">Use Show Source button to view generated code</div>
-                        </div>
-                    `;
-                } else {
-                    // Server offline
-                    lilypondOutput.innerHTML = `
-                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                            <div style="color: var(--error-color); font-weight: 500; margin-bottom: 0.5rem;">🔴 Server offline - source code generated</div>
-                            <div style="font-size: 0.875rem;">Use Show Source button to view generated code</div>
-                        </div>
-                    `;
-                }
-                
-            } catch (error) {
-                console.error('LilyPond generation error:', error);
-                lilypondOutput.innerHTML = `
-                    <div class="error-message">
-                        ⚠️ ${error.message || 'Failed to generate LilyPond notation'}
-                    </div>
-                `;
-            } finally {
-                lilypondBtn.disabled = false;
-                lilypondBtn.textContent = 'Generate LilyPond';
-            }
-        }
-
-        // Local storage functions
-        function saveToLocalStorage(notation, selectionStart, selectionEnd) {
-            try {
-                const textarea = document.getElementById('notation-input');
-                const notationSelector = document.getElementById('notation-system');
-                const settings = {
-                    notation: notation || textarea.value,
-                    selectionStart: selectionStart !== undefined ? selectionStart : textarea.selectionStart,
-                    selectionEnd: selectionEnd !== undefined ? selectionEnd : textarea.selectionEnd,
-                    notationSystem: notationSelector ? notationSelector.value : 'auto',
-                    timestamp: Date.now()
-                };
-                console.log(`Saving cursor position: ${settings.selectionStart}-${settings.selectionEnd}, notation: ${settings.notationSystem}`);
-                localStorage.setItem('musicNotationSettings', JSON.stringify(settings));
-            } catch (e) {
-                console.error("Failed to save to local storage:", e);
-            }
-        }
-        
-        function loadFromLocalStorage() {
-            try {
-                const savedSettings = localStorage.getItem('musicNotationSettings');
-                if (savedSettings) {
-                    const settings = JSON.parse(savedSettings);
-                    const input = document.getElementById('notation-input');
-                    const notationSelector = document.getElementById('notation-system');
-                    
-                    // Restore notation system selection
-                    if (settings.notationSystem && notationSelector) {
-                        notationSelector.value = settings.notationSystem;
-                    }
-                    
-                    if (settings.notation && input) {
-                        input.value = settings.notation;
-                        
-                        // Restore cursor position if saved
-                        if (settings.selectionStart !== undefined && settings.selectionEnd !== undefined) {
-                            // Use setTimeout to ensure the textarea has processed the value change
-                            setTimeout(() => {
-                                const maxPos = input.value.length;
-                                const start = Math.min(settings.selectionStart, maxPos);
-                                const end = Math.min(settings.selectionEnd, maxPos);
-                                input.setSelectionRange(start, end);
-                                console.log(`Restored cursor position: ${start}-${end} (max: ${maxPos}), notation: ${settings.notationSystem || 'auto'}`);
-                            }, 100); // Longer timeout to ensure DOM is ready
-                        }
-                        
-                        return settings.notation;
-                    }
-                }
-            } catch (e) {
-                console.error("Failed to load from local storage:", e);
-            }
-            return '';
-        }
-
-        async function setupApp() {
-            try {
-                showLoading();
-                await checkServerStatus();
-                
-                // Check server status periodically
-                setInterval(checkServerStatus, 5000);
-                
-                await init({ module_or_path: './pkg/music_text_parser_bg.wasm' });
-                isInitialized = true;
-                
-                const input = document.getElementById('notation-input');
-                const lilypondBtn = document.getElementById('generate-lilypond-btn');
-                
-                // Load saved notation from localStorage (this also restores cursor position)
-                const savedNotation = loadFromLocalStorage();
-                
-                // Set focus to textarea for cursor positioning
-                if (savedNotation) {
-                    input.focus();
-                }
-                
-                // Render initial notation only if there's content
-                if (input.value.trim()) {
-                    renderNotation(input.value);
-                }
-                
-                // Update on input with debouncing
-                let debounceTimer;
-                input.addEventListener('input', (e) => {
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(() => {
-                        renderNotation(e.target.value);
-                        saveToLocalStorage(e.target.value);
-                    }, 150);
-                });
-                
-                // Handle focus and blur for mobile (but don't select all if cursor position was restored)
-                let initialFocusHandled = false;
-                input.addEventListener('focus', () => {
-                    if (!initialFocusHandled && savedNotation) {
-                        // Don't select all text on initial focus if we restored content
-                        initialFocusHandled = true;
-                    } else {
-                        // Normal behavior for subsequent focuses
-                        input.select();
-                    }
-                });
-                
-                // Save cursor position on key events and focus changes
-                input.addEventListener('keyup', () => {
-                    saveToLocalStorage();
-                });
-                
-                input.addEventListener('mouseup', () => {
-                    saveToLocalStorage();
-                });
-                
-                input.addEventListener('blur', () => {
-                    saveToLocalStorage();
-                });
-                
-                // LilyPond generation button
-                lilypondBtn.addEventListener('click', generateLilyPond);
-                
-                // Source toggle button
-                const toggleBtn = document.getElementById('toggle-source-btn');
-                toggleBtn.addEventListener('click', toggleSource);
-                
-                // Slur toggle button
-                const slurBtn = document.getElementById('slur-btn');
-                slurBtn.addEventListener('click', toggleSlur);
-                
-                // Notation system selector
-                const notationSelector = document.getElementById('notation-system');
-                
-                // Set default selection to Auto-detect if no localStorage value
-                const savedSettings = localStorage.getItem('notationParser_settings');
-                if (!savedSettings) {
-                    notationSelector.value = 'auto';
-                } else {
-                    // If there are saved settings but no notation system, default to auto
-                    try {
-                        const settings = JSON.parse(savedSettings);
-                        if (!settings.notationSystem) {
-                            notationSelector.value = 'auto';
-                        }
-                    } catch (e) {
-                        notationSelector.value = 'auto';
-                    }
-                }
-                
-                notationSelector.addEventListener('change', () => {
-                    // Save the new selection
-                    saveToLocalStorage();
-                    
-                    // Re-parse the content with the new notation system
-                    if (input.value.trim()) {
-                        renderNotation(input.value);
-                    }
-                });
-                
-                showLoading(false);
-            } catch (error) {
-                console.error('Setup error:', error);
-                showError(`Failed to initialize: ${error.message || 'Please refresh the page'}`);
-                showLoading(false);
-            }
-        }
-        
-        setupApp();
-    </script>
+    <script src="js/app.js?v=999e2d62"></script>
 </body>
 </html>

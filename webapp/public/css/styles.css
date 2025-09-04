@@ -1,4 +1,4 @@
-/* Notation Parser Token Styles - All possible token types */
+/* Music-Text Parser Token Styles - All possible token types */
 .token-pitch { color: yellow; }  /* Yellow for pitches */
 .token-barline { color: green; }  /* Green for barlines */
 .token-dash { color: yellow; }  /* Yellow for dashes */

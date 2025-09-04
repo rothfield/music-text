@@ -329,7 +329,7 @@ pub fn parsed_elements_to_nodes(elements: Vec<ParsedElement>) -> Vec<Node> {
     elements.into_iter().map(|e| e.into()).collect()
 }
 
-/// Convert ParsedDocument to legacy Document for WASM compatibility
+/// Convert ParsedDocument to legacy Document for backward compatibility
 impl From<ParsedDocument> for Document {
     fn from(doc_v2: ParsedDocument) -> Self {
         Document {

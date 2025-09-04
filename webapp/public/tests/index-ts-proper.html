@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notation Parser - Multi-System Music Notation</title>
+    <title>Music-Text Parser - Multi-System Music Notation</title>
     <link rel="stylesheet" href="css/styles.css">
     <style>
         body {
@@ -188,7 +188,7 @@
 </head>
 <body>
     <div class="header" id="header-section">
-        <h1>🎵 Multi-System Notation Parser <span id="version-display" style="font-size: 16px; color: #cccccc;"></span> <span id="timestamp-display" style="font-size: 12px; color: #999;"></span></h1>
+        <h1>🎵 Multi-System Music-Text Parser <span id="version-display" style="font-size: 16px; color: #cccccc;"></span> <span id="timestamp-display" style="font-size: 12px; color: #999;"></span></h1>
         <p>Enter music notation in any system: Sargam (S R G M P D N), Western (C D E F G A B), or Numbers (1 2 3 4 5 6 7)</p>
     </div>
 
@@ -348,7 +348,7 @@
             try {
                 const app = new UIController();
                 await app.initialize();
-                console.log('🎵 TypeScript Notation Parser application initialized successfully');
+                console.log('🎵 TypeScript Music-Text Parser application initialized successfully');
             } catch (error) {
                 console.error('Failed to initialize TypeScript application:', error);
             }
@@ -392,7 +392,7 @@
             try {
                 const loadStartTime = performance.now();
                 const unique_version = new Date().getTime();
-                wasm = await import(`../pkg/notation_parser.js?v=${unique_version}`);
+                wasm = await import(`../pkg/music-text.js?v=${unique_version}`);
                 await wasm.default(); // This is the 'init' function
                 const loadEndTime = performance.now();
                 const loadTimeMs = Math.round(loadEndTime - loadStartTime);
@@ -698,8 +698,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        notation: notation, 
-                        filename: `web_live_${Date.now()}.123` 
+                        notation: notation
                     })
                 });
                 
@@ -1525,8 +1524,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        notation: notation, 
-                        filename: `fsm_debug_${Date.now()}.123` 
+                        notation: notation
                     })
                 });
                 
@@ -2025,7 +2023,7 @@
         
         async function checkWasmUpdates() {
             try {
-                const response = await fetch('../pkg/notation_parser_bg.wasm', { method: 'HEAD' });
+                const response = await fetch('../pkg/music-text_bg.wasm', { method: 'HEAD' });
                 const lastModified = response.headers.get('Last-Modified');
                 
                 if (lastWasmTimestamp && lastModified && lastWasmTimestamp !== lastModified) {
@@ -2548,7 +2546,7 @@
         
         // Add debug commands to console on load
         console.log(`
-🎵 Notation Parser Debug Commands:
+🎵 Music-Text Parser Debug Commands:
 • runSelfTest() - Re-run the self-test suite
 • showSelfTestResults() - Show last self-test results
 • wasm.get_version() - Get WASM version

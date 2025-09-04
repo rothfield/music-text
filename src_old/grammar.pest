@@ -1,0 +1,113 @@
+-- A Pest grammar for parsing various musical notation systems.
+-- This is a unified translation of the core concepts from the doremi-script EBNF grammar.
+-- It is designed to be used by a Rust parser built with the `pest` library.
+
+-- ============== Top Level Structure ==============
+document = { SOI ~ directives_section? ~ (stave ~ (empty_line+ ~ stave)*)? ~ EOI }
+
+directives_section = { directive ~ (NEWLINE ~ directive)* }
+directive = { directive_key ~ ":" ~ WHITESPACE? ~ directive_value }
+directive_key = @{ ASCII_ALPHANUMERIC+ }
+directive_value = { (!NEWLINE ~ ANY)+ }
+
+stave = {
+    upper_annotation_line*
+    ~ content_line
+    ~ lower_annotation_line*
+    ~ lyrics_line*
+}
+
+-- An empty line, possibly with whitespace, used as a separator
+empty_line = _ { WHITESPACE? ~ NEWLINE }
+
+-- ============== Line Types ==============
+
+-- The main line containing musical notes
+content_line = { line_number? ~ (barline? ~ measure)+ ~ barline? ~ NEWLINE? }
+
+-- Lines for annotations above the notes (ornaments, chords, tala)
+upper_annotation_line = { !content_line ~ !lyrics_line ~ annotation_element+ ~ NEWLINE }
+annotation_element = _ { WHITESPACE | tala | chord | mordent | ornament | ending | upper_octave_marker }
+
+-- Lines for annotations below the notes (octave dots, kommal marks)
+lower_annotation_line = { !content_line ~ !lyrics_line ~ lower_element+ ~ NEWLINE }
+lower_element = _ { WHITESPACE | lower_octave_marker | kommal_indicator }
+
+-- Lines for lyrics
+lyrics_line = { !content_line ~ syllable ~ (WHITESPACE ~ syllable)* ~ NEWLINE }
+
+
+-- ============== Musical Components ============== 
+
+measure = { beat ~ (WHITESPACE ~ beat)* }
+
+-- A beat can be undelimited (e.g., "srg") or delimited (e.g., "<s r g>")
+beat = { delimited_beat | undelimited_beat }
+undelimited_beat = { beat_element+ }
+delimited_beat = { "<" ~ (beat_element | WHITESPACE)* ~ ">" }
+beat_element = { slur | pitch | dash }
+
+-- Barlines (longest matches first)
+barline = { 
+    "||" 
+    | "|:"
+    | ":|"
+    | "|."
+    | "|"
+}
+
+-- Pitches for various systems
+pitch = @{
+    (sargam_base | number_base | western_base) ~ accidental?
+}
+sargam_base = { 'S' | 's' | 'R' | 'r' | 'G' | 'g' | 'M' | 'm' | 'P' | 'p' | 'D' | 'd' | 'N' | 'n' }
+number_base = { '1'..'7' }
+western_base = { 'A'..'G' | 'a'..'g' }
+accidental = { "##" | "#" | "bb" | "b" }
+
+-- Note extender
+dash = { "-" }
+
+-- Slur markers
+slur = { "(" | ")" }
+
+
+-- ============== Annotation Components ============== 
+
+-- Line number, e.g., "1) "
+line_number = { ASCII_DIGIT+ ~ ")" ~ WHITESPACE? }
+
+-- Tala markers, e.g., "+", "0", "2", "3"
+tala = @{ "+" | "0".."6" }
+
+-- Chords, e.g., "[Am]"
+chord = { "[" ~ chord_inner ~ "]" }
+chord_inner = @{ (ASCII_ALPHANUMERIC | " ")* }
+
+-- Mordent, e.g., "~"
+mordent = { "~" }
+
+-- Ornaments (grace notes)
+ornament = { delimited_ornament | undelimited_ornament }
+undelimited_ornament = { pitch+ }
+delimited_ornament = { "<" ~ pitch+ ~ ">" }
+
+-- Endings, e.g., "1.---" or "2____"
+ending = @{ "1".."3" ~ (".." | "_")* }
+
+-- Octave markers
+upper_octave_marker = { "'" | ":" | "*" }
+lower_octave_marker = { "." }
+
+-- Kommal indicator for Bhatkhande notation
+kommal_indicator = { "_" }
+
+-- Syllables for lyrics
+syllable = @{ (ASCII_ALPHA | "'")+ ~ "-"? }
+
+
+-- ============== Silent Utility Rules ============== 
+-- These rules are for structure and are hidden from the AST.
+WHITESPACE = _ { " " | "\t" }
+NEWLINE    = _ { "\r\n" | "\n" }
+COMMENT    = _ { "(*" ~ (!"*)" ~ ANY)* ~ "*)" }

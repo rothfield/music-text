@@ -1,5 +1,10 @@
+// Version check for main.js
+if (confirm('main.js version: STRUCTURE_PRESERVING_FSM_v2.0 - Continue?')) {
+    console.log('Loading main.js STRUCTURE_PRESERVING_FSM_v2.0');
+}
+
 import { showStatus, formatJsonAsYaml } from './utils.js';
-import { parseNotationApi, generateLilypondPngApi, checkServerHealth } from './api.js';
+import { parseNotationApi, generateLilypondSvgApi, checkServerHealth } from './api.js';
 import { renderLiveVexFlowPreview } from './vexflow-renderer.js';
 
 let wasm;
@@ -59,10 +64,27 @@ const elements = {
 };
 
 async function loadWasm() {
+    // WASM module disabled - using pest parser API instead
+    console.log('WASM module disabled - using pest parser API on port 3000');
+    wasmLoaded = false;
+    window.wasmLoaded = false;
+    
+    // Set version display for API mode
+    if (elements.versionDisplay) {
+        elements.versionDisplay.textContent = 'API Mode';
+    }
+    if (elements.timestampDisplay) {
+        elements.timestampDisplay.textContent = '(using pest parser API)';
+    }
+    
+    showStatus(elements.statusContainer, `✅ Using pest parser API mode`, 'success');
+    
+    // Original WASM loading code commented out since we're using the pest parser API
+    /*
     try {
         const loadStartTime = performance.now();
         const unique_version = new Date().getTime();
-        const wasmModule = await import(`../../pkg/notation_parser.js?v=${unique_version}`);
+        const wasmModule = await import(`../../pkg/music_text_parser.js?v=${unique_version}`);
         await wasmModule.default();
         wasm = wasmModule;
         const loadEndTime = performance.now();
@@ -89,6 +111,77 @@ async function loadWasm() {
         console.error('Failed to load WASM module:', error);
         showStatus(elements.statusContainer, `❌ Failed to load WASM module: ${error.message}`, 'error');
     }
+    */
+}
+
+// WebSocket connection for WASM auto-reload during development
+// Automatically reloads WASM module when files change on server
+function setupAutoReload() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}`;
+    
+    let ws;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    
+    function connect() {
+        console.log('🔌 Connecting to auto-reload WebSocket...');
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => {
+            console.log('✅ Auto-reload WebSocket connected');
+            reconnectAttempts = 0;
+            showStatus(elements.statusContainer, '🔄 Auto-reload enabled', 'success');
+        };
+        
+        ws.onmessage = async (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                
+                if (message.type === 'wasm-reload') {
+                    console.log(`🔄 WASM file changed: ${message.file}, reloading...`);
+                    showStatus(elements.statusContainer, `🔄 WASM updated (${message.file}), reloading...`, 'info');
+                    
+                    // Clear old WASM references
+                    wasm = null;
+                    wasmLoaded = false;
+                    window.wasm = null;
+                    window.wasmLoaded = false;
+                    
+                    // Wait a brief moment for file system to stabilize
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Reload WASM
+                    await loadWasm();
+                    
+                    // Show success message
+                    showStatus(elements.statusContainer, `✅ WASM auto-reloaded successfully!`, 'success');
+                }
+            } catch (error) {
+                console.error('Error handling WebSocket message:', error);
+            }
+        };
+        
+        ws.onclose = () => {
+            console.log('🔌 Auto-reload WebSocket closed');
+            
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                const delay = Math.pow(2, reconnectAttempts) * 1000; // Exponential backoff
+                console.log(`🔄 Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+                setTimeout(connect, delay);
+            } else {
+                console.log('❌ Max reconnection attempts reached, auto-reload disabled');
+                showStatus(elements.statusContainer, '❌ Auto-reload disconnected', 'warning');
+            }
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+    }
+    
+    connect();
 }
 
 async function updateServerStatus() {
@@ -141,7 +234,8 @@ function debouncedLiveVexFlow(notation) {
 }
 
 async function parseNotation(notation, showMessages = true) {
-    if (!notation.trim()) {
+    const trimmedNotation = notation.trim();
+    if (!trimmedNotation) {
         elements.detectedSystemDisplay.textContent = '???';
         return;
     }
@@ -154,13 +248,13 @@ async function parseNotation(notation, showMessages = true) {
     }
 
     try {
-        const success = wasm.parse_notation(notation);
+        const success = wasm.parse_notation(trimmedNotation);
         
         if (success) {
             const detectedSystem = wasm.get_detected_system();
             elements.detectedSystemDisplay.textContent = detectedSystem;
             
-            debouncedLiveVexFlow(notation);
+            debouncedLiveVexFlow(trimmedNotation);
             
             if (showMessages) {
                 showStatus(elements.statusContainer, '✅ Successfully processed with WASM!', 'success');
@@ -207,40 +301,24 @@ async function generateStaffNotation() {
             return;
         }
         
-        if (!wasmLoaded) return;
-        
-        // Use WASM ParseResult to get LilyPond output (same as VexFlow approach)
-        const result = wasm.parse_notation(notation);
-        if (!result.success) {
-            elements.staffNotationImage.style.display = 'none';
-            elements.staffNotationPlaceholder.style.display = 'block';
-            elements.staffNotationPlaceholder.innerHTML = 'Failed to parse notation';
-            return;
-        }
-        const lilypondCode = result.lilypond_output;
-        
-        if (!lilypondCode || typeof lilypondCode !== 'string' || !lilypondCode.trim()) {
-            elements.staffNotationImage.style.display = 'none';
-            elements.staffNotationPlaceholder.style.display = 'block';
-            elements.staffNotationPlaceholder.innerHTML = 'No LilyPond output to generate staff notation';
-            return;
-        }
-        
-        elements.lilypondSourceSection.style.display = 'block';
-        elements.lilypondSourceElement.textContent = lilypondCode;
-
         lilypondGenerationTimestamps.push(now);
 
-        const pngResult = await generateLilypondPngApi(lilypondCode);
+        // Use pest parser API to generate LilyPond SVG
+        const svgResult = await generateLilypondSvgApi(notation, 'auto');
         
-        if (pngResult.success && pngResult.imageUrl) {
-            elements.staffNotationImage.src = pngResult.imageUrl;
+        if (svgResult.success && svgResult.svg_url) {
+            elements.staffNotationImage.src = svgResult.svg_url;
             elements.staffNotationImage.style.display = 'block';
             elements.staffNotationPlaceholder.style.display = 'none';
             showStatus(elements.statusContainer, 'Staff notation generated successfully!', 'success');
-            elements.lilypondSourceSection.style.display = 'block';
+            
+            // Show LilyPond source if available
+            if (svgResult.lilypond_source) {
+                elements.lilypondSourceSection.style.display = 'block';
+                elements.lilypondSourceElement.textContent = svgResult.lilypond_source;
+            }
         } else {
-            throw new Error(pngResult.error || 'Failed to generate staff notation');
+            throw new Error(svgResult.error || 'Failed to generate staff notation');
         }
     } catch (error) {
         console.error('Staff notation generation failed:', error);
@@ -364,13 +442,11 @@ async function showFsmDebug() {
             const fsmBeatsOutput = result.documentOutline ? result.documentOutline.trim() : 'No FSM document structure available.';
             const tokenizedOutput = result.tokenizedData ? formatJsonAsYaml(result.tokenizedData) : 'No tokenized data available.';
             const attachedOutput = result.attachedItemsData ? result.attachedItemsData.trim() : 'No attached items data available.';
+            // Use minimal LilyPond source from API result
             let lilypondSourceText = 'No LilyPond output available';
-            if (wasmLoaded) {
-                try {
-                    lilypondSourceText = wasm.get_lilypond_output() || lilypondSourceText;
-                } catch (e) {
-                    lilypondSourceText = 'Error getting LilyPond output';
-                }
+            if (result.lilypond) {
+                // Extract minimal source from full LilyPond output
+                lilypondSourceText = extractMinimalLilyPond(result.lilypond);
             }
             
             elements.tokenizedDisplay.textContent = tokenizedOutput;
@@ -545,6 +621,44 @@ async function main() {
         await parseNotation(initialNotation, false);
     }
     setupEventListeners();
+    setupAutoReload(); // Enable WASM auto-reload during development
+}
+
+// Extract minimal LilyPond content (same logic as server-side)
+function extractMinimalLilyPond(fullSource) {
+    const startMarker = "\\relative c' {";
+    const startIndex = fullSource.indexOf(startMarker);
+    
+    if (startIndex === -1) {
+        return "% Unable to extract musical content";
+    }
+    
+    const contentStart = startIndex + startMarker.length;
+    const endIndex = fullSource.indexOf("    }", contentStart);
+    
+    if (endIndex === -1) {
+        return "% Unable to extract musical content";
+    }
+    
+    const musicalContent = fullSource.substring(contentStart, endIndex);
+    
+    // Clean up the content - remove settings and empty lines
+    const lines = musicalContent
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => 
+            line.length > 0 && 
+            !line.startsWith('\\key') && 
+            !line.startsWith('\\time') &&
+            !line.startsWith('\\autoBeamOff') &&
+            !line.startsWith('\\set')
+        );
+    
+    if (lines.length === 0) {
+        return "% No musical content";
+    }
+    
+    return lines.join(' ');
 }
 
 main();

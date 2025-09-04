@@ -1,28 +1,28 @@
 #!/bin/bash
 
-# restart.sh - Smart restart script for notation parser web server
-# Only rebuilds WASM if Rust source files have changed since last build
+# restart.sh - Smart restart script for music-text web server
+# Only rebuilds if Rust source files have changed since last build
 
 set -e  # Exit on any error
 
-echo "🔄 Smart restart for notation parser web server..."
+echo "🔄 Smart restart for music-text web server..."
 
 # Define paths
-WASM_PKG="pkg/notation_parser.js"
+RUST_BINARY="target/release/cli"
 RUST_SOURCES="src/"
 SERVER_PID_FILE=".server.pid"
 
-# Function to check if WASM needs rebuilding
+# Function to check if rebuild is needed
 needs_rebuild() {
-    # If WASM package doesn't exist, definitely need to rebuild
-    if [ ! -f "$WASM_PKG" ]; then
-        echo "📦 WASM package not found - rebuild needed"
+    # If binary doesn't exist, definitely need to rebuild
+    if [ ! -f "$RUST_BINARY" ]; then
+        echo "🔧 Rust binary not found - rebuild needed"
         return 0
     fi
     
-    # Check if any Rust source files are newer than the WASM package
+    # Check if any Rust source files are newer than the binary
     if [ -d "$RUST_SOURCES" ]; then
-        local newer_files=$(find "$RUST_SOURCES" -name "*.rs" -newer "$WASM_PKG" 2>/dev/null)
+        local newer_files=$(find "$RUST_SOURCES" -name "*.rs" -newer "$RUST_BINARY" 2>/dev/null)
         if [ -n "$newer_files" ]; then
             echo "🔧 Rust source files have changed - rebuild needed:"
             echo "$newer_files" | sed 's/^/  /'
@@ -31,12 +31,12 @@ needs_rebuild() {
     fi
     
     # Check if Cargo.toml is newer
-    if [ -f "Cargo.toml" ] && [ "Cargo.toml" -nt "$WASM_PKG" ]; then
+    if [ -f "Cargo.toml" ] && [ "Cargo.toml" -nt "$RUST_BINARY" ]; then
         echo "📋 Cargo.toml has changed - rebuild needed"
         return 0
     fi
     
-    echo "✅ WASM package is up to date"
+    echo "✅ Rust binary is up to date"
     return 1
 }
 
@@ -60,25 +60,16 @@ stop_server() {
 
 # Function to start server
 start_server() {
-    echo "🚀 Starting web server..."
+    echo "🚀 Starting unified web server..."
     
-    # Check if we have a preferred server script
-    if [ -f "run_webserver.sh" ]; then
-        bash run_webserver.sh &
-    elif [ -f "server.js" ] && command -v node >/dev/null 2>&1; then
-        node server.js &
-    elif command -v python3 >/dev/null 2>&1; then
-        python3 -m http.server 8000 &
-    elif command -v python >/dev/null 2>&1; then
-        python -m SimpleHTTPServer 8000 &
-    else
-        echo "❌ No suitable web server found (need node, python3, or python)"
-        exit 1
-    fi
+    # Start the unified Rust server (serves both API and web assets)
+    ./target/release/cli server &
     
     local server_pid=$!
     echo $server_pid > "$SERVER_PID_FILE"
-    echo "✅ Server started with PID: $server_pid"
+    echo "✅ Unified server started with PID: $server_pid"
+    echo "📍 Web UI: http://localhost:3000"
+    echo "📍 API: http://localhost:3000/api/parse"
 }
 
 # Main execution
@@ -86,21 +77,21 @@ main() {
     # Stop existing server first
     stop_server
     
-    # Rebuild WASM if necessary
+    # Rebuild Rust backend if necessary
     if needs_rebuild; then
-        echo "🔨 Rebuilding WASM package..."
-        bash rebuild_wasm.sh
-        echo "✅ WASM rebuild complete"
+        echo "🔨 Rebuilding Rust backend..."
+        cargo build --release
+        echo "✅ Rust rebuild complete"
     else
-        echo "⚡ Skipping rebuild - using existing WASM package"
+        echo "⚡ Skipping rebuild - using existing binary"
     fi
     
     # Start the server
     start_server
     
     echo ""
-    echo "🎵 Notation Parser web server restarted!"
-    echo "📱 Open http://localhost:8000 in your browser"
+    echo "🎵 Unified Notation Parser server restarted!"
+    echo "📱 Open http://localhost:3000 in your browser"
     echo "🔍 Server PID stored in: $SERVER_PID_FILE"
     echo ""
     echo "💡 To stop the server: kill \$(cat $SERVER_PID_FILE)"

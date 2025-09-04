@@ -1,5 +1,5 @@
 // src/models/mod.rs
-// Core data structures for the notation parser
+// Core data structures for the music-text parser
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

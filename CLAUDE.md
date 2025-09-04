@@ -12,9 +12,8 @@
 ### V2 Hybrid Architecture
 
 #### **Single Unified Codebase**
-- **One Rust Codebase**: `src/` contains all logic - no separate WASM codebase
-- **Dual Compilation**: Same code compiles to both native binary and WASM
-- **WASM Generation**: `wasm-pack build --target web --out-dir webapp/pkg` creates client-side artifacts
+- **One Rust Codebase**: `src/` contains all logic
+- **Native Compilation**: Rust code compiles to native binary for CLI and web server
 
 #### **WYSIWYG Editor Planning** 🚧
 - **Status**: Architecture proposal under consideration (see `WYSIWYG_ARCHITECTURE_PROPOSAL.md`)
@@ -24,23 +23,23 @@
 
 #### **Execution Environments**
 - **CLI**: Native Rust binary for command-line processing
-- **Client-Side Web**: WASM (`notation_parser.js` + `.wasm`) runs V2 parser + VexFlow rendering in browser
-- **Server-Side Web**: Node.js server for LilyPond SVG generation (high-quality output)
+- **Web Server**: Rust Axum server provides API endpoints for parsing
+- **Web Client**: JavaScript frontend calls Rust API for parsing and rendering
 
 #### **Data Flow**
 ```
 Single Rust Codebase → {
     CLI: Native binary execution
-    WASM: Browser execution (V2 parser + VexFlow)
-    Server: LilyPond generation via CLI calls
+    Web Server: Axum API endpoints
+    Web Client: API calls for parsing and rendering
 }
 ```
 
 #### **Web Interface Architecture**
-- **Port 3000**: Express server at http://localhost:3000
-- **Client-Side**: WASM parser + live VexFlow rendering (instant feedback)
-- **Server-Side**: LilyPond SVG generation (professional output)
-- **Hybrid Benefits**: Fast client interaction + high-quality server rendering
+- **Port 3000**: Rust Axum server at http://localhost:3000
+- **Client-Side**: JavaScript frontend with API calls for parsing
+- **Server-Side**: Rust API endpoints + LilyPond SVG generation (professional output)
+- **Benefits**: Clean API separation + high-quality server rendering
 
 ## 🎼 CRITICAL: TONIC-BASED MOVABLE-DO SYSTEM
 
@@ -212,7 +211,6 @@ For any tuplet with N divisions (where N is not a power of 2):
 
 ### Testing Commands  
 - `cargo build --release` - Build backend
-- `wasm-pack build --target web --out-dir webapp/pkg` - Build WASM for web UI
 - `cd webapp && node server.js` - Start web server (port 3000)
 - **PRIMARY TESTING**: `npx playwright test` - Run automated browser tests
 - **Playwright Test Development**: Use Playwright for all browser testing needs:
@@ -232,7 +230,7 @@ For any tuplet with N divisions (where N is not a power of 2):
 
 ## IMPORTANT: ESSENTIAL READING FOR LLM INTERACTIONS
 
-This document explains the rhythm/tuplet system that is **FUNDAMENTAL** to this music notation parser. LLMs typically lack understanding of these music notation implementation details.
+This document explains the rhythm/tuplet system that is **FUNDAMENTAL** to this music music-text. LLMs typically lack understanding of these music notation implementation details.
 
 **IMPORTANT**: This system was "already working in music-text V1" - the V2 system must match this logic exactly.
 

@@ -1,99 +1,82 @@
-# Technical Note: Lyrics Handling in Notation Parser
+# Technical Note: Data Modeling for Lyrics
 
-## Date: 2025-01-25
+## 1. Executive Summary
 
-## Overview
-This document captures the analysis and discussion about lyrics handling in the notation parser compared to music-text's implementation.
+This note codifies the final decision on how to model lyrics within the new stave-centric architecture.
 
-## Current Implementation
+**Decision:** Syllables are a direct attribute of the musical notes they are sung on. The data model will store lyrics as an `Option<String>` field directly on the `Note` element. A parallel array of syllables at the `Stave` or `Music` level is an incorrect, denormalized approach that leads to severe data integrity issues and is to be avoided.
 
-### Data Model
-- Lyrics are stored as `Option<String>` in the `syl` field of `Node` structs
-- The `lyrics.rs` module provides dedicated functions for lyrics processing
+## 2. The Core Question: Normalization
 
-### Processing Flow
-1. **Tokenization**: The lexer identifies `WORD` tokens on lines below musical notation
-2. **Lyrics Extraction**: `parse_lyrics_lines()` collects all WORD tokens from lyrics lines
-3. **Syllable Distribution**: `distribute_syllables_to_notes()` assigns syllables to PITCH nodes sequentially
-4. **Melisma Handling**: Notes within slurs share syllables (first note gets syllable, rest get "_")
+During the design of the stave-centric parser, a critical data normalization question arose:
 
-### Key Functions
-- `parse_text_as_word_tokens()`: Re-tokenizes lyrics lines as words
-- `parse_lyrics_lines()`: Extracts lyrics from token stream  
-- `distribute_syllables_to_notes()`: Main distribution logic
-- `attach_syllables_respecting_slurs()`: Handles melisma via slur boundaries
+> Should a line of lyrics be stored as a parallel array on the `Stave` object (mirroring the input syntax of systems like LilyPond's `\addlyrics`), or should each syllable be attached directly to its corresponding `Note`?
 
-## DoremiScript Comparison
+This note analyzes both approaches and explains why direct attachment is the correctly normalized form.
 
-### Initial Observations
-Initially, it appeared that music-text used a different approach with:
-- Lyrics placed above musical notation
-- Pre-hyphenated syllables
-- Spatial alignment for syllable-to-note mapping
+## 3. Analysis: Input Syntax vs. Internal Data Model
 
-### Deeper Analysis
-After examining the Clojure source code (`to_lilypond.cljc`), we found:
-- Pitches have `:syl` attributes attached directly
-- `get-syl` function extracts syllables from pitch nodes
-- Sequential distribution similar to our approach
-- Dual source system: inline `:syl` attributes OR separate `:lyrics-line` nodes
+The confusion arises from mistaking a user-friendly **input syntax** for a robust **internal data model**. These two concepts are optimized for different goals.
 
-### Core Similarity
-Both systems fundamentally:
-1. **Attach syllables to pitch nodes** as optional attributes
-2. **Use sequential distribution** for syllable-to-note matching
-3. **Handle melismas through slurs** (one syllable across multiple notes)
-4. **Parse lyrics separately** then attach to musical elements
+-   **Input Syntax (e.g., LilyPond's `\addlyrics`):** Optimized for **human convenience**. It is often easier for a user to type all the notes and then all the lyrics in separate, parallel blocks.
 
-## Key Challenges in Lyrics Digitization
+    ```lilypond
+    % This is a convenient INPUT SYNTAX
+    \new Staff { c' d' r e' }
+    \addlyrics { do re mi }
+    ```
 
-### Spatial Alignment Problem
-Handwritten notation relies on visual positioning to indicate syllable-to-note correspondence. However, this breaks down when:
-- Notes have variable spacing (accidentals, ornaments, readability)
-- Barlines interrupt natural spacing
-- Multiple verses need to align with same notes
+-   **Internal Data Model (e.g., our `Stave` struct):** Optimized for **programmatic correctness, safety, and data integrity**. The program needs an unambiguous, direct link between a note and its syllable to function correctly.
 
-### Current Solutions
-- **Sequential Distribution**: Simple, works for most cases
-- **Hyphenation Preservation**: "geor-gia" → "geor-" and "gia"
-- **Melisma via Slurs**: Slurred notes share syllables
-- **Underscore Extension**: "_" indicates held syllables
+The parser's job is to consume the convenient input syntax and build the robust internal data model.
 
-## Implementation Differences
+### 3.1. The Incorrect (Denormalized) Model: Parallel Arrays
 
-| Aspect | Notation Parser (Rust) | DoremiScript (Clojure) |
-|--------|------------------------|------------------------|
-| Data Structure | `Node { syl: Option<String> }` | `[:pitch "S" [:syl "ta"]]` |
-| Storage | Struct field | Nested vector attribute |
-| Extraction | Direct field access | `get-syl` function |
-| Distribution | Imperative loop | Functional reduction |
-| Language | Rust | Clojure |
+Storing lyrics as a separate array on the `Stave` or `Music` object is an anti-pattern.
 
-## Potential Improvements
+```rust
+// ANTI-PATTERN: DO NOT USE
+pub struct Music {
+    pub elements: Vec<StaveElement>, // [Note, Note, Rest, Note]
+    pub syllables: Vec<String>,      // ["do", "re", "mi"] ???
+}
+```
 
-### From Analysis
-1. **Explicit Anchoring**: Allow syntax like `S[ta]` to explicitly bind syllables
-2. **Multiple Verses**: Support verse numbers/labels
-3. **Skip Markers**: Allow instrumental passages without syllables
-4. **Better Dash Handling**: Use `-` for continuation vs hyphenation
+This model is fundamentally flawed:
 
-### From DoremiScript
-1. **Dual Source System**: Support both inline and separate lyrics
-2. **Lyrics as First-Class**: Ensure syllables survive AST transformations
-3. **Tree Traversal**: Use recursive traversal for syllable collection
+1.  **Synchronization Hell:** The `elements` and `syllables` arrays must be kept in perfect sync manually. How are rests handled in the `syllables` array? With `null`? An empty string? Any logic to handle this is complex and brittle.
+2.  **Loss of Direct Relationship:** The fundamental rule "a syllable is sung on a note" is not encoded in the structure. It is only *implied* by matching array indices.
+3.  **Data Integrity Nightmares:** If a `Note` is deleted from `elements`, the developer *must remember* to also delete the corresponding entry from `syllables`. Forgetting to do so corrupts the data, shifting all subsequent syllables to the wrong notes.
+4.  **Inability to Model Melismas:** A melisma (one syllable sung over multiple slurred notes) cannot be represented. The `elements` array would have multiple notes, but the `syllables` array would only have one entry, breaking the parallel structure.
 
-## Conclusion
+### 3.2. The Correct (Normalized) Model: Direct Attachment
 
-The fundamental approach to lyrics handling is the same in both systems: syllables are attributes of pitch nodes, distributed sequentially with special handling for melismas. The differences are primarily in implementation details (functional vs imperative, Clojure vs Rust) rather than conceptual approach.
+The correct approach is to model the fundamental relationship directly: a syllable is an attribute of a note.
 
-The key insight is that both systems recognize lyrics must be **attached to notes as attributes** rather than maintained as separate parallel streams, solving the fundamental synchronization problem in musical notation.
+```rust
+// CORRECT, NORMALIZED MODEL
+pub enum StaveElement {
+    Note {
+        degree: Degree,
+        octave: i8,
+        // ... other fields
+        syllable: Option<String>, // The syllable belongs HERE
+    },
+    Rest { /* No syllable field */ },
+    Barline { /* No syllable field */ }
+}
+```
 
-## Future Considerations
+This model is superior for several reasons:
 
-1. **Explicit Binding Syntax**: Consider allowing explicit syllable-to-note binding for complex cases
-2. **Verse Support**: Implement multiple verse handling
-3. **Melisma Alternatives**: Consider supporting melisma indication without requiring visible slurs
-4. **Spatial Hints**: Use column positions as hints but not sole determinant
+1.  **Unambiguous Association:** The link between a note and its syllable is explicit and guaranteed by the type system.
+2.  **Handles Rests Naturally:** The model makes it impossible to attach a syllable to a rest, enforcing a core musical rule at the data structure level.
+3.  **Handles Melismas Elegantly:** A melisma is easily modeled. The first note in a slur receives `syllable: Some("glo-")`, while subsequent notes in the slur receive `syllable: None`. The relationship remains clear and correct.
+4.  **Data Integrity is Guaranteed:** If a `Note` object is deleted, its associated syllable is deleted with it. It is impossible to have an "orphan" syllable or a synchronization bug.
 
----
-*Generated from discussion about lyrics handling approaches, comparing current implementation with music-text's Clojure-based system.*
+## 4. Final Decision
+
+The parser will be responsible for taking lyrics from any input format (whether on the same line or in separate blocks) and performing the assignment logic to build the correctly normalized internal model.
+
+**The internal data model will exclusively use direct attachment of syllables to note objects.**
+

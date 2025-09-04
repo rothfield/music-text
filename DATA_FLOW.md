@@ -1,513 +1,325 @@
-# Notation Parser Data Flow Documentation - V2 Architecture
+# Musical Music-Text - Data Flow Architecture
 
-This document traces the complete data flow through the V2 notation parser, from raw text input to final output formats.
+This document explains the complete data flow pipeline from raw text input to rendered musical output.
 
-## Overview - V2 Complete Architecture
-
-The V2 parser transforms textual music notation through a **clean-slate FSM-centric pipeline**, with mathematical precision and type safety:
+## Overview Pipeline
 
 ```
-Raw Text → V2 Parser → ParsedElements → FSM V2 → FSM Output → Dual Converters → Output Formats
-                  ↓           ↓              ↓             ↓
-            Type-Safe    Mathematical    Clean FSM    Template-Based
-             Enums      Fractions (2,3)   Tuplets     Generation
+Raw Text → Pest → Parse Tree → parser.rs → AST → spatial_parser.rs → Enhanced AST → FSM → Renderers → Output
 ```
 
-## V2 Architecture - Major Innovations
+## Stage-by-Stage Breakdown
 
-### **1. AI-First Documentation System**
-- **886+ lines** of LLM-focused documentation
-- Domain knowledge encoding specifically for AI consumption
-- Critical tuplet rules and rhythm system explanations for LLMs
+### 1. **Raw Text Input**
+```
+S R G M P
+  _____
+```
+- User types musical notation with spatial layout
+- Multiple lines: content line, annotation lines, lyrics
+- Original character positions preserved
 
-### **2. Clean-Slate FSM-Centric Design**
-- **FSM as architectural core** - rhythm processing drives everything
-- **Mathematical precision** - fractional arithmetic throughout, zero floating point
-- **Type-safe data structures** - eliminated impossible states with compiler enforcement
-
-### **3. Dual Converter Rewrites**
-- **VexFlow V2**: Direct FSM → VexFlow, no hierarchical dependencies
-- **LilyPond V2**: Mustache template system replacing string concatenation
-
-## V2 Detailed Data Flow - Complete Examples
-
-### Phase 1: V2 Parser (Type-Safe ParsedElements)
-
-**Input**: Raw text notation
-**Module**: `models_v2.rs` + `unified_parser_v2()`
-**Example**: `"1-2-3 -4#"` (Number notation with rhythm and sharp)
+### 2. **Pest Parser Generator**
+**Input:** Raw text  
+**Output:** Parse tree (structured tokens)  
+**Responsibility:** Tokenization and grammar matching
 
 ```rust
-// V1 OLD: Monolithic Node with many Optional fields
-pub struct Node {
-    pub node_type: String,           // "PITCH", "REST", "DASH"
-    pub pitch_code: Option<PitchCode>, // Only for notes
-    pub octave: Option<i8>,          // Only for notes  
-    pub syl: Option<String>,         // Only for lyrics
-    pub duration_fraction: Option<String>, // String: "1/4"
-}
-
-// V2 NEW: Type-Safe ParsedElement Enums
-pub enum ParsedElement {
-    Note { 
-        pitch_code: PitchCode,           // Always present
-        octave: i8,                      // Always present
-        value: String,                   // Original text
-        position: Position,              // Structured position
-        children: Vec<ParsedChild>,      // Syllables, ornaments
-        duration: Option<(usize, usize)>, // Mathematical fractions
-    },
-    Dash { 
-        pitch_code: Option<PitchCode>, // Inherited from preceding note
-        octave: Option<i8>,
-        position: Position,
-        duration: Option<(usize, usize)>,
-    },
-    Rest { /* structured fields */ },
-    Barline { /* structured fields */ },
-}
-
-// Input: "1-2-3 -4#" 
-// V2 ParsedElements Output:
-[
-    Note { pitch_code: N1, octave: 0, value: "1", position: Position(0,0), children: [] },
-    Dash { pitch_code: Some(N1), octave: Some(0), position: Position(0,1) },
-    Note { pitch_code: N2, octave: 0, value: "2", position: Position(0,2), children: [] },
-    Dash { pitch_code: Some(N2), octave: Some(0), position: Position(0,3) },
-    Note { pitch_code: N3, octave: 0, value: "3", position: Position(0,4), children: [] },
-    Space { position: Position(0,5) },  // Beat separator
-    Dash { pitch_code: None, octave: None, position: Position(0,7) }, // Rest
-    Note { pitch_code: N4, octave: 0, value: "4#", position: Position(0,8), children: [Sharp] },
+// Pest produces structured token tree:
+Rule::document [
+  Rule::stave [
+    Rule::content_line [
+      Rule::measure [
+        Rule::beat [ Rule::beat_item[Rule::pitch["S"]] ]
+        Rule::beat [ Rule::beat_item[Rule::pitch["R"]] ] 
+        Rule::beat [ Rule::beat_item[Rule::pitch["G"]] ]
+        Rule::beat [ Rule::beat_item[Rule::pitch["M"]] ]
+        Rule::beat [ Rule::beat_item[Rule::pitch["P"]] ]
+      ]
+    ],
+    Rule::lower_line [
+      Rule::beat_grouping["_____"]
+    ]
+  ]
 ]
 ```
 
-**V2 Key Innovations**:
-- **Type Safety**: Impossible states eliminated (no Optional fields for required data)
-- **Mathematical Precision**: Tuple fractions `(2,3)` not string `"2/3"`
-- **Structured Children**: `ParsedChild::Syllable`, `ParsedChild::Ornament` with positioning
+**Key Features:**
+- **No code generation** - uses procedural macros at compile time
+- **Zero runtime cost** - compiled to optimized parsing functions
+- **Position tracking** - preserves original character positions for spatial analysis
+- **Grammar-driven** - defined in `grammar/notation.pest`
 
-### Phase 2: V2 FSM (Mathematical Rhythm Processing)
-
-**Module**: `rhythm_fsm_v2.rs` + `rhythm_fsm_v2_clean.rs`
-**Function**: `process_rhythm_v2_clean()` 
-**Example**: Continue with `"1-2-3 -4#"` → **5/4 tuplet + regular beat**
+### 3. **Our Parser (`src/parser.rs`)**
+**Input:** Pest parse tree  
+**Output:** Musical AST  
+**Responsibility:** Convert tokens to semantic musical structures
 
 ```rust
-// V1 OLD FSM: Complex state machines, string durations, heuristics
-// V2 NEW FSM: Clean mathematical approach with power-of-2 tuplet detection
-
-// Input: ParsedElements from Phase 1
-// Processing: Group into beats, detect tuplets mathematically
-
-// Beat 1: "1-2-3" → divisions=5 (NOT power of 2 = tuplet)
-BeatV2 {
-    divisions: 5,  // Total subdivisions
-    elements: [
-        ElementV2 { element: Note(N1), subdivisions: 2 },  // "1-" (extended)
-        ElementV2 { element: Note(N2), subdivisions: 2 },  // "2-" (extended) 
-        ElementV2 { element: Note(N3), subdivisions: 1 },  // "3" (single)
-    ],
-    // V2 INNOVATION: Mathematical tuplet detection
-    is_tuplet: true,  // 5 is NOT power of 2 (2,4,8,16...)
-    tuplet_ratio: (5, 4),  // 5 notes in place of 4 (next lower power of 2)
-}
-
-// Beat 2: "-4#" → divisions=2 (IS power of 2 = regular beat)
-BeatV2 {
-    divisions: 2,
-    elements: [
-        ElementV2 { element: Rest, subdivisions: 1 },      // "-" (leading dash = rest)
-        ElementV2 { element: Note(N4#), subdivisions: 1 }, // "4#"
-    ],
-    is_tuplet: false,  // 2 IS power of 2
-    tuplet_ratio: None,
+// Converts parse tree to musical AST:
+Document {
+  staves: [
+    Stave {
+      content_line: ContentLine {
+        measures: [
+          Measure {
+            beats: [
+              Beat { elements: [Pitch("S", pos:0)] },
+              Beat { elements: [Pitch("R", pos:2)] },
+              Beat { elements: [Pitch("G", pos:4)] },
+              Beat { elements: [Pitch("M", pos:6)] },
+              Beat { elements: [Pitch("P", pos:8)] }
+            ]
+          }
+        ]
+      },
+      lower_lines: [
+        AnnotationLine {
+          items: [BeatGrouping("_____", pos:2-7)]
+        }
+      ]
+    }
+  ]
 }
 ```
 
-**V2 FSM Key Innovations**:
-- **Power-of-2 Tuplet Detection**: `is_tuplet = (divisions & (divisions-1)) != 0`
-- **Mathematical Duration Calculation**: Uses CRITICAL tuplet rule from CLAUDE.md
-- **Clean Fractional Arithmetic**: No floating point, only fractions
-- **Subdivision Tracking**: Precise counting of note extensions
+**Key Features:**
+- **Semantic understanding** - knows what beats, pitches, measures mean
+- **Position preservation** - maintains character positions from original text
+- **Multi-line support** - handles content lines, annotation lines, lyrics
+- **Unified beat structure** - no more delimited/undelimited distinction
+- **Clean separation** - pure parsing logic only, spatial analysis handled separately
 
-### Phase 2b: V2 Duration Calculation (CRITICAL TUPLET RULE)
+### 4. **Spatial Analyzer (`src/spatial_parser.rs`)**
+**Input:** Complete Document from AST Builder  
+**Output:** Enhanced AST with spatial correlations  
+**Responsibility:** Correlate multi-line annotations with content line notes
 
-**Module**: Applied in FSM processing
-**Example**: Calculate actual durations for "1-2-3" 5/4 tuplet
+**Three Main Functions:**
+
+#### 4a. **Slur Analysis** (`spatial_parser::analyze_slurs`)
+- **Input**: `upper_lines` with underscore sequences  
+- **Process**: Maps slur segments to note positions using spatial correlation via `find_slur_segments()`
+- **Output**: Notes marked with slur information
+
+#### 4b. **Octave Assignment** (`spatial_parser::assign_octave_markers`)  
+- **Input**: `upper_lines` + `lower_lines` with octave markers (`.`, `:`, `*`, `'`)
+- **Process**: Two-phase spatial correlation:
+  - Phase 1: Direct position matching (exact column alignment)
+  - Phase 2: Nearest neighbor assignment for unmatched markers
+- **Conversion**: `.`→±1, `:`→±2, `*`→±3, `'`→±4 octaves via `octave_marker_to_number()`
+- **Output**: Notes with assigned octave values via `apply_octave_assignments()`
+
+#### 4c. **Syllable Assignment** (`spatial_parser::assign_syllables_to_notes`)
+- **Input**: `lyrics_lines` with syllable sequences
+- **Process**: Assigns syllables to singable notes in order, honoring slur markings
+- **Output**: Notes with attached syllable information
 
 ```rust
-// CRITICAL RULE from CLAUDE.md:
-// 1. Find next lower power of 2: 5 → 4 (since 4 < 5 < 8)
-// 2. Calculate as if divisions=4, then wrap in tuplet 5/4
+// Example: Input with octave markers
+// . :           <- upper_lines (octave markers)  
+// S R G M       <- content_line (notes)
+// .   :         <- lower_lines (octave markers)
+// la ti do re   <- lyrics_lines (syllables)
 
-// Each unit = 1/4 ÷ 4 = 1/16
-// Note 1: 2 subdivisions × (1/16) = 1/8 → eighth note  
-// Note 2: 2 subdivisions × (1/16) = 1/8 → eighth note
-// Note 3: 1 subdivision × (1/16) = 1/16 → sixteenth note
+// After spatial analysis:
+Beat { elements: [Pitch{value:"S", octave:1, syllable:"la"}] },   // Upper dot + first syllable
+Beat { elements: [Pitch{value:"R", octave:2, syllable:"ti"}] },   // Upper colon + second syllable  
+Beat { elements: [Pitch{value:"G", octave:-1, syllable:"do"}] },  // Lower dot + third syllable
+Beat { elements: [Pitch{value:"M", octave:0, syllable:"re"}] }    // No marker + fourth syllable
+```
 
-// Final V2 FSM Output with calculated durations:
-OutputItemV2::Beat(BeatV2 {
-    elements: [
-        ElementV2 { 
-            element: Note(N1), 
-            subdivisions: 2,
-            duration: (2, 5),      // Actual fraction of beat: 2/5  
-            tuplet_duration: (1, 8), // Visual duration: eighth note
-        },
-        ElementV2 { 
-            element: Note(N2), 
-            subdivisions: 2,
-            duration: (2, 5),      // Actual fraction: 2/5
-            tuplet_duration: (1, 8), // Visual duration: eighth note  
-        },
-        ElementV2 { 
-            element: Note(N3), 
-            subdivisions: 1,
-            duration: (1, 5),       // Actual fraction: 1/5
-            tuplet_duration: (1, 16), // Visual duration: sixteenth note
-        },
-    ],
-    tuplet_ratio: (5, 4),  // Tuplet: 5 in place of 4
+**Algorithm:**
+1. **Calculate note positions** in content line (column-based)
+2. **Extract annotation positions** from upper/lower/lyrics lines
+3. **Phase 1**: Match annotations to notes at exact same positions
+4. **Phase 2**: Assign remaining annotations to nearest unassigned notes
+5. **Apply assignments** to enhance the Document in-place
+
+**Key Features:**
+- **Column-based alignment** - uses original character positions
+- **Multiple underlines** - can handle complex spatial layouts
+- **Beat regrouping override** - overrides grammar's natural beat boundaries
+- **Modular separation** - separated from parser.rs for cleaner architecture
+- **Dedicated spatial logic** - focused solely on annotation line processing
+
+**Module Architecture:**
+- **`parser.rs`**: Pure pest-to-AST conversion, calls spatial_parser functions
+- **`spatial_parser.rs`**: All spatial analysis functions (slur, octave, syllable analysis)
+- **Clean interface**: Parser calls `spatial_parser::analyze_slurs()`, `assign_octave_markers()` etc.
+
+### 5. **Rhythm FSM (`src/rhythm_fsm.rs`)**
+**Input:** Spatially-grouped AST  
+**Output:** FSM Items with rhythm analysis  
+**Responsibility:** Add temporal/rhythmic intelligence
+
+```rust
+// Before FSM:
+Beat { elements: [Pitch("R"), Pitch("G"), Pitch("M")] }
+
+// After FSM:
+Item::Beat(Beat {
+  divisions: 3,                    // Total subdivisions
+  elements: [
+    BeatElement { 
+      event: Note { degree: R, octave: 0 },
+      subdivisions: 1,             // This note's duration
+      duration: Fraction(1, 3),    // 1/3 of beat
+      tuplet_duration: Fraction(1, 4),  // Display as quarter note
+      tuplet_display_duration: Some(Fraction(1, 4))
+    },
+    // ... similar for G and M
+  ],
+  is_tuplet: false,               // 3 is power of 2? No, wait...
+  tuplet_ratio: None              // Regular beat, no tuplet
 })
 ```
 
-### Phase 3: V2 Dual Converters (Complete Rewrites)
+**Core Responsibilities:**
+- **Subdivision counting** - process dash extensions (`1-2` → Note1(2 subdivisions), Note2(1))
+- **Tuplet detection** - power-of-2 check (`5 & (5-1) != 0` → tuplet)  
+- **Duration calculation** - fractional math for precise timing
+- **Breath mark handling** - breaks extension chains (`1- '-2` → extended note, break, rest + note)
+- **Tie detection** - cross-beat note connections
+- **Pass-through items** - barlines, breath marks as separate items
 
-**Both converters completely rewritten for V2 FSM-centric architecture**
+**Key Features:**
+- **Fractional arithmetic** - never floating point, always precise fractions
+- **Tuplet ratio calculation** - (divisions, next_lower_power_of_2)
+- **Cross-beat tie tracking** - remembers pitches that need tying
+- **Stateless per-beat** - processes each beat independently for rhythm
 
-#### 3a: V2 LilyPond Converter (Template-Based)
+### 6. **Renderers (`src/renderers/`)**
+**Input:** FSM Items with rhythm analysis  
+**Output:** Format-specific musical notation  
+**Responsibility:** Generate final output formats
 
-**Module**: `lilypond_converter_v2.rs` + `lilypond_templates.rs`
-**Function**: `convert_fsm_output_to_lilypond()`
-**Innovation**: **Mustache template system** replacing string concatenation
-
+#### VexFlow Renderer
 ```rust
-// V1 OLD: String building approach
-let mut output = String::new();
-output.push_str("\\fixed c' {\n");
-for note in notes {
-    output.push_str(&format!("  {}{}", note.pitch, note.duration));
-}
-output.push_str("}\n");
-
-// V2 NEW: Template-based with structured context
-let context = TemplateContext::builder()
-    .title("Test Song")
-    .staves("\\tuplet 5/4 { c8 d8 e16 } r4 fs4")  // From FSM
-    .build();
-
-let template = mustache::compile_str(STANDARD_TEMPLATE);
-let rendered = template.render_to_string(&context)?;
-
-// Template: standard.ly.mustache
-\\version "{{version}}"
-\\header { 
-  {{#title}}title = "{{{title}}}"{{/title}}
-}
-\\score {
-  \\new Staff {
-    \\relative c' {
-      {{{staves}}}  // FSM output inserted here
-    }
-  }
-}
-```
-
-**V2 LilyPond Output for "1-2-3 -4#"**:
-```lilypond
-\version "2.24.0"
-\score {
-  \new Staff {
-    \relative c' {
-      \tuplet 5/4 { c8 d8 e16 } r4 fs4
-    }
-  }
-}
-```
-
-#### 3b: V2 VexFlow Converter (FSM-Direct)
-
-**Module**: `vexflow_converter_v2.rs`  
-**Function**: `convert_fsm_output_to_vexflow_v2()`
-**Innovation**: **Direct FSM processing**, no hierarchical document structure
-
-```rust
-// V1 OLD: Expected hierarchical LINE/BEAT structure
-document.nodes → looking for node_type == "LINE" → FAILED (empty output [])
-
-// V2 NEW: Direct FSM → VexFlow mapping
-pub fn convert_fsm_output_to_vexflow_v2(
-    fsm_output: &[OutputItemV2], 
-    metadata: &Metadata
-) -> Result<Vec<VexFlowStave>, ConversionError> {
-    // Process beats directly, no document hierarchy needed
-    for item in fsm_output {
-        match item {
-            OutputItemV2::Beat(beat) => {
-                if beat.is_tuplet {
-                    // Use FSM-calculated tuplet durations directly
-                    for element in &beat.elements {
-                        let duration = map_tuplet_duration(element.tuplet_duration);
-                        // Create VexFlow note with correct duration
-                    }
-                } else {
-                    // Regular beat processing
-                }
-            }
-        }
-    }
-}
-```
-
-**V2 VexFlow Output for "1-2-3 -4#"**:
-```json
-[{
+// FSM Item → VexFlow JSON
+Item::Beat(beat) → {
   "notes": [
-    {"keys": ["c/4"], "duration": "8"},   // Note 1: eighth 
-    {"keys": ["d/4"], "duration": "8"},   // Note 2: eighth
-    {"keys": ["e/4"], "duration": "16"},  // Note 3: sixteenth
-    {"keys": ["r/4"], "duration": "q"},   // Rest: quarter
-    {"keys": ["fs/4"], "duration": "q"}   // Note 4#: quarter
+    {"keys": ["d/4"], "duration": "q"},  // Quarter note D
+    {"keys": ["e/4"], "duration": "q"},  // Quarter note E  
+    {"keys": ["f/4"], "duration": "q"}   // Quarter note F
   ],
-  "tuplet": {"ratio": [5, 4], "notes": [0, 1, 2]}  // First 3 notes in 5/4 tuplet
-}]
-```
-
-### Phase 4: V2 Web Integration & WASM Success
-
-**Major Innovation**: Complete WASM integration with dual output system
-
-#### 4a: WASM Build Success
-```bash
-wasm-pack build --target web --out-dir webapp/pkg
-# ✅ Successfully built with V2 system - 32 warnings but clean build
-# Generated: webapp/pkg/ with V2 VexFlow converter integration
-```
-
-#### 4b: Web UI Dual Output System  
-**Module**: `webapp/server.js` + `webapp/public/js/main.js`
-
-```javascript  
-// V2 Web Integration - Dual output support:
-// 1. VexFlow rendering (live interactive)
-// 2. LilyPond SVG generation (compact for web)
-
-// Input: "1-2-3 -4#" via web UI
-// Processing: Uses WASM V2 parser + FSM + dual converters
-// Output 1: VexFlow JSON → Interactive staff rendering
-// Output 2: LilyPond → Compact SVG for comparison
-
-// Web UI Flow:
-Raw Input → WASM V2 Parser → FSM Output → {
-    VexFlow Converter → Interactive Staff
-    LilyPond Converter → Server SVG Generation → Compact Display  
+  "beam": true  // Beam these notes together
 }
 ```
 
-#### 4c: Small LilyPond SVG Optimization
-**Module**: `src/templates/standard.ly.mustache`
-**Innovation**: **Compact paper settings** optimized for web display
-
-```lilypond
-% V2 Template optimization for web UI
-\\paper {
-  indent = 0\\mm
-  top-margin = 0.5\\mm
-  bottom-margin = 0.5\\mm  
-  paper-height = 50\\mm      % Small height for web
-  paper-width = 200\\mm      % Compact width
-  page-breaking = #ly:one-page-breaking
-}
-```
-
-**Result**: Small, web-optimized SVG output perfect for side-by-side display with VexFlow
-
-## V2 Architecture Summary - Complete Transformation
-
-### **Complete Data Flow: "1-2-3 -4#" Example**
-
-```
-INPUT: "1-2-3 -4#"
-   ↓ V2 Parser (Type-Safe)
-[Note{N1}, Dash{N1}, Note{N2}, Dash{N2}, Note{N3}, Space, Dash{Rest}, Note{N4#}]
-   ↓ V2 FSM (Mathematical) 
-[Beat{divisions:5, tuplet:5/4}, Beat{divisions:2, regular}]
-   ↓ V2 Converters (Dual Rewrites)
-LilyPond: "\tuplet 5/4 { c8 d8 e16 } r4 fs4"
-VexFlow:  [{"notes": [{"keys": ["c/4"], "duration": "8"}, ...], "tuplet": {"ratio": [5,4]}}]
-   ↓ WASM + Web UI
-Interactive Staff + Compact SVG (side-by-side display)
-```
-
-### **V2 Major Innovations Summary**
-
-1. **AI-First Documentation (886+ lines)**
-   - Domain knowledge encoding for LLM consumption
-   - RHYTHM_SYSTEM.md: Critical LLM reference 
-   - System prompts updated so LLMs understand notation
-
-2. **Type-Safe Data Structures**
-   - Monolithic Node → ParsedElement enums
-   - Impossible states eliminated
-   - Mathematical fractions (2,3) not strings "2/3"
-
-3. **Clean-Slate FSM Architecture**
-   - Power-of-2 tuplet detection
-   - CRITICAL tuplet duration rule 
-   - Fractional arithmetic throughout
-
-4. **Complete Converter Rewrites**
-   - VexFlow V2: Direct FSM processing
-   - LilyPond V2: Mustache template system
-   - No V1 technical debt inheritance
-
-5. **Enhanced Lyrics System**
-   - Flat string → structured ParsedChild::Syllable
-   - Spatial positioning with distance tracking
-   - Multiple syllables per note support
-
-6. **Web Integration Success**
-   - WASM VexFlow working
-   - Small LilyPond SVG optimization
-   - Dual output system (VexFlow + LilyPond)
-
-### **Legacy V1 System (Archived)**
-
-*The following sections document the legacy V1 system architecture, preserved for reference. The V2 system above represents the current active implementation.*
-
-**Module**: `lib.rs`
-**Function**: `convert_slur_attributes_to_tokens()`
-
-**Purpose**: Convert boolean slur attributes into explicit SLUR_START/SLUR_END nodes.
-
+#### LilyPond Renderer  
 ```rust
-// Before conversion:
+// FSM Item → LilyPond source
+Item::Beat(beat) → "d4 e4 f4"  // Three quarter notes
+```
+
+**Key Features:**
+- **Beat-based beaming** - notes within beats get beamed together
+- **Tuplet notation** - `\tuplet 5/4 { c8 d8 e16 }` for complex rhythms
+- **Duration mapping** - subdivisions → standard note durations
+- **Tie generation** - cross-beat ties for extended notes
+
+## Data Structure Evolution
+
+### AST Beat (After Spatial Analysis)
+```rust
 Beat {
-    nodes: [
-        Note { value: "G", slur_start: true, ... },
-        Note { value: "S", slur_end: true, ... }
-    ]
+  elements: Vec<BeatElement>,      // Notes, dashes, slurs
+  divisions: None,                 // Not yet calculated
+  is_tuplet: None,                // Not yet determined
+  tuplet_ratio: None              // Not yet calculated
 }
+```
 
-// After conversion:
+### FSM Beat (After Rhythm Analysis)
+```rust
 Beat {
-    nodes: [
-        Node { type: "SLUR_START", value: "(", ... },
-        Note { value: "G", slur_start: None, ... },
-        Note { value: "S", slur_end: None, ... },
-        Node { type: "SLUR_END", value: ")", ... }
-    ]
+  divisions: 5,                    // Total subdivisions calculated
+  elements: Vec<BeatElement>,      // With subdivision counts
+  is_tuplet: true,                // Tuplet detected
+  tuplet_ratio: Some((5, 4)),     // 5-tuplet ratio
+}
+
+BeatElement {
+  event: Note/Rest,               // Musical event
+  subdivisions: 2,                // How many subdivisions this occupies
+  duration: Fraction(2, 5),       // Exact beat fraction
+  tuplet_duration: Fraction(1, 8), // Display duration
 }
 ```
 
-**Key Operations**:
-- Scan for nodes with `slur_start: true`
-- Insert `SLUR_START` node before the marked note
-- Scan for nodes with `slur_end: true` 
-- Insert `SLUR_END` node after the marked note
-- Clear the boolean attributes
+## Error Handling
 
-**Critical Insight**: This is where slur **attributes become tokens**. The final AST contains explicit slur nodes that converters can process.
+Each stage can produce specific error types:
 
-### Phase 7: Lyrics Distribution
+- **Pest**: Grammar syntax errors, unexpected tokens
+- **Parser**: Semantic conversion errors, invalid musical structures  
+- **Spatial Analyzer**: Misaligned underlines, position conflicts
+- **FSM**: Invalid rhythm patterns, impossible tuplets
+- **Renderers**: Unsupported notation, rendering failures
 
-**Module**: `lyrics.rs`
-**Function**: `distribute_syllables_to_notes()`
+## Performance Characteristics
 
-**Purpose**: Attach lyric syllables to appropriate notes.
-
-```rust
-// Input: Structured nodes + lyrics lines
-// Output: Notes with syl: Option<String> populated
-```
-
-**Key Operations**:
-- Parse lyrics from separate text lines
-- Distribute syllables to notes
-- Handle melisma (multiple notes per syllable)
-- Respect slur boundaries
-
-### Phase 8: Document Creation
-
-**Output**: Final `Document` structure ready for converters:
-
-```rust
-Document {
-    metadata: Metadata { /* title, key, etc. */ },
-    nodes: Vec<Node>,  // Fully processed hierarchical structure
-    notation_system: Some("Sargam"),
-}
-```
-
-## Converter Pathways
-
-The final `Document` feeds into multiple output converters:
-
-### VexFlow Conversion
-**Module**: `vexflow_fsm_converter.rs`
-**Function**: `convert_fsm_to_vexflow()`
-
-- Processes explicit `SLUR_START`/`SLUR_END` nodes
-- Creates VexFlow JSON with slur rendering instructions
-- Handles cross-barline slurs
-
-### LilyPond Conversion  
-**Module**: `lilypond_converter.rs`
-**Function**: `convert_to_lilypond()`
-
-- Converts nodes to LilyPond syntax
-- Processes slur tokens into `( )` syntax
-- Handles pitch conversion between notation systems
-
-## Key Design Insights
-
-### 1. Two-Phase Slur Processing
-
-Slurs undergo a **two-stage transformation**:
-1. **Spatial → Attributes**: Overlines become boolean flags
-2. **Attributes → Tokens**: Boolean flags become explicit nodes
-
-This design allows:
-- Spatial analysis to work with visual layout
-- Converters to work with discrete tokens
-- Clean separation between parsing phases
-
-### 2. Hierarchical Structure Evolution
-
-The data structure evolves from flat to hierarchical:
-- **Tokens**: Flat list with position info
-- **Spatial Nodes**: Flat list with spatial relationships
-- **Structured Nodes**: Hierarchical with beats and musical groupings
-
-### 3. Position Information Preservation
-
-Position data (`row`, `col`) is preserved throughout all phases, enabling:
-- Error reporting with exact locations
-- Spatial analysis of overlays
-- Debugging and visualization
-
-## AST Refactoring Implications
-
-For the planned enum-based AST refactoring:
-
-1. **SlurStart/SlurEnd variants are required** - they exist as real nodes in the final tree
-2. **Beat structure must be preserved** - the FSM creates meaningful beat groupings
-3. **Position information is critical** - every enum variant needs location data
-4. **Two-phase slur processing should be maintained** - it cleanly separates concerns
+- **Pest**: Zero runtime overhead (compile-time generation)
+- **Parser**: Single-pass AST construction  
+- **Spatial Analyzer**: O(n×m) where n=notes, m=underlines
+- **FSM**: O(beats) - stateless per-beat processing
+- **Renderers**: O(elements) - linear conversion
 
 ## Testing Strategy
 
-Each phase can be tested independently:
-- **Lexer**: Input text → Expected tokens
-- **Spatial**: Tokens + overlines → Nodes with slur attributes  
-- **FSM**: Flat nodes → Structured beats
-- **Token conversion**: Slur attributes → Explicit slur nodes
-- **End-to-end**: Full notation → Multiple output formats
+Each stage can be tested independently:
 
-## Performance Considerations
+```rust
+// Test Pest grammar
+assert_eq!(parse("S R G"), Ok(expected_parse_tree));
 
-- **Memory usage**: Multiple intermediate representations
-- **Processing time**: Each phase scans the entire structure
-- **Cache locality**: Frequent node transformations
+// Test parser conversion (parser.rs)
+assert_eq!(convert_ast(parse_tree), Ok(expected_ast));
 
-The enum-based refactoring should address memory efficiency while preserving the logical phase separation.
+// Test spatial analysis (spatial_parser.rs)
+assert_eq!(spatial_parser::analyze_slurs(ast), expected_slurred_ast);
+assert_eq!(spatial_parser::assign_octave_markers(ast), expected_enhanced_ast);
+
+// Test rhythm FSM
+assert_eq!(rhythm_fsm(beats), expected_fsm_items);
+
+// Test renderers
+assert_eq!(render_vexflow(fsm_items), expected_json);
+```
+
+This modular architecture allows for targeted testing and debugging at each pipeline stage.
+
+## Complete Pipeline Verification
+
+**Test Function**: `src/parser.rs` - `test_lower_octave_integration()`  
+**Command**: `cargo run -- --test-lower-octave`
+
+This test demonstrates the complete data flow pipeline:
+
+1. **Creates Manual AST**: Simulates Document with lower octave markers
+2. **Applies Spatial Analysis**: Calls `spatial_parser::assign_octave_markers()` 
+3. **Converts through FSM**: Uses `rhythm_fsm::convert_ast_to_fsm_output()`
+4. **Generates Output**: Converts FSM to LilyPond notation
+5. **Verifies Flow**: Confirms octave values flow correctly through entire pipeline
+
+**Expected Output**:
+```
+BEFORE octave assignment:
+Beat 0: S has octave: 0
+Beat 1: R has octave: 0
+
+FSM output:
+Item 0: Beat(Beat { divisions: 1, elements: [BeatElement { event: Note { degree: N1, octave: -1 }, ... }] })
+Item 1: Beat(Beat { divisions: 1, elements: [BeatElement { event: Note { degree: N2, octave: -2 }, ... }] })
+
+LilyPond generation from FSM:
+N1 (octave -1) -> LilyPond: c,
+N2 (octave -2) -> LilyPond: d,,
+
+AFTER octave assignment:
+Beat 0: S has octave: -1
+Beat 1: R has octave: -2
+```
+
+This verifies the complete data flow: **Raw AST → Spatial Analysis → FSM → LilyPond Output** with octave values correctly preserved throughout the entire pipeline.

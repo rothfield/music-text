@@ -137,7 +137,7 @@
         
         async function initWasm() {
             try {
-                const wasm = await import('./pkg/notation_parser.js');
+                const wasm = await import('./pkg/music-text.js');
                 await wasm.default();
                 wasmModule = wasm;
                 console.log('WASM module loaded successfully');

@@ -46,15 +46,18 @@ music-text is a plain text format for writing musical notation using letters, nu
 
 ### Beat Grouping
 
-**Simple beats** - no spaces allowed inside:
+**Simple beats** - no spaces allowed inside (most common):
 ```
 123   SRG   ABC
 ```
 
-**Delimited beats** - spaces allowed inside:
+**Delimited beats** - spaces allowed inside, using overlines:
 ```
-<1 2 3>   <S R G>   <A B C>
+_____
+1 2 3     // Overline above creates delimited beat
 ```
+
+**Note**: The `<1 2 3>` bracket syntax is deprecated. Use overlines instead.
 
 ### Slur Notation
 
@@ -133,9 +136,9 @@ Time: 3/4
 .
 ```
 
-### Delimited beats
+### Delimited beats (deprecated syntax)
 ```
-<1 2> <3- 4> <5>
+<1 2> <3- 4> <5>    // DEPRECATED - use overlines instead
 ```
 
 ## Grammar Summary
@@ -147,11 +150,13 @@ music_lines  ::= (octave_line | pitch_line)*
 octave_line  ::= octave_markers
 pitch_line   ::= measures
 measures     ::= beat+ ('|' beat+)*
-beat         ::= simple_beat | '<' complex_beat '>'
+beat         ::= simple_beat    // Most beats are simple (undelimited)
 simple_beat  ::= (pitch | dash | slur)+
-complex_beat ::= (pitch | dash | slur | space)+
 pitch        ::= pitch_char accidental?
 octave_markers ::= ('.' | '*' | ':')*
+
+// Delimited beats use overlines (beat_grouping in lower_annotation_line)
+// The '<' complex_beat '>' syntax is deprecated
 ```
 
 ## Rules

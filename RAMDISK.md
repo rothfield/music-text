@@ -19,7 +19,7 @@ This project uses a RAMDisk for the `target/` directory to dramatically speed up
 ## 🏗️ Architecture
 
 ```
-/home/john/projects/notation_parser/
+/home/john/projects/music-text/
 ├── src/                     # Source code (on disk)
 ├── target -> /mnt/rust_ramdisk/target  # Symlink to RAMDisk
 └── Cargo.toml              # Project config (on disk)
@@ -62,7 +62,7 @@ sudo mkdir -p /mnt/rust_ramdisk
 sudo mount -t tmpfs -o size=2G tmpfs /mnt/rust_ramdisk
 
 # Setup project symlink
-cd /home/john/projects/notation_parser
+cd /home/john/projects/music-text
 mkdir -p /mnt/rust_ramdisk/target
 rm -rf target  # Backup first if needed
 ln -s /mnt/rust_ramdisk/target target
