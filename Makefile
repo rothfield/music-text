@@ -1,10 +1,16 @@
-# Notation Parser Makefile
+# Music-Text Makefile
 # Ensures consistent builds and testing across CLI and web server
 
-.PHONY: all build test clean consistency-test help
+.PHONY: all build test clean consistency-test help grammar
 
 # Default target
 all: build test
+
+# Regenerate Pest grammar from templates
+grammar:
+	@echo "🎼 Regenerating Pest grammar from templates..."
+	cargo run --bin generate-grammar
+	@echo "✅ Grammar regenerated successfully"
 
 # Build music-txt binary
 build:
@@ -101,6 +107,7 @@ quick-check: build
 help:
 	@echo "Available targets:"
 	@echo "  all              - Build and test everything (default)"
+	@echo "  grammar          - Regenerate Pest grammar from templates"
 	@echo "  build            - Build music-txt binary"
 	@echo "  test             - Run all tests"
 	@echo "  test-rust        - Run Rust tests only"

@@ -2,7 +2,7 @@ use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
 
-use music_text::parse_notation_full;
+use music_text::parse;
 
 #[derive(Parser)]
 #[command(name = "music-txt")]
@@ -16,8 +16,8 @@ struct Cli {
     #[arg(short, long)]
     file: Option<PathBuf>,
     
-    /// Output format (json, debug, ast)
-    #[arg(short, long, default_value = "debug")]
+    /// Output format (web, json, debug)  
+    #[arg(short, long, default_value = "web")]
     output: String,
     
     /// Notation system (auto, sargam, number, western, abc, doremi)
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Web server mode
     if cli.web {
-        music_text::web_server::start_server().await?;
+        music_text::web::start_server().await?;
         return Ok(());
     }
     
@@ -61,77 +61,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Don't remove empty lines - they're semantically important for separating staves
     
-    println!("Parsing input: {}", input);
-    println!("System: {}", cli.system);
-    println!("Output format: {}", cli.output);
+    let result = parse(&input, Some(&cli.system));
+    
+    if !result.success {
+        eprintln!("Parse error: {}", result.error_message.unwrap_or("Unknown error".to_string()));
+        std::process::exit(1);
+    }
     
     match cli.output.as_str() {
-        "json" | "debug" | "ast" => {
-            let result = parse_notation_full(&input, Some(&cli.system));
-            if result.success {
-                if let Some(document) = result.document {
-                    match cli.output.as_str() {
-                        "json" => {
-                            println!("{}", serde_json::to_string_pretty(&document)?);
-                        }
-                        "debug" => {
-                            println!("{:#?}", document);
-                        }
-                        "ast" => {
-                            println!("AST structure:");
-                            println!("{:#?}", document);
-                        }
-                        _ => unreachable!()
-                    }
-                } else {
-                    eprintln!("Parse error: No document generated");
-                    std::process::exit(1);
-                }
+        "web" => {
+            // Output same format as web API
+            let response = serde_json::json!({
+                "success": result.success,
+                "error": result.error_message,
+                "ast": result.ast,
+                "spatial": result.spatial,
+                "fsm": result.fsm,
+                "vexflow": result.vexflow,
+                "lilypond": result.lilypond,
+                "yaml": result.yaml
+            });
+            println!("{}", serde_json::to_string_pretty(&response)?);
+        }
+        "json" => {
+            if let Some(document) = result.document {
+                println!("{}", serde_json::to_string_pretty(&document)?);
             } else {
-                eprintln!("Parse error: {}", result.error_message.unwrap_or("Unknown error".to_string()));
+                eprintln!("No document generated");
                 std::process::exit(1);
             }
         }
-        "full" => {
-            let result = parse_notation_full(&input, Some(&cli.system));
-            if result.success {
-                println!("=== FULL PARSE RESULT ===");
-                println!("AST: {:#?}", result.document);
-                if let Some(ast) = result.ast {
-                    println!("\n=== AST JSON ===");
-                    println!("{}", ast);
-                }
-                if let Some(spatial) = result.spatial {
-                    println!("\n=== SPATIAL JSON ===");
-                    println!("{}", spatial);
-                }
-                if let Some(fsm) = result.fsm {
-                    println!("\n=== FSM JSON ===");
-                    println!("{}", fsm);
-                }
-                if let Some(yaml) = result.yaml {
-                    println!("\n=== YAML ===");
-                    println!("{}", yaml);
-                }
-                if let Some(vexflow) = result.vexflow {
-                    println!("\n=== VEXFLOW ===");
-                    println!("{:#?}", vexflow);
-                }
-                if let Some(lilypond) = result.lilypond {
-                    println!("\n=== LILYPOND ===");
-                    println!("{}", lilypond);
-                }
+        "debug" => {
+            if let Some(document) = result.document {
+                println!("{:#?}", document);
             } else {
-                eprintln!("Parse error: {}", result.error_message.unwrap_or("Unknown error".to_string()));
+                eprintln!("No document generated");
                 std::process::exit(1);
             }
         }
         _ => {
             eprintln!("Unknown output format: {}", cli.output);
-            eprintln!("Available formats: json, debug, ast, full");
+            eprintln!("Available formats: web, json, debug");
             std::process::exit(1);
         }
     }
     
     Ok(())
-}
+}  

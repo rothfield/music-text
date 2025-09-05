@@ -86,6 +86,11 @@ pub struct LilypondRequest {
     notation: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct LilypondSvgRequest {
+    lilypond_source: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct LilypondResponse {
     success: bool,
@@ -97,7 +102,7 @@ pub struct LilypondResponse {
 #[derive(Debug, Serialize)]
 pub struct SvgResponse {
     success: bool,
-    svg_url: Option<String>,
+    svg: Option<String>,
     error: Option<String>,
 }
 
@@ -121,10 +126,33 @@ async fn lilypond_minimal_endpoint(Json(request): Json<LilypondRequest>) -> impl
     };
     
     if let Some(minimal_source) = minimal_lilypond {
+        // Generate SVG from LilyPond source
+        let svg_content = if minimal_source.trim().is_empty() {
+            Some("<svg><text>No musical content to render</text></svg>".to_string())
+        } else {
+            // Use the LilyPond generator to create SVG
+            let generator = crate::renderers::lilypond::generator::LilyPondGenerator::new("webapp/public".to_string());
+            match generator.generate_svg(&minimal_source).await {
+                result if result.success => {
+                    if let Some(svg_url) = result.svg_url {
+                        // Read the generated SVG file and return its content
+                        match std::fs::read_to_string(format!("webapp/public{}", svg_url)) {
+                            Ok(svg_content) => Some(svg_content),
+                            Err(_) => Some("<svg><text>Failed to read generated SVG</text></svg>".to_string()),
+                        }
+                    } else {
+                        Some("<svg><text>SVG generation failed</text></svg>".to_string())
+                    }
+                },
+                result => Some(format!("<svg><text>LilyPond error: {}</text></svg>", 
+                    result.error.unwrap_or_else(|| "Unknown error".to_string())))
+            }
+        };
+
         Json(LilypondResponse {
             success: true,
             lilypond_source: Some(minimal_source),
-            svg: Some("<svg><text>LilyPond rendering not yet implemented</text></svg>".to_string()),
+            svg: svg_content,
             error: None,
         })
     } else {
@@ -137,25 +165,47 @@ async fn lilypond_minimal_endpoint(Json(request): Json<LilypondRequest>) -> impl
     }
 }
 
-async fn lilypond_svg_endpoint(Json(request): Json<LilypondRequest>) -> impl IntoResponse {
-    // Parse the input to get LilyPond source
-    let result = crate::parse(&request.input, Some(&request.notation));
+async fn lilypond_svg_endpoint(Json(request): Json<LilypondSvgRequest>) -> impl IntoResponse {
+    // Use the provided LilyPond source directly (no re-parsing needed)
+    if request.lilypond_source.trim().is_empty() {
+        return Json(SvgResponse {
+            success: false,
+            svg: None,
+            error: Some("Empty LilyPond source provided".to_string()),
+        });
+    }
     
-    if let Some(lilypond_source) = &result.lilypond {
-        // Use the existing LilyPond generator to create SVG
-        let generator = crate::renderers::lilypond::generator::LilyPondGenerator::new("webapp/public".to_string());
-        let generation_result = generator.generate_svg(lilypond_source).await;
-        
-        Json(SvgResponse {
-            success: generation_result.success,
-            svg_url: generation_result.svg_url,
-            error: generation_result.error,
-        })
+    // Use the existing LilyPond generator to create SVG
+    let generator = crate::renderers::lilypond::generator::LilyPondGenerator::new("webapp/public".to_string());
+    let generation_result = generator.generate_svg(&request.lilypond_source).await;
+    
+    if generation_result.success {
+        if let Some(svg_url) = generation_result.svg_url {
+            // Read the generated SVG file and return its content
+            match std::fs::read_to_string(format!("webapp/public{}", svg_url)) {
+                Ok(svg_content) => Json(SvgResponse {
+                    success: true,
+                    svg: Some(svg_content),
+                    error: None,
+                }),
+                Err(_) => Json(SvgResponse {
+                    success: false,
+                    svg: None,
+                    error: Some("Failed to read generated SVG file".to_string()),
+                }),
+            }
+        } else {
+            Json(SvgResponse {
+                success: false,
+                svg: None,
+                error: Some("SVG generation succeeded but no file path returned".to_string()),
+            })
+        }
     } else {
         Json(SvgResponse {
             success: false,
-            svg_url: None,
-            error: Some("Failed to generate LilyPond source".to_string()),
+            svg: None,
+            error: generation_result.error,
         })
     }
 }

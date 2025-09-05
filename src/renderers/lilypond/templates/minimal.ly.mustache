@@ -1,20 +1,5 @@
-\version "{{version}}"
-\language "english"
-
-{{#title}}
-\header { 
-  title = "{{{title}}}" 
-  tagline = ##f
-}
-{{/title}}
-
-{{#source_comment}}
-%{
-{{{source_comment}}}
-%}
-{{/source_comment}}
-
-\fixed c' {
-  \clef treble
-  {{{staves}}}
+\score {
+  <<
+    \new Staff { \relative c' { {{{staves}}} } }
+  >>
 }

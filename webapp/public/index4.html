@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Textarea Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        textarea {
+            width: 600px;
+            height: 200px;
+            font-size: 16px;
+            padding: 10px;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple Textarea Test</h1>
+    <textarea id="simple-input" placeholder="Type something here..."></textarea>
+    
+    <div id="output" style="margin-top: 20px; padding: 10px; background: #f0f0f0;">
+        Content will appear here as you type...
+    </div>
+    
+    <script>
+        const textarea = document.getElementById('simple-input');
+        const output = document.getElementById('output');
+        
+        textarea.addEventListener('input', function() {
+            output.textContent = 'Current text: ' + this.value;
+        });
+    </script>
+</body>
+</html>

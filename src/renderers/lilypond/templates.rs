@@ -3,10 +3,9 @@ use serde::Serialize;
 
 #[derive(Debug, Clone)]
 pub enum LilyPondTemplate {
-    // Minimal, // DELETED - unused variant
+    Minimal,
     Standard,
     MultiStave,
-    // Testing, // DELETED - unused variant
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -162,10 +161,9 @@ fn format_source_comment(source: &str) -> String {
 
 pub fn get_template_content(template_type: LilyPondTemplate) -> &'static str {
     match template_type {
-        // LilyPondTemplate::Minimal => include_str!("templates/minimal.ly.mustache"),
+        LilyPondTemplate::Minimal => include_str!("templates/minimal.ly.mustache"),
         LilyPondTemplate::Standard => include_str!("templates/standard.ly.mustache"),
         LilyPondTemplate::MultiStave => include_str!("templates/multi-stave.ly.mustache"),
-        // LilyPondTemplate::Testing => include_str!("templates/testing.ly.mustache"),
     }
 }
 

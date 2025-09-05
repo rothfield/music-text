@@ -36,7 +36,7 @@
 
 \score {
   \new Staff {
-    \relative c' {
+    \fixed c' {
       \key c \major
       {{#time_signature}}{{{time_signature}}}{{/time_signature}}{{^time_signature}}\time 4/4{{/time_signature}}
       \autoBeamOff
@@ -57,12 +57,6 @@
   {{/lyrics}}
   
   \layout {
-    \context {
-      \Staff
-      \remove "Time_signature_engraver"
-      \override StaffSymbol.staff-space = #0.6
-      \override StaffSymbol.thickness = #0.6
-    }
     \context {
       \Score
       \override SpacingSpanner.base-shortest-duration = #(ly:make-moment 1/32)

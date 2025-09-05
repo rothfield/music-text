@@ -6,7 +6,6 @@ Cargo.lock
 node_modules/
 
 # Reference folders
-doremi-script/
 #vexflow/
 
 # Test data and artifacts
@@ -80,6 +79,9 @@ z
 .DS_Store
 Thumbs.db
 
+# Root-level debug and test scripts
+*.js
+
 # Logs
 *.log
 
@@ -104,3 +106,4 @@ temp_server_tests/
 playwright-report/
 test-results/
 playwright-report/
+tests/test-user-data-*/

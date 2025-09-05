@@ -90,7 +90,7 @@ main() {
     start_server
     
     echo ""
-    echo "🎵 Unified Notation Parser server restarted!"
+    echo "🎵 Unified Music-Text server restarted!"
     echo "📱 Open http://localhost:3000 in your browser"
     echo "🔍 Server PID stored in: $SERVER_PID_FILE"
     echo ""

@@ -2,6 +2,37 @@
 
 ## Important Project Guidelines
 
+### ⚠️ CRITICAL: NO INLINE OCTAVE NOTATION
+**IMPORTANT**: This system uses **spatial octave markers** only. There is NO inline octave notation.
+- ❌ **WRONG**: "1." as inline lower octave notation  
+- ✅ **CORRECT**: "1" with dot marker below in separate annotation line
+- **Grammar Rule**: `number_pitch = { ASCII_DIGIT ~ flat_or_sharp? }` - NO dots allowed
+- **Octave System**: All octave information comes from spatial markers (upper/lower annotation lines)
+
+### 🚨 PEST GRAMMAR ISSUE IDENTIFIED: "1\n." PARSING FAILURE
+**Status**: Architecture refactor planned  
+**Problem**: Current grammar cannot disambiguate upper vs lower octave markers based on position  
+**Root Cause**: Parser tries to classify line types during parsing instead of post-processing  
+
+**Current Broken Behavior**:
+```
+Input: "1\n."
+Expected: content_line("1") + lower_line(".")  
+Actual: Fails with "unexpected measure" or "expected number_upper_line_item"
+```
+
+**Solution**: Multi-phase parsing with specialized grammars
+- **Phase 1**: Parse structure with position-aware grammars (`upper_grammar` vs `lower_grammar`)  
+- **Phase 2**: Classify parsed content into final AST types
+- **Architecture**: `RawStave` → classification → `Stave`
+
+**Implementation Plans**:
+- `TECH_NOTE_GRAMMAR_REFACTOR.md` - High-level architectural proposal
+- `DETAILED_CODE_PLAN_GRAMMAR_REFACTOR.md` - Code-level implementation plan  
+- `GRAMMAR_REFACTOR_CRITIQUE.md` - Expert validation of approach
+
+**Timeline**: Major refactor required - estimated 2-4 weeks implementation
+
 ### Development Workflow
 - **Testing Requirement**: The job is not done until the web UI is actually tested
 - Always verify fixes work in the browser interface, not just in backend code

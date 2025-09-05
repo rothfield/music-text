@@ -45,30 +45,54 @@ staves_section = {
     stave ~ (empty_line+ ~ stave)*
 }
 
+// Position-aware stave structure
 stave = {
-    upper_line* ~
+    pre_content_line* ~
     content_line ~
-    lower_line* ~
-    lyrics_line*
+    post_content_line*
+}
+
+// Pre-content lines use upper_grammar
+pre_content_line = {
+    !content_line ~ upper_grammar ~ newline
+}
+
+// Post-content lines use lower_grammar or lyrics_grammar  
+post_content_line = {
+    !content_line ~ post_content_grammar ~ newline
+}
+
+post_content_grammar = {
+    lower_grammar | lyrics_grammar
 }
 
 // ============================================================================
 // CONTENT LINE (generic for auto-detection)
 // ============================================================================
 
+// Strengthened content line - must be specific enough to avoid false positives
 content_line = {
     line_number? ~
     barline? ~
-    measure ~ (barline ~ measure)* ~
+    content_measure ~ (barline ~ content_measure)* ~
     barline? ~
-    newline?
+    newline  // REQUIRED - no more optional newlines
+}
+
+content_measure = {
+    ws_opt ~ content_beat ~ (ws_req ~ content_beat)* ~ ws_opt
+}
+
+content_beat = {
+    musical_element+  // Only actual musical elements
+}
+
+musical_element = {
+    pitch | dash | begin_slur | end_slur | breath_mark
+    // Explicitly excludes: dots, ornaments, chords, etc.
 }
 
 line_number = { ASCII_DIGIT+ ~ ")" }
-
-measure = {
-    ws_opt ~ (beat ~ (ws_req ~ beat)*)? ~ ws_opt
-}
 
 // ============================================================================
 // BEATS (generic for auto-detection)
@@ -167,42 +191,35 @@ doremi_pitch = {
 flat_or_sharp = { "#" | "b" }
 
 // ============================================================================
-// UPPER/LOWER ANNOTATION LINES
+// SPECIALIZED POSITION-AWARE GRAMMARS
 // ============================================================================
 
-upper_line = {
-    !content_line ~ !lyrics_line ~ upper_line_item+ ~ newline
+// Upper grammar - for lines BEFORE content
+upper_grammar = {
+    upper_item+
 }
 
-upper_line_item = {
-    upper_line_dot |
-    tala |
-    ornament |
-    chord |
-    mordent |
-    upper_line_two_dots |
-    ending |
-    slur |
-    " "+
+upper_item = {
+    upper_octave_marker | tala | ornament | chord | mordent | ending | slur | " "+
 }
 
-lower_line = {
-    !content_line ~ !lyrics_line ~ lower_line_item+ ~ newline
+upper_octave_marker = { "." | "*" | ":" }
+
+// Lower grammar - for lines AFTER content
+lower_grammar = {
+    lower_item+
 }
 
-lower_line_item = {
-    lower_line_dot |
-    lower_line_two_dots |
-    kommal_indicator |
-    beat_grouping |
-    " "+
+lower_item = {
+    lower_octave_marker | kommal_indicator | beat_grouping | " "+
 }
 
-// Octave markers
-upper_line_dot = { "." | "*" }
-upper_line_two_dots = { ":" }
-lower_line_dot = { "." | "*" }
-lower_line_two_dots = { ":" }
+lower_octave_marker = { "." | "*" | ":" }
+
+// Lyrics grammar - for syllables
+lyrics_grammar = {
+    syllable ~ (" "+ ~ syllable)*
+}
 
 // Ornaments (pitch sequences above notes)
 ornament = {
@@ -233,14 +250,6 @@ beat_grouping = { "__" ~ "_"* }
 
 // Endings (1.---, 2.___)
 ending = @{ ASCII_DIGIT ~ ("." | "_")+ }
-
-// ============================================================================
-// LYRICS
-// ============================================================================
-
-lyrics_line = {
-    !content_line ~ syllable ~ (" "+ ~ syllable)* ~ newline
-}
 
 syllable = @{
     (ASCII_ALPHA | "'" | "!" | "-")+

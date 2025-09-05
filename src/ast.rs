@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use crate::models::Position;
 
+pub mod raw;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Document {
     /// Key-value attributes (key: C, time: 4/4, author: John, etc.)

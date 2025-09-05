@@ -23,7 +23,7 @@ pub fn convert_elements_to_lilypond_src(
     metadata: &Metadata,
     source: Option<&str>
 ) -> Result<String, String> {
-    eprintln!("V2 LILYPOND CONVERTER: Processing FSM output with beats");
+    // Processing FSM output with beats
     
     let mut lilypond_notes: Vec<String> = Vec::new();
     let mut previous_beat_notes: Vec<String> = Vec::new();
@@ -132,8 +132,7 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
         if beat_element.is_note() {
             let (degree, octave, _, _) = beat_element.as_note().unwrap();
             let lily_note = degree_to_lilypond(*degree, octave, current_tonic)?;
-            eprintln!("V2 LILYPOND: Note {} with tuplet_duration {} -> {}{}", 
-                beat_element.value, beat_element.tuplet_duration, lily_note, duration_string);
+            // Note {} with tuplet_duration {} -> {}{}
             
             let mut note_str = format!("{}{}", lily_note, duration_string);
             
@@ -299,11 +298,34 @@ pub fn convert_processed_document_to_lilypond_src(
     metadata: &Metadata,
     source: Option<&str>
 ) -> Result<String, String> {
-    if processed_doc.staves.len() == 1 {
-        // Single stave - use existing function
-        convert_elements_to_lilypond_src(&processed_doc.staves[0].items, metadata, source)
+    // Count staves with actual musical content
+    let mut staves_with_content: Vec<&ProcessedStave> = Vec::new();
+    
+    for stave in &processed_doc.staves {
+        let mut has_content = false;
+        for item in &stave.items {
+            if let crate::parser_v2_fsm::Item::Beat(beat) = item {
+                if !beat.elements.is_empty() {
+                    has_content = true;
+                    break;
+                }
+            }
+        }
+        if has_content {
+            staves_with_content.push(stave);
+        }
+    }
+    
+    if staves_with_content.len() <= 1 {
+        // Single stave with content (or no content) - use standard template
+        let items = if let Some(stave) = staves_with_content.first() {
+            &stave.items
+        } else {
+            &processed_doc.staves[0].items // fallback to first stave
+        };
+        convert_elements_to_lilypond_src(items, metadata, source)
     } else {
-        // Multiple staves - use multi-stave template
+        // Multiple staves with content - use multi-stave template
         convert_multistave_to_lilypond_src(processed_doc, metadata, source)
     }
 }
@@ -320,7 +342,7 @@ fn convert_multistave_to_lilypond_src(
     for stave in &processed_doc.staves {
         // Get LilyPond content for this stave (without template wrapper)
         let stave_lilypond = convert_stave_to_lilypond_content(&stave.items)?;
-        stave_contents.push(format!("    \\new Staff {{ {} }}", stave_lilypond));
+        stave_contents.push(format!("\\new Staff {{\n  \\fixed c' {{\n    \\key c \\major\n    \\time 4/4\n    \\autoBeamOff\n    \\set Score.measureBarType = #\"\"\n    \\set Score.startRepeatBarType = #\"\"\n    \\set Score.endRepeatBarType = #\"\"\n    \n    {}\n  }}\n}}", stave_lilypond));
     }
     
     // Create template context for multi-stave template
@@ -357,4 +379,106 @@ fn convert_stave_to_lilypond_content(items: &Vec<Item>) -> Result<String, String
     }
     
     Ok(lilypond_notes.join(" "))
+}
+
+/// Generate minimal LilyPond source (just the notes, no staff boilerplate)
+pub fn convert_processed_document_to_lilypond_minimal(
+    document: &ProcessedDocument,
+    metadata: &Metadata,
+    source: Option<&str>
+) -> Result<String, String> {
+    let mut all_notes = Vec::new();
+    
+    // Convert all staves into a simple note list by processing items directly
+    // Only include staves that have actual musical content
+    for stave in &document.staves {
+        let mut stave_has_notes = false;
+        for item in &stave.items {
+            match item {
+                crate::parser_v2_fsm::Item::Beat(beat) => {
+                    for element in &beat.elements {
+                        match &element.event {
+                            crate::parser_v2_fsm::Event::Note { degree, octave, .. } => {
+                                // Convert note to proper lilypond format with octave (c'4, d'4, etc.)
+                                if let Ok(lily_note) = degree_to_lilypond(*degree, *octave, None) {
+                                    let note_str = format!("{}4", lily_note);
+                                    all_notes.push(note_str);
+                                    stave_has_notes = true;
+                                }
+                            },
+                            crate::parser_v2_fsm::Event::Rest => {
+                                all_notes.push("r4".to_string());
+                                stave_has_notes = true;
+                            },
+                            // Skip other elements for minimal output
+                            _ => {},
+                        }
+                    }
+                },
+                // Skip barlines and breath marks for minimal output
+                _ => {},
+            }
+        }
+        // If this stave had content, break after first stave with content
+        // This ensures minimal output shows only the first stave with actual music
+        if stave_has_notes {
+            break;
+        }
+    }
+    
+    // Use minimal template that only shows notes
+    let template_context = TemplateContext {
+        version: "2.24.0".to_string(),
+        title: None,
+        composer: None,
+        source_comment: None,
+        staves: all_notes.join(" "),
+        time_signature: None,
+        key_signature: None,
+        lyrics: None,
+    };
+
+    render_lilypond(LilyPondTemplate::Minimal, &template_context)
+        .map_err(|e| format!("Template rendering failed: {}", e))
+}
+
+/// Simple degree to lilypond note conversion (just note names)
+fn degree_to_lilypond_simple(degree: Degree) -> &'static str {
+    match degree {
+        Degree::N1bb => "cff",
+        Degree::N1b => "cf",
+        Degree::N1 => "c",
+        Degree::N1s => "cs",
+        Degree::N1ss => "css",
+        Degree::N2bb => "dff",
+        Degree::N2b => "df",
+        Degree::N2 => "d", 
+        Degree::N2s => "ds",
+        Degree::N2ss => "dss",
+        Degree::N3bb => "eff",
+        Degree::N3b => "ef",
+        Degree::N3 => "e",
+        Degree::N3s => "es",
+        Degree::N3ss => "ess",
+        Degree::N4bb => "fff",
+        Degree::N4b => "ff",
+        Degree::N4 => "f",
+        Degree::N4s => "fs",
+        Degree::N4ss => "fss",
+        Degree::N5bb => "gff",
+        Degree::N5b => "gf",
+        Degree::N5 => "g",
+        Degree::N5s => "gs", 
+        Degree::N5ss => "gss",
+        Degree::N6bb => "aff",
+        Degree::N6b => "af",
+        Degree::N6 => "a",
+        Degree::N6s => "as",
+        Degree::N6ss => "ass",
+        Degree::N7bb => "bff",
+        Degree::N7b => "bf",
+        Degree::N7 => "b",
+        Degree::N7s => "bs",
+        Degree::N7ss => "bss",
+    }
 }

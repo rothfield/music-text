@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script to start the unified music-text web server
 
-echo "🎵 Starting Unified Notation Parser Web Server..."
+echo "🎵 Starting Unified Music-Text Web Server..."
 
 # Check if webapp directory exists
 if [ ! -d "webapp" ]; then
@@ -10,7 +10,7 @@ if [ ! -d "webapp" ]; then
 fi
 
 # Check if Rust backend is built
-if [ ! -f "target/release/cli" ]; then
+if [ ! -f "target/release/music-txt" ]; then
     echo "⚠️  Rust backend not found. Building..."
     cargo build --release
     if [ $? -ne 0 ]; then
@@ -27,4 +27,4 @@ cd webapp && node update-cache-bust.js && cd ..
 echo "🚀 Starting unified server on http://localhost:3000"
 echo "📍 Web UI: http://localhost:3000"
 echo "📍 API: http://localhost:3000/api/parse"
-./target/release/cli --web
+./target/release/music-txt --web

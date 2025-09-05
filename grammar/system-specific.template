@@ -8,53 +8,57 @@
 }
 
 {{SYSTEM}}_stave = {
-    ({{SYSTEM}}_upper_line ~ newline)* ~
+    {{SYSTEM}}_pre_content_line* ~
     {{SYSTEM}}_content_line ~
-    (newline ~ lower_line)* ~
-    (newline ~ lyrics_line)*
+    {{SYSTEM}}_post_content_line*
+}
+
+{{SYSTEM}}_pre_content_line = {
+    !{{SYSTEM}}_content_line ~ {{SYSTEM}}_upper_grammar ~ newline
+}
+
+{{SYSTEM}}_post_content_line = {
+    !{{SYSTEM}}_content_line ~ {{SYSTEM}}_post_content_grammar ~ newline
+}
+
+{{SYSTEM}}_post_content_grammar = {
+    {{SYSTEM}}_lower_grammar | lyrics_grammar
 }
 
 {{SYSTEM}}_content_line = {
     line_number? ~
     barline? ~
-    {{SYSTEM}}_measure ~ (barline ~ {{SYSTEM}}_measure)* ~
+    {{SYSTEM}}_content_measure ~ (barline ~ {{SYSTEM}}_content_measure)* ~
     barline? ~
-    newline?
+    newline
 }
 
-{{SYSTEM}}_measure = {
-    ws_opt ~ ({{SYSTEM}}_beat ~ (ws_req ~ {{SYSTEM}}_beat)*)? ~ ws_opt
+{{SYSTEM}}_content_measure = {
+    ws_opt ~ {{SYSTEM}}_content_beat ~ (ws_req ~ {{SYSTEM}}_content_beat)* ~ ws_opt
 }
 
-{{SYSTEM}}_beat = {
-    {{SYSTEM}}_simple_beat
+{{SYSTEM}}_content_beat = {
+    {{SYSTEM}}_musical_element+
 }
 
-{{SYSTEM}}_simple_beat = {
-    {{SYSTEM}}_beat_item+
-}
-
-// Note: Delimited beats with <> syntax are deprecated
-// Beat grouping is now handled via overlines in lower_annotation_line
-
-{{SYSTEM}}_beat_item = {
+{{SYSTEM}}_musical_element = {
     {{PITCH_RULE}} | dash | begin_slur | end_slur | breath_mark
 }
 
-{{SYSTEM}}_upper_line = {
-    {{SYSTEM}}_upper_line_item+
+{{SYSTEM}}_upper_grammar = {
+    {{SYSTEM}}_upper_item+
 }
 
-{{SYSTEM}}_upper_line_item = {
-    upper_line_dot |
-    tala |
-    {{SYSTEM}}_ornament |
-    chord |
-    mordent |
-    upper_line_two_dots |
-    ending |
-    slur |
-    " "+
+{{SYSTEM}}_upper_item = {
+    upper_octave_marker | tala | {{SYSTEM}}_ornament | chord | mordent | ending | slur | " "+
+}
+
+{{SYSTEM}}_lower_grammar = {
+    {{SYSTEM}}_lower_item+
+}
+
+{{SYSTEM}}_lower_item = {
+    lower_octave_marker | kommal_indicator | beat_grouping | " "+
 }
 
 {{SYSTEM}}_ornament = {

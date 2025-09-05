@@ -6,14 +6,14 @@ use pest_derive::Parser;
 // use std::collections::HashMap; // Not needed for current implementation
 
 use crate::ast::*;
-use crate::ast_to_parsed;
+use crate::ast::raw::*;
 use crate::models::{Degree, Position};
 use crate::spatial_parser::{assign_octave_markers, assign_syllables_to_notes, analyze_slurs};
-use crate::parser_v2_fsm;
+use crate::classifier::{classify_raw_stave, ClassificationError};
 
 #[derive(Parser)]
 #[grammar = "grammar/notation.pest"]
-pub struct NotationParser;
+pub struct MusicTextParser;
 
 pub type ParseError = pest::error::Error<Rule>;
 
@@ -26,12 +26,12 @@ fn extract_position(pair: &Pair<Rule>) -> Option<Position> {
 /// Helper function to choose the appropriate grammar rule based on system
 fn parse_with_system<'a>(input: &'a str, system: &str) -> Result<pest::iterators::Pairs<'a, Rule>, ParseError> {
     match system {
-        "sargam" => NotationParser::parse(Rule::sargam_document, input),
-        "number" => NotationParser::parse(Rule::number_document, input),
-        "western" => NotationParser::parse(Rule::western_document, input),
-        "abc" => NotationParser::parse(Rule::abc_document, input),
-        "doremi" => NotationParser::parse(Rule::doremi_document, input),
-        "auto" | _ => NotationParser::parse(Rule::document, input),
+        "sargam" => MusicTextParser::parse(Rule::sargam_document, input),
+        "number" => MusicTextParser::parse(Rule::number_document, input),
+        "western" => MusicTextParser::parse(Rule::western_document, input),
+        "abc" => MusicTextParser::parse(Rule::abc_document, input),
+        "doremi" => MusicTextParser::parse(Rule::doremi_document, input),
+        "auto" | _ => MusicTextParser::parse(Rule::document, input),
     }
 }
 
@@ -74,18 +74,6 @@ pub fn parse_notation_with_stages(input: &str, system: &str) -> Result<(Document
     Ok((raw_document, spatial_document))
 }
 
-// Process document through rhythm FSM for musical analysis
-pub fn parse_notation_with_rhythm_analysis(input: &str, system: &str) -> Result<(Document, Vec<parser_v2_fsm::Item>), ParseError> {
-    let document = parse_notation(input, system)?;
-    
-    // Convert AST to ParsedElements
-    let parsed_elements = ast_to_parsed::convert_ast_to_parsed_elements(&document);
-    
-    // Process through rhythm FSM
-    let rhythm_items = parser_v2_fsm::group_elements_with_fsm_full(&parsed_elements, &[]);
-    
-    Ok((document, rhythm_items))
-}
 
 struct DocumentBuilder {
     document: Document,
@@ -213,28 +201,29 @@ impl DocumentBuilder {
     
     fn process_stave(&mut self, pair: Pair<Rule>) -> Result<Stave, ParseError> {
         let position = extract_position(&pair);
-        
-        let mut stave = Stave {
-            upper_lines: Vec::new(),
-            content_line: ContentLine {
-                line_number: None,
-                measures: Vec::new(),
-            },
-            lower_lines: Vec::new(),
-            lyrics_lines: Vec::new(),
-            position,
+        let raw_stave = self.parse_raw_stave(pair)?;
+        let final_stave = self.classify_raw_stave(raw_stave)?;
+        Ok(final_stave)
+    }
+    
+    fn parse_raw_stave(&mut self, pair: Pair<Rule>) -> Result<RawStave, ParseError> {
+        let mut raw_stave = RawStave {
+            pre_content_lines: Vec::new(),
+            content_line: ContentLine { line_number: None, measures: Vec::new() },
+            post_content_lines: Vec::new(),
+            position: extract_position(&pair),
         };
         
         for inner_pair in pair.into_inner() {
             match inner_pair.as_rule() {
-                Rule::upper_line | 
-                Rule::sargam_upper_line | 
-                Rule::number_upper_line | 
-                Rule::western_upper_line | 
-                Rule::abc_upper_line | 
-                Rule::doremi_upper_line => {
-                    let annotation_line = self.process_upper_line(inner_pair)?;
-                    stave.upper_lines.push(annotation_line);
+                Rule::pre_content_line | 
+                Rule::sargam_pre_content_line | 
+                Rule::number_pre_content_line | 
+                Rule::western_pre_content_line | 
+                Rule::abc_pre_content_line | 
+                Rule::doremi_pre_content_line => {
+                    let raw_line = self.parse_pre_content_line(inner_pair)?;
+                    raw_stave.pre_content_lines.push(raw_line);
                 }
                 Rule::content_line | 
                 Rule::sargam_content_line | 
@@ -242,21 +231,60 @@ impl DocumentBuilder {
                 Rule::western_content_line | 
                 Rule::abc_content_line | 
                 Rule::doremi_content_line => {
-                    stave.content_line = self.process_content_line(inner_pair)?;
+                    raw_stave.content_line = self.process_content_line(inner_pair)?;
+                }
+                Rule::post_content_line | 
+                Rule::sargam_post_content_line | 
+                Rule::number_post_content_line | 
+                Rule::western_post_content_line | 
+                Rule::abc_post_content_line | 
+                Rule::doremi_post_content_line => {
+                    let raw_line = self.parse_post_content_line(inner_pair)?;
+                    raw_stave.post_content_lines.push(raw_line);
+                }
+                // Handle legacy rules for backward compatibility
+                Rule::upper_line | 
+                Rule::sargam_upper_line | 
+                Rule::number_upper_line | 
+                Rule::western_upper_line | 
+                Rule::abc_upper_line | 
+                Rule::doremi_upper_line => {
+                    // Treat as pre-content line
+                    let annotation_line = self.process_upper_line(inner_pair)?;
+                    let raw_line = self.convert_annotation_line_to_raw_upper(annotation_line)?;
+                    raw_stave.pre_content_lines.push(raw_line);
                 }
                 Rule::lower_line => {
+                    // Treat as post-content line
                     let annotation_line = self.process_lower_line(inner_pair)?;
-                    stave.lower_lines.push(annotation_line);
+                    let raw_line = self.convert_annotation_line_to_raw_lower(annotation_line)?;
+                    raw_stave.post_content_lines.push(raw_line);
                 }
                 Rule::lyrics_line => {
+                    // Treat as post-content line
                     let lyrics = self.process_lyrics_line(inner_pair)?;
-                    stave.lyrics_lines.push(lyrics);
+                    let raw_line = RawAnnotationLine {
+                        content: RawAnnotationContent::Lyrics(lyrics.syllables),
+                        position: None,
+                    };
+                    raw_stave.post_content_lines.push(raw_line);
                 }
                 _ => {}
             }
         }
         
-        Ok(stave)
+        Ok(raw_stave)
+    }
+    
+    fn classify_raw_stave(&mut self, raw_stave: RawStave) -> Result<Stave, ParseError> {
+        classify_raw_stave(raw_stave).map_err(|err| {
+            pest::error::Error::new_from_pos(
+                pest::error::ErrorVariant::CustomError {
+                    message: format!("Classification error: {}", err),
+                },
+                pest::Position::from_start(""),
+            )
+        })
     }
     
     fn process_content_line(&mut self, pair: Pair<Rule>) -> Result<ContentLine, ParseError> {
@@ -654,6 +682,304 @@ impl DocumentBuilder {
         
         Ok(LyricsLine { syllables })
     }
+    
+    /// Parse pre-content line using upper_grammar context
+    fn parse_pre_content_line(&mut self, pair: Pair<Rule>) -> Result<RawAnnotationLine, ParseError> {
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::upper_grammar | 
+                Rule::sargam_upper_grammar | 
+                Rule::number_upper_grammar | 
+                Rule::western_upper_grammar | 
+                Rule::abc_upper_grammar | 
+                Rule::doremi_upper_grammar => {
+                    return Ok(RawAnnotationLine {
+                        content: RawAnnotationContent::Upper(self.parse_upper_items(inner_pair)?),
+                        position: extract_position(&pair),
+                    });
+                }
+                _ => {}
+            }
+        }
+        Err(pest::error::Error::new_from_pos(
+            pest::error::ErrorVariant::CustomError {
+                message: "Expected upper_grammar in pre_content_line".to_string(),
+            },
+            pair.as_span().start_pos(),
+        ))
+    }
+    
+    /// Parse post-content line using lower_grammar or lyrics_grammar context
+    fn parse_post_content_line(&mut self, pair: Pair<Rule>) -> Result<RawAnnotationLine, ParseError> {
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::lower_grammar | 
+                Rule::sargam_lower_grammar | 
+                Rule::number_lower_grammar | 
+                Rule::western_lower_grammar | 
+                Rule::abc_lower_grammar | 
+                Rule::doremi_lower_grammar => {
+                    return Ok(RawAnnotationLine {
+                        content: RawAnnotationContent::Lower(self.parse_lower_items(inner_pair)?),
+                        position: extract_position(&pair),
+                    });
+                }
+                Rule::lyrics_grammar => {
+                    return Ok(RawAnnotationLine {
+                        content: RawAnnotationContent::Lyrics(self.parse_lyrics_items(inner_pair)?),
+                        position: extract_position(&pair),
+                    });
+                }
+                _ => {}
+            }
+        }
+        Err(pest::error::Error::new_from_pos(
+            pest::error::ErrorVariant::CustomError {
+                message: "Expected lower_grammar or lyrics_grammar in post_content_line".to_string(),
+            },
+            pair.as_span().start_pos(),
+        ))
+    }
+    
+    /// Parse upper grammar items
+    fn parse_upper_items(&mut self, pair: Pair<Rule>) -> Result<Vec<UpperItem>, ParseError> {
+        let mut items = Vec::new();
+        
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::upper_item | 
+                Rule::sargam_upper_item | 
+                Rule::number_upper_item | 
+                Rule::western_upper_item | 
+                Rule::abc_upper_item | 
+                Rule::doremi_upper_item => {
+                    if let Some(item) = self.parse_upper_item(inner_pair)? {
+                        items.push(item);
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        Ok(items)
+    }
+    
+    /// Parse individual upper item
+    fn parse_upper_item(&mut self, pair: Pair<Rule>) -> Result<Option<UpperItem>, ParseError> {
+        let position = extract_position(&pair);
+        
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::upper_octave_marker => {
+                    return Ok(Some(UpperItem::OctaveMarker { 
+                        marker: inner_pair.as_str().to_string(),
+                        position
+                    }));
+                }
+                Rule::tala => {
+                    return Ok(Some(UpperItem::Tala { 
+                        marker: inner_pair.as_str().to_string(),
+                        position
+                    }));
+                }
+                Rule::ornament | Rule::sargam_ornament | Rule::number_ornament | 
+                Rule::western_ornament | Rule::abc_ornament | Rule::doremi_ornament => {
+                    let pitches = self.process_ornament(inner_pair)?;
+                    return Ok(Some(UpperItem::Ornament { pitches, position }));
+                }
+                Rule::chord => {
+                    return Ok(Some(UpperItem::Chord { 
+                        chord: inner_pair.as_str().to_string(),
+                        position
+                    }));
+                }
+                Rule::slur => {
+                    return Ok(Some(UpperItem::Slur { 
+                        underscores: inner_pair.as_str().to_string(),
+                        position
+                    }));
+                }
+                Rule::ending => {
+                    return Ok(Some(UpperItem::Ending { 
+                        ending: inner_pair.as_str().to_string(),
+                        position
+                    }));
+                }
+                Rule::mordent => {
+                    return Ok(Some(UpperItem::Mordent { position }));
+                }
+                _ => {
+                    // Handle spaces - count consecutive spaces
+                    let text = inner_pair.as_str();
+                    if text.chars().all(|c| c == ' ' || c == '\t') {
+                        return Ok(Some(UpperItem::Space { 
+                            count: text.len(),
+                            position
+                        }));
+                    }
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+    
+    /// Parse lower grammar items
+    fn parse_lower_items(&mut self, pair: Pair<Rule>) -> Result<Vec<LowerItem>, ParseError> {
+        let mut items = Vec::new();
+        
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::lower_item | 
+                Rule::sargam_lower_item | 
+                Rule::number_lower_item | 
+                Rule::western_lower_item | 
+                Rule::abc_lower_item | 
+                Rule::doremi_lower_item => {
+                    if let Some(item) = self.parse_lower_item(inner_pair)? {
+                        items.push(item);
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        Ok(items)
+    }
+    
+    /// Parse individual lower item
+    fn parse_lower_item(&mut self, pair: Pair<Rule>) -> Result<Option<LowerItem>, ParseError> {
+        let position = extract_position(&pair);
+        
+        for inner_pair in pair.into_inner() {
+            match inner_pair.as_rule() {
+                Rule::lower_octave_marker => {
+                    return Ok(Some(LowerItem::OctaveMarker { 
+                        marker: inner_pair.as_str().to_string(),
+                        position
+                    }));
+                }
+                Rule::kommal_indicator => {
+                    return Ok(Some(LowerItem::KommalIndicator { position }));
+                }
+                Rule::beat_grouping => {
+                    return Ok(Some(LowerItem::BeatGrouping { 
+                        underscores: inner_pair.as_str().to_string(),
+                        position
+                    }));
+                }
+                _ => {
+                    // Handle spaces - count consecutive spaces
+                    let text = inner_pair.as_str();
+                    if text.chars().all(|c| c == ' ' || c == '\t') {
+                        return Ok(Some(LowerItem::Space { 
+                            count: text.len(),
+                            position
+                        }));
+                    }
+                }
+            }
+        }
+        
+        Ok(None)
+    }
+    
+    /// Parse lyrics items
+    fn parse_lyrics_items(&mut self, pair: Pair<Rule>) -> Result<Vec<String>, ParseError> {
+        let mut syllables = Vec::new();
+        
+        for inner_pair in pair.into_inner() {
+            if inner_pair.as_rule() == Rule::syllable {
+                syllables.push(inner_pair.as_str().to_string());
+            }
+        }
+        
+        Ok(syllables)
+    }
+    
+    /// Convert annotation line to raw upper for backward compatibility
+    fn convert_annotation_line_to_raw_upper(&mut self, annotation_line: AnnotationLine) -> Result<RawAnnotationLine, ParseError> {
+        let mut items = Vec::new();
+        
+        for item in annotation_line.items {
+            let raw_item = match item {
+                AnnotationItem::UpperOctaveMarker { marker, position } => {
+                    UpperItem::OctaveMarker { marker, position }
+                }
+                AnnotationItem::Tala { marker, position } => {
+                    UpperItem::Tala { marker, position }
+                }
+                AnnotationItem::Ornament { pitches, position } => {
+                    UpperItem::Ornament { pitches, position }
+                }
+                AnnotationItem::Chord { chord, position } => {
+                    UpperItem::Chord { chord, position }
+                }
+                AnnotationItem::Slur { underscores, position } => {
+                    UpperItem::Slur { underscores, position }
+                }
+                AnnotationItem::Ending { ending, position } => {
+                    UpperItem::Ending { ending, position }
+                }
+                AnnotationItem::Mordent { position } => {
+                    UpperItem::Mordent { position }
+                }
+                AnnotationItem::Space { count, position } => {
+                    UpperItem::Space { count, position }
+                }
+                _ => {
+                    return Err(pest::error::Error::new_from_pos(
+                        pest::error::ErrorVariant::CustomError {
+                            message: "Invalid annotation item for upper line".to_string(),
+                        },
+                        pest::Position::from_start(""),
+                    ));
+                }
+            };
+            items.push(raw_item);
+        }
+        
+        Ok(RawAnnotationLine {
+            content: RawAnnotationContent::Upper(items),
+            position: None,
+        })
+    }
+    
+    /// Convert annotation line to raw lower for backward compatibility  
+    fn convert_annotation_line_to_raw_lower(&mut self, annotation_line: AnnotationLine) -> Result<RawAnnotationLine, ParseError> {
+        let mut items = Vec::new();
+        
+        for item in annotation_line.items {
+            let raw_item = match item {
+                AnnotationItem::LowerOctaveMarker { marker, position } => {
+                    LowerItem::OctaveMarker { marker, position }
+                }
+                AnnotationItem::BeatGrouping { underscores, position } => {
+                    LowerItem::BeatGrouping { underscores, position }
+                }
+                AnnotationItem::Space { count, position } => {
+                    LowerItem::Space { count, position }
+                }
+                AnnotationItem::Symbol { symbol, position } if symbol == "_" => {
+                    LowerItem::KommalIndicator { position }
+                }
+                _ => {
+                    return Err(pest::error::Error::new_from_pos(
+                        pest::error::ErrorVariant::CustomError {
+                            message: "Invalid annotation item for lower line".to_string(),
+                        },
+                        pest::Position::from_start(""),
+                    ));
+                }
+            };
+            items.push(raw_item);
+        }
+        
+        Ok(RawAnnotationLine {
+            content: RawAnnotationContent::Lower(items),
+            position: None,
+        })
+    }
 }
 
 
@@ -718,7 +1044,7 @@ pub fn debug_pest_parse(input: &str) {
     
     // Test with number_document rule
     println!("--- Testing number_document rule ---");
-    match NotationParser::parse(Rule::number_document, input) {
+    match MusicTextParser::parse(Rule::number_document, input) {
         Ok(pairs) => {
             println!("SUCCESS: Parsed with number_document rule");
             debug_print_parse_tree(pairs, 0);
@@ -733,7 +1059,7 @@ pub fn debug_pest_parse(input: &str) {
     
     // Test with generic document rule  
     println!("--- Testing generic document rule ---");
-    match NotationParser::parse(Rule::document, input) {
+    match MusicTextParser::parse(Rule::document, input) {
         Ok(pairs) => {
             println!("SUCCESS: Parsed with document rule");
             debug_print_parse_tree(pairs, 0);
@@ -751,7 +1077,7 @@ pub fn debug_pest_parse(input: &str) {
     
     // Test number_pitch directly
     println!("Testing number_pitch:");
-    match NotationParser::parse(Rule::number_pitch, input) {
+    match MusicTextParser::parse(Rule::number_pitch, input) {
         Ok(pairs) => {
             println!("SUCCESS: Parsed with number_pitch rule");
             debug_print_parse_tree(pairs, 0);
@@ -766,7 +1092,7 @@ pub fn debug_pest_parse(input: &str) {
     
     // Test pitch directly
     println!("Testing pitch:");
-    match NotationParser::parse(Rule::pitch, input) {
+    match MusicTextParser::parse(Rule::pitch, input) {
         Ok(pairs) => {
             println!("SUCCESS: Parsed with pitch rule");
             debug_print_parse_tree(pairs, 0);
@@ -781,7 +1107,7 @@ pub fn debug_pest_parse(input: &str) {
     
     // Test number_beat_item directly
     println!("Testing number_beat_item:");
-    match NotationParser::parse(Rule::number_beat_item, input) {
+    match MusicTextParser::parse(Rule::number_beat_item, input) {
         Ok(pairs) => {
             println!("SUCCESS: Parsed with number_beat_item rule");
             debug_print_parse_tree(pairs, 0);
@@ -796,7 +1122,7 @@ pub fn debug_pest_parse(input: &str) {
     
     // Test number_simple_beat directly
     println!("Testing number_simple_beat:");
-    match NotationParser::parse(Rule::number_simple_beat, input) {
+    match MusicTextParser::parse(Rule::number_simple_beat, input) {
         Ok(pairs) => {
             println!("SUCCESS: Parsed with number_simple_beat rule");
             debug_print_parse_tree(pairs, 0);

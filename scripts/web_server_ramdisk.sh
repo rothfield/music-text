@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start web server (ramdisk configured in .cargo/config.toml)
-echo "🎵 Starting Pest Grammar Notation Parser Web Server"
+echo "🎵 Starting Music-Text Web Server"
 echo "📍 Server will run on http://127.0.0.1:3000"  
 echo "⚡ Using ramdisk for faster compilation (configured in .cargo/config.toml)"
 echo "🛑 Press Ctrl+C to stop"

@@ -90,13 +90,6 @@ pub fn convert_fsm_items_to_enhanced_vexflow(fsm_items: &Vec<Item>) -> Result<En
     })
 }
 
-pub fn convert_document_to_enhanced_vexflow(document: &Document) -> Result<EnhancedVexFlowOutput, String> {
-    // Convert AST to parsed elements and then through rhythm FSM
-    let parsed_elements = ast_to_parsed::convert_ast_to_parsed_elements(document);
-    let fsm_items = crate::parser_v2_fsm::group_elements_with_fsm_full(&parsed_elements, &[]);
-    // Use the unified converter
-    convert_fsm_items_to_enhanced_vexflow(&fsm_items)
-}
 
 fn process_beat_to_vexflow(beat: &Beat) -> Result<Vec<EnhancedVexFlowElement>, String> {
     let mut elements = Vec::new();

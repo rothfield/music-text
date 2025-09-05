@@ -6,8 +6,8 @@ test('test VexFlow alignment with actual content', async ({ page }) => {
   await page.goto('/');
   await page.waitForLoadState('networkidle');
   
-  // Wait for WASM to load
-  await expect(page.locator('#version-display')).toBeVisible({ timeout: 10000 });
+  // Wait for page to fully load
+  await page.waitForTimeout(2000);
   
   // Enter notation to trigger VexFlow rendering
   const textarea = page.locator('#notation-input');

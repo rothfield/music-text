@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>Music-Text Parser</title>
-    <link rel="stylesheet" href="css/app.css?v=73a8d47b">
+    <link rel="stylesheet" href="css/app.css?v=2abd7816">
 </head>
 <body>
     <div class="container">
@@ -18,7 +18,7 @@
                     <button onclick="parse()">Parse</button>
                     <div id="server-status" class="status offline">Checking...</div>
                 </div>
-                <textarea id="input" placeholder="Try: 1-2-3 | S R G M P | C D E F | key: D&#10;1 2 3">1-2-3</textarea>
+                <textarea id="notation-input" placeholder="Try: 1-2-3 | S R G M P | C D E F | key: D&#10;1 2 3"></textarea>
             </div>
             
             <div class="tabs">
@@ -29,10 +29,10 @@
                     <span class="tab-number">2</span>Parser Output
                 </button>
                 <button class="tab" data-tab="spatial" onclick="showTab('spatial')">
-                    <span class="tab-number">3</span>Spatial AST
+                    <span class="tab-number">3</span>Spatial Parser
                 </button>
                 <button class="tab" data-tab="fsm" onclick="showTab('fsm')">
-                    <span class="tab-number">4</span>FSM
+                    <span class="tab-number">4</span>Rhythm
                 </button>
                 <button class="tab" data-tab="lilypond-minimal" onclick="showTab('lilypond-minimal')">
                     <span class="tab-number">5</span>LilyPond (Minimal)
@@ -41,7 +41,7 @@
                     <span class="tab-number">6</span>LilyPond (Full)
                 </button>
                 <button class="tab" data-tab="lilypond-png" onclick="showTab('lilypond-png')">
-                    <span class="tab-number">7</span>LilyPond PNG
+                    <span class="tab-number">7</span>LilyPond SVG
                 </button>
                 <button class="tab" data-tab="vexflow" onclick="showTab('vexflow')">
                     <span class="tab-number">8</span>VexFlow
@@ -54,7 +54,7 @@
             <div id="ast-content" class="tab-content active">
                 <div class="output-header">
                     <div>
-                        <div class="output-title">Raw AST (Before Spatial Processing)</div>
+                        <div class="output-title">Raw AST</div>
                     </div>
                     <button class="copy-btn" onclick="copyToClipboard('ast-output')">📋 Copy</button>
                 </div>
@@ -74,7 +74,7 @@
             <div id="spatial-content" class="tab-content">
                 <div class="output-header">
                     <div>
-                        <div class="output-title">Spatial AST (After Spatial Processing)</div>
+                        <div class="output-title">Spatial Parser</div>
                     </div>
                     <button class="copy-btn" onclick="copyToClipboard('spatial-output')">📋 Copy</button>
                 </div>
@@ -84,7 +84,7 @@
             <div id="fsm-content" class="tab-content">
                 <div class="output-header">
                     <div>
-                        <div class="output-title">FSM (Finite State Machine) Output</div>
+                        <div class="output-title">Rhythm</div>
                     </div>
                     <button class="copy-btn" onclick="copyToClipboard('fsm-output')">📋 Copy</button>
                 </div>
@@ -94,7 +94,7 @@
             <div id="lilypond-minimal-content" class="tab-content">
                 <div class="output-header">
                     <div>
-                        <div class="output-title">LilyPond Source (Minimal)</div>
+                        <div class="output-title">LilyPond (Minimal)</div>
                     </div>
                     <button class="copy-btn" onclick="copyToClipboard('lilypond-minimal-output')">📋 Copy</button>
                 </div>
@@ -145,6 +145,6 @@
         </div>
     </div>
 
-    <script src="js/app.js?v=999e2d62"></script>
+    <script src="js/app.js?v=a5255b6a"></script>
 </body>
 </html>

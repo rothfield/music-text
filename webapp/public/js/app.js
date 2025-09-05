@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(checkServerStatus, 10000);
     
     // Parse on startup if there's content
-    const input = document.getElementById('input').value;
+    const input = document.getElementById('notation-input').value;
     if (input && input.trim()) {
         parse();
     }
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Setup event listeners
 function setupEventListeners() {
-    const inputEl = document.getElementById('input');
+    const inputEl = document.getElementById('notation-input');
     const systemEl = document.getElementById('system');
     
     // Auto-save on input change with debounce
@@ -61,7 +61,7 @@ function setupEventListeners() {
 
 // Save to local storage
 function saveToStorage() {
-    const input = document.getElementById('input').value;
+    const input = document.getElementById('notation-input').value;
     const system = document.getElementById('system').value;
     
     localStorage.setItem(STORAGE_KEYS.notation, input);
@@ -79,7 +79,7 @@ function loadFromStorage() {
     const savedTab = localStorage.getItem(STORAGE_KEYS.currentTab);
     
     if (savedNotation !== null) {
-        document.getElementById('input').value = savedNotation;
+        document.getElementById('notation-input').value = savedNotation;
     }
     
     if (savedSystem !== null) {
@@ -129,7 +129,7 @@ function showTab(tabName) {
 
 // Debounced SVG generation (5 seconds)
 function debouncedSvgGeneration() {
-    const input = document.getElementById('input').value;
+    const input = document.getElementById('notation-input').value;
     const system = document.getElementById('system').value;
     
     // Clear existing timeout
@@ -144,12 +144,12 @@ function debouncedSvgGeneration() {
     
     // Show loading state
     document.getElementById('lilypond-png-output').innerHTML = 
-        '<div style="color: #666; text-align: center; padding: 40px;">⏳ Generating SVG in 5 seconds...</div>';
+        '<div style="color: #666; text-align: center; padding: 40px;">⏳ Generating SVG in 2 seconds...</div>';
     
-    // Set timeout for 5 seconds
+    // Set timeout for 2 seconds (reduced from 5)
     svgTimeout = setTimeout(async () => {
         await generateSvg(input, system);
-    }, 5000);
+    }, 2000);
 }
 
 // Generate SVG
@@ -165,13 +165,37 @@ async function generateSvg(input, system) {
         '<div style="color: #666; text-align: center; padding: 40px;">🎼 Generating SVG...</div>';
     
     try {
-        const response = await fetch('/api/lilypond/svg', {
+        // Check if we can reuse LilyPond source from last parse result
+        let lilypondSource = null;
+        if (lastResult && lastResult.success && lastResult.lilypond) {
+            lilypondSource = lastResult.lilypond;
+        } else {
+            // Parse the input to get LilyPond source
+            const parseResponse = await fetch('/api/parse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ input: input, notation: system })
+            });
+            
+            const parseResult = await parseResponse.json();
+            
+            if (!parseResult.success || !parseResult.lilypond) {
+                document.getElementById('lilypond-png-output').innerHTML = 
+                    '<div class="warning">Failed to generate LilyPond source for SVG</div>';
+                return;
+            }
+            
+            lilypondSource = parseResult.lilypond;
+        }
+        
+        // Submit the LilyPond source to the SVG endpoint
+        const svgResponse = await fetch('/api/lilypond/svg', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ input: input, notation: system })
+            body: JSON.stringify({ lilypond_source: lilypondSource })
         });
         
-        const svgResult = await response.json();
+        const svgResult = await svgResponse.json();
         
         // Cache the result
         svgCache = svgResult;
@@ -189,12 +213,12 @@ async function generateSvg(input, system) {
 
 // Display SVG result
 function displaySvgResult(svgResult) {
-    if (svgResult.success && svgResult.svg_url) {
-        document.getElementById('lilypond-png-output').innerHTML = 
-            `<img src="${svgResult.svg_url}" alt="LilyPond SVG Output" style="max-width: 100%; border: 1px solid #ddd;">`;
+    if (svgResult.success && svgResult.svg) {
+        document.getElementById('lilypond-png-output').innerHTML = svgResult.svg;
     } else {
+        const errorMsg = svgResult.error || 'Failed to generate LilyPond SVG';
         document.getElementById('lilypond-png-output').innerHTML = 
-            '<div class="warning">Failed to generate LilyPond SVG</div>';
+            `<div class="warning">Error: ${errorMsg}</div>`;
     }
 }
 
@@ -218,7 +242,7 @@ async function checkServerStatus() {
 
 // Parse function
 async function parse() {
-    const input = document.getElementById('input').value;
+    const input = document.getElementById('notation-input').value;
     const system = document.getElementById('system').value;
     
     if (!input.trim()) {
@@ -280,14 +304,8 @@ async function parse() {
         if (result.success) {
             // Update AST tab
             if (result.ast) {
-                const astNote = '✅ Raw AST Parsing Complete\n' +
-                              '===================================\n\n' +
-                              'Pest grammar parsed into:\n' +
-                              '• Document structure with staves\n' +
-                              '• Measures and beats\n' +
-                              '• Raw pitch and dash elements\n\n' +
-                              'Raw AST (JSON):\n\n';
-                updateOutput('ast-output', astNote + result.ast);
+                // result.ast is already an object, so stringify it properly
+                updateOutput('ast-output', JSON.stringify(result.ast, null, 2));
             } else {
                 updateOutput('ast-output', 'No AST generated', 'warning');
             }
@@ -301,25 +319,16 @@ async function parse() {
             
             // Update spatial tab
             if (result.spatial) {
-                const spatialNote = 'Spatial-Enhanced AST (JSON):\n\n';
-                updateOutput('spatial-output', spatialNote + result.spatial);
+                updateOutput('spatial-output', result.spatial);
             } else {
-                updateOutput('spatial-output', 'Spatial processing not available', 'warning');
+                updateOutput('spatial-output', '❌ MISSING FIELD: result.spatial\n\nServer response does not contain spatial field.\nCheck ParseResponse struct in src/web.rs\n\nExpected: Spatial parser output from src/spatial_parser.rs', 'error');
             }
             
             // Update FSM tab
             if (result.fsm) {
-                const fsmNote = '✅ FSM Rhythm Analysis Complete\n' +
-                              '======================================\n\n' +
-                              'Rhythm features detected:\n' +
-                              '• Beat divisions and tuplet analysis\n' +
-                              '• Note subdivisions and durations\n' +
-                              '• Extension and tie processing\n\n' +
-                              'FSM Output (JSON):\n\n';
-                updateOutput('fsm-output', fsmNote + result.fsm);
+                updateOutput('fsm-output', result.fsm);
             } else {
-                updateOutput('fsm-output', 
-                    'FSM processing not available', 'warning');
+                updateOutput('fsm-output', '❌ MISSING FIELD: result.fsm\n\nServer response does not contain fsm field.\nCheck ParseResponse struct in src/web.rs\n\nExpected: FSM output from src/structure_preserving_fsm.rs\nor src/rhythm_fsm.rs', 'error');
             }
             
             // Update LilyPond Minimal tab

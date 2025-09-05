@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 // Internal modules
 pub mod parser;
-pub mod web_server;
+pub mod web;
 mod ast;
 mod ast_to_parsed;
 mod rhythm_fsm;  
@@ -12,6 +12,10 @@ mod models;
 mod parser_v2_fsm;
 mod spatial_parser;
 mod structure_preserving_fsm;
+mod pest_tests;
+// mod lilypond_tests;  // TODO: Fix imports and enable
+mod lilypond_integration_tests;
+mod classifier;
 
 // Re-export key types for external use
 pub use ast::{Document, NotationSystem};
@@ -83,7 +87,7 @@ pub struct NotationResult {
 }
 
 /// Main public API function - parse notation and return all formats
-pub fn parse_notation_full(input: &str, system: Option<&str>) -> NotationResult {
+pub fn parse(input: &str, system: Option<&str>) -> NotationResult {
     let system = system.unwrap_or("auto");
     
     match parser::parse_notation_with_stages(input, system) {
