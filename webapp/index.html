@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Text Parser</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Music Text Parser</h1>
+        
+        <div class="input-section">
+            <label for="input-text">Enter your music notation:</label>
+            <textarea id="input-text" placeholder="Try typing: 1 2 3 | 4 5 6&#10;or: C D E F G A B&#10;or: 1# 2b 3##"></textarea>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('pest')">Raw PEST Output</button>
+            <button class="tab-button" onclick="switchTab('document')">Document Structure</button>
+            <button class="tab-button" onclick="switchTab('processed')">Processed Staves</button>
+            <button class="tab-button" onclick="switchTab('minimal-lily')">Minimal LilyPond</button>
+            <button class="tab-button" onclick="switchTab('full-lily')">Full LilyPond</button>
+            <button class="tab-button" onclick="switchTab('svg')">LilyPond SVG</button>
+            <button class="tab-button" onclick="switchTab('vexflow')">VexFlow</button>
+        </div>
+        
+        <div id="pest-tab" class="tab-content active">
+            <div id="pest-output" class="json-output loading">
+                Type in the textarea above to see the raw PEST parse tree...
+            </div>
+        </div>
+        
+        <div id="document-tab" class="tab-content">
+            <div id="document-output" class="json-output loading">
+                Parsed document structure will appear here...
+            </div>
+        </div>
+        
+        <div id="processed-tab" class="tab-content">
+            <div id="processed-output" class="json-output loading">
+                Processed staves will appear here...
+            </div>
+        </div>
+        
+        <div id="minimal-lily-tab" class="tab-content">
+            <div id="minimal-lily-output" class="json-output loading">
+                Minimal LilyPond notation will appear here...
+            </div>
+        </div>
+        
+        <div id="full-lily-tab" class="tab-content">
+            <div id="full-lily-output" class="json-output loading">
+                Full LilyPond score will appear here...
+            </div>
+        </div>
+        
+        <div id="svg-tab" class="tab-content">
+            <div id="svg-output" class="loading">
+                LilyPond SVG rendering will appear here...
+            </div>
+        </div>
+        
+        <div id="vexflow-tab" class="tab-content">
+            <div id="vexflow-output">
+                <canvas id="vexflow-canvas" width="600" height="200" style="border: 1px solid #ddd; background: #fafafa;">
+                    VexFlow canvas will render here...
+                </canvas>
+                <div id="vexflow-data" class="json-output" style="margin-top: 10px; max-height: 200px; overflow-y: auto;">
+                    VexFlow data will appear here...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

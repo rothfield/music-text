@@ -1,0 +1,132 @@
+body {
+    font-family: Arial, sans-serif;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+.container {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1 {
+    color: #333;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.input-section {
+    margin-bottom: 30px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #555;
+}
+
+#input-text {
+    width: 100%;
+    height: 150px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+#input-text:focus {
+    outline: none;
+    border-color: #4CAF50;
+}
+
+.tabs {
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 20px;
+}
+
+.tab-button {
+    background-color: #f1f1f1;
+    border: none;
+    padding: 12px 24px;
+    cursor: pointer;
+    margin-right: 5px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.tab-button:hover {
+    background-color: #ddd;
+}
+
+.tab-button.active {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.tab-content {
+    display: none;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 0 4px 4px 4px;
+    background-color: #fafafa;
+    min-height: 300px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.json-output {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    padding: 15px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+
+.error {
+    color: #d32f2f;
+    background-color: #ffebee;
+    padding: 15px;
+    border-radius: 4px;
+    border-left: 4px solid #d32f2f;
+}
+
+.loading {
+    color: #666;
+    font-style: italic;
+}
+
+.syntax-highlight .key {
+    color: #9cdcfe;
+}
+
+.syntax-highlight .string {
+    color: #ce9178;
+}
+
+.syntax-highlight .number {
+    color: #b5cea8;
+}
+
+.syntax-highlight .boolean {
+    color: #569cd6;
+}
+
+.syntax-highlight .null {
+    color: #569cd6;
+}
