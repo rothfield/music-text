@@ -104,6 +104,14 @@ function syntaxHighlight(json) {
 }
 
 async function parseInput(input) {
+    console.log('🚀 parseInput() called:', {
+        inputLength: input.length,
+        isEmpty: !input.trim(),
+        firstLine: input.split('\n')[0],
+        totalLines: input.split('\n').length,
+        timestamp: new Date().toISOString()
+    });
+    
     const pestOutput = document.getElementById('pest-output');
     const documentOutput = document.getElementById('document-output');
     const processedOutput = document.getElementById('processed-output');
@@ -114,6 +122,10 @@ async function parseInput(input) {
     const vexflowData = document.getElementById('vexflow-data');
     
     if (!input.trim()) {
+        // Reset notation systems display
+        const detectedSystemsSpan = document.getElementById('detected-systems');
+        detectedSystemsSpan.textContent = 'Enter some music to see detected systems...';
+        
         pestOutput.innerHTML = '<span class="loading">Type in the textarea above to see the raw PEST parse tree...</span>';
         documentOutput.innerHTML = '<span class="loading">Parsed document structure will appear here...</span>';
         processedOutput.innerHTML = '<span class="loading">Processed staves will appear here...</span>';
@@ -121,13 +133,15 @@ async function parseInput(input) {
         fullLilyOutput.innerHTML = '<span class="loading">Full LilyPond score will appear here...</span>';
         svgOutput.innerHTML = '<span class="loading">LilyPond SVG rendering will appear here...</span>';
         vexflowData.innerHTML = '<span class="loading">VexFlow notation data will appear here...</span>';
-        const ctx = vexflowCanvas.getContext('2d');
-        ctx.clearRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
-        ctx.fillStyle = '#fafafa';
-        ctx.fillRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
-        ctx.fillStyle = '#666';
-        ctx.font = '14px Arial';
-        ctx.fillText('VexFlow canvas will render here...', 20, 100);
+        if (vexflowCanvas) {
+            const ctx = vexflowCanvas.getContext('2d');
+            ctx.clearRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
+            ctx.fillStyle = '#666';
+            ctx.font = '14px Arial';
+            ctx.fillText('VexFlow canvas will render here...', 20, 100);
+        }
         return;
     }
     
@@ -140,19 +154,58 @@ async function parseInput(input) {
         fullLilyOutput.innerHTML = '<span class="loading">Generating...</span>';
         svgOutput.innerHTML = '<span class="loading">Rendering...</span>';
         vexflowData.innerHTML = '<span class="loading">Converting...</span>';
-        const ctx = vexflowCanvas.getContext('2d');
-        ctx.clearRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
-        ctx.fillStyle = '#fafafa';
-        ctx.fillRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
-        ctx.fillStyle = '#666';
-        ctx.font = '14px Arial';
-        ctx.fillText('Rendering VexFlow...', 20, 100);
+        if (vexflowCanvas) {
+            const ctx = vexflowCanvas.getContext('2d');
+            ctx.clearRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
+            ctx.fillStyle = '#666';
+            ctx.font = '14px Arial';
+            ctx.fillText('Rendering VexFlow...', 20, 100);
+        }
         
         // Fetch all outputs from unified endpoint
-        const response = await fetch(`/api/parse?input=${encodeURIComponent(input)}`);
+        const apiUrl = `/api/parse?input=${encodeURIComponent(input)}`;
+        console.log('🔄 Making API request:', { 
+            input: input.slice(0, 100) + (input.length > 100 ? '...' : ''),
+            url: apiUrl,
+            timestamp: new Date().toISOString()
+        });
+        
+        const response = await fetch(apiUrl);
+        console.log('📡 API Response received:', {
+            status: response.status,
+            ok: response.ok,
+            headers: Object.fromEntries(response.headers.entries())
+        });
+        
         const data = await response.json();
+        console.log('📋 Parsed API data:', {
+            success: data.success,
+            hasError: !!data.error,
+            error: data.error?.slice(0, 200),
+            detectedSystems: data.detected_notation_systems,
+            outputsGenerated: {
+                pest: !!data.pest_output,
+                document: !!data.parsed_document,
+                lily: !!data.minimal_lilypond,
+                vexflow: !!data.vexflow
+            }
+        });
         
         if (data.success) {
+            console.log('✅ Processing successful API response');
+            
+            // Update detected notation systems display
+            const detectedSystemsSpan = document.getElementById('detected-systems');
+            if (data.detected_notation_systems && data.detected_notation_systems.length > 0) {
+                detectedSystemsSpan.textContent = data.detected_notation_systems.join(', ');
+                console.log('🎵 Updated notation systems display:', data.detected_notation_systems);
+            } else {
+                detectedSystemsSpan.textContent = 'None detected';
+                console.log('⚠️ No notation systems detected');
+            }
+            
             // PEST Output
             if (data.pest_output) {
                 const jsonString = JSON.stringify(data.pest_output, null, 2);
@@ -199,18 +252,52 @@ async function parseInput(input) {
             }
             
             // VexFlow
-            if (data.vexflow) {
-                // Display the data
-                const vexJsonString = JSON.stringify(data.vexflow, null, 2);
-                vexflowData.innerHTML = '<div class="syntax-highlight">' + syntaxHighlight(vexJsonString) + '</div>';
+            if (data.vexflow && data.vexflow_svg) {
+                console.log('🎼 Rendering VexFlow output:', {
+                    hasVexflowData: !!data.vexflow,
+                    hasSvg: !!data.vexflow_svg,
+                    svgLength: data.vexflow_svg?.length
+                });
                 
-                // Draw dummy VexFlow rendering on canvas
-                drawVexFlowPlaceholder(vexflowCanvas, input);
+                // Display the VexFlow SVG rendering
+                const vexflowOutput = document.getElementById('vexflow-output');
+                vexflowOutput.innerHTML = data.vexflow_svg + 
+                    '<div id="vexflow-data" class="json-output" style="margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>';
+                
+                // Display the JSON data below the SVG
+                const vexJsonString = JSON.stringify(data.vexflow, null, 2);
+                const newVexflowData = document.getElementById('vexflow-data');
+                newVexflowData.innerHTML = '<div class="syntax-highlight">' + syntaxHighlight(vexJsonString) + '</div>';
             } else {
+                console.log('⚠️ No VexFlow data available, using canvas fallback');
                 vexflowData.innerHTML = '<span class="loading">No VexFlow data available</span>';
+                if (vexflowCanvas) {
+                    console.log('🖼️ Drawing VexFlow canvas fallback');
+                    const ctx = vexflowCanvas.getContext('2d');
+                    ctx.clearRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
+                    ctx.fillStyle = '#fafafa';
+                    ctx.fillRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
+                    ctx.fillStyle = '#666';
+                    ctx.font = '14px Arial';
+                    ctx.fillText('No VexFlow rendering available', 20, 100);
+                } else {
+                    console.log('❌ VexFlow canvas element is null - cannot draw fallback');
+                }
             }
             
         } else {
+            console.log('❌ API returned error response:', {
+                success: data.success,
+                error: data.error,
+                errorLength: data.error?.length,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Show error in notation systems display
+            const detectedSystemsSpan = document.getElementById('detected-systems');
+            detectedSystemsSpan.textContent = 'Parse error';
+            console.log('🔴 Updated notation systems display with: Parse error');
+            
             const errorMsg = '<div class="error">Parse Error: ' + (data.error || 'Unknown error') + '</div>';
             pestOutput.innerHTML = errorMsg;
             documentOutput.innerHTML = errorMsg;
@@ -219,9 +306,22 @@ async function parseInput(input) {
             fullLilyOutput.innerHTML = errorMsg;
             svgOutput.innerHTML = errorMsg;
             vexflowData.innerHTML = errorMsg;
+            console.log('📄 Updated all output tabs with error message');
         }
         
     } catch (error) {
+        console.error('🚨 Network/JavaScript error caught:', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Show network error in notation systems display  
+        const detectedSystemsSpan = document.getElementById('detected-systems');
+        detectedSystemsSpan.textContent = 'Network error';
+        console.log('🔴 Updated notation systems display with: Network error');
+        
         const errorMsg = '<div class="error">Network Error: ' + error.message + '</div>';
         pestOutput.innerHTML = errorMsg;
         documentOutput.innerHTML = errorMsg;
@@ -230,17 +330,24 @@ async function parseInput(input) {
         fullLilyOutput.innerHTML = errorMsg;
         svgOutput.innerHTML = errorMsg;
         vexflowData.innerHTML = errorMsg;
+        console.log('📄 Updated all output tabs with network error message');
     }
 }
 
 document.getElementById('input-text').addEventListener('input', function(e) {
     const inputValue = e.target.value;
+    console.log('⌨️ Input event triggered:', {
+        inputLength: inputValue.length,
+        firstChars: inputValue.slice(0, 20),
+        timestamp: new Date().toISOString()
+    });
     
     // Save input text to localStorage
     saveInputText(inputValue);
     
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
+        console.log('⏰ Debounce timer triggered, calling parseInput');
         parseInput(inputValue);
     }, 300);
 });

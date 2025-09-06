@@ -1,9 +1,11 @@
 body {
     font-family: Arial, sans-serif;
-    max-width: 1200px;
+    max-width: 95vw;
+    width: 100%;
     margin: 0 auto;
     padding: 20px;
     background-color: #f5f5f5;
+    font-size: 16px;
 }
 
 .container {
@@ -11,6 +13,8 @@ body {
     padding: 30px;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    width: 100%;
+    box-sizing: border-box;
 }
 
 h1 {
@@ -34,8 +38,8 @@ label {
     width: 100%;
     height: 150px;
     font-family: 'Courier New', monospace;
-    font-size: 14px;
-    padding: 10px;
+    font-size: 16px;
+    padding: 15px;
     border: 2px solid #ddd;
     border-radius: 4px;
     resize: vertical;
@@ -47,21 +51,38 @@ label {
     border-color: #4CAF50;
 }
 
+.notation-systems {
+    margin-bottom: 10px;
+    padding: 10px 15px;
+    background-color: #f0f7ff;
+    border: 1px solid #b3d9ff;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #2563eb;
+}
+
+.notation-systems #detected-systems {
+    font-weight: 600;
+}
+
 .tabs {
     border-bottom: 2px solid #ddd;
     margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
 }
 
 .tab-button {
     background-color: #f1f1f1;
     border: none;
-    padding: 12px 24px;
+    padding: 12px 20px;
     cursor: pointer;
-    margin-right: 5px;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
-    font-size: 14px;
+    font-size: 15px;
     transition: background-color 0.3s;
+    flex-shrink: 0;
 }
 
 .tab-button:hover {
@@ -87,13 +108,14 @@ label {
 }
 
 .json-output {
-    background-color: #1e1e1e;
-    color: #d4d4d4;
-    padding: 15px;
-    border-radius: 4px;
+    background-color: #f8f9fa;
+    color: #333;
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
     font-family: 'Courier New', monospace;
-    font-size: 12px;
-    line-height: 1.4;
+    font-size: 14px;
+    line-height: 1.5;
     overflow-x: auto;
     white-space: pre-wrap;
 }
@@ -112,21 +134,21 @@ label {
 }
 
 .syntax-highlight .key {
-    color: #9cdcfe;
+    color: #22863a;
 }
 
 .syntax-highlight .string {
-    color: #ce9178;
+    color: #d73a49;
 }
 
 .syntax-highlight .number {
-    color: #b5cea8;
+    color: #005cc5;
 }
 
 .syntax-highlight .boolean {
-    color: #569cd6;
+    color: #6f42c1;
 }
 
 .syntax-highlight .null {
-    color: #569cd6;
+    color: #6a737d;
 }

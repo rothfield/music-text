@@ -1,12 +1,15 @@
-pub mod document_parser;
+pub mod document;
 pub mod stave_parser;
 pub mod pipeline;
 
 // Re-export main parsing functionality
-pub use document_parser::{
-    parse_notation, pest_pair_to_json, parse_document_structure,
-    Pair, Error, Rule, Document, Stave, ContentLine, MusicalElement, Position, TextLine
+pub use document::{
+    parse as parse_notation, 
+    parse_document,
+    Rule, Error,
+    Document, Stave, ContentLine, MusicalElement, Position, TextLine
 };
+pub use document::tree_transformer::{pest_pair_to_json, build_document as parse_document_structure};
 
 // Re-export stave parsing functionality
 pub use stave_parser::{
