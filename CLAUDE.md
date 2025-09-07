@@ -28,7 +28,14 @@
 - **Grammar Rule**: `number_pitch = { ASCII_DIGIT ~ flat_or_sharp? }` - NO dots allowed
 - **Octave System**: All octave information comes from spatial markers (upper/lower annotation lines)
 
-### 🚨 PEST GRAMMAR ISSUE IDENTIFIED: "1\n." PARSING FAILURE
+### 🚨 CRITICAL: PARSER REQUIRES BARLINES FOR VALID INPUT
+**IMPORTANT**: The current parser WILL NOT parse musical input without barlines.
+- ❌ **FAILS**: `"1"`, `"SRG"`, `"1 2 3"` - all fail with "expected barline"
+- ✅ **WORKS**: `"|1"`, `"|SRG"`, `"|1 2 3"` - barline prefix makes input parseable
+- **Grammar Constraint**: Current grammar expects barlines to separate musical content
+- **Testing Requirement**: Always prefix test inputs with `|` for successful parsing
+
+### 🚨 PEST GRAMMAR ISSUE IDENTIFIED: "1\n." PARSING FAILURE  
 **Status**: Architecture refactor planned  
 **Problem**: Current grammar cannot disambiguate upper vs lower octave markers based on position  
 **Root Cause**: Parser tries to classify line types during parsing instead of post-processing  

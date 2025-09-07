@@ -31,18 +31,42 @@ musical_element_no_barline = {
 
 space = { " "+ } // One or more spaces as a single element
 
-// Pitch: number/letter + optional accidentals
-pitch = { base_pitch ~ accidentals? }
+// Pitch: atomic patterns with explicit accidental limits (most specific first)
+pitch = { number_pitch | western_pitch | sargam_pitch | bhatkhande_pitch }
 
-base_pitch = { number_pitch | letter_pitch | sargam_pitch | bhatkhande_pitch }
-number_pitch = { '1'..'7' }
-letter_pitch = { 'A'..'G' }
-sargam_pitch = { "s" | "S" | "r" | "R" | "g" | "G" | "m" | "M" | "p" | "P" | "d" | "D" | "n" | "N" }
-bhatkhande_pitch = { "स" | "रे" | "र" | "ग" | "म" | "प" | "ध" | "द" | "नि" | "न" }
+// Number notation - all 35 combinations
+number_pitch = { 
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "##" |  // double sharp
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "bb" |  // double flat
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "#" |   // sharp
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "b" |   // flat
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7")           // natural
+}
 
-accidentals = { sharp+ | flat+ }
-sharp = { "#" }
-flat = { "b" }
+// Western notation - all 35 combinations  
+western_pitch = {
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "##" |  // double sharp
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "bb" |  // double flat
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "#" |   // sharp
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "b" |   // flat
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B")           // natural
+}
+
+// Sargam notation - including extended accidentals
+sargam_pitch = {
+    // Extended accidentals (most specific first) - include all sargam letters
+    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "##" |
+    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "bb" |
+    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "b" |
+    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "#" |
+    // Natural sargam notes
+    "s" | "S" | "r" | "R" | "g" | "G" | "m" | "M" | "p" | "P" | "d" | "D" | "n" | "N"
+}
+
+// Bhatkhande Devanagari notation - basic support
+bhatkhande_pitch = { 
+    "स" | "रे" | "र" | "ग" | "म" | "प" | "ध" | "द" | "नि" | "न" 
+}
 
 barline = { "|" }
 

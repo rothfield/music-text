@@ -3,10 +3,10 @@ use crate::document::model::{MusicalElement, PitchCode, Note, NotationSystem};
 use super::helpers::source_from_span;
 
 pub(super) fn resolve_notation_system(syllable: &str, context_system: NotationSystem) -> NotationSystem {
-    // Remove accidentals to get base syllable
-    let base_syllable = syllable.trim_end_matches('#').trim_end_matches('b');
+    // Extract base note from complete pitch token
+    let base_syllable = extract_base_pitch(syllable);
     
-    match base_syllable {
+    match base_syllable.as_str() {
         // Unambiguous cases - ignore context
         "1" | "2" | "3" | "4" | "5" | "6" | "7" => NotationSystem::Number,
         "C" | "E" | "A" | "B" => NotationSystem::Western,
@@ -22,41 +22,47 @@ pub(super) fn resolve_notation_system(syllable: &str, context_system: NotationSy
 }
 
 pub(super) fn transform_pitch(pitch_pair: Pair<Rule>, in_slur: bool, in_beat_group: bool, context_notation_system: NotationSystem) -> Result<MusicalElement, String> {
-    let mut syllable = String::new();
     let source = source_from_span(pitch_pair.as_span());
+    let full_pitch_str = source.value.as_str(); // Complete pitch token
     
-    for inner_pair in pitch_pair.into_inner() {
-        match inner_pair.as_rule() {
-            Rule::base_pitch => {
-                for base_inner in inner_pair.into_inner() {
-                    match base_inner.as_rule() {
-                        Rule::number_pitch | Rule::letter_pitch | Rule::sargam_pitch | Rule::bhatkhande_pitch => {
-                            syllable = base_inner.as_str().to_string();
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            Rule::accidentals => {
-                // Accidentals are now captured in source.value, no separate field
-            }
-            _ => {}
+    // With atomic grammar, we can directly extract the notation system from the rule type
+    let notation_system = match pitch_pair.into_inner().next() {
+        Some(inner) => match inner.as_rule() {
+            Rule::number_pitch => NotationSystem::Number,
+            Rule::western_pitch => NotationSystem::Western,
+            Rule::sargam_pitch => NotationSystem::Sargam,
+            Rule::bhatkhande_pitch => NotationSystem::Bhatkhande,
+            _ => context_notation_system, // fallback
         }
-    }
+        None => context_notation_system,
+    };
     
-    let pitch_code = PitchCode::from_source(&syllable);
+    // Direct conversion from complete pitch token to PitchCode
+    let pitch_code = PitchCode::from_source(full_pitch_str);
     
-    let notation_system = resolve_notation_system(&syllable, context_notation_system);
+    // Extract base note for display (remove modifiers for syllable field)
+    let base_pitch = extract_base_pitch(full_pitch_str);
     
     let note = Note {
-        syllable,
-        octave: 0, // Default octave for now
-        pitch_code,
+        syllable: base_pitch, // Base note without modifiers for display
+        octave: 0, // Default octave for now  
+        pitch_code, // Complete pitch information
         notation_system,
-        source, // Contains full text including accidentals
+        source, // Contains complete pitch token
         in_slur,
         in_beat_group,
     };
     
     Ok(MusicalElement::Note(note))
+}
+
+/// Extract base note from complete pitch token (remove modifiers)
+fn extract_base_pitch(full_pitch: &str) -> String {
+    // Remove pitch modifiers to get base note for display
+    full_pitch
+        .trim_end_matches("##")
+        .trim_end_matches("#")
+        .trim_end_matches("bb")
+        .trim_end_matches("b")
+        .to_string()
 }

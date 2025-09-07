@@ -2,6 +2,7 @@ pub mod document;
 pub mod stave_parser;
 pub mod pipeline;
 pub mod renderers;
+pub mod converters;
 
 // Re-export main parsing functionality
 pub use document::{

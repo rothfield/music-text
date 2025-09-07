@@ -1,4 +1,5 @@
 let debounceTimer;
+let svgDebounceTimer;
 const STORAGE_KEYS = {
     INPUT_TEXT: 'music-text-parser-input',
     ACTIVE_TAB: 'music-text-parser-active-tab'
@@ -361,12 +362,19 @@ async function parseInput(input) {
     }
 }
 
+// Check if SVG tab is currently active
+function isSvgTabActive() {
+    const svgTabButton = document.getElementById('svg-tab-btn');
+    return svgTabButton && svgTabButton.classList.contains('active');
+}
+
 document.getElementById('input-text').addEventListener('input', function(e) {
     const inputValue = e.target.value;
     console.log('⌨️ Input event triggered:', {
         inputLength: inputValue.length,
         firstChars: inputValue.slice(0, 20),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        svgTabActive: isSvgTabActive()
     });
     
     // Save input text to localStorage
@@ -377,6 +385,15 @@ document.getElementById('input-text').addEventListener('input', function(e) {
         console.log('⏰ Debounce timer triggered, calling parseInput');
         parseInput(inputValue);
     }, 1000); // Increased debounce to reduce API calls
+    
+    // If SVG tab is active, also trigger SVG generation with 3-second debounce
+    if (isSvgTabActive()) {
+        clearTimeout(svgDebounceTimer);
+        svgDebounceTimer = setTimeout(() => {
+            console.log('🎵 SVG debounce timer triggered, generating SVG automatically');
+            generateSvgFromLilypond();
+        }, 3000); // 3-second debounce for SVG generation
+    }
 });
 
 function drawVexFlowPlaceholder(canvas, input) {
@@ -510,18 +527,14 @@ if (document.readyState === 'loading') {
 async function generateSvgFromLilypond() {
     console.log("🎵 generateSvgFromLilypond() called");
     
-    // Get LilyPond source from the full-lily tab
-    const fullLilyTab = document.querySelector("#full-lily-tab .json-output");
-    if (!fullLilyTab || !fullLilyTab.textContent) {
-        alert("Please generate LilyPond notation first by entering music in the textarea above.");
+    // Get notation directly from input field
+    const inputField = document.getElementById("input-text");
+    if (!inputField || !inputField.value.trim()) {
+        alert("Please enter music notation first.");
         return;
     }
     
-    const lilypondSource = fullLilyTab.textContent.trim();
-    if (!lilypondSource || lilypondSource === "Full LilyPond score will appear here..." || lilypondSource.includes("will appear here")) {
-        alert("No LilyPond source available. Please enter music notation first.");
-        return;
-    }
+    const notation = inputField.value.trim();
     
     // Update button state
     const button = document.getElementById("generate-svg-btn");
@@ -529,16 +542,16 @@ async function generateSvgFromLilypond() {
     
     button.disabled = true;
     button.textContent = "Generating...";
-    svgContent.innerHTML = "<div class=\"text-muted\">Generating SVG from LilyPond...</div>";
+    svgContent.innerHTML = "<div class=\"text-muted\">Generating SVG from notation...</div>";
     
     try {
-        const response = await fetch("/api/generate-svg", {
+        const response = await fetch("/api/lilypond-svg", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                lilypond_source: lilypondSource
+                notation: notation
             })
         });
         

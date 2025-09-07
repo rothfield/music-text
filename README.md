@@ -81,8 +81,19 @@ The Pest grammar (`src/document/grammar.pest`) is organized into:
 #### `GET /api/parse`
 Main parsing endpoint
 - Query parameters:
-  - `text`: The notation text to parse (URL encoded)
+  - `input`: The notation text to parse (URL encoded)
 - Response: JSON with parsed output including VexFlow data, LilyPond, and VexFlow SVG
+
+#### `POST /api/lilypond-svg`
+Fast LilyPond SVG generation endpoint
+- Request body (JSON):
+  - `notation`: Music notation string (e.g., `"|SRG"`, `"|1 2 3"`)
+- Response: JSON with SVG content
+  - `success`: Boolean indicating if generation succeeded
+  - `svg_content`: Generated SVG string (if successful)
+  - `error`: Error message (if failed)
+
+**Note**: This endpoint directly processes music notation and generates optimized LilyPond source for fastest SVG generation.
 
 ## Installation & Usage
 

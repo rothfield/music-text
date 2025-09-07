@@ -1,0 +1,19 @@
+\version "{{version}}"
+
+\paper {
+  indent = 0\mm
+  tagline = ##f
+  ragged-right = ##t
+  page-breaking = #ly:one-page-breaking
+}
+
+\score {
+  \new Staff {
+    \fixed c' {
+      \autoBeamOff
+      {{{staves}}}
+    }
+  }
+  
+  \layout { }
+}

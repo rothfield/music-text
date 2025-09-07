@@ -16,7 +16,30 @@ use self::document::transform_document;
 
 // Main entry point - transforms parsed input into Document structure  
 pub fn build_document(input: &str) -> Result<Document, String> {
-    let pairs = parse(input).map_err(|e| format!("Parse error: {}", e))?;
+    let pairs = parse(input).map_err(|e| {
+        let error_msg = format!("{}", e);
+        
+        // Check for missing barline error pattern
+        if error_msg.contains("expected musical_element_no_barline or barline") {
+            // Check if input has musical content but no barlines
+            let has_musical_content = input.chars().any(|c| {
+                match c {
+                    '1'..='7' | 'A'..='G' | 'S' | 'R' | 'M' | 'P' | 'D' | 'N' |
+                    's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n' => true,
+                    _ => false
+                }
+            }) || input.contains("स") || input.contains("रे") || input.contains("र") || 
+                 input.contains("ग") || input.contains("म") || input.contains("प") || 
+                 input.contains("ध") || input.contains("द") || input.contains("नि") || input.contains("न");
+            let has_barline = input.contains('|');
+            
+            if has_musical_content && !has_barline {
+                return "Content line requires at least one barline (|)".to_string();
+            }
+        }
+        
+        format!("Parse error: {}", error_msg)
+    })?;
     transform_document(pairs)
 }
 

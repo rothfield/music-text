@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use music_text::{parse_notation, pest_pair_to_json, process_notation};
 use music_text::document::model::NotationSystem;
+use music_text::renderers::render_web_fast_lilypond;
 use log::{info, warn, error};
 use crate::lilypond_generator::{LilyPondGenerator, GenerationResult};
 
@@ -30,7 +31,7 @@ struct ParseResponse {
 
 #[derive(Deserialize)]
 struct SvgGenerateRequest {
-    lilypond_source: String,
+    notation: String,
 }
 
 #[derive(Serialize)]
@@ -129,22 +130,36 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
     })
 }
 
-async fn generate_svg(Json(request): Json<SvgGenerateRequest>) -> Json<SvgGenerateResponse> {
-    info!("SVG generation request received");
+async fn generate_lilypond_svg(Json(request): Json<SvgGenerateRequest>) -> Json<SvgGenerateResponse> {
+    info!("LilyPond SVG generation request received");
     
-    if request.lilypond_source.trim().is_empty() {
+    if request.notation.trim().is_empty() {
         return Json(SvgGenerateResponse {
             success: false,
             svg_content: None,
-            error: Some("Empty LilyPond source provided".to_string()),
+            error: Some("Empty notation provided".to_string()),
         });
     }
     
-    // Create temporary directory for SVG generation
+    // Parse notation and generate optimized LilyPond source
+    let lilypond_source = match process_notation(&request.notation) {
+        Ok(result) => {
+            render_web_fast_lilypond(&result.processed_staves)
+        },
+        Err(e) => {
+            return Json(SvgGenerateResponse {
+                success: false,
+                svg_content: None,
+                error: Some(format!("Parse error: {}", e)),
+            });
+        }
+    };
+    
+    // Generate SVG using optimized LilyPond source
     let temp_dir = std::env::temp_dir().join("music-text-svg");
     let generator = LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
     
-    let result = generator.generate_svg(&request.lilypond_source).await;
+    let result = generator.generate_svg(&lilypond_source).await;
     
     Json(SvgGenerateResponse {
         success: result.success,
@@ -181,7 +196,7 @@ pub fn start() {
     
     let app = Router::new()
         .route("/api/parse", get(parse_text))
-        .route("/api/generate-svg", post(generate_svg))
+        .route("/api/lilypond-svg", post(generate_lilypond_svg))
         .nest_service("/", ServeDir::new("webapp"))
         .layer(CorsLayer::permissive());
 
