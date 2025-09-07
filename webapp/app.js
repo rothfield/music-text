@@ -108,7 +108,7 @@ async function parseInput(input) {
     const processedOutput = document.querySelector('#processed-tab .json-output');
     const minimalLilyOutput = document.querySelector('#minimal-lily-tab .json-output');
     const fullLilyOutput = document.querySelector('#full-lily-tab .json-output');
-    const svgOutput = document.querySelector('#svg-tab > div');
+    const svgOutput = document.getElementById('svg-content');
     const vexflowCanvas = document.getElementById('vexflow-canvas');
     const vexflowData = document.getElementById('vexflow-data');
     
@@ -512,13 +512,13 @@ async function generateSvgFromLilypond() {
     
     // Get LilyPond source from the full-lily tab
     const fullLilyTab = document.querySelector("#full-lily-tab .json-output");
-    if (\!fullLilyTab || \!fullLilyTab.textContent) {
+    if (!fullLilyTab || !fullLilyTab.textContent) {
         alert("Please generate LilyPond notation first by entering music in the textarea above.");
         return;
     }
     
     const lilypondSource = fullLilyTab.textContent.trim();
-    if (\!lilypondSource || lilypondSource === "Full LilyPond score will appear here..." || lilypondSource.includes("will appear here")) {
+    if (!lilypondSource || lilypondSource === "Full LilyPond score will appear here..." || lilypondSource.includes("will appear here")) {
         alert("No LilyPond source available. Please enter music notation first.");
         return;
     }

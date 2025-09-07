@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand, CommandFactory};
 use clap_complete::{generate, Generator, Shell};
 
 mod web_server;
+mod lilypond_generator;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

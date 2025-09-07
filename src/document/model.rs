@@ -47,15 +47,23 @@ pub struct Source {
     pub position: Position, // Line/column position
 }
 
-// Normalized pitch codes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+// Normalized pitch codes - matches old Degree enum with complete accidental coverage
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PitchCode {
-    // Natural degrees
-    N1, N2, N3, N4, N5, N6, N7,
-    // Flat degrees (for Sargam komal notes)
-    N1b, N2b, N3b, N4b, N5b, N6b, N7b,
-    // Sharp degrees (for Sargam tivra notes)  
-    N1s, N2s, N3s, N4s, N5s, N6s, N7s,
+    // 1 series (Do/Sa/C)
+    N1bb, N1b, N1, N1s, N1ss,
+    // 2 series (Re/D)
+    N2bb, N2b, N2, N2s, N2ss,
+    // 3 series (Mi/Ga/E)
+    N3bb, N3b, N3, N3s, N3ss,
+    // 4 series (Fa/Ma/F)
+    N4bb, N4b, N4, N4s, N4ss,
+    // 5 series (Sol/Pa/G)
+    N5bb, N5b, N5, N5s, N5ss,
+    // 6 series (La/Dha/A)
+    N6bb, N6b, N6, N6s, N6ss,
+    // 7 series (Ti/Ni/B)
+    N7bb, N7b, N7, N7s, N7ss,
 }
 
 impl PitchCode {
