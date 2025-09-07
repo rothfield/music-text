@@ -14,6 +14,13 @@
 
 ## Important Project Guidelines
 
+### 🚨 CRITICAL: DO NOT RESTART THE SERVER
+**IMPORTANT**: The user has a development environment (Zellij with cargo-watch) that automatically handles server restarts.
+- ❌ **NEVER** manually restart the web server with `cargo run -- --web` or background processes
+- ❌ **NEVER** kill existing server processes unless explicitly asked
+- ✅ **ONLY** make code changes - the development environment will automatically rebuild and restart
+- **Why**: Manual restarts interfere with the user's Zellij pane setup and cause process conflicts
+
 ### ⚠️ CRITICAL: NO INLINE OCTAVE NOTATION
 **IMPORTANT**: This system uses **spatial octave markers** only. There is NO inline octave notation.
 - ❌ **WRONG**: "1." as inline lower octave notation  

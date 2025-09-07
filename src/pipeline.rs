@@ -1,5 +1,6 @@
 use crate::document::{parse_document, Document, Stave};
 use crate::stave_parser::parse_document_staves;
+use log::warn;
 use serde::{Deserialize, Serialize};
 
 /// The complete processing pipeline output
@@ -246,6 +247,7 @@ fn staves_to_vexflow_data(staves: &[Stave]) -> serde_json::Value {
 /// 
 /// Input String → document_parser → stave_parser → converters → ProcessingResult
 pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
+    warn!("PIPELINE: Starting process_notation with input: '{}'", input);
     // Stage 1: Parse text into Document structure
     let parsed_document = parse_document(input)?;
     
@@ -254,6 +256,7 @@ pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
     
     // Stage 3: Convert to output formats
     let minimal_lilypond = staves_to_minimal_lilypond(&processed_staves);
+    warn!("Generated minimal LilyPond source: {}", minimal_lilypond);
     let full_lilypond = staves_to_full_lilypond(&processed_staves);
     let vexflow_svg = staves_to_vexflow_svg(&processed_staves);
     let vexflow_data = staves_to_vexflow_data(&processed_staves);

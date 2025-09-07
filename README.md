@@ -13,30 +13,24 @@ A Rust-based musical notation parser using Pest grammar for parsing multiple not
 
 ### Core Components
 
-1. **Pest Grammar Parser** (`grammar/notation.pest`)
+1. **Pest Grammar Parser** (`src/document/grammar.pest`)
    - Handles multiple notation systems (sargam, number, western, abc, doremi)
    - Supports multi-line notation with annotations
    - Processes barlines, beats, segments, and musical structure
 
-2. **AST Processing Pipeline**
-   - **Parser** (`src/parser.rs`): Pest grammar to AST conversion
-   - **AST** (`src/ast.rs`): Core data structures for musical notation
-   - **Spatial Parser** (`src/spatial_parser.rs`): Handles slurs, octave markers, syllable assignment
-   - **AST to Parsed** (`src/ast_to_parsed.rs`): Converts AST to parsed elements
+2. **Document Processing Pipeline**
+   - **Document Model** (`src/document/model.rs`): Core data structures for musical notation
+   - **Tree Transformer** (`src/document/tree_transformer/`): Transforms Pest parse tree to document model
+   - **Pipeline** (`src/pipeline.rs`): Orchestrates the processing pipeline
+   - **Stave Parser** (`src/stave_parser.rs`): Parses individual staves
 
-3. **Rhythm Processing** (In Development)
-   - **Rhythm FSM** (`src/rhythm_fsm.rs`): Rhythm analysis and tuplet detection
-   - **Parser V2 FSM** (`src/parser_v2_fsm.rs`): Beat grouping and subdivision logic
-   - **Simple FSM** (`src/simple_fsm.rs`): Simplified rhythm processing
+3. **Output Generation**
+   - **LilyPond**: Generates LilyPond notation source
+   - **VexFlow**: Generates VexFlow JSON and SVG for web rendering
 
-4. **Output Renderers** (Terminology Note: Using "renderer" not "converter")
-   - **LilyPond Renderer** (`src/renderers/lilypond/`): Generate LilyPond notation source
-   - **VexFlow Renderer** (`src/renderers/vexflow/`): Generate VexFlow JSON for web rendering
-
-5. **Web Interface**
-   - **Web Server** (`src/web_server.rs`): Rust web server on port 3000
-   - **Express Proxy** (`webapp/server.js`): Node.js server on port 8000
-   - **Web UI** (`webapp/public/index.html`): Interactive data flow pipeline visualization
+4. **Web Interface**
+   - **Web Server** (`src/web_server.rs`): Integrated Rust web server module on port 3000
+   - **Web UI** (`webapp/`): Interactive data flow pipeline visualization with VexFlow rendering
 
 ## Supported Notation Systems
 
@@ -60,7 +54,7 @@ The parser supports multiple musical notation input systems, all with tonic-base
 
 ## Grammar Structure
 
-The Pest grammar (`src/grammar.pest`) is organized into:
+The Pest grammar (`src/document/grammar.pest`) is organized into:
 
 ### Top-Level Structure
 - `document`: Root rule handling directives and staves
@@ -82,90 +76,58 @@ The Pest grammar (`src/grammar.pest`) is organized into:
 
 ## API Endpoints
 
-### Pest Parser Server (Port 3000)
+### Web Server API (Port 3000)
 
-#### `GET /health`
-Health check endpoint
-- Query params: `?detailed=true` for extended info
-- Response: `{ status, parser, version, endpoints }`
-
-#### `POST /api/parse`
+#### `GET /api/parse`
 Main parsing endpoint
-- Request body:
-  ```json
-  {
-    "notation": "1 2 3",
-    "system": "number",  // optional: "auto", "sargam", "number", "western", "abc", "doremi"
-    "output": ["ast", "vexflow", "lilypond", "yaml"]  // optional
-  }
-  ```
-- Response:
-  ```json
-  {
-    "success": true,
-    "error": null,
-    "ast": {...},
-    "spatial": "...",
-    "vexflow": {...},
-    "lilypond": "...",
-    "yaml": "..."
-  }
-  ```
-
-#### `POST /api/parse/ast`
-Returns only AST output
-
-#### `POST /api/parse/full`
-Returns all available output formats
-
-### Web UI Server (Port 8000)
-
-Express server serving the interactive web interface and proxying requests to the pest parser.
+- Query parameters:
+  - `text`: The notation text to parse (URL encoded)
+- Response: JSON with parsed output including VexFlow data, LilyPond, and VexFlow SVG
 
 ## Installation & Usage
 
 ### Prerequisites
 - Rust 1.70+
-- Node.js 16+ (for web interface)
 
 ### Build
 ```bash
+# Clean build (removes previous artifacts)
+cargo clean
 cargo build --release
 ```
 
-### Running the Servers
+### Running the Application
 
-#### 1. Start the Pest Parser Server (Port 3000)
+#### Web Server with UI (Port 3000)
 ```bash
-./target/release/cli --web
-# Or
-cargo run -- --web
+# Start the integrated web server
+./target/release/music-text --web
+
+# Then visit http://localhost:3000 for the interactive UI
 ```
 
-#### 2. Start the Web UI Server (Port 8000)
+#### CLI Usage
 ```bash
-cd webapp
-node server.js
+# Parse with different output stages
+./target/release/music-text pest "|1 2 3"        # Show raw PEST parse tree
+./target/release/music-text document "|1 2 3"    # Show parsed document structure
+./target/release/music-text processed "|1 2 3"   # Show processed staves
+./target/release/music-text minimal-lily "|1 2 3" # Show minimal LilyPond notation
+./target/release/music-text full-lily "|1 2 3"    # Show full LilyPond score
+./target/release/music-text vexflow "|1 2 3"      # Show VexFlow data structure
+./target/release/music-text vexflow-svg "|1 2 3"  # Show VexFlow SVG rendering
+./target/release/music-text all "|1 2 3"          # Show all stages
+
+# Read from stdin
+echo "|1 2 3" | ./target/release/music-text document
+cat input.notation | ./target/release/music-text full-lily
 ```
 
-Then visit http://localhost:8000 for the interactive UI.
-
-### CLI Usage
+### Stopping the Application
 ```bash
-# Parse a string directly
-./target/release/cli --input "| S R G M |"
-
-# Parse a file
-./target/release/cli --file input.notation
-
-# Different output formats
-./target/release/cli --input "1 2 3" --output json
-./target/release/cli --input "1 2 3" --output debug
-./target/release/cli --input "1 2 3" --output ast
-
-# Specify notation system
-./target/release/cli --input "S R G M" --system sargam
-./target/release/cli --input "1 2 3 4" --system number
+# Stop with Ctrl+C in the terminal
+# Or find and kill the process:
+pkill -f "music-text --web"
 ```
 
 ## Data Flow Pipeline
@@ -229,35 +191,27 @@ Output: Sargam notes with chord symbols and lyrics
 ```
 music-text/
 ├── src/
-│   ├── main.rs                  # CLI interface
+│   ├── main.rs                  # CLI interface and entry point
+│   ├── web_server.rs            # Web server module (port 3000)
 │   ├── lib.rs                   # Public API
-│   ├── parser.rs                # Pest grammar integration
-│   ├── ast.rs                   # AST definitions
-│   ├── ast_to_parsed.rs         # AST to parsed elements
-│   ├── spatial_parser.rs        # Spatial processing (slurs, octaves)
-│   ├── parser_v2_fsm.rs         # V2 rhythm FSM
-│   ├── rhythm_fsm.rs            # Rhythm analysis
-│   ├── simple_fsm.rs            # Simple FSM implementation
-│   ├── web_server.rs            # Rust web server (port 3000)
-│   ├── web.rs                   # Web utilities
-│   ├── models/
-│   │   ├── mod.rs               # Model exports
-│   │   ├── domain.rs            # Domain types
-│   │   ├── parsed.rs            # Parsed element types
-│   │   ├── pitch.rs             # Pitch/degree definitions
-│   │   └── rhythm.rs            # Rhythm utilities
-│   └── renderers/
-│       ├── lilypond/            # LilyPond generation
-│       └── vexflow/             # VexFlow JSON generation
-├── grammar/
-│   └── notation.pest            # Pest grammar file
+│   ├── pipeline.rs              # Processing pipeline
+│   ├── stave_parser.rs          # Stave parsing logic
+│   └── document/                # Document processing
+│       ├── mod.rs               # Module exports
+│       ├── model.rs             # Domain models
+│       ├── pest_interface.rs    # Pest integration
+│       ├── grammar.pest         # Pest grammar file
+│       └── tree_transformer/    # AST transformation
+│           ├── mod.rs           # Transformer exports
+│           ├── document.rs      # Document transformer
+│           ├── stave.rs         # Stave transformer
+│           ├── content_line.rs  # Content line transformer
+│           ├── pitch.rs         # Pitch transformer
+│           └── helpers.rs       # Helper functions
 ├── webapp/
-│   ├── server.js                # Express server (port 8000)
-│   └── public/
-│       ├── index.html           # Web UI
-│       └── js/
-│           ├── main.js          # UI logic
-│           └── api.js           # API client
+│   ├── app.js                   # Web UI JavaScript
+│   ├── index.html               # Web UI HTML
+│   └── styles.css               # Web UI styles
 ├── Cargo.toml
 └── README.md
 ```
@@ -267,11 +221,13 @@ music-text/
 # Run unit tests
 cargo test
 
-# Test specific notation system
-cargo run -- --input "S R G M" --system sargam --output debug
+# Test CLI with specific notation
+./target/release/music-text pest "S R G M"
+./target/release/music-text full-lily "1 2 3"
 
 # Start web server for interactive testing
-cargo run -- --web
+./target/release/music-text --web
+# Then visit http://localhost:3000
 ```
 
 ## Known Issues

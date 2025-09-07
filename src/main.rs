@@ -1,42 +1,91 @@
 use music_text::{parse_notation, pest_pair_to_json, process_notation};
-use std::env;
 use std::io::{self, Read};
+use clap::{Parser, Subcommand, CommandFactory};
+use clap_complete::{generate, Generator, Shell};
+
+mod web_server;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+    
+    /// Start web server on port 3000
+    #[arg(long)]
+    web: bool,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Show raw PEST parse tree
+    Pest { input: Option<String> },
+    /// Show parsed document structure (JSON)
+    Document { input: Option<String> },
+    /// Show processed staves (JSON)
+    Processed { input: Option<String> },
+    /// Show minimal LilyPond notation
+    #[command(name = "minimal-lily")]
+    MinimalLily { input: Option<String> },
+    /// Show full LilyPond score
+    #[command(name = "full-lily")]
+    FullLily { input: Option<String> },
+    /// Show VexFlow data structure (JSON)
+    Vexflow { input: Option<String> },
+    /// Show VexFlow SVG rendering
+    #[command(name = "vexflow-svg")]
+    VexflowSvg { input: Option<String> },
+    /// Show all stages
+    All { input: Option<String> },
+    /// Generate shell completions
+    Completions {
+        /// Shell type
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
     
-    if args.len() < 2 {
-        eprintln!("Usage: {} [stage] [input]", args[0]);
-        eprintln!("       {} [stage] < input_file", args[0]);
-        eprintln!();
-        eprintln!("Stages:");
-        eprintln!("  pest        - Show raw PEST parse tree");
-        eprintln!("  document    - Show parsed document structure (JSON)");
-        eprintln!("  processed   - Show processed staves (JSON)");
-        eprintln!("  minimal-lily - Show minimal LilyPond notation");
-        eprintln!("  full-lily   - Show full LilyPond score");
-        eprintln!("  vexflow     - Show VexFlow data structure (JSON)");
-        eprintln!("  vexflow-svg - Show VexFlow SVG rendering");
-        eprintln!("  all         - Show all stages");
-        eprintln!();
-        eprintln!("Examples:");
-        eprintln!("  {} pest \"|1 2 3\"", args[0]);
-        eprintln!("  echo \"|1 2 3\" | {} document", args[0]);
+    // Check for --web flag
+    if cli.web {
+        web_server::start();
         return;
     }
     
-    let stage = &args[1];
-    
-    // Get input from command line argument or stdin
-    let input = if args.len() >= 3 {
-        args[2].clone()
-    } else {
-        let mut buffer = String::new();
-        io::stdin().read_to_string(&mut buffer).unwrap_or_else(|_| {
-            eprintln!("Error reading from stdin");
+    match cli.command {
+        Some(Commands::Pest { input }) => process_stage("pest", input),
+        Some(Commands::Document { input }) => process_stage("document", input),
+        Some(Commands::Processed { input }) => process_stage("processed", input),
+        Some(Commands::MinimalLily { input }) => process_stage("minimal-lily", input),
+        Some(Commands::FullLily { input }) => process_stage("full-lily", input),
+        Some(Commands::Vexflow { input }) => process_stage("vexflow", input),
+        Some(Commands::VexflowSvg { input }) => process_stage("vexflow-svg", input),
+        Some(Commands::All { input }) => process_stage("all", input),
+        Some(Commands::Completions { shell }) => {
+            let mut cmd = Cli::command();
+            print_completions(shell, &mut cmd);
+        },
+        None => {
+            eprintln!("Error: No command provided");
+            eprintln!("Use --help to see available commands");
             std::process::exit(1);
-        });
-        buffer.trim().to_string()
+        }
+    }
+}
+
+fn process_stage(stage: &str, input: Option<String>) {
+    let input = match input {
+        Some(input_str) => input_str,
+        None => {
+            let mut buffer = String::new();
+            io::stdin().read_to_string(&mut buffer).unwrap_or_else(|_| {
+                eprintln!("Error reading from stdin");
+                std::process::exit(1);
+            });
+            buffer.trim().to_string()
+        }
     };
     
     if input.is_empty() {
@@ -44,7 +93,7 @@ fn main() {
         return;
     }
     
-    match stage.as_str() {
+    match stage {
         "pest" => show_pest_output(&input),
         "document" => show_document(&input),
         "processed" => show_processed(&input),
@@ -55,9 +104,13 @@ fn main() {
         "all" => show_all_stages(&input),
         _ => {
             eprintln!("Error: Unknown stage '{}'", stage);
-            eprintln!("Valid stages: pest, document, processed, minimal-lily, full-lily, vexflow, vexflow-svg, all");
+            std::process::exit(1);
         }
     }
+}
+
+fn print_completions<G: Generator>(gen: G, cmd: &mut clap::Command) {
+    generate(gen, cmd, cmd.get_name().to_string(), &mut std::io::stdout());
 }
 
 fn show_pest_output(input: &str) {

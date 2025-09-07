@@ -1,0 +1,35 @@
+layout {
+    default_tab_template {
+        children
+        pane size=1 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+    
+    pane_template name="claude" {
+        command "make"
+        args "claude-cli"
+        start_in_place true
+    }
+    pane_template name="server_logs" {
+        command "bash"
+        args "-c" "echo '=== Music Text Development Logs ===' && echo 'Starting cargo-watch for auto-rebuild...' && echo 'Watching src/ directory only' && echo 'Server logs will appear below:' && echo '' && cargo-watch -w src/ -c -x 'run -- --web'"
+        start_in_place true
+        cwd "/home/john/projects/music-text"
+    }
+    pane_template name="shell" {
+        start_in_place true
+    }
+
+    tab name="AI Command Center" focus=true {
+        pane split_direction="vertical" {
+            claude
+            pane size="35%" {
+                pane split_direction="horizontal" {
+                    server_logs
+                    shell
+                }
+            }
+        }
+    }
+}
