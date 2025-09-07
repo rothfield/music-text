@@ -1,0 +1,109 @@
+# Build outputs
+target/
+Cargo.lock
+
+# Dependencies
+node_modules/
+
+# Test data and artifacts
+my_test_data/
+attic/
+test_output/
+test_*.123
+test_*.flattener.clr
+test_*.flattener.yaml
+test_*.lexer.json
+test_*.tokenizer.clr
+test_*.ly
+test_*.png
+test_*.svg
+test_output.txt
+
+# New test system - generated files only (keep baselines in git)
+tests/test_output/
+*.generated.ly
+*.generated.png
+*.diff.png
+# Keep baseline files in version control:
+# *.baseline.ly
+# *.baseline.png
+
+# Test outputs and generated files
+*.flattener.*
+*.lexer.json
+*.tokenizer.*
+*.ly
+*.outline
+synthetic_image_*.json
+.server.pid
+
+# Test executables and debug files
+debug_*
+test_*
+simple_test
+keystroke_test
+quick_test
+test_complex_rhythm
+test_fsm_*
+test_vexflow_*
+test_notation_detection
+
+# Temporary and scratch files
+simple_space_test.txt
+chatgpt_spacial.txt
+stdin.*
+simple.*
+simple_key.*
+test2.*
+test.outline
+
+# Generated files
+output.ly
+happy_birthday.ly
+*.png
+*.svg
+x.svg
+z
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Root-level debug and test scripts
+*.js
+
+# Logs
+*.log
+development.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Archives
+*.tgz
+*.tar
+*.tar.gz
+
+# Web live files
+web_live_*
+
+# Server test files (should be in temp directory)
+server_test_*
+temp_server_tests/
+
+# Playwright test reports and results
+playwright-report/
+test-results/
+tests/test-user-data-*/
+
+# Legacy codebase
+old.music-text/
