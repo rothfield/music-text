@@ -4,22 +4,22 @@ const STORAGE_KEYS = {
     ACTIVE_TAB: 'music-text-parser-active-tab'
 };
 
-function switchTab(tabName) {
-    // Remove active class from all tabs
-    document.querySelectorAll('.tab-button').forEach(button => {
-        button.classList.remove('active');
-    });
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    
-    // Add active class to clicked tab
-    event.target.classList.add('active');
-    document.getElementById(tabName + '-tab').classList.add('active');
-    
-    // Save active tab to localStorage
-    saveActiveTab(tabName);
+// Bootstrap handles tab switching automatically, but we still need to save active tab
+function saveActiveTabFromBootstrap() {
+    const activeTab = document.querySelector('.nav-link.active');
+    if (activeTab) {
+        const tabName = activeTab.id.replace('-tab-btn', '');
+        saveActiveTab(tabName);
+    }
 }
+
+// Add event listeners to Bootstrap tab buttons
+document.addEventListener('DOMContentLoaded', function() {
+    const tabButtons = document.querySelectorAll('.nav-link');
+    tabButtons.forEach(button => {
+        button.addEventListener('shown.bs.tab', saveActiveTabFromBootstrap);
+    });
+});
 
 function saveInputText(text) {
     try {
@@ -58,28 +58,19 @@ function loadActiveTab() {
 function restoreActiveTab() {
     const savedTab = loadActiveTab();
     
-    // Remove active class from all tabs
-    document.querySelectorAll('.tab-button').forEach(button => {
-        button.classList.remove('active');
-    });
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
+    // Find the saved tab button and activate it using Bootstrap
+    const tabButton = document.getElementById(savedTab + '-tab-btn');
     
-    // Find and activate the saved tab
-    const tabButton = document.querySelector(`[onclick="switchTab('${savedTab}')"]`);
-    const tabContent = document.getElementById(savedTab + '-tab');
-    
-    if (tabButton && tabContent) {
-        tabButton.classList.add('active');
-        tabContent.classList.add('active');
+    if (tabButton) {
+        // Use Bootstrap's Tab API to activate the tab
+        const tab = new bootstrap.Tab(tabButton);
+        tab.show();
     } else {
         // Fallback to first tab if saved tab doesn't exist
-        const firstButton = document.querySelector('.tab-button');
-        const firstContent = document.querySelector('.tab-content');
-        if (firstButton && firstContent) {
-            firstButton.classList.add('active');
-            firstContent.classList.add('active');
+        const firstButton = document.querySelector('.nav-link');
+        if (firstButton) {
+            const tab = new bootstrap.Tab(firstButton);
+            tab.show();
         }
     }
 }
@@ -112,12 +103,12 @@ async function parseInput(input) {
         timestamp: new Date().toISOString()
     });
     
-    const pestOutput = document.getElementById('pest-output');
-    const documentOutput = document.getElementById('document-output');
-    const processedOutput = document.getElementById('processed-output');
-    const minimalLilyOutput = document.getElementById('minimal-lily-output');
-    const fullLilyOutput = document.getElementById('full-lily-output');
-    const svgOutput = document.getElementById('svg-output');
+    const pestOutput = document.querySelector('#pest-tab .json-output');
+    const documentOutput = document.querySelector('#document-tab .json-output');
+    const processedOutput = document.querySelector('#processed-tab .json-output');
+    const minimalLilyOutput = document.querySelector('#minimal-lily-tab .json-output');
+    const fullLilyOutput = document.querySelector('#full-lily-tab .json-output');
+    const svgOutput = document.querySelector('#svg-tab > div');
     const vexflowCanvas = document.getElementById('vexflow-canvas');
     const vexflowData = document.getElementById('vexflow-data');
     
@@ -126,13 +117,19 @@ async function parseInput(input) {
         const detectedSystemsSpan = document.getElementById('detected-systems');
         detectedSystemsSpan.textContent = 'Enter some music to see detected systems...';
         
-        pestOutput.innerHTML = '<span class="loading">Type in the textarea above to see the raw PEST parse tree...</span>';
-        documentOutput.innerHTML = '<span class="loading">Parsed document structure will appear here...</span>';
-        processedOutput.innerHTML = '<span class="loading">Processed staves will appear here...</span>';
-        minimalLilyOutput.innerHTML = '<span class="loading">Minimal LilyPond notation will appear here...</span>';
-        fullLilyOutput.innerHTML = '<span class="loading">Full LilyPond score will appear here...</span>';
-        svgOutput.innerHTML = '<span class="loading">LilyPond SVG rendering will appear here...</span>';
-        vexflowData.innerHTML = '<span class="loading">VexFlow notation data will appear here...</span>';
+        pestOutput.innerHTML = 'Type in the textarea above to see the raw PEST parse tree...';
+        pestOutput.className = 'json-output p-3 loading';
+        documentOutput.innerHTML = 'Parsed document structure will appear here...';
+        documentOutput.className = 'json-output p-3 loading';
+        processedOutput.innerHTML = 'Processed staves will appear here...';
+        processedOutput.className = 'json-output p-3 loading';
+        minimalLilyOutput.innerHTML = 'Minimal LilyPond notation will appear here...';
+        minimalLilyOutput.className = 'json-output p-3 loading';
+        fullLilyOutput.innerHTML = 'Full LilyPond score will appear here...';
+        fullLilyOutput.className = 'json-output p-3 loading';
+        svgOutput.innerHTML = 'LilyPond SVG rendering will appear here...';
+        svgOutput.className = 'p-3 loading';
+        if (vexflowData) vexflowData.innerHTML = 'VexFlow notation data will appear here...';
         if (vexflowCanvas) {
             const ctx = vexflowCanvas.getContext('2d');
             ctx.clearRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
@@ -147,13 +144,19 @@ async function parseInput(input) {
     
     try {
         // Set all outputs to loading
-        pestOutput.innerHTML = '<span class="loading">Parsing...</span>';
-        documentOutput.innerHTML = '<span class="loading">Parsing...</span>';
-        processedOutput.innerHTML = '<span class="loading">Processing...</span>';
-        minimalLilyOutput.innerHTML = '<span class="loading">Generating...</span>';
-        fullLilyOutput.innerHTML = '<span class="loading">Generating...</span>';
-        svgOutput.innerHTML = '<span class="loading">Rendering...</span>';
-        vexflowData.innerHTML = '<span class="loading">Converting...</span>';
+        pestOutput.innerHTML = 'Parsing...';
+        pestOutput.className = 'tab-content json-output loading';
+        documentOutput.innerHTML = 'Parsing...';
+        documentOutput.className = 'tab-content json-output loading';
+        processedOutput.innerHTML = 'Processing...';
+        processedOutput.className = 'tab-content json-output loading';
+        minimalLilyOutput.innerHTML = 'Generating...';
+        minimalLilyOutput.className = 'tab-content json-output loading';
+        fullLilyOutput.innerHTML = 'Generating...';
+        fullLilyOutput.className = 'tab-content json-output loading';
+        svgOutput.innerHTML = 'Rendering...';
+        svgOutput.className = 'tab-content loading';
+        if (vexflowData) vexflowData.innerHTML = 'Converting...';
         if (vexflowCanvas) {
             const ctx = vexflowCanvas.getContext('2d');
             ctx.clearRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
@@ -210,45 +213,57 @@ async function parseInput(input) {
             if (data.pest_output) {
                 const jsonString = JSON.stringify(data.pest_output, null, 2);
                 pestOutput.innerHTML = '<div class="syntax-highlight">' + syntaxHighlight(jsonString) + '</div>';
+                pestOutput.className = 'tab-content json-output active';
             } else {
-                pestOutput.innerHTML = '<span class="loading">No PEST output available</span>';
+                pestOutput.innerHTML = 'No PEST output available';
+                pestOutput.className = 'tab-content json-output loading active';
             }
             
             // Document Structure
             if (data.parsed_document) {
                 const docJsonString = JSON.stringify(data.parsed_document, null, 2);
                 documentOutput.innerHTML = '<div class="syntax-highlight">' + syntaxHighlight(docJsonString) + '</div>';
+                documentOutput.className = 'tab-content json-output';
             } else {
-                documentOutput.innerHTML = '<span class="loading">No document structure available</span>';
+                documentOutput.innerHTML = 'No document structure available';
+                documentOutput.className = 'tab-content json-output loading';
             }
             
             // Processed Staves
             if (data.processed_staves) {
                 const processedJsonString = JSON.stringify(data.processed_staves, null, 2);
                 processedOutput.innerHTML = '<div class="syntax-highlight">' + syntaxHighlight(processedJsonString) + '</div>';
+                processedOutput.className = 'tab-content json-output';
             } else {
-                processedOutput.innerHTML = '<span class="loading">No processed staves available</span>';
+                processedOutput.innerHTML = 'No processed staves available';
+                processedOutput.className = 'tab-content json-output loading';
             }
             
             // Minimal LilyPond
             if (data.minimal_lilypond) {
                 minimalLilyOutput.innerHTML = '<pre style="white-space: pre-wrap;">' + data.minimal_lilypond + '</pre>';
+                minimalLilyOutput.className = 'tab-content json-output';
             } else {
-                minimalLilyOutput.innerHTML = '<span class="loading">No minimal LilyPond available</span>';
+                minimalLilyOutput.innerHTML = 'No minimal LilyPond available';
+                minimalLilyOutput.className = 'tab-content json-output loading';
             }
             
             // Full LilyPond
             if (data.full_lilypond) {
                 fullLilyOutput.innerHTML = '<pre style="white-space: pre-wrap;">' + data.full_lilypond + '</pre>';
+                fullLilyOutput.className = 'tab-content json-output';
             } else {
-                fullLilyOutput.innerHTML = '<span class="loading">No full LilyPond available</span>';
+                fullLilyOutput.innerHTML = 'No full LilyPond available';
+                fullLilyOutput.className = 'tab-content json-output loading';
             }
             
             // SVG Output
             if (data.lilypond_svg) {
                 svgOutput.innerHTML = data.lilypond_svg;
+                svgOutput.className = 'tab-content';
             } else {
-                svgOutput.innerHTML = '<span class="loading">No SVG available</span>';
+                svgOutput.innerHTML = 'No SVG available';
+                svgOutput.className = 'tab-content loading';
             }
             
             // VexFlow
@@ -300,12 +315,18 @@ async function parseInput(input) {
             
             const errorMsg = '<div class="error">Parse Error: ' + (data.error || 'Unknown error') + '</div>';
             pestOutput.innerHTML = errorMsg;
+            pestOutput.className = 'tab-content json-output active';
             documentOutput.innerHTML = errorMsg;
+            documentOutput.className = 'tab-content json-output';
             processedOutput.innerHTML = errorMsg;
+            processedOutput.className = 'tab-content json-output';
             minimalLilyOutput.innerHTML = errorMsg;
+            minimalLilyOutput.className = 'tab-content json-output';
             fullLilyOutput.innerHTML = errorMsg;
+            fullLilyOutput.className = 'tab-content json-output';
             svgOutput.innerHTML = errorMsg;
-            vexflowData.innerHTML = errorMsg;
+            svgOutput.className = 'tab-content';
+            if (vexflowData) vexflowData.innerHTML = errorMsg;
             console.log('📄 Updated all output tabs with error message');
         }
         
@@ -324,12 +345,18 @@ async function parseInput(input) {
         
         const errorMsg = '<div class="error">Network Error: ' + error.message + '</div>';
         pestOutput.innerHTML = errorMsg;
+        pestOutput.className = 'tab-content json-output active';
         documentOutput.innerHTML = errorMsg;
+        documentOutput.className = 'tab-content json-output';
         processedOutput.innerHTML = errorMsg;
+        processedOutput.className = 'tab-content json-output';
         minimalLilyOutput.innerHTML = errorMsg;
+        minimalLilyOutput.className = 'tab-content json-output';
         fullLilyOutput.innerHTML = errorMsg;
+        fullLilyOutput.className = 'tab-content json-output';
         svgOutput.innerHTML = errorMsg;
-        vexflowData.innerHTML = errorMsg;
+        svgOutput.className = 'tab-content';
+        if (vexflowData) vexflowData.innerHTML = errorMsg;
         console.log('📄 Updated all output tabs with network error message');
     }
 }
@@ -349,7 +376,7 @@ document.getElementById('input-text').addEventListener('input', function(e) {
     debounceTimer = setTimeout(() => {
         console.log('⏰ Debounce timer triggered, calling parseInput');
         parseInput(inputValue);
-    }, 300);
+    }, 1000); // Increased debounce to reduce API calls
 });
 
 function drawVexFlowPlaceholder(canvas, input) {
@@ -458,14 +485,17 @@ function initializeApp() {
     const savedInput = loadInputText();
     const inputElement = document.getElementById('input-text');
     if (savedInput && inputElement) {
+        // Set value without triggering input event
         inputElement.value = savedInput;
     }
     
     // Restore active tab
     restoreActiveTab();
     
-    // Parse the restored input (or empty string if no saved input)
-    parseInput(savedInput);
+    // Only parse if there's actually saved input to avoid unnecessary API calls
+    if (savedInput && savedInput.trim()) {
+        parseInput(savedInput);
+    }
 }
 
 // Initialize when DOM is loaded
@@ -474,4 +504,58 @@ if (document.readyState === 'loading') {
 } else {
     // DOM is already loaded
     initializeApp();
+}
+
+// SVG Generation function
+async function generateSvgFromLilypond() {
+    console.log("🎵 generateSvgFromLilypond() called");
+    
+    // Get LilyPond source from the full-lily tab
+    const fullLilyTab = document.querySelector("#full-lily-tab .json-output");
+    if (\!fullLilyTab || \!fullLilyTab.textContent) {
+        alert("Please generate LilyPond notation first by entering music in the textarea above.");
+        return;
+    }
+    
+    const lilypondSource = fullLilyTab.textContent.trim();
+    if (\!lilypondSource || lilypondSource === "Full LilyPond score will appear here..." || lilypondSource.includes("will appear here")) {
+        alert("No LilyPond source available. Please enter music notation first.");
+        return;
+    }
+    
+    // Update button state
+    const button = document.getElementById("generate-svg-btn");
+    const svgContent = document.getElementById("svg-content");
+    
+    button.disabled = true;
+    button.textContent = "Generating...";
+    svgContent.innerHTML = "<div class=\"text-muted\">Generating SVG from LilyPond...</div>";
+    
+    try {
+        const response = await fetch("/api/generate-svg", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                lilypond_source: lilypondSource
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.svg_content) {
+            svgContent.innerHTML = result.svg_content;
+            console.log("✅ SVG generated successfully");
+        } else {
+            svgContent.innerHTML = `<div class="alert alert-danger">SVG Generation Error: ${result.error || "Unknown error"}</div>`;
+            console.error("❌ SVG generation failed:", result.error);
+        }
+    } catch (error) {
+        console.error("🚨 Network error during SVG generation:", error);
+        svgContent.innerHTML = `<div class="alert alert-danger">Network Error: ${error.message}</div>`;
+    } finally {
+        button.disabled = false;
+        button.textContent = "Generate SVG";
+    }
 }
