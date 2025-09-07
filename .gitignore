@@ -1,6 +1,7 @@
-# Build outputs
+# Build outputs  
 target/
-Cargo.lock
+# Note: Cargo.lock should be committed for applications, ignored for libraries
+# Since this is an application (has main.rs), we commit Cargo.lock
 
 # Dependencies
 node_modules/
