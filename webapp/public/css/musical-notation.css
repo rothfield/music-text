@@ -1,0 +1,341 @@
+/* Musical Notation CSS - Inspired by doremi-script */
+/* Base styling for musical notation rendering */
+
+.musical-notation {
+    font-family: 'Times New Roman', serif;
+    font-size: 18px;
+    line-height: 1.8;
+    color: #333;
+    white-space: nowrap;
+    overflow-x: auto;
+    padding: 20px;
+}
+
+/* Beat and measure structure */
+.beat {
+    display: inline-block;
+    margin: 0 8px;
+    padding: 4px 8px;
+    border: 1px dotted #ccc;
+    border-radius: 3px;
+    position: relative;
+    min-height: 1.2em;
+    vertical-align: top;
+}
+
+.measure {
+    display: inline-block;
+    margin: 0 12px;
+    padding: 8px;
+    border-left: 2px solid #666;
+    position: relative;
+}
+
+.measure:first-child {
+    border-left: 3px solid #333;
+}
+
+/* Note wrapper and positioning */
+.note-wrapper {
+    position: relative;
+    display: inline-block;
+    margin: 0 2px;
+}
+
+.note {
+    display: inline-block;
+    font-weight: bold;
+    position: relative;
+    padding: 0 1px;
+}
+
+/* Octave indicators */
+.octave-upper-1 {
+    position: relative;
+    top: -0.4em;
+    font-size: 0.8em;
+}
+
+.octave-upper-2 {
+    position: relative;
+    top: -0.8em;
+    font-size: 0.7em;
+}
+
+.octave-lower-1 {
+    position: relative;
+    top: 0.4em;
+    font-size: 0.8em;
+}
+
+.octave-lower-2 {
+    position: relative;
+    top: 0.8em;
+    font-size: 0.7em;
+}
+
+/* Note duration indicators */
+.duration-whole {
+    font-size: 1.4em;
+    font-weight: normal;
+}
+
+.duration-half {
+    font-size: 1.2em;
+    font-weight: normal;
+}
+
+.duration-quarter {
+    font-size: 1.0em;
+    font-weight: bold;
+}
+
+.duration-eighth {
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.duration-sixteenth {
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+/* Accidentals */
+.accidental {
+    font-size: 0.8em;
+    margin-right: 1px;
+    color: #666;
+}
+
+.sharp::before {
+    content: "♯";
+}
+
+.flat::before {
+    content: "♭";
+}
+
+.natural::before {
+    content: "♮";
+}
+
+/* Rests */
+.rest {
+    color: #888;
+    font-style: italic;
+}
+
+.rest-quarter::before {
+    content: "𝄽";
+}
+
+.rest-eighth::before {
+    content: "𝄾";
+}
+
+.rest-sixteenth::before {
+    content: "𝄿";
+}
+
+/* Slurs and ties */
+.slur {
+    position: absolute;
+    top: -0.8em;
+    left: 0;
+    right: 0;
+    height: 0.5em;
+    border-top: 2px solid #333;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.slur-start {
+    border-left: 2px solid #333;
+    border-top-left-radius: 100% 50%;
+}
+
+.slur-end {
+    border-right: 2px solid #333;
+    border-top-right-radius: 100% 50%;
+}
+
+.tie {
+    position: absolute;
+    top: 0.5em;
+    left: 0;
+    right: 0;
+    height: 0.3em;
+    border-top: 1px solid #333;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* Tuplets */
+.tuplet {
+    position: relative;
+    display: inline-block;
+    border-top: 1px solid #666;
+    margin: 0 4px;
+}
+
+.tuplet-number {
+    position: absolute;
+    top: -1.2em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7em;
+    font-weight: bold;
+    color: #666;
+}
+
+/* Time signatures */
+.time-signature {
+    display: inline-block;
+    font-size: 0.9em;
+    margin-right: 16px;
+    vertical-align: middle;
+    border-right: 1px solid #999;
+    padding-right: 8px;
+}
+
+.time-numerator {
+    display: block;
+    text-align: center;
+    line-height: 0.8;
+}
+
+.time-denominator {
+    display: block;
+    text-align: center;
+    line-height: 0.8;
+}
+
+/* Key signatures */
+.key-signature {
+    display: inline-block;
+    margin-right: 12px;
+    font-weight: bold;
+    color: #555;
+}
+
+/* Lyrics */
+.lyrics-line {
+    display: block;
+    margin-top: 8px;
+    font-style: italic;
+    color: #666;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.lyric {
+    display: inline-block;
+    margin: 0 4px;
+    text-align: center;
+    min-width: 1em;
+}
+
+/* Barlines */
+.barline {
+    display: inline-block;
+    margin: 0 8px;
+    font-weight: bold;
+    color: #333;
+}
+
+.barline-single::before {
+    content: "|";
+}
+
+.barline-double::before {
+    content: "||";
+}
+
+.barline-final::before {
+    content: "||";
+    font-weight: bolder;
+}
+
+/* Ornaments */
+.ornament {
+    position: absolute;
+    top: -1em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7em;
+    color: #666;
+}
+
+.trill::before {
+    content: "tr";
+}
+
+.mordent::before {
+    content: "♯";
+}
+
+.turn::before {
+    content: "∼";
+}
+
+/* Notation system specific styling */
+.sargam-notation .note {
+    font-family: 'Times New Roman', serif;
+    text-transform: uppercase;
+}
+
+.number-notation .note {
+    font-family: 'Arial', sans-serif;
+    font-weight: bold;
+}
+
+.western-notation .note {
+    font-family: 'Times New Roman', serif;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .musical-notation {
+        font-size: 16px;
+        padding: 15px;
+    }
+    
+    .beat {
+        margin: 0 4px;
+        padding: 2px 4px;
+    }
+    
+    .measure {
+        margin: 0 6px;
+        padding: 4px;
+    }
+}
+
+/* Hover effects for interactivity */
+.note-wrapper:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+    border-radius: 3px;
+}
+
+.beat:hover {
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+/* Print styles */
+@media print {
+    .musical-notation {
+        font-size: 14px;
+        color: black;
+    }
+    
+    .beat {
+        border-color: black;
+    }
+    
+    .note-wrapper:hover,
+    .beat:hover {
+        background-color: transparent;
+        border-color: black;
+    }
+}

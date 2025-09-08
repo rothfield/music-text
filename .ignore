@@ -1,0 +1,53 @@
+# Cargo-watch ignore patterns to prevent rebuild loops
+# Build outputs
+target/
+*.rlib
+*.so
+*.dylib
+*.dll
+
+# Generated files that shouldn't trigger rebuilds
+*.ly
+*.png
+*.svg
+*.pdf
+*.ps
+*.json
+*.yaml
+*.clr
+*.outline
+*.tmp
+*.temp
+*.bak
+
+# Web assets and cache files  
+webapp/public/js/*.js
+webapp/public/css/*.css
+webapp/test_output/
+webapp/node_modules/
+
+# Test outputs
+test_output/
+tests/test_output/
+temp_server_tests/
+server_test_*
+
+# IDE and temporary files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Generated grammar files (avoid circular regeneration)
+grammar/notation.pest
+
+# Archives and backups
+*.tgz
+*.tar
+*.tar.gz

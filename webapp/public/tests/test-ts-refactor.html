@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music-Text Parser - TypeScript Refactor Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .input-section {
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+        button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .output-section {
+            margin-top: 20px;
+        }
+        #live-vexflow-container {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-height: 200px;
+            background: white;
+            padding: 10px;
+        }
+        #detected-system-display {
+            font-weight: bold;
+            color: #28a745;
+        }
+        #error-display {
+            display: none;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .debug-info {
+            font-family: monospace;
+            font-size: 12px;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎼 Music-Text Parser - TypeScript Refactor Test</h1>
+        
+        <div class="input-section">
+            <h3>Notation Input</h3>
+            <textarea 
+                id="notation-input" 
+                placeholder="Enter your notation here, e.g., | S R G M | P D N S' |"
+            >| S R G M | P D N S' |</textarea>
+        </div>
+
+        <div class="controls">
+            <button id="parse-button">Parse Notation</button>
+            
+            <div class="toggle-group">
+                <input type="checkbox" id="live-preview-checkbox" checked>
+                <label for="live-preview-checkbox">Live Preview</label>
+            </div>
+            
+            <div class="toggle-group">
+                <input type="checkbox" id="staff-preview-toggle" checked>
+                <label for="staff-preview-toggle">Staff Preview</label>
+            </div>
+            
+            <div class="debug-info">
+                System: <span id="detected-system-display">Not parsed</span>
+            </div>
+        </div>
+
+        <div id="error-display"></div>
+
+        <div class="output-section">
+            <h3>VexFlow Output</h3>
+            <div id="live-vexflow-container">
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    🎼 VexFlow rendering will appear here
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load VexFlow library -->
+    <script src="lib/vexflow5.js"></script>
+    
+    <!-- Load WASM module (this would be the existing WASM loading script) -->
+    <script>
+        // Mock WASM module for testing - replace with actual WASM loading
+        console.log('⚠️ Using mock WASM module for testing');
+        
+        // Simulate WASM module loading
+        window.wasm_bindgen = {
+            parse_notation: (notation) => {
+                console.log('Mock parsing:', notation);
+                return JSON.stringify({
+                    success: true,
+                    staves: [
+                        {
+                            notes: [
+                                {
+                                    type: 'Note',
+                                    keys: ['c/4'],
+                                    duration: '4',
+                                    dots: 0
+                                },
+                                {
+                                    type: 'Note',
+                                    keys: ['d/4'],
+                                    duration: '4',
+                                    dots: 0
+                                },
+                                {
+                                    type: 'Note',
+                                    keys: ['e/4'],
+                                    duration: '4',
+                                    dots: 0
+                                },
+                                {
+                                    type: 'Note',
+                                    keys: ['f/4'],
+                                    duration: '4',
+                                    dots: 0
+                                }
+                            ]
+                        }
+                    ]
+                });
+            },
+            get_version: () => 'mock-1.0.0',
+            get_build_timestamp: () => new Date().toISOString()
+        };
+    </script>
+    
+    <!-- Load the refactored TypeScript modules -->
+    <script type="module">
+        import { initializeApp } from './js/app.js';
+        
+        console.log('🚀 Loading refactored TypeScript modules...');
+        
+        try {
+            const app = await initializeApp();
+            console.log('✅ App initialized successfully');
+            console.log('App instance:', app);
+            
+            // Test basic functionality
+            if (app.isReady()) {
+                console.log('✅ App is ready for use');
+            } else {
+                console.warn('⚠️ App not fully ready yet');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to initialize app:', error);
+        }
+    </script>
+</body>
+</html>

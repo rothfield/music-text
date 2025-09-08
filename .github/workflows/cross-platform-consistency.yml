@@ -1,0 +1,65 @@
+name: Cross-Platform Consistency Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  consistency-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        components: rustfmt, clippy
+        
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install LilyPond
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lilypond
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build Rust CLI binary
+      run: cargo build --release --bin cli
+      
+    - name: Build WASM module
+      run: wasm-pack build --target web --out-dir web/pkg
+      
+    - name: Start web server (background)
+      run: |
+        npm start &
+        sleep 10  # Give server time to start
+      
+    - name: Run cross-platform consistency tests
+      run: ./test_cross_platform_consistency.sh
+      
+    - name: Upload test artifacts on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: consistency-test-results
+        path: |
+          test_output/
+          *.ly
+          *.outline
+          *.yaml

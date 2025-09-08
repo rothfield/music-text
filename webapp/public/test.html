@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>API Test</h1>
+    <button onclick="testApi()">Test API</button>
+    <div id="result"></div>
+    <div id="lilypond"></div>
+    
+    <script>
+    async function testApi() {
+        try {
+            console.log('Testing API...');
+            const response = await fetch('/api/parse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    notation: "111",
+                    system: "auto",
+                    output: ['full']
+                })
+            });
+            
+            console.log('Response status:', response.status);
+            const result = await response.json();
+            console.log('Full result:', result);
+            console.log('Success:', result.success);
+            console.log('Has lilypond:', !!result.lilypond);
+            console.log('Lilypond length:', result.lilypond ? result.lilypond.length : 0);
+            
+            document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            
+            if (result.lilypond) {
+                document.getElementById('lilypond').innerHTML = '<h2>LilyPond Output:</h2><pre>' + result.lilypond + '</pre>';
+            } else {
+                document.getElementById('lilypond').innerHTML = '<h2>No LilyPond Output</h2>';
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('result').innerHTML = 'Error: ' + error.message;
+        }
+    }
+    </script>
+</body>
+</html>

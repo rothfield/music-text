@@ -1,0 +1,44 @@
+/* Music-Text Parser Token Styles - All possible token types */
+.token-pitch { color: yellow; }  /* Yellow for pitches */
+.token-barline { color: green; }  /* Green for barlines */
+.token-dash { color: yellow; }  /* Yellow for dashes */
+.token-symbols { color: red; }  /* Red for symbols */
+.token-word { color: brown; }  /* Brown for words */
+.token-whitespace { color: yellow; /* reverse */ }  /* White on dark background for whitespace */
+.token-newline { color: white; /* reverse */ }  /* White on dark background for newlines */
+.token-unknown { color: magenta; }  /* Magenta for unknown tokens */
+.token-octave-marker { color: magenta; }  /* Magenta for octave markers */
+.token-title { color: white; font-weight: bold; text-decoration: underline; }
+.token-directive-key { color: green; }
+.token-directive-value { color: brown; }  
+.token-metadata { color: blue; }  /* Blue for metadata */
+.token-unassigned { color: white; /* reverse */ }
+
+/* Beat elements (pitches within beats) get underlined */
+.beat-element { text-decoration: underline; }
+
+/* General styling for colorized output */
+#colorized-output {
+    font-family: 'Courier New', monospace;
+    background-color: #1e1e1e;
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    line-height: 1.4;
+    white-space: pre;
+}
+
+/* Legend styling */
+.legend {
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 15px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+}
+
+.legend strong {
+    color: #FFF;
+}

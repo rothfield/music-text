@@ -1,0 +1,84 @@
+select.selectNotation.form-control ,select.renderAs.form-control {
+  width: 100px;
+}
+span.offline {
+  background-color: orange;
+}
+.form-inline audio {
+  vertical-align: middle
+}
+div.has-error #parse-results {
+  font-family: monospace;
+}
+select#downloads {
+  width:100px;
+}
+div.downloads {
+  display:inline-block;
+}
+@media print {
+ul.nav {
+		display:none;
+}
+div.composition {
+ height:auto !important;
+ border: none !important;
+}
+}
+ /* height:175px;   or set for printing initial */
+div.composition {
+  overflow:auto;
+	resize:both;
+	border: 1px black solid;
+}
+.hidden {
+		display:none;
+}
+img.hidden {
+		display:none;
+}
+.displayKind {
+		font-weight:bold;
+}
+div.controls div,
+div.controls button,
+div.controls span,
+div.controls a {
+ margin-right: 2em;
+}
+.exampleTxt {
+  border: 1px solid black;
+	display: inline-block;
+	padding: 0.2em;
+	font-size: 1.0em;
+}
+textarea.entryArea {
+		/* don't try nowrap or overflow: auto. Causes problems in chrome */
+		font-family: monospace; 
+		padding-left: 1em;
+		font-size: 1.6em;
+		height: 170px; 
+		width:95%; 
+	  overflow-x: scroll;
+		position:relative;
+		left:1em;
+}
+
+textarea:focus {
+		outline: none;
+}
+div.zentryAreaBox {
+		position: relative;
+		left: 5px; 
+		top: 5px;
+		right: 5px; 
+		bottom: 5px;
+		border: 1px solid #CCC; /* style like textarea */
+}
+div.editLineWrapper.line_parse_failed, div.line_parse_failed, div.compositionParseFailed {
+		border: 2px solid #999;
+}
+
+.compositionParseFailed {
+		margin-top: 2em;
+}

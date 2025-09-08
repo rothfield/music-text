@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Repeat Bar Test</title>
+    <script src="lib/vexflow5.js"></script>
+</head>
+<body>
+    <h1>Repeat Bar Test</h1>
+    <div id="output"></div>
+    
+    <script>
+        const { Renderer, Stave, Voice, Formatter, StaveNote, BarNote } = VexFlow;
+        
+        // Create renderer
+        const div = document.getElementById("output");
+        const renderer = new Renderer(div, Renderer.Backends.SVG);
+        renderer.resize(800, 200);
+        const context = renderer.getContext();
+        
+        // Create stave with repeat barlines
+        const stave = new Stave(10, 40, 700);
+        
+        // Set repeat barlines on the stave itself
+        // Test repeat begin |: and repeat end :|
+        try {
+            stave.setBegBarType(VexFlow.Barline ? VexFlow.Barline.type.REPEAT_BEGIN : 'REPEAT_BEGIN');
+            stave.setEndBarType(VexFlow.Barline ? VexFlow.Barline.type.REPEAT_END : 'REPEAT_END');
+            console.log('Successfully set repeat barlines');
+        } catch (error) {
+            console.error('Error setting barlines:', error);
+            // Try alternative strings
+            try {
+                stave.setBegBarType('REPEAT_BEGIN');
+                stave.setEndBarType('REPEAT_END');
+            } catch (e2) {
+                console.error('Alternative barline API also failed:', e2);
+            }
+        }
+        
+        stave.setContext(context).draw();
+        
+        // Create notes without BarNote objects
+        const notes = [
+            new StaveNote({ keys: ["c/4"], duration: "q" }),
+            new StaveNote({ keys: ["d/4"], duration: "q" }),
+            new StaveNote({ keys: ["e/4"], duration: "q" }),
+            new StaveNote({ keys: ["f/4"], duration: "q" }),
+            new StaveNote({ keys: ["g/4"], duration: "q" }),
+            new StaveNote({ keys: ["a/4"], duration: "q" }),
+            new StaveNote({ keys: ["b/4"], duration: "q" }),
+            new StaveNote({ keys: ["c/5"], duration: "q" }),
+        ];
+        
+        // Create voice and add notes
+        const voice = new Voice({ num_beats: 8, beat_value: 4 });
+        voice.addTickables(notes);
+        
+        // Format and draw
+        new Formatter().joinVoices([voice]).format([voice], 650);
+        voice.draw(context, stave);
+        
+        console.log('Repeat bar test rendered successfully');
+    </script>
+</body>
+</html>

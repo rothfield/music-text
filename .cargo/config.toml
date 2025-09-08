@@ -1,0 +1,7 @@
+[build]
+# Use ramdisk for target directory by default for faster compilation
+target-dir = "/mnt/rust_ramdisk/target"
+
+[env]
+# Set environment variable for consistency
+CARGO_TARGET_DIR = "/mnt/rust_ramdisk/target"
