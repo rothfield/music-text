@@ -77,8 +77,13 @@ z
 .DS_Store
 Thumbs.db
 
-# Root-level debug and test scripts
-*.js
+# Root-level debug and test scripts (but allow intentional test files)
+debug_*.js
+temp_*.js
+scratch_*.js
+quick_*.js
+simple_*.js
+# Allow our intentional test files: test_*.js are kept in version control
 
 # Logs
 *.log

@@ -1,1 +1,0 @@
-cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/home/john/projects/music-text/target/debug/build/mime_guess-b073c3206768a77e/out/mime_types_generated.rs
