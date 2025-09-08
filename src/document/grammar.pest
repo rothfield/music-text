@@ -3,9 +3,12 @@
 // Document structure 
 document = { SOI ~ mixed_content? ~ trailing_whitespace? ~ EOI }
 
-mixed_content = { mixed_line ~ (stave_separator ~ mixed_line)* ~ stave_separator? }
+mixed_content = { (mixed_line | blank_line) ~ (stave_separator ~ (mixed_line | blank_line))* ~ stave_separator? }
 stave_separator = { NEWLINE+ }
 trailing_whitespace = { (NEWLINE | " ")+ }
+
+// Blank line - spaces only
+blank_line = { " "* }
 
 // Mixed line can be either a traditional stave or a simple content line
 mixed_line = { stave | simple_content_line }
@@ -79,4 +82,3 @@ simple_content_line = { musical_element_no_barline+ }
 
 // Text line - any line that is not a content line, not blank, and contains no barlines
 text_line = { !content_line ~ !blank_line ~ (!NEWLINE ~ !"|" ~ ANY)* }
-blank_line = { " "* }

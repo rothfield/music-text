@@ -174,6 +174,12 @@ Input: "1 2 3 4"
 Output: Four quarter notes C D E F
 ```
 
+### Sargam Notation (Valid as lone line)
+```
+Input: "SRG"
+Output: Three quarter notes Sa-Re-Ga (C-D-E)
+```
+
 ### Sargam with Rhythm
 ```
 Input: "| S-R G-M |"
