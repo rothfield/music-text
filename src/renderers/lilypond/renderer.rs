@@ -22,8 +22,8 @@ impl LilyPondRenderer {
     
     /// Convert staves to minimal LilyPond notation
     pub fn render_minimal(&self, staves: &[ProcessedStave]) -> String {
-        let notes_content = self.convert_staves_to_notes(staves);
-        self.minimal_formatter.format(&notes_content)
+        let (notes_content, lyrics_content) = self.convert_staves_to_notes_and_lyrics(staves);
+        self.minimal_formatter.format_with_lyrics(&notes_content, &lyrics_content)
     }
     
     /// Convert staves to full LilyPond score using template
@@ -34,17 +34,25 @@ impl LilyPondRenderer {
     
     /// Convert staves to fast web-optimized LilyPond for SVG generation
     pub fn render_web_fast(&self, staves: &[ProcessedStave]) -> String {
-        let notes_content = self.convert_staves_to_notes(staves);
-        self.web_fast_formatter.format(&notes_content)
+        let (notes_content, lyrics_content) = self.convert_staves_to_notes_and_lyrics(staves);
+        self.web_fast_formatter.format_with_lyrics(&notes_content, &lyrics_content)
     }
     
     /// Core conversion logic: ProcessedStaves with beats -> LilyPond note content
     fn convert_staves_to_notes(&self, staves: &[ProcessedStave]) -> String {
-        let mut result = String::new();
+        let (notes_content, _) = self.convert_staves_to_notes_and_lyrics(staves);
+        notes_content
+    }
+    
+    /// Convert staves to both notes and lyrics content for addLyrics pattern
+    fn convert_staves_to_notes_and_lyrics(&self, staves: &[ProcessedStave]) -> (String, String) {
+        let mut notes_result = String::new();
+        let mut lyrics_result = String::new();
+        let mut has_lyrics = false;
         
         for (i, stave) in staves.iter().enumerate() {
             if i > 0 {
-                result.push_str(" | ");
+                notes_result.push_str(" | ");
             }
             
             for rhythm_item in &stave.rhythm_items {
@@ -52,28 +60,48 @@ impl LilyPondRenderer {
                     Item::Beat(beat) => {
                         if beat.is_tuplet {
                             if let Some((num, den)) = beat.tuplet_ratio {
-                                result.push_str(&format!("\\tuplet {}/{} {{ ", num, den));
+                                notes_result.push_str(&format!("\\tuplet {}/{} {{ ", num, den));
                                 
                                 for beat_element in &beat.elements {
-                                    let lily_note = self.convert_beat_element_to_lilypond(beat_element);
-                                    result.push_str(&lily_note);
+                                    let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                                    notes_result.push_str(&lily_note);
+                                    
+                                    if let Some(syl) = syllable {
+                                        lyrics_result.push_str(&syl);
+                                        lyrics_result.push(' ');
+                                        has_lyrics = true;
+                                    } else {
+                                        // Add placeholder for notes without syllables
+                                        lyrics_result.push_str("_ ");
+                                    }
                                 }
                                 
-                                result.push_str("} ");
+                                notes_result.push_str("} ");
                             }
                         } else {
                             // Regular beat - no tuplet wrapper
                             for beat_element in &beat.elements {
-                                let lily_note = self.convert_beat_element_to_lilypond(beat_element);
-                                result.push_str(&lily_note);
+                                let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                                notes_result.push_str(&lily_note);
+                                
+                                if let Some(syl) = syllable {
+                                    lyrics_result.push_str(&syl);
+                                    lyrics_result.push(' ');
+                                    has_lyrics = true;
+                                } else {
+                                    // Add placeholder for notes without syllables
+                                    lyrics_result.push_str("_ ");
+                                }
                             }
                         }
                     }
                     Item::Barline(_, _) => {
-                        result.push_str("| ");
+                        notes_result.push_str("| ");
+                        // No lyrics entry needed for barlines
                     }
                     Item::Breathmark => {
-                        result.push_str("\\breathe ");
+                        notes_result.push_str("\\breathe ");
+                        // No lyrics entry needed for breath marks
                     }
                     Item::Tonic(_) => {
                         // Tonic declarations don't generate output notation - they set context
@@ -83,33 +111,42 @@ impl LilyPondRenderer {
             }
         }
         
-        result
+        // Return empty lyrics if no actual syllables were found
+        let final_lyrics = if has_lyrics {
+            lyrics_result.trim().to_string()
+        } else {
+            String::new()
+        };
+        
+        (notes_result, final_lyrics)
     }
     
     /// Convert a beat element to LilyPond notation with proper duration
     fn convert_beat_element_to_lilypond(&self, beat_element: &crate::rhythm_fsm::BeatElement) -> String {
+        let (note, _) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+        note
+    }
+    
+    /// Convert a beat element to LilyPond notation and extract syllable for lyrics
+    fn convert_beat_element_to_lilypond_with_lyrics(&self, beat_element: &crate::rhythm_fsm::BeatElement) -> (String, Option<String>) {
         match &beat_element.event {
             Event::Note { degree, octave, .. } => {
                 let lily_pitch = degree_to_lilypond_simple(*degree);
                 // Use the sophisticated FSM-calculated tuplet_duration instead of simple subdivision mapping
                 let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
                 
-                // Add syllable (tabla pitch source) as lyric if available
-                if let Some(syllable) = beat_element.syl() {
-                    if !syllable.is_empty() && syllable != lily_pitch {
-                        // Use LilyPond's \lyricmode for syllables
-                        format!("{}{}^\"{}\" ", lily_pitch, duration, syllable)
-                    } else {
-                        format!("{}{} ", lily_pitch, duration)
-                    }
-                } else {
-                    format!("{}{} ", lily_pitch, duration)
-                }
+                let note = format!("{}{} ", lily_pitch, duration);
+                
+                // Extract syllable for lyrics - pass through directly from parser
+                let syllable = beat_element.syl();
+                
+                (note, syllable)
             }
             Event::Rest => {
                 // Use the sophisticated FSM-calculated tuplet_duration for rests too
                 let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
-                format!("r{} ", duration)
+                let note = format!("r{} ", duration);
+                (note, None) // Rests don't have syllables
             }
         }
     }
@@ -125,6 +162,7 @@ impl LilyPondRenderer {
         }
     }
 }
+
 
 /// Convert fraction duration to LilyPond duration notation
 fn fraction_to_lilypond_duration(duration: fraction::Fraction) -> String {

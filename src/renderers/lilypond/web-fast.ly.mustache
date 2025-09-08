@@ -8,6 +8,30 @@
   page-breaking = #ly:one-page-breaking
 }
 
+{{#lyrics}}
+melody = {
+  \fixed c' {
+    \autoBeamOff
+    {{{staves}}}
+  }
+}
+
+text = \lyricmode {
+  {{{lyrics}}}
+}
+
+\score {
+  <<
+    \new Voice = "one" {
+      \melody
+    }
+    \new Lyrics \lyricsto "one" \text
+  >>
+  
+  \layout { }
+}
+{{/lyrics}}
+{{^lyrics}}
 \score {
   \new Staff {
     \fixed c' {
@@ -18,3 +42,4 @@
   
   \layout { }
 }
+{{/lyrics}}

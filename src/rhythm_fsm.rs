@@ -55,8 +55,15 @@ impl BeatElement {
     }
     
     pub fn syl(&self) -> Option<String> {
-        // Extract syllable from children or use value
-        Some(self.value.clone())
+        // Extract syllable from ParsedChild::Syllable in children
+        if let Event::Note { children, .. } = &self.event {
+            children.iter().rev().find_map(|child| match child {
+                ParsedChild::Syllable { text, .. } => Some(text.clone()),
+                _ => None
+            })
+        } else {
+            None
+        }
     }
     
     pub fn ornaments(&self) -> Vec<OrnamentType> {
@@ -478,6 +485,17 @@ fn convert_musical_elements_to_parsed_elements(elements: &[MusicalElement]) -> V
         match element {
             MusicalElement::Note(note) => {
                 let degree = convert_pitchcode_to_degree(note.pitch_code);
+                
+                // Convert syllable to ParsedChild only for tabla notation
+                let children = if note.notation_system == crate::document::model::NotationSystem::Tabla && !note.syllable.is_empty() {
+                    vec![ParsedChild::Syllable { 
+                        text: note.syllable.clone(),
+                        distance: 1 // Below the note 
+                    }]
+                } else {
+                    vec![]
+                };
+                
                 result.push(ParsedElement::Note {
                     degree,
                     octave: note.octave,
@@ -486,7 +504,7 @@ fn convert_musical_elements_to_parsed_elements(elements: &[MusicalElement]) -> V
                         row: note.source.position.line,
                         col: note.source.position.column,
                     },
-                    children: vec![],
+                    children,
                     duration: None,
                     slur: if note.in_slur { Some(SlurRole::Middle) } else { None }, // Basic slur handling
                 });

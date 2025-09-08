@@ -10,6 +10,17 @@ impl WebFastFormatter {
     
     /// Format notes content using web-optimized template
     pub fn format(&self, notes_content: &str) -> String {
+        self.format_with_lyrics(notes_content, "")
+    }
+    
+    /// Format notes and lyrics using web-optimized template with addLyrics pattern
+    pub fn format_with_lyrics(&self, notes_content: &str, lyrics_content: &str) -> String {
+        let lyrics_option = if lyrics_content.is_empty() {
+            None
+        } else {
+            Some(lyrics_content.to_string())
+        };
+        
         let context = TemplateContext {
             version: "2.24.0".to_string(),
             staves: notes_content.to_string(),
@@ -18,7 +29,7 @@ impl WebFastFormatter {
             composer: None,
             time_signature: None,
             key_signature: None,
-            lyrics: None,
+            lyrics: lyrics_option,
             midi: false,
             tempo: None,
         };

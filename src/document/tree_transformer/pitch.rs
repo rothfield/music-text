@@ -108,8 +108,16 @@ pub(super) fn transform_pitch(pitch_pair: Pair<Rule>, in_slur: bool, in_beat_gro
     // Extract base note for display (remove modifiers for syllable field)
     let base_pitch = extract_base_pitch(full_pitch_str);
     
+    // For tabla notation, use the original source text as syllable
+    let syllable = if notation_system == NotationSystem::Tabla {
+        full_pitch_str.to_string() // Use original tabla bol as syllable
+    } else {
+        // For other notation systems, don't set syllables (they don't need lyrics)
+        "".to_string() // Empty syllable means no lyrics will be generated
+    };
+    
     let note = Note {
-        syllable: base_pitch, // Base note without modifiers for display
+        syllable, // Tabla bols use source text, others use base pitch
         octave: 0, // Default octave for now  
         pitch_code, // Complete pitch information
         notation_system,
