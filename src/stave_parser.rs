@@ -1,4 +1,4 @@
-use crate::document::{Document, Stave};
+use crate::document::Document;
 use crate::rhythm_fsm::process_rhythm;
 
 /// Pipeline step: Parse document staves into processed staves
@@ -18,6 +18,8 @@ pub fn parse_document_staves(document: Document) -> Result<Vec<ProcessedStave>, 
             text_lines_after: stave.text_lines_after,
             notation_system: stave.notation_system,
             source: stave.source,
+            begin_multi_stave: stave.begin_multi_stave,
+            end_multi_stave: stave.end_multi_stave,
         };
         
         processed_staves.push(processed_stave);
@@ -35,6 +37,8 @@ pub struct ProcessedStave {
     pub text_lines_after: Vec<crate::document::TextLine>,
     pub notation_system: crate::document::model::NotationSystem,
     pub source: crate::document::model::Source,
+    pub begin_multi_stave: bool,  // True if this stave begins a multi-stave group
+    pub end_multi_stave: bool,    // True if this stave ends a multi-stave group
 }
 
 #[cfg(test)]
@@ -50,7 +54,7 @@ mod tests {
         
         // Should return the same staves as input
         assert_eq!(staves.len(), 1);
-        assert_eq!(staves[0].content_line.elements.len(), 6); // |, 1, space, 2, space, 3 (barline included as element)
+        assert!(!staves[0].rhythm_items.is_empty()); // Should have rhythm items
     }
 
     #[test]

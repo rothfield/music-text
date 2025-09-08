@@ -1,4 +1,4 @@
-use crate::document::{parse_document, Document, Stave};
+use crate::document::{parse_document, Document};
 use crate::stave_parser::{parse_document_staves, ProcessedStave};
 use crate::renderers::{render_minimal_lilypond, render_full_lilypond, render_vexflow_svg, render_vexflow_data};
 use log::warn;

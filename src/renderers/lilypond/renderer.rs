@@ -34,7 +34,7 @@ impl LilyPondRenderer {
     
     /// Convert staves to fast web-optimized LilyPond for SVG generation
     pub fn render_web_fast(&self, staves: &[ProcessedStave]) -> String {
-        let (notes_content, lyrics_content) = self.convert_staves_to_notes_and_lyrics(staves);
+        let (notes_content, lyrics_content) = self.convert_staves_to_raw_notes_and_lyrics(staves);
         self.web_fast_formatter.format_with_lyrics(&notes_content, &lyrics_content)
     }
     
@@ -44,8 +44,8 @@ impl LilyPondRenderer {
         notes_content
     }
     
-    /// Convert staves to both notes and lyrics content for addLyrics pattern
-    fn convert_staves_to_notes_and_lyrics(&self, staves: &[ProcessedStave]) -> (String, String) {
+    /// Convert staves to raw notes and lyrics content for web-fast template (no Staff wrappers)
+    fn convert_staves_to_raw_notes_and_lyrics(&self, staves: &[ProcessedStave]) -> (String, String) {
         let mut notes_result = String::new();
         let mut lyrics_result = String::new();
         let mut has_lyrics = false;
@@ -55,59 +55,75 @@ impl LilyPondRenderer {
                 notes_result.push_str(" | ");
             }
             
-            for rhythm_item in &stave.rhythm_items {
-                match rhythm_item {
-                    Item::Beat(beat) => {
-                        if beat.is_tuplet {
-                            if let Some((num, den)) = beat.tuplet_ratio {
-                                notes_result.push_str(&format!("\\tuplet {}/{} {{ ", num, den));
-                                
-                                for beat_element in &beat.elements {
-                                    let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
-                                    notes_result.push_str(&lily_note);
-                                    
-                                    if let Some(syl) = syllable {
-                                        lyrics_result.push_str(&syl);
-                                        lyrics_result.push(' ');
-                                        has_lyrics = true;
-                                    } else {
-                                        // Add placeholder for notes without syllables
-                                        lyrics_result.push_str("_ ");
-                                    }
-                                }
-                                
-                                notes_result.push_str("} ");
-                            }
-                        } else {
-                            // Regular beat - no tuplet wrapper
-                            for beat_element in &beat.elements {
-                                let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
-                                notes_result.push_str(&lily_note);
-                                
-                                if let Some(syl) = syllable {
-                                    lyrics_result.push_str(&syl);
-                                    lyrics_result.push(' ');
-                                    has_lyrics = true;
-                                } else {
-                                    // Add placeholder for notes without syllables
-                                    lyrics_result.push_str("_ ");
-                                }
-                            }
-                        }
-                    }
-                    Item::Barline(_, _) => {
-                        notes_result.push_str("| ");
-                        // No lyrics entry needed for barlines
-                    }
-                    Item::Breathmark => {
-                        notes_result.push_str("\\breathe ");
-                        // No lyrics entry needed for breath marks
-                    }
-                    Item::Tonic(_) => {
-                        // Tonic declarations don't generate output notation - they set context
-                        // Skip for now
-                    }
-                }
+            let (stave_notes, stave_lyrics, stave_has_lyrics) = self.convert_single_stave_to_notes_and_lyrics(stave);
+            
+            // For web-fast, just append the raw notes without Staff wrapper
+            notes_result.push_str(stave_notes.trim());
+            
+            if stave_has_lyrics {
+                lyrics_result.push_str(&stave_lyrics);
+                has_lyrics = true;
+            }
+        }
+        
+        let final_lyrics = if has_lyrics {
+            lyrics_result
+        } else {
+            String::new()
+        };
+        
+        (notes_result, final_lyrics)
+    }
+
+    /// Convert staves to both notes and lyrics content for addLyrics pattern (with Staff wrappers)
+    fn convert_staves_to_notes_and_lyrics(&self, staves: &[ProcessedStave]) -> (String, String) {
+        let mut notes_result = String::new();
+        let mut lyrics_result = String::new();
+        let mut has_lyrics = false;
+        let mut in_multi_stave_group = false;
+        
+        for (i, stave) in staves.iter().enumerate() {
+            if i > 0 && !in_multi_stave_group {
+                notes_result.push_str(" | ");
+            }
+            
+            // Check if this stave begins a multi-stave group
+            if stave.begin_multi_stave {
+                // Start a StaffGroup (using generic bracket grouping)
+                notes_result.push_str("\\new StaffGroup <<\n");
+                in_multi_stave_group = true;
+            }
+            
+            // Convert single stave to notes and lyrics
+            let (stave_notes, stave_lyrics, stave_has_lyrics) = self.convert_single_stave_to_notes_and_lyrics(stave);
+            
+            // Wrap stave in \new Staff context
+            let wrapped_notes = if in_multi_stave_group {
+                format!(
+                    "  \\new Staff {{\n    \\fixed c' {{\n      \\autoBeamOff\n      {}\n    }}\n  }}",
+                    stave_notes.trim()
+                )
+            } else {
+                format!(
+                    "\\new Staff {{\n  \\fixed c' {{\n    \\autoBeamOff\n    {}\n  }}\n}}",
+                    stave_notes.trim()
+                )
+            };
+            
+            notes_result.push_str(&wrapped_notes);
+            if in_multi_stave_group && i + 1 < staves.len() && !stave.end_multi_stave {
+                notes_result.push('\n'); // Add newline between staves in group
+            }
+            
+            lyrics_result.push_str(&stave_lyrics);
+            if stave_has_lyrics {
+                has_lyrics = true;
+            }
+            
+            // Check if this stave ends a multi-stave group
+            if stave.end_multi_stave {
+                notes_result.push_str("\n>>");
+                in_multi_stave_group = false;
             }
         }
         
@@ -121,16 +137,81 @@ impl LilyPondRenderer {
         (notes_result, final_lyrics)
     }
     
-    /// Convert a beat element to LilyPond notation with proper duration
-    fn convert_beat_element_to_lilypond(&self, beat_element: &crate::rhythm_fsm::BeatElement) -> String {
-        let (note, _) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
-        note
+    /// Convert a single stave to LilyPond notation and extract lyrics
+    fn convert_single_stave_to_notes_and_lyrics(&self, stave: &ProcessedStave) -> (String, String, bool) {
+        let mut notes_result = String::new();
+        let mut lyrics_result = String::new();
+        let mut has_lyrics = false;
+        
+        for rhythm_item in &stave.rhythm_items {
+            match rhythm_item {
+                Item::Beat(beat) => {
+                    if beat.is_tuplet {
+                        if let Some((num, den)) = beat.tuplet_ratio {
+                            notes_result.push_str(&format!("\\tuplet {}/{} {{ ", num, den));
+                            
+                            for beat_element in &beat.elements {
+                                let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                                notes_result.push_str(&lily_note);
+                                
+                                if let Some(syl) = syllable {
+                                    lyrics_result.push_str(&syl);
+                                    lyrics_result.push(' ');
+                                    has_lyrics = true;
+                                } else {
+                                    // Add placeholder for notes without syllables
+                                    lyrics_result.push_str("_ ");
+                                }
+                            }
+                            
+                            notes_result.push_str("} ");
+                        }
+                    } else {
+                        // Regular beat - no tuplet wrapper
+                        for beat_element in &beat.elements {
+                            let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                            notes_result.push_str(&lily_note);
+                            
+                            if let Some(syl) = syllable {
+                                lyrics_result.push_str(&syl);
+                                lyrics_result.push(' ');
+                                has_lyrics = true;
+                            } else {
+                                // Add placeholder for notes without syllables
+                                lyrics_result.push_str("_ ");
+                            }
+                        }
+                    }
+                }
+                Item::Barline(_, _) => {
+                    notes_result.push_str("| ");
+                    // No lyrics entry needed for barlines
+                }
+                Item::Breathmark => {
+                    notes_result.push_str("\\breathe ");
+                    // No lyrics entry needed for breath marks
+                }
+                Item::Tonic(_) => {
+                    // Tonic declarations don't generate output notation - they set context
+                    // Skip for now
+                }
+            }
+        }
+        
+        // Return empty lyrics if no actual syllables were found
+        let final_lyrics = if has_lyrics {
+            lyrics_result.trim().to_string()
+        } else {
+            String::new()
+        };
+        
+        (notes_result, final_lyrics, has_lyrics)
     }
     
     /// Convert a beat element to LilyPond notation and extract syllable for lyrics
     fn convert_beat_element_to_lilypond_with_lyrics(&self, beat_element: &crate::rhythm_fsm::BeatElement) -> (String, Option<String>) {
         match &beat_element.event {
-            Event::Note { degree, octave, .. } => {
+            Event::Note { degree, .. } => {
                 let lily_pitch = degree_to_lilypond_simple(*degree);
                 // Use the sophisticated FSM-calculated tuplet_duration instead of simple subdivision mapping
                 let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
@@ -151,16 +232,6 @@ impl LilyPondRenderer {
         }
     }
     
-    /// Convert subdivisions to LilyPond duration (simplified for now)
-    fn subdivisions_to_lilypond_duration(&self, subdivisions: usize) -> String {
-        match subdivisions {
-            1 => "8".to_string(),   // eighth note
-            2 => "4".to_string(),   // quarter note  
-            3 => "4.".to_string(),  // dotted quarter
-            4 => "2".to_string(),   // half note
-            _ => "4".to_string(),   // fallback to quarter
-        }
-    }
 }
 
 
@@ -268,6 +339,241 @@ fn degree_to_lilypond_simple(degree: Degree) -> String {
 impl Default for LilyPondRenderer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::stave_parser::ProcessedStave;
+    use crate::document::model::{NotationSystem, Source, Position};
+    use crate::rhythm_fsm::{Item, Beat, BeatElement, Event};
+    use crate::old_models::{Degree, BarlineType};
+
+    #[test]
+    fn test_row_row_row_multi_stave() {
+        let renderer = LilyPondRenderer::new();
+        
+        // Create Row, Row, Row Your Boat test with actual musical content
+        let source = Source {
+            value: "test".to_string(),
+            position: Position { line: 1, column: 1 },
+        };
+
+        // Create the three parts of Row, Row, Row Your Boat
+        // Part 1: |1 1 1-2 3|3-2 3-4 5 -|
+        let beat1_1 = create_test_beat(vec![
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 2), // 1-2 (extended)
+            (Event::Note { degree: Degree::N3, octave: 4, children: Vec::new(), slur: None }, 1),
+        ]);
+        let beat1_2 = create_test_beat(vec![
+            (Event::Note { degree: Degree::N3, octave: 4, children: Vec::new(), slur: None }, 2), // 3-2 (extended)
+            (Event::Note { degree: Degree::N3, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Note { degree: Degree::N4, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Note { degree: Degree::N5, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Rest, 1),
+        ]);
+
+        // Part 2: |5 5 5-5 5|5-5 5-5 5 -|
+        let beat2_1 = create_test_beat(vec![
+            (Event::Note { degree: Degree::N5, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Note { degree: Degree::N5, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Note { degree: Degree::N5, octave: 4, children: Vec::new(), slur: None }, 2), // 5-5 (extended)
+            (Event::Note { degree: Degree::N5, octave: 4, children: Vec::new(), slur: None }, 1),
+        ]);
+        let beat2_2 = create_test_beat(vec![
+            (Event::Note { degree: Degree::N5, octave: 4, children: Vec::new(), slur: None }, 2), // 5-5 (extended)
+            (Event::Note { degree: Degree::N5, octave: 4, children: Vec::new(), slur: None }, 2), // 5-5 (extended)
+            (Event::Note { degree: Degree::N5, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Rest, 1),
+        ]);
+
+        // Part 3: |1 1 1-1 1|1-1 1-1 1 -|
+        let beat3_1 = create_test_beat(vec![
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 2), // 1-1 (extended)
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 1),
+        ]);
+        let beat3_2 = create_test_beat(vec![
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 2), // 1-1 (extended)
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 2), // 1-1 (extended)
+            (Event::Note { degree: Degree::N1, octave: 4, children: Vec::new(), slur: None }, 1),
+            (Event::Rest, 1),
+        ]);
+
+        let part1 = ProcessedStave {
+            text_lines_before: Vec::new(),
+            rhythm_items: vec![
+                Item::Barline(BarlineType::Single, None),
+                Item::Beat(beat1_1),
+                Item::Barline(BarlineType::Single, None),
+                Item::Beat(beat1_2),
+                Item::Barline(BarlineType::Single, None),
+            ],
+            text_lines_after: Vec::new(),
+            notation_system: NotationSystem::Number,
+            source: source.clone(),
+            begin_multi_stave: true,   // First part begins group
+            end_multi_stave: false,
+        };
+
+        let part2 = ProcessedStave {
+            text_lines_before: Vec::new(),
+            rhythm_items: vec![
+                Item::Barline(BarlineType::Single, None),
+                Item::Beat(beat2_1),
+                Item::Barline(BarlineType::Single, None),
+                Item::Beat(beat2_2),
+                Item::Barline(BarlineType::Single, None),
+            ],
+            text_lines_after: Vec::new(),
+            notation_system: NotationSystem::Number,
+            source: source.clone(),
+            begin_multi_stave: false,
+            end_multi_stave: false,   // Middle part
+        };
+
+        let part3 = ProcessedStave {
+            text_lines_before: Vec::new(),
+            rhythm_items: vec![
+                Item::Barline(BarlineType::Single, None),
+                Item::Beat(beat3_1),
+                Item::Barline(BarlineType::Single, None),
+                Item::Beat(beat3_2),
+                Item::Barline(BarlineType::Single, None),
+            ],
+            text_lines_after: Vec::new(),
+            notation_system: NotationSystem::Number,
+            source: source.clone(),
+            begin_multi_stave: false,
+            end_multi_stave: true,    // Last part ends group
+        };
+
+        let staves = vec![part1, part2, part3];
+        let result = renderer.render_minimal(&staves);
+        
+        println!("Row, Row, Row Your Boat Multi-stave LilyPond output:\n{}", result);
+        
+        // Check that the output contains StaffGroup markers
+        assert!(result.contains("\\new StaffGroup <<"));
+        assert!(result.contains(">>"));
+        assert!(result.contains("\\new Staff"));
+        
+        // Check that it contains the musical notes
+        assert!(result.contains("c4")); // Note 1
+        assert!(result.contains("e4")); // Note 3  
+        assert!(result.contains("f4")); // Note 4
+        assert!(result.contains("g4")); // Note 5
+        assert!(result.contains("r4")); // Rest
+    }
+
+    fn create_test_beat(events: Vec<(Event, usize)>) -> Beat {
+        let mut elements = Vec::new();
+        let mut total_subdivisions = 0;
+        
+        for (event, subdivisions) in events {
+            total_subdivisions += subdivisions;
+            elements.push(BeatElement {
+                event,
+                subdivisions,
+                duration: fraction::Fraction::new(subdivisions as u32, total_subdivisions as u32),
+                tuplet_duration: fraction::Fraction::new(1u32, 4u32), // Quarter note base
+                tuplet_display_duration: None,
+                value: "test".to_string(),
+                position: crate::old_models::Position { row: 1, col: 1 },
+            });
+        }
+        
+        // Determine if this is a tuplet (non-power-of-2 divisions)
+        let is_tuplet = total_subdivisions > 1 && (total_subdivisions & (total_subdivisions - 1)) != 0;
+        let tuplet_ratio = if is_tuplet && total_subdivisions > 0 {
+            // Find next lower power of 2 (with safety check)
+            let mut den = 1;
+            let mut iteration_count = 0;
+            while den * 2 < total_subdivisions && iteration_count < 64 {
+                den *= 2;
+                iteration_count += 1;
+            }
+            Some((total_subdivisions, den))
+        } else {
+            None
+        };
+        
+        Beat {
+            divisions: total_subdivisions,
+            elements,
+            tied_to_previous: false,
+            is_tuplet,
+            tuplet_ratio,
+        }
+    }
+
+    #[test]
+    fn test_multi_stave_rendering() {
+        let renderer = LilyPondRenderer::new();
+        
+        // Create test data for multi-stave group
+        let source = Source {
+            value: "test".to_string(),
+            position: Position { line: 1, column: 1 },
+        };
+
+        // Create simple beat with one note
+        let beat_element = BeatElement {
+            event: Event::Note { 
+                degree: Degree::N1, 
+                octave: 4,
+                children: Vec::new(),
+                slur: None,
+            },
+            subdivisions: 1,
+            duration: fraction::Fraction::new(1u32, 4u32),
+            tuplet_duration: fraction::Fraction::new(1u32, 4u32),
+            tuplet_display_duration: None,
+            value: "1".to_string(),
+            position: crate::old_models::Position { row: 1, col: 1 },
+        };
+        
+        let beat = Beat {
+            divisions: 1,
+            elements: vec![beat_element],
+            tied_to_previous: false,
+            is_tuplet: false,
+            tuplet_ratio: None,
+        };
+
+        let stave1 = ProcessedStave {
+            text_lines_before: Vec::new(),
+            rhythm_items: vec![Item::Beat(beat.clone())],
+            text_lines_after: Vec::new(),
+            notation_system: NotationSystem::Number,
+            source: source.clone(),
+            begin_multi_stave: true,   // First stave begins group
+            end_multi_stave: false,
+        };
+
+        let stave2 = ProcessedStave {
+            text_lines_before: Vec::new(),
+            rhythm_items: vec![Item::Beat(beat.clone())],
+            text_lines_after: Vec::new(),
+            notation_system: NotationSystem::Number,
+            source: source.clone(),
+            begin_multi_stave: false,
+            end_multi_stave: true,    // Second stave ends group
+        };
+
+        let staves = vec![stave1, stave2];
+        let result = renderer.render_minimal(&staves);
+        
+        println!("Multi-stave LilyPond output:\n{}", result);
+        
+        // Check that the output contains StaffGroup markers
+        assert!(result.contains("\\new StaffGroup <<"));
+        assert!(result.contains(">>"));
+        assert!(result.contains("\\new Staff"));
     }
 }
 

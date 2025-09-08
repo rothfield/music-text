@@ -24,7 +24,7 @@ pub fn build_document(input: &str) -> Result<Document, String> {
             // Check if input has musical content but no barlines
             let has_musical_content = input.chars().any(|c| {
                 match c {
-                    '1'..='7' | 'A'..='G' | 'S' | 'R' | 'M' | 'P' | 'D' | 'N' |
+                    '1'..='7' | 'A'..='G' | 'S' | 'R' | 'M' | 'P' | 'N' |
                     's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n' => true,
                     _ => false
                 }

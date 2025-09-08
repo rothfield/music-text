@@ -1,0 +1,21 @@
+___
+.
+S
+hello
+
+R
+hello
+___
+
+
+SRG
+
+
+____
+RGM
+
+GMP
+___
+2 staves. combined into one multi-stave
+followed by a single stave.
+followed by a multi stave

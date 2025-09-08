@@ -1,31 +1,28 @@
-// Music Notation Grammar - Complete Version
+// Music Notation Grammar - Corrected
 
-// Document structure 
-document = { SOI ~ mixed_content? ~ trailing_whitespace? ~ EOI }
+document = { SOI ~ (stave ~ (stave_separator ~ stave)*)? ~ trailing_whitespace? ~ EOI }
 
-mixed_content = { (mixed_line | blank_line) ~ (stave_separator ~ (mixed_line | blank_line))* ~ stave_separator? }
-stave_separator = { NEWLINE+ }
-trailing_whitespace = { (NEWLINE | " ")+ }
+stave_separator = { blank_line+ }
+trailing_whitespace = { (NEWLINE | " ")* }
 
-// Blank line - spaces only
-blank_line = { " "* }
-
-// Mixed line can be either a traditional stave or a simple content line
-mixed_line = { stave | simple_content_line }
-
-// Stave is a content line with optional text lines (requires barline)
-stave = { 
-    text_lines* ~ 
-    content_line ~ 
-    text_lines*
+stave = {
+    text_lines* ~
+    (content_line | simple_content_line) ~
+    text_lines* ~
+    text_line?
 }
 
 text_lines = { text_line ~ NEWLINE }
 
-// Content line contains musical elements and must have at least one barline
-content_line = { 
+content_line = {
     (!barline ~ musical_element_no_barline)* ~ barline ~ musical_element*
 }
+
+simple_content_line = { musical_element_no_barline+ }
+
+text_line = { (!NEWLINE ~ ANY)* }
+
+blank_line = { " "* ~ NEWLINE }
 
 musical_element = {
     pitch | dash | space | barline
@@ -35,48 +32,27 @@ musical_element_no_barline = {
     pitch | dash | space
 }
 
-space = { " "+ } // One or more spaces as a single element
-dash = { "-" } // Dash element
+space = { " "+ }
+dash = { "-" }
 
-// Pitch: atomic patterns with explicit accidental limits (most specific first)
 pitch = { tabla_pitch | number_pitch | western_pitch | sargam_pitch | bhatkhande_pitch }
 
-// Number notation - all 35 combinations
-number_pitch = { 
-    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "##" |  // double sharp
-    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "bb" |  // double flat
-    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "#" |   // sharp
-    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "b" |   // flat
-    ("1"|"2"|"3"|"4"|"5"|"6"|"7")           // natural
+number_pitch = {
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ ("##" | "bb" | "#" | "b")?
 }
 
-// Western notation - all 35 combinations  
 western_pitch = {
-    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "##" |  // double sharp
-    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "bb" |  // double flat
-    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "#" |   // sharp
-    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "b" |   // flat
-    ("C"|"D"|"E"|"F"|"G"|"A"|"B")           // natural
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ ("##" | "bb" | "#" | "b")?
 }
 
-// Sargam notation - including extended accidentals
 sargam_pitch = {
-    // Extended accidentals (most specific first) - include all sargam letters
-    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "##" |
-    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "bb" |
-    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "b" |
-    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "#" |
-    // Natural sargam notes
-    "s" | "S" | "r" | "R" | "g" | "G" | "m" | "M" | "p" | "P" | "d" | "D" | "n" | "N"
+    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ ("##" | "bb" | "#" | "b")?
 }
 
-// Bhatkhande Devanagari notation - basic support
-bhatkhande_pitch = { 
-    "स" | "रे" | "र" | "ग" | "म" | "प" | "ध" | "द" | "नि" | "न" 
+bhatkhande_pitch = {
+    "स" | "ре" | "р" | "г" | "м" | "п" | "ध" | "д" | "ни" | "н"
 }
 
-// Tabla notation - tabla bols (syllables)
-// All tabla bols map to N1 for now
 tabla_pitch = {
     "dhin" | "dha" | "trkt" | "taka" | "ka" | "ta" | "ge" |
     "Dhin" | "Dha" | "Trkt" | "Taka" | "Ka" | "Ta" | "Ge" |
@@ -85,8 +61,4 @@ tabla_pitch = {
 
 barline = { "|" }
 
-// Simple content line - musical elements without requiring barlines
-simple_content_line = { musical_element_no_barline+ }
-
-// Text line - any line that is not a content line, not blank, and contains no barlines
-text_line = { !content_line ~ !blank_line ~ (!NEWLINE ~ !"|" ~ ANY)* }
+NEWLINE = _{"\r\n" | "\n" }

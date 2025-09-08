@@ -25,8 +25,17 @@ A Rust-based musical notation parser using Pest grammar for parsing multiple not
    - **Stave Parser** (`src/stave_parser.rs`): Parses individual staves
 
 3. **Output Generation**
-   - **LilyPond**: Generates LilyPond notation source
-   - **VexFlow**: Generates VexFlow JSON and SVG for web rendering
+
+   **⚠️ IMPORTANT: LilyPond is the Primary Renderer**
+   - **LilyPond First**: When implementing new features, ALWAYS implement LilyPond rendering first
+   - **Professional Quality**: LilyPond produces publication-quality musical scores
+   - **SVG Output**: `lilypond --format=svg` generates high-quality vector graphics
+   - **CLI Commands**: 
+     - `music-text full-lily` - Complete LilyPond score with headers
+     - `music-text minimal-lily` - Minimal LilyPond notation
+   
+   **Secondary Renderers:**
+   - **VexFlow**: Generates VexFlow JSON and SVG for web rendering (secondary priority)
 
 4. **Web Interface**
    - **Web Server** (`src/web_server.rs`): Integrated Rust web server module on port 3000
@@ -55,6 +64,13 @@ The parser supports multiple musical notation input systems, all with tonic-base
 ## Grammar Structure
 
 The Pest grammar (`src/document/grammar.pest`) is organized into:
+
+## Notation Rules
+
+A line of music is identified as a "content line".
+
+- **With Barline:** If a line contains a barline (`|`), it is always treated as musical content.
+- **Without Barline:** If a line does not contain a barline, it must have at least three consecutive musical notes (e.g., `S R G`, `1 2 3`, `C D E`) to be considered a content line. Otherwise, it is treated as a `text_line`.
 
 ### Top-Level Structure
 - `document`: Root rule handling directives and staves
@@ -104,7 +120,7 @@ Fast LilyPond SVG generation endpoint
 ```bash
 # Clean build (removes previous artifacts)
 cargo clean
-cargo build --release
+cargo build
 ```
 
 ### Running the Application
@@ -112,7 +128,7 @@ cargo build --release
 #### Web Server with UI (Port 3000)
 ```bash
 # Start the integrated web server
-./target/release/music-text --web
+./target/debug/music-text --web
 
 # Then visit http://localhost:3000 for the interactive UI
 ```
@@ -120,18 +136,27 @@ cargo build --release
 #### CLI Usage
 ```bash
 # Parse with different output stages
-./target/release/music-text pest "|1 2 3"        # Show raw PEST parse tree
-./target/release/music-text document "|1 2 3"    # Show parsed document structure
-./target/release/music-text processed "|1 2 3"   # Show processed staves
-./target/release/music-text minimal-lily "|1 2 3" # Show minimal LilyPond notation
-./target/release/music-text full-lily "|1 2 3"    # Show full LilyPond score
-./target/release/music-text vexflow "|1 2 3"      # Show VexFlow data structure
-./target/release/music-text vexflow-svg "|1 2 3"  # Show VexFlow SVG rendering
-./target/release/music-text all "|1 2 3"          # Show all stages
+./target/debug/music-text pest "|1 2 3"        # Show raw PEST parse tree
+./target/debug/music-text document "|1 2 3"    # Show parsed document structure
+./target/debug/music-text processed "|1 2 3"   # Show processed staves
+./target/debug/music-text minimal-lily "|1 2 3" # Show minimal LilyPond notation
+./target/debug/music-text full-lily "|1 2 3"    # Show full LilyPond score
+./target/debug/music-text vexflow "|1 2 3"      # Show VexFlow data structure
+./target/debug/music-text vexflow-svg "|1 2 3"  # Show VexFlow SVG rendering
+./target/debug/music-text all "|1 2 3"          # Show all stages
+
+# Generate LilyPond SVG files directly (RECOMMENDED WORKFLOW)
+cat row.txt | ./target/debug/music-text lilypond-svg -o row    # Creates row.ly and row.svg
+echo "|1 2 3" | ./target/debug/music-text lilypond-svg        # Creates output.ly and output.svg
 
 # Read from stdin
-echo "|1 2 3" | ./target/release/music-text document
-cat input.notation | ./target/release/music-text full-lily
+echo "|1 2 3" | ./target/debug/music-text document
+cat input.notation | ./target/debug/music-text full-lily
+
+# Manual SVG generation using LilyPond compiler
+cat row.txt | ./target/debug/music-text full-lily > row.ly
+lilypond --format=svg row.ly    # Creates row.svg
+lilypond --format=png row.ly    # Creates row.png
 ```
 
 ### Stopping the Application
@@ -239,11 +264,11 @@ music-text/
 cargo test
 
 # Test CLI with specific notation
-./target/release/music-text pest "S R G M"
-./target/release/music-text full-lily "1 2 3"
+./target/debug/music-text pest "S R G M"
+./target/debug/music-text full-lily "1 2 3"
 
 # Start web server for interactive testing
-./target/release/music-text --web
+./target/debug/music-text --web
 # Then visit http://localhost:3000
 ```
 

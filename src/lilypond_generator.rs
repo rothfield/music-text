@@ -21,6 +21,8 @@ impl LilyPondGenerator {
         Self { output_dir }
     }
     
+    
+    
     /// Generate SVG from LilyPond source using piping (no temp .ly files!)
     pub async fn generate_svg(&self, lilypond_source: &str) -> GenerationResult {
         let temp_id = Uuid::new_v4();
@@ -101,39 +103,4 @@ impl LilyPondGenerator {
         Ok(())
     }
     
-    /// Clean up old temporary SVG files (optional maintenance)
-    pub fn cleanup_old_files(&self, max_age_minutes: u64) -> Result<usize, String> {
-        use std::time::{SystemTime, Duration};
-        
-        let cutoff_time = SystemTime::now() - Duration::from_secs(max_age_minutes * 60);
-        let mut cleaned_count = 0;
-        
-        // Read directory and find temp_*.svg files
-        let entries = fs::read_dir(&self.output_dir)
-            .map_err(|e| format!("Failed to read output directory: {}", e))?;
-        
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if let Some(filename) = path.file_name() {
-                    if let Some(filename_str) = filename.to_str() {
-                        if filename_str.starts_with("temp_") && filename_str.ends_with(".svg") {
-                            // Check file age
-                            if let Ok(metadata) = entry.metadata() {
-                                if let Ok(modified) = metadata.modified() {
-                                    if modified < cutoff_time {
-                                        if fs::remove_file(&path).is_ok() {
-                                            cleaned_count += 1;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        Ok(cleaned_count)
-    }
 }

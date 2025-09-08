@@ -1,0 +1,23 @@
+// google/token.pseudo
+
+// Defines the types of tokens that the content line parser can produce.
+// This is a simple, flat enumeration of the possible elements on a musical line.
+enum TokenType:
+  PITCH       // A musical note, like "S", "G", "1", "C#".
+  DASH        // A dash "-", used for extending notes.
+  BARLINE     // A barline "|".
+  WHITESPACE  // One or more space characters.
+  UNKNOWN     // Any character that doesn't fit the other categories.
+
+// Represents a single token that has been parsed from the content line string.
+class Token:
+  type: TokenType   // The type of the token.
+  value: String     // The raw string value of the token from the input.
+  start: int        // The starting character index in the original string.
+  end: int          // The ending character index in the original string.
+
+  constructor(type, value, start, end):
+    self.type = type
+    self.value = value
+    self.start = start
+    self.end = end

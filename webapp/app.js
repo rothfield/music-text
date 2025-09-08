@@ -404,6 +404,18 @@ function isSvgTabActive() {
     return svgTabButton && svgTabButton.classList.contains('active');
 }
 
+// Auto-expand textarea based on content
+function autoExpandTextarea(textarea) {
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+    
+    // Calculate the new height based on scrollHeight
+    const newHeight = Math.max(60, textarea.scrollHeight); // Min height of 60px (about 3 rows)
+    
+    // Set the new height
+    textarea.style.height = newHeight + 'px';
+}
+
 document.getElementById('input-text').addEventListener('input', function(e) {
     const inputValue = e.target.value;
     console.log('⌨️ Input event triggered:', {
@@ -412,6 +424,9 @@ document.getElementById('input-text').addEventListener('input', function(e) {
         timestamp: new Date().toISOString(),
         svgTabActive: isSvgTabActive()
     });
+    
+    // Auto-expand textarea
+    autoExpandTextarea(e.target);
     
     // Save input text to localStorage
     saveInputText(inputValue);
@@ -565,6 +580,8 @@ function initializeApp() {
     if (savedInput && inputElement) {
         // Set value without triggering input event
         inputElement.value = savedInput;
+        // Auto-expand textarea to fit restored content
+        autoExpandTextarea(inputElement);
     }
     
     // Restore active tab

@@ -1,5 +1,7 @@
-use music_text::{parse_notation, pest_pair_to_json, process_notation};
+use music_text::{parse_document, process_notation};
+use music_text::renderers::render_web_fast_lilypond;
 use std::io::{self, Read};
+use std::fs;
 use clap::{Parser, Subcommand, CommandFactory};
 use clap_complete::{generate, Generator, Shell};
 
@@ -38,6 +40,14 @@ enum Commands {
     VexflowSvg { input: Option<String> },
     /// Show all stages
     All { input: Option<String> },
+    /// Generate LilyPond SVG files (.ly and .svg) to disk
+    #[command(name = "lilypond-svg")]
+    LilypondSvg { 
+        input: Option<String>,
+        /// Output filename prefix (without extension)
+        #[arg(short, long, default_value = "output")]
+        output: String,
+    },
     /// Generate shell completions
     Completions {
         /// Shell type
@@ -64,6 +74,7 @@ fn main() {
         Some(Commands::Vexflow { input }) => process_stage("vexflow", input),
         Some(Commands::VexflowSvg { input }) => process_stage("vexflow-svg", input),
         Some(Commands::All { input }) => process_stage("all", input),
+        Some(Commands::LilypondSvg { input, output }) => generate_lilypond_svg_files(input, output),
         Some(Commands::Completions { shell }) => {
             let mut cmd = Cli::command();
             print_completions(shell, &mut cmd);
@@ -95,7 +106,7 @@ fn process_stage(stage: &str, input: Option<String>) {
     }
     
     match stage {
-        "pest" => show_pest_output(&input),
+        "parse" => show_parse_output(&input),
         "document" => show_document(&input),
         "processed" => show_processed(&input),
         "minimal-lily" => show_minimal_lilypond(&input),
@@ -114,13 +125,10 @@ fn print_completions<G: Generator>(gen: G, cmd: &mut clap::Command) {
     generate(gen, cmd, cmd.get_name().to_string(), &mut std::io::stdout());
 }
 
-fn show_pest_output(input: &str) {
-    match parse_notation(input) {
-        Ok(pairs) => {
-            let result: Vec<serde_json::Value> = pairs
-                .map(|pair| pest_pair_to_json(&pair))
-                .collect();
-            println!("{}", serde_json::to_string_pretty(&result).unwrap());
+fn show_parse_output(input: &str) {
+    match parse_document(input) {
+        Ok(document) => {
+            println!("{}", serde_json::to_string_pretty(&document).unwrap());
         }
         Err(e) => {
             eprintln!("Parse error: {}", e);
@@ -206,7 +214,7 @@ fn show_all_stages(input: &str) {
     println!("{}\n", input);
     
     println!("=== PEST PARSE TREE ===");
-    show_pest_output(input);
+    show_parse_output(input);
     println!();
     
     match process_notation(input) {
@@ -233,5 +241,71 @@ fn show_all_stages(input: &str) {
             eprintln!("Processing error: {}", e);
             std::process::exit(1);
         }
+    }
+}
+
+fn generate_lilypond_svg_files(input: Option<String>, output_prefix: String) {
+    let input = match input {
+        Some(input_str) => input_str,
+        None => {
+            let mut buffer = String::new();
+            io::stdin().read_to_string(&mut buffer).unwrap_or_else(|_| {
+                eprintln!("Error reading from stdin");
+                std::process::exit(1);
+            });
+            buffer.trim().to_string()
+        }
+    };
+    
+    if input.is_empty() {
+        eprintln!("Error: No input provided");
+        std::process::exit(1);
+    }
+    
+    // Process notation using the same pipeline as web UI
+    let processed_staves = match process_notation(&input) {
+        Ok(result) => result.processed_staves,
+        Err(e) => {
+            eprintln!("Processing error: {}", e);
+            std::process::exit(1);
+        }
+    };
+    
+    // Generate optimized LilyPond source using web fast renderer
+    let lilypond_source = render_web_fast_lilypond(&processed_staves);
+    
+    // Write .ly file to disk
+    let ly_filename = format!("{}.ly", output_prefix);
+    if let Err(e) = fs::write(&ly_filename, &lilypond_source) {
+        eprintln!("Error writing LilyPond file {}: {}", ly_filename, e);
+        std::process::exit(1);
+    }
+    println!("LilyPond source written to: {}", ly_filename);
+    
+    // Generate SVG using LilyPond generator
+    let temp_dir = std::env::temp_dir().join("music-text-cli");
+    let generator = lilypond_generator::LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
+    
+    // Use Tokio runtime for async SVG generation
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let result = rt.block_on(generator.generate_svg(&lilypond_source));
+    
+    if result.success {
+        if let Some(svg_content) = result.svg_content {
+            // Write .svg file to disk  
+            let svg_filename = format!("{}.svg", output_prefix);
+            if let Err(e) = fs::write(&svg_filename, &svg_content) {
+                eprintln!("Error writing SVG file {}: {}", svg_filename, e);
+                std::process::exit(1);
+            }
+            println!("SVG file written to: {}", svg_filename);
+        } else {
+            eprintln!("Error: SVG generation succeeded but no content returned");
+            std::process::exit(1);
+        }
+    } else {
+        let error_msg = result.error.unwrap_or("Unknown error".to_string());
+        eprintln!("SVG generation failed: {}", error_msg);
+        std::process::exit(1);
     }
 }

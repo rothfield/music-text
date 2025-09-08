@@ -8,12 +8,9 @@ pub mod old_models;
 
 // Re-export main parsing functionality
 pub use document::{
-    parse as parse_notation, 
-    parse_document,
-    Rule, Error,
+    parse_document, ParseError,
     Document, Stave, ContentLine, MusicalElement, Position, TextLine
 };
-pub use document::tree_transformer::{pest_pair_to_json, build_document as parse_document_structure};
 
 // Re-export stave parsing functionality
 pub use stave_parser::{

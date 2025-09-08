@@ -39,6 +39,10 @@
     font-family: Arial, monospace;
     font-size: 20pt;
     font-weight: bold;
+    transition: height 0.2s ease-out;
+    resize: none;
+    overflow: hidden;
+    min-height: 60px;
 }
 
 .json-output {

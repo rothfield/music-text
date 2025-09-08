@@ -1,19 +1,9 @@
-/// Minimal LilyPond formatter with word wrapping
-pub struct MinimalFormatter {
-    wrap_width: usize,
-}
+/// Minimal LilyPond formatter
+pub struct MinimalFormatter;
 
 impl MinimalFormatter {
     pub fn new() -> Self {
-        Self {
-            wrap_width: 70,
-        }
-    }
-    
-    pub fn with_wrap_width(wrap_width: usize) -> Self {
-        Self {
-            wrap_width,
-        }
+        Self
     }
     
     /// Format notes content as minimal LilyPond single line
@@ -53,30 +43,6 @@ impl MinimalFormatter {
         }
     }
     
-    /// Word wrap text at specified column, breaking at spaces
-    fn word_wrap(&self, text: &str) -> String {
-        let mut result = String::new();
-        let mut current_line = String::new();
-        
-        for word in text.split(' ') {
-            if current_line.len() + word.len() + 1 > self.wrap_width && !current_line.is_empty() {
-                result.push_str(&current_line);
-                result.push('\n');
-                current_line = String::new();
-            }
-            
-            if !current_line.is_empty() {
-                current_line.push(' ');
-            }
-            current_line.push_str(word);
-        }
-        
-        if !current_line.is_empty() {
-            result.push_str(&current_line);
-        }
-        
-        result
-    }
 }
 
 impl Default for MinimalFormatter {

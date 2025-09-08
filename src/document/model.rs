@@ -184,6 +184,8 @@ pub struct Stave {
     pub text_lines_after: Vec<TextLine>,
     pub notation_system: NotationSystem,
     pub source: Source,
+    pub begin_multi_stave: bool,  // True if this stave begins a multi-stave group
+    pub end_multi_stave: bool,    // True if this stave ends a multi-stave group
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

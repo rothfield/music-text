@@ -29,33 +29,26 @@ pub(super) fn transform_pitch(pitch_pair: Pair<Rule>, in_slur: bool, in_beat_gro
     let full_pitch_str = source.value.as_str(); // Complete pitch token including accidentals
     
     // Parse the pitch components from the PEST tree
-    let mut base_pitch = String::new();
     let mut accidentals = String::new();
     let mut notation_system = context_notation_system;
     
-    // Extract base pitch and accidentals from inner rules
+    // Extract notation system and accidentals from inner rules
     for inner in pitch_pair.into_inner() {
         match inner.as_rule() {
             Rule::number_pitch => {
                 notation_system = NotationSystem::Number;
-                base_pitch = inner.as_str().to_string();
             },
             Rule::western_pitch => {
                 notation_system = NotationSystem::Western;
-                base_pitch = inner.as_str().to_string();
             },
             Rule::sargam_pitch => {
                 notation_system = NotationSystem::Sargam;
-                base_pitch = inner.as_str().to_string();
             },
             Rule::bhatkhande_pitch => {
                 notation_system = NotationSystem::Bhatkhande;
-                base_pitch = inner.as_str().to_string();
             },
             Rule::tabla_pitch => {
-                // Tabla bols all map to N1 for now
                 notation_system = NotationSystem::Tabla;
-                base_pitch = "1".to_string();
             },
             // Handle composite pitch structure (base_pitch + accidentals)
             _ => {
@@ -63,24 +56,18 @@ pub(super) fn transform_pitch(pitch_pair: Pair<Rule>, in_slur: bool, in_beat_gro
                     match sub_inner.as_rule() {
                         Rule::number_pitch => {
                             notation_system = NotationSystem::Number;
-                            base_pitch = sub_inner.as_str().to_string();
                         },
                         Rule::western_pitch => {
                             notation_system = NotationSystem::Western;
-                            base_pitch = sub_inner.as_str().to_string();
                         },
                         Rule::sargam_pitch => {
                             notation_system = NotationSystem::Sargam;
-                            base_pitch = sub_inner.as_str().to_string();
                         },
                         Rule::bhatkhande_pitch => {
                             notation_system = NotationSystem::Bhatkhande;
-                            base_pitch = sub_inner.as_str().to_string();
                         },
                         Rule::tabla_pitch => {
-                            // Tabla bols all map to N1 for now
                             notation_system = NotationSystem::Tabla;
-                            base_pitch = "1".to_string();
                         },
                         // Capture accidentals if they exist as separate rules
                         _ => {
@@ -95,18 +82,8 @@ pub(super) fn transform_pitch(pitch_pair: Pair<Rule>, in_slur: bool, in_beat_gro
         }
     }
     
-    // Construct complete pitch string
-    let complete_pitch = if accidentals.is_empty() {
-        base_pitch.clone()
-    } else {
-        format!("{}{}", base_pitch, accidentals)
-    };
-    
     // Use the full span text which should include accidentals  
     let pitch_code = PitchCode::from_source(full_pitch_str);
-    
-    // Extract base note for display (remove modifiers for syllable field)
-    let base_pitch = extract_base_pitch(full_pitch_str);
     
     // For tabla notation, use the original source text as syllable
     let syllable = if notation_system == NotationSystem::Tabla {

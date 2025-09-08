@@ -1,7 +1,7 @@
 /// Sophisticated Rhythm FSM - Copied from old working system
 /// Converts flat element lists into beat-grouped structures with proper fraction-based durations
 
-use crate::document::model::{MusicalElement, PitchCode};
+use crate::document::model::MusicalElement;
 use crate::old_models::*;
 use fraction::Fraction;
 
@@ -153,7 +153,6 @@ pub enum Item {
 #[derive(Debug, PartialEq)]
 enum State {
     S0,                  // Initial/Between elements
-    InBeat,             // Processing beat elements
     CollectingPitch,    // Extending current note with dashes
     CollectingRests,    // Processing leading dashes as rests
     Halt,               // End of processing
@@ -202,24 +201,6 @@ impl FSM {
                     // Whitespace in S0 is ignored (beat separators handled elsewhere)
                 },
 
-                // InBeat State - Processing beat elements
-                (State::InBeat, ParsedElement::Note { .. }) => {
-                    self.add_note_to_beat(element);
-                    self.state = State::CollectingPitch;
-                },
-                (State::InBeat, ParsedElement::Dash { .. }) => {
-                    self.add_rest_to_beat(element);
-                    self.state = State::CollectingRests;
-                },
-                (State::InBeat, ParsedElement::Whitespace { .. }) => {
-                    self.finish_beat();
-                    self.state = State::S0;
-                },
-                (State::InBeat, ParsedElement::Barline { .. }) => {
-                    self.finish_beat();
-                    self.emit_barline(element);
-                    self.state = State::S0;
-                },
 
                 // CollectingPitch State - Extending current note
                 (State::CollectingPitch, ParsedElement::Dash { .. }) => {
@@ -264,7 +245,7 @@ impl FSM {
         }
 
         // Finish any pending beat
-        if matches!(self.state, State::InBeat | State::CollectingPitch | State::CollectingRests) {
+        if matches!(self.state, State::S0 | State::CollectingPitch | State::CollectingRests) {
             self.finish_beat();
         }
         self.state = State::Halt;
@@ -345,18 +326,7 @@ impl FSM {
         }
     }
 
-    fn add_rest_to_beat(&mut self, dash_element: &ParsedElement) {
-        let rest_element = ParsedElement::Rest {
-            value: "r".to_string(),
-            position: dash_element.position().clone(),
-            duration: None,
-        };
-
-        if let Some(beat) = &mut self.current_beat {
-            beat.divisions += 1;
-            beat.elements.push(BeatElement::from(rest_element).with_subdivisions(1));
-        }
-    }
+    
 
     fn extend_last_element(&mut self) {
         if let Some(beat) = &mut self.current_beat {

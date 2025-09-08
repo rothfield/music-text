@@ -1,0 +1,73 @@
+// google/content_line_parser.pseudo
+
+// A simple recursive descent parser for a single line of musical content.
+class ContentLineParser:
+  input: String         // The raw string for the content line.
+  position: int         // The current character index we're looking at.
+  tokens: List<Token>   // The list of tokens we've parsed.
+
+  constructor(input_string):
+    self.input = input_string
+    self.position = 0
+    self.tokens = []
+
+  // Main parsing loop.
+  function parse():
+    while not self.is_at_end():
+      char = self.peek()
+
+      if is_whitespace(char):
+        self.consume_whitespace()
+      else if char == '|':
+        self.consume_barline()
+      else if char == '-':
+        self.consume_dash()
+      else if is_pitch_start_char(char):
+        self.consume_pitch()
+      else:
+        // If the character doesn't start a known token,
+        // we can treat it as an "unknown" token.
+        self.consume_unknown()
+
+    return self.tokens
+
+  // --- Token Consumer Methods ---
+
+  function consume_whitespace():
+    start = self.position
+    while not self.is_at_end() and is_whitespace(self.peek()):
+      self.advance()
+    // We can choose to create a single WHITESPACE token for the whole block.
+    self.add_token(WHITESPACE, self.input.substring(start, self.position))
+
+  function consume_barline():
+    self.add_token(BARLINE, "|")
+    self.advance()
+
+  function consume_dash():
+    self.add_token(DASH, "-")
+    self.advance()
+
+  function consume_pitch():
+    start = self.position
+    // Consume the base note character(s).
+    while not self.is_at_end() and is_pitch_char(self.peek()):
+      self.advance()
+    // Look ahead for accidentals (#, b) and consume them as part of the pitch.
+    while not self.is_at_end() and is_accidental(self.peek()):
+      self.advance()
+    self.add_token(PITCH, self.input.substring(start, self.position))
+
+  // --- Helper Methods ---
+
+  function peek():
+    return self.input[self.position]
+
+  function advance():
+    self.position += 1
+
+  function is_at_end():
+    return self.position >= len(self.input)
+
+  function add_token(type, value):
+    self.tokens.add(new Token(type, value, ...))

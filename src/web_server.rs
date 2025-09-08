@@ -7,11 +7,11 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tower_http::{cors::CorsLayer, services::ServeDir};
-use music_text::{parse_notation, pest_pair_to_json, process_notation};
+use music_text::{parse_document, process_notation};
 use music_text::document::model::NotationSystem;
 use music_text::renderers::render_web_fast_lilypond;
 use log::{info, warn, error};
-use crate::lilypond_generator::{LilyPondGenerator, GenerationResult};
+use crate::lilypond_generator::LilyPondGenerator;
 
 
 #[derive(Serialize)]
@@ -41,7 +41,7 @@ struct SvgGenerateResponse {
     error: Option<String>,
 }
 
-// pest_pair_to_json is now imported from parser module
+// Using hand-written parser instead of Pest
 
 async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<ParseResponse> {
     let input = params.get("input").cloned().unwrap_or_default();
@@ -65,16 +65,13 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
         });
     }
     
-    // Get PEST output
-    let pest_result = match parse_notation(&input) {
-        Ok(pairs) => {
-            let result: Vec<serde_json::Value> = pairs
-                .map(|pair| pest_pair_to_json(&pair))
-                .collect();
-            Some(serde_json::Value::Array(result))
+    // Get parse output
+    let parse_result = match parse_document(&input) {
+        Ok(document) => {
+            Some(serde_json::to_value(&document).unwrap())
         }
         Err(e) => {
-            error!("PEST parsing failed: {}", e);
+            error!("Document parsing failed: {}", e);
             return Json(ParseResponse {
                 success: false,
                 pest_output: None,
@@ -117,7 +114,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
     
     Json(ParseResponse {
         success: true,
-        pest_output: pest_result,
+        pest_output: parse_result,
         parsed_document: parsed_doc,
         processed_staves,
         detected_notation_systems: detected_systems,

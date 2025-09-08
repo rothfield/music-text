@@ -4,20 +4,29 @@ help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Available targets:'
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $1, $2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
 build: ## Build release binary
 	cargo build --release
+
+build-dev: ## Build with permissive warnings for development
+	RUSTFLAGS="-A warnings" cargo build --release
+
+build-fast: ## Build debug mode with warnings ignored (fastest)
+	RUSTFLAGS="-A warnings" cargo build
 
 clean: ## Clean build artifacts and logs
 	cargo clean
 	rm -f development.log
 
-run: ## Run CLI with example input
-	./target/release/music-text pest "|1 2 3"
-
-web: ## Start web server on port 3000
+run: ## Start web server on port 3000
 	./target/release/music-text --web
+
+web: ## Start web server on port 3000 (alias for run)
+	./target/release/music-text --web
+
+cli-test: ## Test CLI with example input
+	./target/release/music-text pest "|1 2 3"
 
 kill: ## Stop the web server
 	@pkill -f "music-text --web" && echo "✓ Web server stopped" || echo "✗ No web server running"
@@ -64,6 +73,8 @@ install-completions: build ## Install shell completions for fish
 
 # Quick development shortcuts
 b: build
+bd: build-dev
+bf: build-fast
 c: clean
 w: web
 k: kill
