@@ -112,6 +112,14 @@ impl PitchCode {
             // Ni (seventh) - komal/shuddha system
             "n" => PitchCode::N7b, "N" => PitchCode::N7, "Nbb" => PitchCode::N7bb, "N#" => PitchCode::N7s, "N##" => PitchCode::N7ss,
             
+            // Tabla notation - all tabla bols map to N1 (tonic) as requested
+            "dha" => PitchCode::N1, "dhin" => PitchCode::N1, "ta" => PitchCode::N1, "ka" => PitchCode::N1,
+            "taka" => PitchCode::N1, "trkt" => PitchCode::N1, "ge" => PitchCode::N1,
+            "Dha" => PitchCode::N1, "Dhin" => PitchCode::N1, "Ta" => PitchCode::N1, "Ka" => PitchCode::N1,
+            "Taka" => PitchCode::N1, "Trkt" => PitchCode::N1, "Ge" => PitchCode::N1,
+            "DHA" => PitchCode::N1, "DHIN" => PitchCode::N1, "TA" => PitchCode::N1, "KA" => PitchCode::N1,
+            "TAKA" => PitchCode::N1, "TRKT" => PitchCode::N1, "GE" => PitchCode::N1,
+            
             // Bhatkhande Devanagari notation - basic support (extended variants rare in practice)
             "स" => PitchCode::N1, "रे" => PitchCode::N2, "र" => PitchCode::N2b, "ग" => PitchCode::N3,
             "म" => PitchCode::N4, "प" => PitchCode::N5, "ध" => PitchCode::N6, "द" => PitchCode::N6b,

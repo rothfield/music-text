@@ -93,7 +93,18 @@ impl LilyPondRenderer {
                 let lily_pitch = degree_to_lilypond_simple(*degree);
                 // Use the sophisticated FSM-calculated tuplet_duration instead of simple subdivision mapping
                 let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
-                format!("{}{} ", lily_pitch, duration)
+                
+                // Add syllable (tabla pitch source) as lyric if available
+                if let Some(syllable) = beat_element.syl() {
+                    if !syllable.is_empty() && syllable != lily_pitch {
+                        // Use LilyPond's \lyricmode for syllables
+                        format!("{}{}^\"{}\" ", lily_pitch, duration, syllable)
+                    } else {
+                        format!("{}{} ", lily_pitch, duration)
+                    }
+                } else {
+                    format!("{}{} ", lily_pitch, duration)
+                }
             }
             Event::Rest => {
                 // Use the sophisticated FSM-calculated tuplet_duration for rests too

@@ -284,8 +284,17 @@ fn degree_to_vexflow_key(degree: Degree, octave: i8) -> (String, Vec<VexFlowAcci
         format!("{}/{}", note_name, vexflow_octave)
     };
     
-    // VexFlow handles accidentals in the key name, so no separate accidentals needed
-    (key, vec![])
+    // Create VexFlow accidental objects for visual rendering
+    let accidentals = if let Some(acc) = accidental_str {
+        vec![VexFlowAccidental {
+            index: 0,
+            accidental: acc.to_string(),
+        }]
+    } else {
+        vec![]
+    };
+    
+    (key, accidentals)
 }
 
 /// Convert tuplet duration (fraction) to VexFlow duration and dots

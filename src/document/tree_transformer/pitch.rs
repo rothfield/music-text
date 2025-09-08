@@ -23,21 +23,83 @@ pub(super) fn resolve_notation_system(syllable: &str, context_system: NotationSy
 
 pub(super) fn transform_pitch(pitch_pair: Pair<Rule>, in_slur: bool, in_beat_group: bool, context_notation_system: NotationSystem) -> Result<MusicalElement, String> {
     let source = source_from_span(pitch_pair.as_span());
-    let full_pitch_str = source.value.as_str(); // Complete pitch token
+    let full_pitch_str = source.value.as_str(); // Complete pitch token including accidentals
     
-    // With atomic grammar, we can directly extract the notation system from the rule type
-    let notation_system = match pitch_pair.into_inner().next() {
-        Some(inner) => match inner.as_rule() {
-            Rule::number_pitch => NotationSystem::Number,
-            Rule::western_pitch => NotationSystem::Western,
-            Rule::sargam_pitch => NotationSystem::Sargam,
-            Rule::bhatkhande_pitch => NotationSystem::Bhatkhande,
-            _ => context_notation_system, // fallback
+    // Parse the pitch components from the PEST tree
+    let mut base_pitch = String::new();
+    let mut accidentals = String::new();
+    let mut notation_system = context_notation_system;
+    
+    // Extract base pitch and accidentals from inner rules
+    for inner in pitch_pair.into_inner() {
+        match inner.as_rule() {
+            Rule::number_pitch => {
+                notation_system = NotationSystem::Number;
+                base_pitch = inner.as_str().to_string();
+            },
+            Rule::western_pitch => {
+                notation_system = NotationSystem::Western;
+                base_pitch = inner.as_str().to_string();
+            },
+            Rule::sargam_pitch => {
+                notation_system = NotationSystem::Sargam;
+                base_pitch = inner.as_str().to_string();
+            },
+            Rule::bhatkhande_pitch => {
+                notation_system = NotationSystem::Bhatkhande;
+                base_pitch = inner.as_str().to_string();
+            },
+            Rule::tabla_pitch => {
+                // Tabla bols all map to N1 for now
+                notation_system = NotationSystem::Number;
+                base_pitch = "1".to_string();
+            },
+            // Handle composite pitch structure (base_pitch + accidentals)
+            _ => {
+                for sub_inner in inner.into_inner() {
+                    match sub_inner.as_rule() {
+                        Rule::number_pitch => {
+                            notation_system = NotationSystem::Number;
+                            base_pitch = sub_inner.as_str().to_string();
+                        },
+                        Rule::western_pitch => {
+                            notation_system = NotationSystem::Western;
+                            base_pitch = sub_inner.as_str().to_string();
+                        },
+                        Rule::sargam_pitch => {
+                            notation_system = NotationSystem::Sargam;
+                            base_pitch = sub_inner.as_str().to_string();
+                        },
+                        Rule::bhatkhande_pitch => {
+                            notation_system = NotationSystem::Bhatkhande;
+                            base_pitch = sub_inner.as_str().to_string();
+                        },
+                        Rule::tabla_pitch => {
+                            // Tabla bols all map to N1 for now
+                            notation_system = NotationSystem::Number;
+                            base_pitch = "1".to_string();
+                        },
+                        // Capture accidentals if they exist as separate rules
+                        _ => {
+                            let text = sub_inner.as_str();
+                            if text == "#" || text == "b" || text == "##" || text == "bb" {
+                                accidentals.push_str(text);
+                            }
+                        }
+                    }
+                }
+            }
         }
-        None => context_notation_system,
+    }
+    
+    // Construct complete pitch string
+    let complete_pitch = if accidentals.is_empty() {
+        base_pitch.clone()
+    } else {
+        format!("{}{}", base_pitch, accidentals)
     };
     
-    // Direct conversion from complete pitch token to PitchCode
+    // Use the full span text which should include accidentals  
     let pitch_code = PitchCode::from_source(full_pitch_str);
     
     // Extract base note for display (remove modifiers for syllable field)

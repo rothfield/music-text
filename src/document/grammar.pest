@@ -39,7 +39,7 @@ space = { " "+ } // One or more spaces as a single element
 dash = { "-" } // Dash element
 
 // Pitch: atomic patterns with explicit accidental limits (most specific first)
-pitch = { number_pitch | western_pitch | sargam_pitch | bhatkhande_pitch }
+pitch = { tabla_pitch | number_pitch | western_pitch | sargam_pitch | bhatkhande_pitch }
 
 // Number notation - all 35 combinations
 number_pitch = { 
@@ -73,6 +73,14 @@ sargam_pitch = {
 // Bhatkhande Devanagari notation - basic support
 bhatkhande_pitch = { 
     "स" | "रे" | "र" | "ग" | "म" | "प" | "ध" | "द" | "नि" | "न" 
+}
+
+// Tabla notation - tabla bols (syllables)
+// All tabla bols map to N1 for now
+tabla_pitch = {
+    "dhin" | "dha" | "trkt" | "taka" | "ka" | "ta" | "ge" |
+    "Dhin" | "Dha" | "Trkt" | "Taka" | "Ka" | "Ta" | "Ge" |
+    "DHIN" | "DHA" | "TRKT" | "TAKA" | "KA" | "TA" | "GE"
 }
 
 barline = { "|" }
