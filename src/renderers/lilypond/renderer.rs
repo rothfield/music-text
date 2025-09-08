@@ -1,8 +1,19 @@
-use crate::stave_parser::ProcessedStave;
+use crate::stave_parser::{ProcessedStave, StaffGroupInfo};
+use crate::document::model::StaffGroupType;
 use crate::rhythm_fsm::{Item, Event};
 use crate::old_models::Degree;
 use super::formatters::{MinimalFormatter, FullFormatter, WebFastFormatter};
 use serde::Serialize;
+
+/// Helper enum for grouping staves during rendering
+#[derive(Debug)]
+enum StaveGroup<'a> {
+    Single(&'a ProcessedStave),
+    Group {
+        group_type: StaffGroupType,
+        staves: Vec<&'a ProcessedStave>,
+    },
+}
 
 /// Main LilyPond rendering orchestrator
 pub struct LilyPondRenderer {
@@ -50,62 +61,36 @@ impl LilyPondRenderer {
         let mut lyrics_result = String::new();
         let mut has_lyrics = false;
         
-        for (i, stave) in staves.iter().enumerate() {
+        // Group staves by their staff group context
+        let grouped_staves = self.group_staves_by_context(staves);
+        
+        for (i, stave_group) in grouped_staves.iter().enumerate() {
             if i > 0 {
                 notes_result.push_str(" | ");
             }
             
-            for rhythm_item in &stave.rhythm_items {
-                match rhythm_item {
-                    Item::Beat(beat) => {
-                        if beat.is_tuplet {
-                            if let Some((num, den)) = beat.tuplet_ratio {
-                                notes_result.push_str(&format!("\\tuplet {}/{} {{ ", num, den));
-                                
-                                for beat_element in &beat.elements {
-                                    let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
-                                    notes_result.push_str(&lily_note);
-                                    
-                                    if let Some(syl) = syllable {
-                                        lyrics_result.push_str(&syl);
-                                        lyrics_result.push(' ');
-                                        has_lyrics = true;
-                                    } else {
-                                        // Add placeholder for notes without syllables
-                                        lyrics_result.push_str("_ ");
-                                    }
-                                }
-                                
-                                notes_result.push_str("} ");
-                            }
-                        } else {
-                            // Regular beat - no tuplet wrapper
-                            for beat_element in &beat.elements {
-                                let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
-                                notes_result.push_str(&lily_note);
-                                
-                                if let Some(syl) = syllable {
-                                    lyrics_result.push_str(&syl);
-                                    lyrics_result.push(' ');
-                                    has_lyrics = true;
-                                } else {
-                                    // Add placeholder for notes without syllables
-                                    lyrics_result.push_str("_ ");
-                                }
-                            }
-                        }
+            match stave_group {
+                StaveGroup::Single(stave) => {
+                    let (stave_notes, stave_lyrics, stave_has_lyrics) = self.convert_single_stave_to_notes_and_lyrics(stave);
+                    
+                    // Wrap single staves in \new Staff context since template no longer does this
+                    let wrapped_notes = format!(
+                        "\\new Staff {{\n  \\fixed c' {{\n    \\autoBeamOff\n    {}\n  }}\n}}",
+                        stave_notes.trim()
+                    );
+                    
+                    notes_result.push_str(&wrapped_notes);
+                    lyrics_result.push_str(&stave_lyrics);
+                    if stave_has_lyrics {
+                        has_lyrics = true;
                     }
-                    Item::Barline(_, _) => {
-                        notes_result.push_str("| ");
-                        // No lyrics entry needed for barlines
-                    }
-                    Item::Breathmark => {
-                        notes_result.push_str("\\breathe ");
-                        // No lyrics entry needed for breath marks
-                    }
-                    Item::Tonic(_) => {
-                        // Tonic declarations don't generate output notation - they set context
-                        // Skip for now
+                }
+                StaveGroup::Group { group_type, staves: group_staves } => {
+                    let (group_notes, group_lyrics, group_has_lyrics) = self.convert_staff_group_to_notes_and_lyrics(*group_type, group_staves);
+                    notes_result.push_str(&group_notes);
+                    lyrics_result.push_str(&group_lyrics);
+                    if group_has_lyrics {
+                        has_lyrics = true;
                     }
                 }
             }
@@ -119,6 +104,160 @@ impl LilyPondRenderer {
         };
         
         (notes_result, final_lyrics)
+    }
+
+    /// Group staves by their staff group context
+    fn group_staves_by_context<'a>(&self, staves: &'a [ProcessedStave]) -> Vec<StaveGroup<'a>> {
+        let mut grouped = Vec::new();
+        let mut i = 0;
+        
+        while i < staves.len() {
+            let stave = &staves[i];
+            
+            if let Some(ref group_info) = stave.staff_group_info {
+                // This is part of a staff group - collect all staves in this group
+                let group_type = group_info.group_type;
+                let group_size = group_info.group_size;
+                
+                // Collect the group staves (they should be consecutive)
+                let mut group_staves = Vec::new();
+                for j in 0..group_size {
+                    if i + j < staves.len() {
+                        group_staves.push(&staves[i + j]);
+                    }
+                }
+                
+                grouped.push(StaveGroup::Group { group_type, staves: group_staves });
+                i += group_size; // Skip past all the staves in this group
+            } else {
+                // Single stave
+                grouped.push(StaveGroup::Single(stave));
+                i += 1;
+            }
+        }
+        
+        grouped
+    }
+
+    /// Convert a single stave to notes and lyrics
+    fn convert_single_stave_to_notes_and_lyrics(&self, stave: &ProcessedStave) -> (String, String, bool) {
+        let mut notes_result = String::new();
+        let mut lyrics_result = String::new();
+        let mut has_lyrics = false;
+        
+        for rhythm_item in &stave.rhythm_items {
+            match rhythm_item {
+                Item::Beat(beat) => {
+                    if beat.is_tuplet {
+                        if let Some((num, den)) = beat.tuplet_ratio {
+                            notes_result.push_str(&format!("\\tuplet {}/{} {{ ", num, den));
+                            
+                            for beat_element in &beat.elements {
+                                let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                                notes_result.push_str(&lily_note);
+                                
+                                if let Some(syl) = syllable {
+                                    lyrics_result.push_str(&syl);
+                                    lyrics_result.push(' ');
+                                    has_lyrics = true;
+                                } else {
+                                    // Add placeholder for notes without syllables
+                                    lyrics_result.push_str("_ ");
+                                }
+                            }
+                            
+                            notes_result.push_str("} ");
+                        }
+                    } else {
+                        // Regular beat - no tuplet wrapper
+                        for beat_element in &beat.elements {
+                            let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                            notes_result.push_str(&lily_note);
+                            
+                            if let Some(syl) = syllable {
+                                lyrics_result.push_str(&syl);
+                                lyrics_result.push(' ');
+                                has_lyrics = true;
+                            } else {
+                                // Add placeholder for notes without syllables
+                                lyrics_result.push_str("_ ");
+                            }
+                        }
+                    }
+                }
+                Item::Barline(_, _) => {
+                    notes_result.push_str("| ");
+                    // No lyrics entry needed for barlines
+                }
+                Item::Breathmark => {
+                    notes_result.push_str("\\breathe ");
+                    // No lyrics entry needed for breath marks
+                }
+                Item::Tonic(_) => {
+                    // Tonic declarations don't generate output notation - they set context
+                    // Skip for now
+                }
+            }
+        }
+        
+        (notes_result, lyrics_result, has_lyrics)
+    }
+
+    /// Convert a staff group to LilyPond notation with staff grouping contexts
+    fn convert_staff_group_to_notes_and_lyrics(&self, group_type: StaffGroupType, staves: &[&ProcessedStave]) -> (String, String, bool) {
+        let context_name = group_type.to_lilypond_context();
+        let mut group_notes = format!("\\new {} <<\n", context_name);
+        let mut group_lyrics = String::new();
+        let mut has_lyrics = false;
+        
+        for stave in staves {
+            let (stave_notes, stave_lyrics, stave_has_lyrics) = self.convert_single_stave_to_notes_and_lyrics(stave);
+            
+            // Get staff name and infer clef
+            let staff_name = if let Some(ref info) = stave.staff_group_info {
+                &info.staff_name
+            } else {
+                "unnamed"
+            };
+            
+            let clef = self.infer_clef_from_name(staff_name);
+            
+            group_notes.push_str(&format!("  \\new Staff = \"{}\" {{\n", staff_name));
+            
+            if let Some(clef) = clef {
+                group_notes.push_str(&format!("    \\clef {}\n", clef));
+            }
+            
+            group_notes.push_str("    \\fixed c' {\n");
+            group_notes.push_str("      \\autoBeamOff\n");
+            group_notes.push_str(&format!("      {}\n", stave_notes.trim()));
+            group_notes.push_str("    }\n");
+            group_notes.push_str("  }\n");
+            
+            // Combine lyrics (for now, just concatenate - more sophisticated logic may be needed)
+            if stave_has_lyrics {
+                if !group_lyrics.is_empty() {
+                    group_lyrics.push(' ');
+                }
+                group_lyrics.push_str(&stave_lyrics);
+                has_lyrics = true;
+            }
+        }
+        
+        group_notes.push_str(">>\n");
+        
+        (group_notes, group_lyrics, has_lyrics)
+    }
+
+    /// Infer appropriate clef from staff name
+    fn infer_clef_from_name(&self, name: &str) -> Option<&'static str> {
+        let name_lower = name.to_lowercase();
+        match name_lower.as_str() {
+            "treble" | "soprano" | "alto" | "violin" | "violin1" | "violin2" | "flute" | "oboe" | "clarinet" => Some("treble"),
+            "bass" | "cello" | "contrabass" | "bassoon" | "tuba" => Some("bass"),
+            "viola" | "tenor" | "horn" => Some("alto"), 
+            _ => None, // Let LilyPond use default treble clef
+        }
     }
     
     /// Convert a beat element to LilyPond notation with proper duration

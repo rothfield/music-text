@@ -10,10 +10,7 @@
 
 {{#lyrics}}
 melody = {
-  \fixed c' {
-    \autoBeamOff
-    {{{staves}}}
-  }
+  {{{staves}}}
 }
 
 text = \lyricmode {
@@ -33,12 +30,7 @@ text = \lyricmode {
 {{/lyrics}}
 {{^lyrics}}
 \score {
-  \new Staff {
-    \fixed c' {
-      \autoBeamOff
-      {{{staves}}}
-    }
-  }
+  {{{staves}}}
   
   \layout { }
 }

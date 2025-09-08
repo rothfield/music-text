@@ -151,7 +151,74 @@ pub struct Note {
 // Document structure types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
-    pub staves: Vec<Stave>,
+    pub content: Vec<DocumentElement>,
+    pub source: Source,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DocumentElement {
+    SingleStave(Stave),
+    StaffGroup(StaffGroup),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaffGroup {
+    pub group_type: StaffGroupType,
+    pub staves: Vec<NamedStave>,
+    pub source: Source,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StaffGroupType {
+    Piano,    // Maps to PianoStaff (brace + connected bars)
+    Grand,    // Maps to GrandStaff (brace + connected bars)
+    Group,    // Maps to StaffGroup (bracket + disconnected bars)  
+    Choir,    // Maps to ChoirStaff (bracket + disconnected bars)
+}
+
+impl StaffGroupType {
+    /// Parse staff group type from string
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "piano" => Some(StaffGroupType::Piano),
+            "grand" => Some(StaffGroupType::Grand),
+            "group" => Some(StaffGroupType::Group),
+            "choir" => Some(StaffGroupType::Choir),
+            _ => None,
+        }
+    }
+
+    /// Get the LilyPond context name for this staff group type
+    pub fn to_lilypond_context(&self) -> &'static str {
+        match self {
+            StaffGroupType::Piano => "PianoStaff",
+            StaffGroupType::Grand => "GrandStaff",
+            StaffGroupType::Group => "StaffGroup",
+            StaffGroupType::Choir => "ChoirStaff",
+        }
+    }
+
+    /// Check if this staff group type uses braces (true) or brackets (false)
+    pub fn uses_brace(&self) -> bool {
+        match self {
+            StaffGroupType::Piano | StaffGroupType::Grand => true,
+            StaffGroupType::Group | StaffGroupType::Choir => false,
+        }
+    }
+
+    /// Check if this staff group type connects barlines
+    pub fn connects_barlines(&self) -> bool {
+        match self {
+            StaffGroupType::Piano | StaffGroupType::Grand => true,
+            StaffGroupType::Group | StaffGroupType::Choir => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NamedStave {
+    pub name: String,      // "treble", "bass", "violin1", etc.
+    pub stave: Stave,      // Existing Stave structure
     pub source: Source,
 }
 
@@ -161,8 +228,17 @@ impl Document {
         use std::collections::HashSet;
         
         let mut systems = HashSet::new();
-        for stave in &self.staves {
-            systems.insert(stave.notation_system);
+        for element in &self.content {
+            match element {
+                DocumentElement::SingleStave(stave) => {
+                    systems.insert(stave.notation_system);
+                },
+                DocumentElement::StaffGroup(group) => {
+                    for named_stave in &group.staves {
+                        systems.insert(named_stave.stave.notation_system);
+                    }
+                }
+            }
         }
         
         let mut result: Vec<NotationSystem> = systems.into_iter().collect();
