@@ -81,10 +81,10 @@ pub fn parse_stave_from_paragraph(paragraph: &str, start_line: usize) -> Result<
         .map(|line| is_underscore_line(&line.content))
         .unwrap_or(false);
 
+    // Check if ANY line after the content line is an underscore line
     let end_multi_stave = text_lines_after
-        .last()
-        .map(|line| is_underscore_line(&line.content))
-        .unwrap_or(false);
+        .iter()
+        .any(|line| is_underscore_line(&line.content));
 
     Ok(Stave {
         text_lines_before,

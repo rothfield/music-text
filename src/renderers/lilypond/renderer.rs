@@ -46,33 +46,14 @@ impl LilyPondRenderer {
     
     /// Convert staves to raw notes and lyrics content for web-fast template (no Staff wrappers)
     fn convert_staves_to_raw_notes_and_lyrics(&self, staves: &[ProcessedStave]) -> (String, String) {
-        let mut notes_result = String::new();
-        let mut lyrics_result = String::new();
-        let mut has_lyrics = false;
-        
-        for (i, stave) in staves.iter().enumerate() {
-            if i > 0 {
-                notes_result.push_str(" | ");
-            }
-            
-            let (stave_notes, stave_lyrics, stave_has_lyrics) = self.convert_single_stave_to_notes_and_lyrics(stave);
-            
-            // For web-fast, just append the raw notes without Staff wrapper
-            notes_result.push_str(stave_notes.trim());
-            
-            if stave_has_lyrics {
-                lyrics_result.push_str(&stave_lyrics);
-                has_lyrics = true;
-            }
-        }
-        
-        let final_lyrics = if has_lyrics {
-            lyrics_result
+        // For simplicity, just use the first stave for web-fast template
+        // Multi-stave support in web-fast template would need additional template logic
+        if let Some(first_stave) = staves.first() {
+            let (stave_notes, stave_lyrics, _) = self.convert_single_stave_to_notes_and_lyrics(first_stave);
+            (stave_notes, stave_lyrics)
         } else {
-            String::new()
-        };
-        
-        (notes_result, final_lyrics)
+            (String::new(), String::new())
+        }
     }
 
     /// Convert staves to both notes and lyrics content for addLyrics pattern (with Staff wrappers)
@@ -80,39 +61,34 @@ impl LilyPondRenderer {
         let mut notes_result = String::new();
         let mut lyrics_result = String::new();
         let mut has_lyrics = false;
+        
+        // For multiple staves, wrap everything in simultaneous music
+        if staves.len() > 1 {
+            notes_result.push_str("<<\n");
+        }
+        
         let mut in_multi_stave_group = false;
         
         for (i, stave) in staves.iter().enumerate() {
-            if i > 0 && !in_multi_stave_group {
-                notes_result.push_str(" | ");
-            }
-            
             // Check if this stave begins a multi-stave group
-            if stave.begin_multi_stave {
-                // Start a StaffGroup (using generic bracket grouping)
-                notes_result.push_str("\\new StaffGroup <<\n");
+            if stave.begin_multi_stave && !in_multi_stave_group {
+                notes_result.push_str("  \\new StaffGroup <<\n");
                 in_multi_stave_group = true;
             }
             
             // Convert single stave to notes and lyrics
             let (stave_notes, stave_lyrics, stave_has_lyrics) = self.convert_single_stave_to_notes_and_lyrics(stave);
             
-            // Wrap stave in \new Staff context
-            let wrapped_notes = if in_multi_stave_group {
-                format!(
-                    "  \\new Staff {{\n    \\fixed c' {{\n      \\autoBeamOff\n      {}\n    }}\n  }}",
-                    stave_notes.trim()
-                )
-            } else {
-                format!(
-                    "\\new Staff {{\n  \\fixed c' {{\n    \\autoBeamOff\n    {}\n  }}\n}}",
-                    stave_notes.trim()
-                )
-            };
+            // Wrap stave in \new Staff context with proper indentation
+            let indent = if staves.len() > 1 && in_multi_stave_group { "    " } else if staves.len() > 1 { "  " } else { "" };
+            let wrapped_notes = format!(
+                "{}\\new Staff {{\n{}  \\fixed c' {{\n{}    \\autoBeamOff\n{}    {}\n{}  }}\n{}}}",
+                indent, indent, indent, indent, stave_notes.trim(), indent, indent
+            );
             
             notes_result.push_str(&wrapped_notes);
-            if in_multi_stave_group && i + 1 < staves.len() && !stave.end_multi_stave {
-                notes_result.push('\n'); // Add newline between staves in group
+            if i + 1 < staves.len() {
+                notes_result.push('\n');
             }
             
             lyrics_result.push_str(&stave_lyrics);
@@ -121,10 +97,15 @@ impl LilyPondRenderer {
             }
             
             // Check if this stave ends a multi-stave group
-            if stave.end_multi_stave {
-                notes_result.push_str("\n>>");
+            if stave.end_multi_stave && in_multi_stave_group {
+                notes_result.push_str("  >>\n");
                 in_multi_stave_group = false;
             }
+        }
+        
+        // Close the simultaneous music block
+        if staves.len() > 1 {
+            notes_result.push_str(">>");
         }
         
         // Return empty lyrics if no actual syllables were found
@@ -142,10 +123,12 @@ impl LilyPondRenderer {
         let mut notes_result = String::new();
         let mut lyrics_result = String::new();
         let mut has_lyrics = false;
+        let mut is_first_item = true;
         
         for rhythm_item in &stave.rhythm_items {
             match rhythm_item {
                 Item::Beat(beat) => {
+                    is_first_item = false;
                     if beat.is_tuplet {
                         if let Some((num, den)) = beat.tuplet_ratio {
                             notes_result.push_str(&format!("\\tuplet {}/{} {{ ", num, den));
@@ -184,11 +167,16 @@ impl LilyPondRenderer {
                     }
                 }
                 Item::Barline(_, _) => {
-                    notes_result.push_str("| ");
+                    // Skip leading barlines as they create invalid LilyPond syntax
+                    if !is_first_item {
+                        notes_result.push_str("| ");
+                    }
+                    is_first_item = false;
                     // No lyrics entry needed for barlines
                 }
                 Item::Breathmark => {
                     notes_result.push_str("\\breathe ");
+                    is_first_item = false;
                     // No lyrics entry needed for breath marks
                 }
                 Item::Tonic(_) => {

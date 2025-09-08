@@ -33,12 +33,7 @@ text = \lyricmode {
 {{/lyrics}}
 {{^lyrics}}
 \score {
-  \new Staff {
-    \fixed c' {
-      \autoBeamOff
-      {{{staves}}}
-    }
-  }
+  {{{staves}}}
   
   \layout { }
 }

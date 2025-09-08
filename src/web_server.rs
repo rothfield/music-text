@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use music_text::{parse_document, process_notation};
 use music_text::document::model::NotationSystem;
-use music_text::renderers::render_web_fast_lilypond;
+use music_text::renderers::render_full_lilypond;
 use log::{info, warn, error};
 use crate::lilypond_generator::LilyPondGenerator;
 
@@ -138,10 +138,10 @@ async fn generate_lilypond_svg(Json(request): Json<SvgGenerateRequest>) -> Json<
         });
     }
     
-    // Parse notation and generate optimized LilyPond source
+    // Parse notation and generate full LilyPond source with all staves
     let lilypond_source = match process_notation(&request.notation) {
         Ok(result) => {
-            render_web_fast_lilypond(&result.processed_staves)
+            render_full_lilypond(&result.processed_staves)
         },
         Err(e) => {
             return Json(SvgGenerateResponse {
