@@ -12,6 +12,9 @@ pub(super) fn resolve_notation_system(syllable: &str, context_system: NotationSy
         "C" | "E" | "A" | "B" => NotationSystem::Western,
         "S" | "r" | "m" | "n" | "d" | "g" => NotationSystem::Sargam,
         "स" | "रे" | "र" | "ग" | "म" | "प" | "ध" | "द" | "नि" | "न" => NotationSystem::Bhatkhande,
+        "dha" | "dhin" | "ta" | "ka" | "taka" | "trkt" | "ge" |
+        "Dha" | "Dhin" | "Ta" | "Ka" | "Taka" | "Trkt" | "Ge" |
+        "DHA" | "DHIN" | "TA" | "KA" | "TAKA" | "TRKT" | "GE" => NotationSystem::Tabla,
         
         // Ambiguous cases - use context system
         "D" | "F" | "G" | "R" | "M" | "P" | "N" => context_system,
@@ -51,7 +54,7 @@ pub(super) fn transform_pitch(pitch_pair: Pair<Rule>, in_slur: bool, in_beat_gro
             },
             Rule::tabla_pitch => {
                 // Tabla bols all map to N1 for now
-                notation_system = NotationSystem::Number;
+                notation_system = NotationSystem::Tabla;
                 base_pitch = "1".to_string();
             },
             // Handle composite pitch structure (base_pitch + accidentals)
@@ -76,7 +79,7 @@ pub(super) fn transform_pitch(pitch_pair: Pair<Rule>, in_slur: bool, in_beat_gro
                         },
                         Rule::tabla_pitch => {
                             // Tabla bols all map to N1 for now
-                            notation_system = NotationSystem::Number;
+                            notation_system = NotationSystem::Tabla;
                             base_pitch = "1".to_string();
                         },
                         // Capture accidentals if they exist as separate rules

@@ -10,6 +10,8 @@ pub mod tree_transformer;
 pub mod model;
 pub mod compact_notation_preprocessor;
 
+use serde::{Serialize, Deserialize};
+
 // Re-export key types and functions for convenience
 pub use model::{Document, Stave, ContentLine, MusicalElement, TextLine, Position, PitchCode};
 pub use tree_transformer::build_document;
@@ -85,6 +87,7 @@ fn try_create_consecutive_stave(input: &str) -> Option<Stave> {
                     NotationSystem::Sargam => model::NotationSystem::Sargam,
                     NotationSystem::Western => model::NotationSystem::Western,
                     NotationSystem::Bhatkhande => model::NotationSystem::Bhatkhande,
+                    NotationSystem::Tabla => model::NotationSystem::Tabla,
                 },
                 source: source.clone(),
                 in_slur: false,
@@ -107,6 +110,7 @@ fn try_create_consecutive_stave(input: &str) -> Option<Stave> {
             NotationSystem::Sargam => model::NotationSystem::Sargam,
             NotationSystem::Western => model::NotationSystem::Western,
             NotationSystem::Bhatkhande => model::NotationSystem::Bhatkhande,
+            NotationSystem::Tabla => model::NotationSystem::Tabla,
         },
         source,
     })
@@ -146,6 +150,7 @@ fn char_to_pitchcode(ch: char, system: NotationSystem) -> Option<PitchCode> {
             _ => None,
         },
         NotationSystem::Bhatkhande => None, // Not implemented
+        NotationSystem::Tabla => None, // Not implemented for single characters (tabla bols are multi-character)
     }
 }
 
@@ -173,10 +178,11 @@ fn detect_system_from_consecutive(chars: &[char]) -> Option<NotationSystem> {
 }
 
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 enum NotationSystem {
     Number,
     Western, 
     Sargam,
     Bhatkhande,
+    Tabla,
 }

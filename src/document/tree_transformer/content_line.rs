@@ -49,7 +49,7 @@ fn is_position_in_spans(position: usize, spans: &[UnderlineSpan]) -> bool {
 
 
 fn detect_dominant_notation_system_from_elements(elements: &[MusicalElement]) -> NotationSystem {
-    let mut counts = [0; 4]; // [Number, Western, Sargam, Bhatkhande]
+    let mut counts = [0; 5]; // [Number, Western, Sargam, Bhatkhande, Tabla]
     
     for element in elements {
         if let MusicalElement::Note(note) = element {
@@ -58,14 +58,17 @@ fn detect_dominant_notation_system_from_elements(elements: &[MusicalElement]) ->
                 NotationSystem::Western => 1,
                 NotationSystem::Sargam => 2,
                 NotationSystem::Bhatkhande => 3,
+                NotationSystem::Tabla => 4,
             };
             counts[idx] += 1;
         }
     }
     
-    // Priority: Bhatkhande > others (most specific)
+    // Priority: Bhatkhande > Tabla > others (most specific)
     if counts[3] > 0 {
         NotationSystem::Bhatkhande
+    } else if counts[4] > 0 {
+        NotationSystem::Tabla
     } else {
         // Find the system with maximum count
         let max_idx = counts.iter().enumerate().max_by_key(|(_, count)| *count).map(|(idx, _)| idx).unwrap_or(1);
@@ -74,6 +77,7 @@ fn detect_dominant_notation_system_from_elements(elements: &[MusicalElement]) ->
             1 => NotationSystem::Western,
             2 => NotationSystem::Sargam,
             3 => NotationSystem::Bhatkhande,
+            4 => NotationSystem::Tabla,
             _ => NotationSystem::Western, // Default fallback
         }
     }

@@ -7,6 +7,7 @@ pub enum NotationSystem {
     Western,    // C D E F G A B (standard western notes)  
     Sargam,     // S R G M P D N (Indian classical music)
     Bhatkhande, // स रे ग म प ध नि (Devanagari script)
+    Tabla,      // dha dhin ta ka taka trkt ge (tabla bols/percussion syllables)
 }
 
 impl NotationSystem {
@@ -29,6 +30,10 @@ impl NotationSystem {
             "s" | "S" | "r" | "g" | "m" | "n" | "d" | "p" => NotationSystem::Sargam,
             // Bhatkhande Devanagari notation
             "स" | "रे" | "र" | "ग" | "म" | "प" | "ध" | "द" | "नि" | "न" => NotationSystem::Bhatkhande,
+            // Tabla notation (all cases)
+            "dha" | "dhin" | "ta" | "ka" | "taka" | "trkt" | "ge" |
+            "Dha" | "Dhin" | "Ta" | "Ka" | "Taka" | "Trkt" | "Ge" |
+            "DHA" | "DHIN" | "TA" | "KA" | "TAKA" | "TRKT" | "GE" => NotationSystem::Tabla,
             // Ambiguous letters (case-specific disambiguation)
             "F" => NotationSystem::Western,  // F doesn't exist in Sargam, clearly Western
             "R" | "G" | "M" | "P" | "D" | "N" => NotationSystem::Sargam, // More commonly Sargam
@@ -166,6 +171,7 @@ impl Document {
             NotationSystem::Western => 1,
             NotationSystem::Sargam => 2,
             NotationSystem::Bhatkhande => 3,
+            NotationSystem::Tabla => 4,
         });
         result
     }
