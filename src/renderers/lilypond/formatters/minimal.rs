@@ -18,7 +18,7 @@ impl MinimalFormatter {
     
     /// Format notes content as minimal LilyPond single line
     pub fn format(&self, notes_content: &str) -> String {
-        format!("\\version \"2.24.0\"\n{}", notes_content.trim())
+        format!("\\version \"2.24.0\" {{ {} }}", notes_content.trim())
     }
     
     /// Format notes and lyrics using addLyrics pattern (like bansuri example)
@@ -27,10 +27,11 @@ impl MinimalFormatter {
             // No lyrics, use simple format
             self.format(notes_content)
         } else {
-            // Use addLyrics pattern - notes_content now contains complete staff contexts
+            // Use addLyrics pattern based on bansuri example
             format!(
                 "\\version \"2.24.0\"\n\
                 melody = {{\n\
+                  \\clef treble\n\
                   {}\n\
                 }}\n\
                 \n\

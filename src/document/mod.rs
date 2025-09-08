@@ -27,7 +27,7 @@ pub fn parse_document(input: &str) -> Result<Document, String> {
             position: model::Position { line: 1, column: 1 },
         };
         return Ok(Document { 
-            content: vec![model::DocumentElement::SingleStave(stave)], 
+            staves: vec![stave], 
             source: document_source 
         });
     }

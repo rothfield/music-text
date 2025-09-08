@@ -3,7 +3,7 @@
 // Document structure 
 document = { SOI ~ mixed_content? ~ trailing_whitespace? ~ EOI }
 
-mixed_content = { (mixed_line | staff_group | blank_line) ~ (stave_separator ~ (mixed_line | staff_group | blank_line))* ~ stave_separator? }
+mixed_content = { (mixed_line | blank_line) ~ (stave_separator ~ (mixed_line | blank_line))* ~ stave_separator? }
 stave_separator = { NEWLINE+ }
 trailing_whitespace = { (NEWLINE | " ")+ }
 
@@ -90,19 +90,3 @@ simple_content_line = { musical_element_no_barline+ }
 
 // Text line - any line that is not a content line, not blank, and contains no barlines
 text_line = { !content_line ~ !blank_line ~ (!NEWLINE ~ !"|" ~ ANY)* }
-
-// Staff group support for multi-stave music (piano, orchestral, etc.)
-staff_group = { 
-    staff_group_start ~ 
-    staff_group_content ~ 
-    staff_group_end 
-}
-
-staff_group_start = { "{" ~ group_type ~ NEWLINE }
-group_type = { "piano" | "grand" | "group" | "choir" }
-
-staff_group_content = { named_stave+ }
-named_stave = { staff_name ~ ":" ~ stave ~ NEWLINE? }
-staff_name = { (ASCII_ALPHANUMERIC | "_")+ }
-
-staff_group_end = { "}" ~ NEWLINE? }

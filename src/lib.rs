@@ -13,12 +13,11 @@ pub use document::{
     Rule, Error,
     Document, Stave, ContentLine, MusicalElement, Position, TextLine
 };
-pub use document::model::{DocumentElement, StaffGroup, StaffGroupType, NamedStave};
 pub use document::tree_transformer::{pest_pair_to_json, build_document as parse_document_structure};
 
 // Re-export stave parsing functionality
 pub use stave_parser::{
-    parse_document_staves, ProcessedStave, StaffGroupInfo
+    parse_document_staves, ProcessedStave
 };
 
 // Re-export pipeline functionality
