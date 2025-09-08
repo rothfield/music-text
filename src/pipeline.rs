@@ -1,5 +1,5 @@
 use crate::document::{parse_document, Document, Stave};
-use crate::stave_parser::parse_document_staves;
+use crate::stave_parser::{parse_document_staves, ProcessedStave};
 use crate::renderers::{render_minimal_lilypond, render_full_lilypond, render_vexflow_svg, render_vexflow_data};
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct ProcessingResult {
     pub original_input: String,
     pub parsed_document: Document,
-    pub processed_staves: Vec<Stave>,
+    pub processed_staves: Vec<ProcessedStave>,
     pub minimal_lilypond: String,
     pub full_lilypond: String,
     pub vexflow_svg: String,

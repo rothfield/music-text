@@ -1,13 +1,16 @@
 // Music Notation Grammar - Complete Version
 
 // Document structure 
-document = { SOI ~ stave_list? ~ trailing_whitespace? ~ EOI }
+document = { SOI ~ mixed_content? ~ trailing_whitespace? ~ EOI }
 
-stave_list = { stave ~ (stave_separator ~ stave)* ~ stave_separator? }
+mixed_content = { mixed_line ~ (stave_separator ~ mixed_line)* ~ stave_separator? }
 stave_separator = { NEWLINE+ }
 trailing_whitespace = { (NEWLINE | " ")+ }
 
-// Stave is a content line with optional text lines
+// Mixed line can be either a traditional stave or a simple content line
+mixed_line = { stave | simple_content_line }
+
+// Stave is a content line with optional text lines (requires barline)
 stave = { 
     text_lines* ~ 
     content_line ~ 
@@ -22,14 +25,15 @@ content_line = {
 }
 
 musical_element = {
-    pitch | space | barline
+    pitch | dash | space | barline
 }
 
 musical_element_no_barline = {
-    pitch | space
+    pitch | dash | space
 }
 
 space = { " "+ } // One or more spaces as a single element
+dash = { "-" } // Dash element
 
 // Pitch: atomic patterns with explicit accidental limits (most specific first)
 pitch = { number_pitch | western_pitch | sargam_pitch | bhatkhande_pitch }
@@ -69,6 +73,9 @@ bhatkhande_pitch = {
 }
 
 barline = { "|" }
+
+// Simple content line - musical elements without requiring barlines
+simple_content_line = { musical_element_no_barline+ }
 
 // Text line - any line that is not a content line, not blank, and contains no barlines
 text_line = { !content_line ~ !blank_line ~ (!NEWLINE ~ !"|" ~ ANY)* }

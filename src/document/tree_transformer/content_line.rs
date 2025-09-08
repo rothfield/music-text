@@ -160,6 +160,13 @@ fn transform_musical_element(element_pair: Pair<Rule>, in_slur: bool, in_beat_gr
                     in_beat_group,
                 });
             }
+            Rule::dash => {
+                return Ok(MusicalElement::Dash {
+                    source: source_from_span(inner_pair.as_span()),
+                    in_slur,
+                    in_beat_group,
+                });
+            }
             _ => {}
         }
     }
@@ -176,6 +183,13 @@ fn transform_musical_element_no_barline(element_pair: Pair<Rule>, in_slur: bool,
                 let space_count = inner_pair.as_str().len();
                 return Ok(MusicalElement::Space { 
                     count: space_count,
+                    source: source_from_span(inner_pair.as_span()),
+                    in_slur,
+                    in_beat_group,
+                });
+            }
+            Rule::dash => {
+                return Ok(MusicalElement::Dash {
                     source: source_from_span(inner_pair.as_span()),
                     in_slur,
                     in_beat_group,

@@ -1,7 +1,8 @@
-use crate::document::Stave;
+use crate::stave_parser::ProcessedStave;
+use crate::rhythm_fsm::{Item, Event};
 
 /// Convert staves to VexFlow SVG
-pub fn render_vexflow_svg(staves: &[Stave]) -> String {
+pub fn render_vexflow_svg(staves: &[ProcessedStave]) -> String {
     let mut svg = String::new();
     svg.push_str(r#"<svg width="600" height="200" xmlns="http://www.w3.org/2000/svg">"#);
     svg.push_str("\n");
@@ -43,24 +44,20 @@ pub fn render_vexflow_svg(staves: &[Stave]) -> String {
     let mut note_x = staff_x + 80;
     
     for stave in staves {
-        for element in &stave.content_line.elements {
-            match element {
-                crate::document::model::MusicalElement::Note(note) => {
-                    let note_y = match note.syllable.as_str() {
-                        "1" => staff_y + 50,  // C below staff
-                        "2" => staff_y + 45,  // D
-                        "3" => staff_y + 40,  // E
-                        "4" => staff_y + 35,  // F
-                        "5" => staff_y + 30,  // G
-                        "6" => staff_y + 25,  // A
-                        "7" => staff_y + 20,  // B
-                        "C" => staff_y + 50,  // C below staff
-                        "D" => staff_y + 45,  // D
-                        "E" => staff_y + 40,  // E
-                        "F" => staff_y + 35,  // F
-                        "G" => staff_y + 30,  // G
-                        "A" => staff_y + 25,  // A
-                        "B" => staff_y + 20,  // B
+        // For now, just render a placeholder message
+        // TODO: Update SVG rendering to work with rhythm items
+        for rhythm_item in &stave.rhythm_items {
+            if let Item::Beat(beat) = rhythm_item {
+                for beat_element in &beat.elements {
+                    if let Event::Note { degree, .. } = &beat_element.event {
+                        let note_y = match degree {
+                        crate::old_models::Degree::N1 => staff_y + 50,  // C below staff
+                        crate::old_models::Degree::N2 => staff_y + 45,  // D
+                        crate::old_models::Degree::N3 => staff_y + 40,  // E
+                        crate::old_models::Degree::N4 => staff_y + 35,  // F
+                        crate::old_models::Degree::N5 => staff_y + 30,  // G
+                        crate::old_models::Degree::N6 => staff_y + 25,  // A
+                        crate::old_models::Degree::N7 => staff_y + 20,  // B
                         _ => staff_y + 20,    // Default to B
                     };
                     
@@ -81,30 +78,17 @@ pub fn render_vexflow_svg(staves: &[Stave]) -> String {
                         svg.push_str("\n");
                     }
                     
-                    // Slur indication
-                    if note.in_slur {
-                        svg.push_str(&format!("  <text x=\"{}\" y=\"{}\" font-family=\"serif\" font-size=\"10\" fill=\"#666\">slur</text>", 
-                            note_x - 5, note_y - 30));
-                        svg.push_str("\n");
+                        // TODO: Add slur and beat group indication using new Event structure
+                        
+                        note_x += 60;
                     }
-                    
-                    // Beat group indication
-                    if note.in_beat_group {
-                        svg.push_str(&format!("  <text x=\"{}\" y=\"{}\" font-family=\"serif\" font-size=\"10\" fill=\"#999\">beat</text>", 
-                            note_x - 5, note_y + 20));
-                        svg.push_str("\n");
-                    }
-                    
-                    note_x += 60;
                 }
-                crate::document::model::MusicalElement::Barline { .. } => {
-                    // Barline
-                    svg.push_str(&format!("  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#333\" stroke-width=\"2\"/>", 
-                        note_x - 10, staff_y, note_x - 10, staff_y + 40));
-                    svg.push_str("\n");
-                    note_x += 20;
-                }
-                _ => {}
+            } else if let Item::Barline(_, _) = rhythm_item {
+                // Barline
+                svg.push_str(&format!("  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#333\" stroke-width=\"2\"/>", 
+                    note_x - 10, staff_y, note_x - 10, staff_y + 40));
+                svg.push_str("\n");
+                note_x += 20;
             }
         }
     }
@@ -118,43 +102,95 @@ pub fn render_vexflow_svg(staves: &[Stave]) -> String {
 }
 
 /// Convert staves to VexFlow JSON data
-pub fn render_vexflow_data(staves: &[Stave]) -> serde_json::Value {
+pub fn render_vexflow_data(staves: &[ProcessedStave]) -> serde_json::Value {
     let mut notes = Vec::new();
+    let mut beats = Vec::new();
     
     for stave in staves {
-        for element in &stave.content_line.elements {
-            if let crate::document::model::MusicalElement::Note(note) = element {
-                let pitch = match note.syllable.as_str() {
-                    "1" => "c/4",
-                    "2" => "d/4",
-                    "3" => "e/4", 
-                    "4" => "f/4",
-                    "5" => "g/4",
-                    "6" => "a/4",
-                    "7" => "b/4",
-                    "C" => "c/4",
-                    "D" => "d/4",
-                    "E" => "e/4", 
-                    "F" => "f/4",
-                    "G" => "g/4",
-                    "A" => "a/4",
-                    "B" => "b/4",
-                    _ => "c/4",
-                };
-                
-                notes.push(serde_json::json!({
-                    "keys": [pitch],
-                    "duration": "q",
-                    "syllable": note.syllable,
-                    "in_slur": note.in_slur,
-                    "in_beat_group": note.in_beat_group
-                }));
+        for rhythm_item in &stave.rhythm_items {
+            match rhythm_item {
+                Item::Beat(beat) => {
+                    let mut beat_notes = Vec::new();
+                    
+                    for beat_element in &beat.elements {
+                        match &beat_element.event {
+                            Event::Note { degree, .. } => {
+                                let pitch = match degree {
+                                    crate::old_models::Degree::N1 => "c/4",
+                                    crate::old_models::Degree::N2 => "d/4",
+                                    crate::old_models::Degree::N3 => "e/4",
+                                    crate::old_models::Degree::N4 => "f/4",
+                                    crate::old_models::Degree::N5 => "g/4",
+                                    crate::old_models::Degree::N6 => "a/4",
+                                    crate::old_models::Degree::N7 => "b/4",
+                                    _ => "c/4",
+                                };
+                                
+                                let duration = match beat_element.subdivisions {
+                                    1 => "8",   // eighth note
+                                    2 => "q",   // quarter note
+                                    3 => "q.",  // dotted quarter
+                                    4 => "h",   // half note
+                                    _ => "q",   // fallback
+                                };
+                                
+                                let note_data = serde_json::json!({
+                                    "keys": [pitch],
+                                    "duration": duration,
+                                    "subdivisions": beat_element.subdivisions
+                                });
+                                
+                                beat_notes.push(note_data.clone());
+                                notes.push(note_data);
+                            }
+                            Event::Rest => {
+                                let duration = match beat_element.subdivisions {
+                                    1 => "8r",   // eighth rest
+                                    2 => "qr",   // quarter rest
+                                    3 => "q.r",  // dotted quarter rest
+                                    4 => "hr",   // half rest
+                                    _ => "qr",   // fallback
+                                };
+                                
+                                let rest_data = serde_json::json!({
+                                    "keys": [],
+                                    "duration": duration,
+                                    "subdivisions": beat_element.subdivisions
+                                });
+                                
+                                beat_notes.push(rest_data.clone());
+                                notes.push(rest_data);
+                            }
+                        }
+                    }
+                    
+                    beats.push(serde_json::json!({
+                        "divisions": beat.divisions,
+                        "is_tuplet": beat.is_tuplet,
+                        "tuplet_ratio": beat.tuplet_ratio,
+                        "notes": beat_notes
+                    }));
+                }
+                Item::Barline(_, _) => {
+                    beats.push(serde_json::json!({
+                        "type": "barline"
+                    }));
+                }
+                Item::Breathmark => {
+                    beats.push(serde_json::json!({
+                        "type": "breathmark"
+                    }));
+                }
+                Item::Tonic(_) => {
+                    // Tonic declarations don't generate visual elements - skip
+                }
             }
         }
     }
     
     serde_json::json!({
         "notes": notes,
+        "beats": beats,
         "time_signature": "4/4",
         "clef": "treble"
     })

@@ -3,6 +3,8 @@ pub mod stave_parser;
 pub mod pipeline;
 pub mod renderers;
 pub mod converters;
+pub mod rhythm_fsm;
+pub mod old_models;
 
 // Re-export main parsing functionality
 pub use document::{
@@ -15,10 +17,15 @@ pub use document::tree_transformer::{pest_pair_to_json, build_document as parse_
 
 // Re-export stave parsing functionality
 pub use stave_parser::{
-    parse_document_staves
+    parse_document_staves, ProcessedStave
 };
 
 // Re-export pipeline functionality
 pub use pipeline::{
     process_notation, ProcessingResult
+};
+
+// Re-export rhythm FSM functionality
+pub use rhythm_fsm::{
+    process_rhythm, Beat, BeatElement, Event, Item
 };

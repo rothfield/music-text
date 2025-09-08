@@ -198,6 +198,11 @@ pub enum MusicalElement {
         in_slur: bool,
         in_beat_group: bool,
     },
+    Dash {
+        source: Source,
+        in_slur: bool,
+        in_beat_group: bool,
+    },
     SlurBegin {
         source: Source,
         in_slur: bool,

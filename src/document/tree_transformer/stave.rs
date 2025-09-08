@@ -1,7 +1,8 @@
 use crate::document::pest_interface::{Pair, Rule};
-use crate::document::model::{Stave, TextLine};
+use crate::document::model::{Stave, TextLine, ContentLine, MusicalElement};
 use super::helpers::source_from_span;
 use super::content_line::transform_content_line;
+use super::pitch::transform_pitch;
 
 pub(super) fn transform_stave(stave_pair: Pair<Rule>) -> Result<Stave, String> {
     let mut text_lines_before = Vec::new();
@@ -50,4 +51,49 @@ fn transform_text_lines(text_lines_pair: Pair<Rule>) -> Vec<TextLine> {
         }
     }
     lines
+}
+
+/// Transform a simple_content_line (no barlines) into a Stave
+pub(super) fn transform_simple_content_to_stave(content_pair: Pair<Rule>) -> Result<Stave, String> {
+    use crate::document::model::NotationSystem;
+    
+    let source = source_from_span(content_pair.as_span());
+    let mut elements = Vec::new();
+    
+    // Extract musical elements from simple_content_line
+    for element in content_pair.clone().into_inner() {
+        if element.as_rule() == Rule::musical_element_no_barline {
+            for inner in element.into_inner() {
+                match inner.as_rule() {
+                    Rule::pitch => {
+                        // Default values for simple content (no slurs, no beat groups)
+                        let musical_elem = transform_pitch(inner, false, false, NotationSystem::Number)?;
+                        elements.push(musical_elem);
+                    }
+                    Rule::space => {
+                        elements.push(MusicalElement::Space {
+                            count: 1,
+                            in_slur: false,
+                            in_beat_group: false,
+                            source: source_from_span(inner.as_span()),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    
+    let content_line = ContentLine {
+        elements,
+        source: source.clone(),
+    };
+    
+    Ok(Stave {
+        text_lines_before: Vec::new(),
+        content_line,
+        text_lines_after: Vec::new(),
+        notation_system: NotationSystem::Number, // Default to Number system
+        source,
+    })
 }
