@@ -267,38 +267,74 @@ async function parseInput(input) {
                 svgOutput.className = 'tab-content loading';
             }
             
-            // VexFlow
-            if (data.vexflow && data.vexflow_svg) {
-                console.log('🎼 Rendering VexFlow output:', {
+            // VexFlow - Enhanced rendering with professional features
+            if (data.vexflow) {
+                console.log('🎼 Rendering enhanced VexFlow output:', {
                     hasVexflowData: !!data.vexflow,
-                    hasSvg: !!data.vexflow_svg,
-                    svgLength: data.vexflow_svg?.length
+                    staves: data.vexflow.staves?.length,
+                    hasAdvancedFeatures: data.vexflow.staves?.some(s => s.notes?.some(n => n.type === 'Tuplet' || n.type === 'SlurStart'))
                 });
                 
-                // Display the VexFlow SVG rendering
                 const vexflowOutput = document.getElementById('vexflow-output');
-                vexflowOutput.innerHTML = data.vexflow_svg + 
-                    '<div id="vexflow-data" class="json-output" style="margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>';
                 
-                // Display the JSON data below the SVG
-                const vexJsonString = JSON.stringify(data.vexflow, null, 2);
-                const newVexflowData = document.getElementById('vexflow-data');
-                newVexflowData.innerHTML = '<div class="syntax-highlight">' + syntaxHighlight(vexJsonString) + '</div>';
-            } else {
-                console.log('⚠️ No VexFlow data available, using canvas fallback');
-                vexflowData.innerHTML = '<span class="loading">No VexFlow data available</span>';
-                if (vexflowCanvas) {
-                    console.log('🖼️ Drawing VexFlow canvas fallback');
-                    const ctx = vexflowCanvas.getContext('2d');
-                    ctx.clearRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
-                    ctx.fillStyle = '#fafafa';
-                    ctx.fillRect(0, 0, vexflowCanvas.width, vexflowCanvas.height);
-                    ctx.fillStyle = '#666';
-                    ctx.font = '14px Arial';
-                    ctx.fillText('No VexFlow rendering available', 20, 100);
+                // Create container for VexFlow rendering
+                vexflowOutput.innerHTML = `
+                    <div class="vexflow-professional">
+                        <div class="text-muted mb-2">Professional VexFlow Rendering with Advanced Features</div>
+                        <div id="vexflow-notation" style="width: 100%; min-height: 200px; border: 1px solid #ddd; background: #fafafa;"></div>
+                        <div class="mt-2">
+                            <button id="toggle-vexflow-data" class="btn btn-sm btn-outline-secondary">Show JSON Data</button>
+                        </div>
+                        <div id="vexflow-data" class="json-output mt-2" style="display: none; max-height: 300px; overflow-y: auto;"></div>
+                    </div>
+                `;
+                
+                // Render with enhanced VexFlow renderer
+                if (window.VexFlowRenderer) {
+                    window.VexFlowRenderer.renderVexFlowNotation(data.vexflow, 'vexflow-notation')
+                        .then(success => {
+                            if (success) {
+                                console.log('✅ Enhanced VexFlow rendering completed');
+                            } else {
+                                console.warn('⚠️ VexFlow rendering had issues');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('🚨 VexFlow rendering failed:', error);
+                            document.getElementById('vexflow-notation').innerHTML = 
+                                `<div class="alert alert-warning">VexFlow rendering failed: ${error.message}</div>`;
+                        });
                 } else {
-                    console.log('❌ VexFlow canvas element is null - cannot draw fallback');
+                    console.warn('⚠️ VexFlowRenderer not available, loading...');
+                    // Try to load the renderer and retry
+                    loadVexFlowRenderer().then(() => {
+                        if (window.VexFlowRenderer) {
+                            window.VexFlowRenderer.renderVexFlowNotation(data.vexflow, 'vexflow-notation');
+                        }
+                    });
                 }
+                
+                // Setup JSON data toggle
+                const vexJsonString = JSON.stringify(data.vexflow, null, 2);
+                const vexflowDataDiv = document.getElementById('vexflow-data');
+                vexflowDataDiv.innerHTML = '<div class="syntax-highlight">' + syntaxHighlight(vexJsonString) + '</div>';
+                
+                document.getElementById('toggle-vexflow-data').addEventListener('click', function() {
+                    const dataDiv = document.getElementById('vexflow-data');
+                    const button = this;
+                    if (dataDiv.style.display === 'none') {
+                        dataDiv.style.display = 'block';
+                        button.textContent = 'Hide JSON Data';
+                    } else {
+                        dataDiv.style.display = 'none';
+                        button.textContent = 'Show JSON Data';
+                    }
+                });
+                
+            } else {
+                console.log('⚠️ No VexFlow data available');
+                const vexflowOutput = document.getElementById('vexflow-output');
+                vexflowOutput.innerHTML = '<div class="text-muted">No VexFlow data available - check parser output</div>';
             }
             
         } else {
@@ -496,6 +532,31 @@ function drawVexFlowPlaceholder(canvas, input) {
     ctx.fillText('VexFlow-style rendering placeholder', 50, canvas.height - 20);
 }
 
+// Load VexFlow renderer dynamically
+async function loadVexFlowRenderer() {
+    if (window.VexFlowRenderer) return;
+    
+    try {
+        const script = document.createElement('script');
+        script.src = 'vexflow-renderer.js';
+        script.async = true;
+        
+        return new Promise((resolve, reject) => {
+            script.onload = () => {
+                console.log('✅ VexFlow renderer loaded');
+                resolve();
+            };
+            script.onerror = () => {
+                console.error('❌ Failed to load VexFlow renderer');
+                reject(new Error('Failed to load VexFlow renderer'));
+            };
+            document.head.appendChild(script);
+        });
+    } catch (error) {
+        console.error('🚨 Error loading VexFlow renderer:', error);
+    }
+}
+
 // Initialize the application on page load
 function initializeApp() {
     // Restore saved input text
@@ -508,6 +569,9 @@ function initializeApp() {
     
     // Restore active tab
     restoreActiveTab();
+    
+    // Load VexFlow renderer
+    loadVexFlowRenderer();
     
     // Only parse if there's actually saved input to avoid unnecessary API calls
     if (savedInput && savedInput.trim()) {

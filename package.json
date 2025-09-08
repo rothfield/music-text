@@ -1,0 +1,17 @@
+{
+  "name": "music-text",
+  "version": "1.0.0",
+  "description": "A Rust-based musical notation parser using Pest grammar for parsing multiple notation systems and converting them to various musical formats (VexFlow, LilyPond, etc.).",
+  "main": "debug-flashing.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "canvas": "^3.2.0",
+    "jsdom": "^26.1.0"
+  }
+}

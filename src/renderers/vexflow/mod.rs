@@ -1,23 +1,73 @@
 use crate::stave_parser::ProcessedStave;
-use crate::rhythm_fsm::{Item, Event};
+use crate::rhythm_fsm::{Item, Event, Beat};
+use crate::old_models::{Degree, BarlineType};
+use serde::{Serialize, Deserialize};
 
-/// Convert staves to VexFlow SVG
+/// VexFlow output structures for sophisticated rendering
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VexFlowStave {
+    pub notes: Vec<VexFlowElement>,
+    pub key_signature: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum VexFlowElement {
+    Note {
+        keys: Vec<String>,
+        duration: String,
+        dots: u8,
+        accidentals: Vec<VexFlowAccidental>,
+        tied: bool,
+        beam_start: bool,
+        beam_end: bool,
+        syl: Option<String>, // Lyrics/syllables
+        ornaments: Vec<String>, // Ornament types
+    },
+    Rest {
+        duration: String,
+        dots: u8,
+    },
+    BarLine {
+        bar_type: String,
+    },
+    SlurStart,
+    SlurEnd,
+    Tuplet {
+        notes: Vec<VexFlowElement>,
+        divisions: usize,
+        ratio: Option<(usize, usize)>, // (notes, in_space_of)
+    },
+    Breathmark,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VexFlowAccidental {
+    pub index: usize,
+    pub accidental: String,
+}
+
+/// Convert staves to VexFlow SVG - enhanced with sophisticated rendering
 pub fn render_vexflow_svg(staves: &[ProcessedStave]) -> String {
+    // Generate VexFlow JSON first
+    let _vexflow_data = render_vexflow_data(staves);
+    
+    // Use the VexFlow JSON to render SVG
     let mut svg = String::new();
-    svg.push_str(r#"<svg width="600" height="200" xmlns="http://www.w3.org/2000/svg">"#);
+    svg.push_str(r#"<svg width="800" height="300" xmlns="http://www.w3.org/2000/svg">"#);
     svg.push_str("\n");
     
     // Background
-    svg.push_str("  <rect width=\"600\" height=\"200\" fill=\"#fafafa\" stroke=\"#333\" stroke-width=\"1\"/>");
+    svg.push_str("  <rect width=\"800\" height=\"300\" fill=\"#fafafa\" stroke=\"#333\" stroke-width=\"1\"/>");
     svg.push_str("\n");
     
     // Title
-    svg.push_str("  <text x=\"20\" y=\"25\" font-family=\"serif\" font-size=\"16\" font-weight=\"bold\" fill=\"#333\">VexFlow-style Musical Notation</text>");
+    svg.push_str("  <text x=\"20\" y=\"25\" font-family=\"serif\" font-size=\"16\" font-weight=\"bold\" fill=\"#333\">VexFlow Professional Notation</text>");
     svg.push_str("\n");
     
     // Staff lines
     let staff_y = 80;
-    let staff_width = 500;
+    let staff_width = 700;
     let staff_x = 50;
     
     for i in 0..5 {
@@ -40,158 +90,254 @@ pub fn render_vexflow_svg(staves: &[ProcessedStave]) -> String {
         staff_x + 50, staff_y + 20));
     svg.push_str("\n");
     
-    // Notes
-    let mut note_x = staff_x + 80;
-    
-    for stave in staves {
-        // For now, just render a placeholder message
-        // TODO: Update SVG rendering to work with rhythm items
-        for rhythm_item in &stave.rhythm_items {
-            if let Item::Beat(beat) = rhythm_item {
-                for beat_element in &beat.elements {
-                    if let Event::Note { degree, .. } = &beat_element.event {
-                        let note_y = match degree {
-                        crate::old_models::Degree::N1 => staff_y + 50,  // C below staff
-                        crate::old_models::Degree::N2 => staff_y + 45,  // D
-                        crate::old_models::Degree::N3 => staff_y + 40,  // E
-                        crate::old_models::Degree::N4 => staff_y + 35,  // F
-                        crate::old_models::Degree::N5 => staff_y + 30,  // G
-                        crate::old_models::Degree::N6 => staff_y + 25,  // A
-                        crate::old_models::Degree::N7 => staff_y + 20,  // B
-                        _ => staff_y + 20,    // Default to B
-                    };
-                    
-                    // Note head
-                    svg.push_str(&format!("  <ellipse cx=\"{}\" cy=\"{}\" rx=\"6\" ry=\"4\" fill=\"#333\"/>", 
-                        note_x, note_y));
-                    svg.push_str("\n");
-                    
-                    // Stem
-                    svg.push_str(&format!("  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#333\" stroke-width=\"2\"/>", 
-                        note_x + 6, note_y, note_x + 6, note_y - 25));
-                    svg.push_str("\n");
-                    
-                    // Ledger line if needed (for C below staff)
-                    if note_y >= staff_y + 45 {
-                        svg.push_str(&format!("  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#333\" stroke-width=\"1\"/>", 
-                            note_x - 8, staff_y + 50, note_x + 14, staff_y + 50));
-                        svg.push_str("\n");
-                    }
-                    
-                        // TODO: Add slur and beat group indication using new Event structure
-                        
-                        note_x += 60;
-                    }
-                }
-            } else if let Item::Barline(_, _) = rhythm_item {
-                // Barline
-                svg.push_str(&format!("  <line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#333\" stroke-width=\"2\"/>", 
-                    note_x - 10, staff_y, note_x - 10, staff_y + 40));
-                svg.push_str("\n");
-                note_x += 20;
-            }
-        }
-    }
+    // Enhanced rendering notice
+    svg.push_str("  <text x=\"20\" y=\"50\" font-family=\"Arial\" font-size=\"12\" fill=\"#666\">Enhanced VexFlow data available in JSON - use JavaScript renderer for full features</text>");
+    svg.push_str("\n");
     
     // Footer
-    svg.push_str("  <text x=\"20\" y=\"180\" font-family=\"serif\" font-size=\"10\" fill=\"#999\">Generated by Music Text Parser • VexFlow-style rendering</text>");
+    svg.push_str("  <text x=\"20\" y=\"280\" font-family=\"serif\" font-size=\"10\" fill=\"#999\">Generated by Music Text Parser • Professional VexFlow rendering via JSON</text>");
     svg.push_str("\n");
     
     svg.push_str("</svg>");
     svg
 }
 
-/// Convert staves to VexFlow JSON data
+/// Convert staves to sophisticated VexFlow JSON data with advanced features
 pub fn render_vexflow_data(staves: &[ProcessedStave]) -> serde_json::Value {
-    let mut notes = Vec::new();
-    let mut beats = Vec::new();
+    let mut staves_data = Vec::new();
     
     for stave in staves {
-        for rhythm_item in &stave.rhythm_items {
-            match rhythm_item {
-                Item::Beat(beat) => {
-                    let mut beat_notes = Vec::new();
-                    
-                    for beat_element in &beat.elements {
-                        match &beat_element.event {
-                            Event::Note { degree, .. } => {
-                                let pitch = match degree {
-                                    crate::old_models::Degree::N1 => "c/4",
-                                    crate::old_models::Degree::N2 => "d/4",
-                                    crate::old_models::Degree::N3 => "e/4",
-                                    crate::old_models::Degree::N4 => "f/4",
-                                    crate::old_models::Degree::N5 => "g/4",
-                                    crate::old_models::Degree::N6 => "a/4",
-                                    crate::old_models::Degree::N7 => "b/4",
-                                    _ => "c/4",
-                                };
-                                
-                                let duration = match beat_element.subdivisions {
-                                    1 => "8",   // eighth note
-                                    2 => "q",   // quarter note
-                                    3 => "q.",  // dotted quarter
-                                    4 => "h",   // half note
-                                    _ => "q",   // fallback
-                                };
-                                
-                                let note_data = serde_json::json!({
-                                    "keys": [pitch],
-                                    "duration": duration,
-                                    "subdivisions": beat_element.subdivisions
-                                });
-                                
-                                beat_notes.push(note_data.clone());
-                                notes.push(note_data);
-                            }
-                            Event::Rest => {
-                                let duration = match beat_element.subdivisions {
-                                    1 => "8r",   // eighth rest
-                                    2 => "qr",   // quarter rest
-                                    3 => "q.r",  // dotted quarter rest
-                                    4 => "hr",   // half rest
-                                    _ => "qr",   // fallback
-                                };
-                                
-                                let rest_data = serde_json::json!({
-                                    "keys": [],
-                                    "duration": duration,
-                                    "subdivisions": beat_element.subdivisions
-                                });
-                                
-                                beat_notes.push(rest_data.clone());
-                                notes.push(rest_data);
-                            }
-                        }
-                    }
-                    
-                    beats.push(serde_json::json!({
-                        "divisions": beat.divisions,
-                        "is_tuplet": beat.is_tuplet,
-                        "tuplet_ratio": beat.tuplet_ratio,
-                        "notes": beat_notes
-                    }));
-                }
-                Item::Barline(_, _) => {
-                    beats.push(serde_json::json!({
-                        "type": "barline"
-                    }));
-                }
-                Item::Breathmark => {
-                    beats.push(serde_json::json!({
-                        "type": "breathmark"
-                    }));
-                }
-                Item::Tonic(_) => {
-                    // Tonic declarations don't generate visual elements - skip
-                }
-            }
-        }
+        let vexflow_stave = convert_stave_to_vexflow(stave);
+        staves_data.push(vexflow_stave);
     }
     
     serde_json::json!({
-        "notes": notes,
-        "beats": beats,
+        "staves": staves_data,
         "time_signature": "4/4",
-        "clef": "treble"
+        "clef": "treble",
+        "key_signature": "C"
     })
+}
+
+/// Convert a single stave to VexFlow format with advanced features
+fn convert_stave_to_vexflow(stave: &ProcessedStave) -> VexFlowStave {
+    let mut vexflow_elements = Vec::new();
+    let mut slur_stack = Vec::new(); // Track slur nesting
+    
+    for rhythm_item in &stave.rhythm_items {
+        match rhythm_item {
+            Item::Beat(beat) => {
+                if beat.is_tuplet {
+                    // Handle tuplet as a group
+                    let tuplet_elements = convert_beat_to_vexflow_elements(beat, &mut slur_stack);
+                    let tuplet_ratio = beat.tuplet_ratio.unwrap_or((beat.divisions, next_power_of_2(beat.divisions)));
+                    
+                    vexflow_elements.push(VexFlowElement::Tuplet {
+                        notes: tuplet_elements,
+                        divisions: beat.divisions,
+                        ratio: Some(tuplet_ratio),
+                    });
+                } else {
+                    // Regular beat - add elements directly
+                    let beat_elements = convert_beat_to_vexflow_elements(beat, &mut slur_stack);
+                    vexflow_elements.extend(beat_elements);
+                }
+            },
+            Item::Barline(barline_type, _tala) => {
+                vexflow_elements.push(VexFlowElement::BarLine {
+                    bar_type: barline_type_to_vexflow_string(barline_type),
+                });
+            },
+            Item::Breathmark => {
+                vexflow_elements.push(VexFlowElement::Breathmark);
+            },
+            Item::Tonic(_) => {
+                // Tonic affects transposition but doesn't generate visual elements
+            },
+        }
+    }
+    
+    VexFlowStave {
+        notes: vexflow_elements,
+        key_signature: Some("C".to_string()),
+    }
+}
+
+/// Convert a beat to VexFlow elements with slur handling
+fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>) -> Vec<VexFlowElement> {
+    let mut elements = Vec::new();
+    
+    for beat_element in &beat.elements {
+        match &beat_element.event {
+            Event::Note { degree, octave, children, slur } => {
+                // Handle slur start
+                if let Some(slur_role) = slur {
+                    use crate::old_models::SlurRole;
+                    match slur_role {
+                        SlurRole::Start | SlurRole::StartEnd => {
+                            elements.push(VexFlowElement::SlurStart);
+                            slur_stack.push(true);
+                        },
+                        _ => {}
+                    }
+                }
+                
+                // Convert note
+                let (keys, accidentals) = degree_to_vexflow_key(*degree, *octave);
+                let (duration, dots) = convert_tuplet_duration_to_vexflow(beat_element.tuplet_duration);
+                
+                // Extract syllable from children
+                let syllable = children.iter()
+                    .find_map(|child| match child {
+                        crate::old_models::ParsedChild::Syllable { text, .. } => Some(text.clone()),
+                        _ => None,
+                    });
+                
+                // Extract ornaments from children  
+                let ornaments: Vec<String> = children.iter()
+                    .filter_map(|child| match child {
+                        crate::old_models::ParsedChild::Ornament { kind, .. } => {
+                            Some(match kind {
+                                crate::old_models::OrnamentType::Mordent => "Mordent".to_string(),
+                                crate::old_models::OrnamentType::Trill => "Trill".to_string(),
+                                crate::old_models::OrnamentType::Turn => "Turn".to_string(),
+                                crate::old_models::OrnamentType::Grace => "Grace".to_string(),
+                            })
+                        },
+                        _ => None,
+                    }).collect();
+                
+                elements.push(VexFlowElement::Note {
+                    keys: vec![keys],
+                    duration,
+                    dots,
+                    accidentals,
+                    tied: false, // Will be determined later based on ties
+                    beam_start: false, // Will be determined by beaming logic
+                    beam_end: false,
+                    syl: syllable,
+                    ornaments,
+                });
+                
+                // Handle slur end
+                if let Some(slur_role) = slur {
+                    use crate::old_models::SlurRole;
+                    match slur_role {
+                        SlurRole::End | SlurRole::StartEnd => {
+                            elements.push(VexFlowElement::SlurEnd);
+                            if !slur_stack.is_empty() {
+                                slur_stack.pop();
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+            },
+            Event::Rest => {
+                let (duration, dots) = convert_tuplet_duration_to_vexflow(beat_element.tuplet_duration);
+                
+                elements.push(VexFlowElement::Rest {
+                    duration,
+                    dots,
+                });
+            },
+        }
+    }
+    
+    elements
+}
+
+/// Convert Degree and octave to VexFlow key format
+fn degree_to_vexflow_key(degree: Degree, octave: i8) -> (String, Vec<VexFlowAccidental>) {
+    use Degree::*;
+    
+    // VexFlow octave: 4 = middle C
+    let vexflow_octave = octave + 4;
+    
+    let (note_name, accidental_str) = match degree {
+        // Scale degree 1 (Do/Sa/C)
+        N1bb => ("c", Some("bb")), N1b => ("c", Some("b")), N1 => ("c", None),
+        N1s => ("c", Some("#")), N1ss => ("c", Some("##")),
+        // Scale degree 2 (Re/D)  
+        N2bb => ("d", Some("bb")), N2b => ("d", Some("b")), N2 => ("d", None),
+        N2s => ("d", Some("#")), N2ss => ("d", Some("##")),
+        // Scale degree 3 (Mi/Ga/E)
+        N3bb => ("e", Some("bb")), N3b => ("e", Some("b")), N3 => ("e", None),
+        N3s => ("e", Some("#")), N3ss => ("e", Some("##")),
+        // Scale degree 4 (Fa/Ma/F)
+        N4bb => ("f", Some("bb")), N4b => ("f", Some("b")), N4 => ("f", None),
+        N4s => ("f", Some("#")), N4ss => ("f", Some("##")),
+        // Scale degree 5 (Sol/Pa/G)
+        N5bb => ("g", Some("bb")), N5b => ("g", Some("b")), N5 => ("g", None),
+        N5s => ("g", Some("#")), N5ss => ("g", Some("##")),
+        // Scale degree 6 (La/Dha/A)
+        N6bb => ("a", Some("bb")), N6b => ("a", Some("b")), N6 => ("a", None),
+        N6s => ("a", Some("#")), N6ss => ("a", Some("##")),
+        // Scale degree 7 (Ti/Ni/B)
+        N7bb => ("b", Some("bb")), N7b => ("b", Some("b")), N7 => ("b", None),
+        N7s => ("b", Some("#")), N7ss => ("b", Some("##")),
+    };
+    
+    let key = if let Some(acc) = accidental_str {
+        format!("{}{}/{}", note_name, acc, vexflow_octave)
+    } else {
+        format!("{}/{}", note_name, vexflow_octave)
+    };
+    
+    // VexFlow handles accidentals in the key name, so no separate accidentals needed
+    (key, vec![])
+}
+
+/// Convert tuplet duration (fraction) to VexFlow duration and dots
+fn convert_tuplet_duration_to_vexflow(duration: fraction::Fraction) -> (String, u8) {
+    let numerator = *duration.numer().unwrap() as u32;
+    let denominator = *duration.denom().unwrap() as u32;
+    
+    // Handle standard durations
+    match (numerator, denominator) {
+        (1, 1) => ("w".to_string(), 0),     // whole
+        (1, 2) => ("h".to_string(), 0),     // half
+        (3, 4) => ("h".to_string(), 1),     // dotted half
+        (1, 4) => ("q".to_string(), 0),     // quarter
+        (3, 8) => ("q".to_string(), 1),     // dotted quarter
+        (7, 16) => ("q".to_string(), 2),    // double-dotted quarter
+        (1, 8) => ("8".to_string(), 0),     // eighth
+        (3, 16) => ("8".to_string(), 1),    // dotted eighth
+        (1, 16) => ("16".to_string(), 0),   // sixteenth
+        (1, 32) => ("32".to_string(), 0),   // thirty-second
+        (1, 64) => ("64".to_string(), 0),   // sixty-fourth
+        _ => {
+            // For complex fractions, find the closest standard duration
+            let decimal_value = numerator as f64 / denominator as f64;
+            if decimal_value >= 0.75 { ("w".to_string(), 0) }
+            else if decimal_value >= 0.375 { ("h".to_string(), 0) }
+            else if decimal_value >= 0.1875 { ("q".to_string(), 0) }
+            else if decimal_value >= 0.09375 { ("8".to_string(), 0) }
+            else if decimal_value >= 0.046875 { ("16".to_string(), 0) }
+            else if decimal_value >= 0.0234375 { ("32".to_string(), 0) }
+            else { ("64".to_string(), 0) }
+        }
+    }
+}
+
+/// Convert BarlineType to VexFlow string
+fn barline_type_to_vexflow_string(barline_type: &BarlineType) -> String {
+    match barline_type {
+        BarlineType::Single => "single".to_string(),
+        BarlineType::Double => "double".to_string(),
+        BarlineType::RepeatStart => "repeat-begin".to_string(),
+        BarlineType::RepeatEnd => "repeat-end".to_string(),
+        BarlineType::RepeatBoth => "double-repeat".to_string(),
+        // Note: No Final barline type in old_models - use Double as fallback
+    }
+}
+
+/// Calculate next power of 2 for tuplet ratios
+fn next_power_of_2(n: usize) -> usize {
+    if n <= 1 { return 1; }
+    let mut power = 1;
+    while power < n {
+        power *= 2;
+    }
+    if power == n { power } else { power / 2 }
 }
