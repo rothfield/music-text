@@ -6,6 +6,10 @@
     <title>Music Text Parser</title>
     <link rel="stylesheet" href="assets/bootstrap.min.css">
     <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts for monospace options -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Source+Code+Pro:wght@400;700&family=JetBrains+Mono:wght@400;700&family=Fira+Code:wght@400;700&family=Space+Mono:wght@400;700&family=IBM+Plex+Mono:wght@400;700&family=Inconsolata:wght@400;700&family=PT+Mono&family=Noto+Sans+Mono:wght@400;700&family=Overpass+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="assets/bootstrap.bundle.min.js"></script>
     <script src="assets/vexflow4.js"></script>
 </head>
@@ -21,6 +25,54 @@
     <div class="container-fluid">
         <div class="mb-3">
             <textarea id="input-text" class="form-control" rows="3" placeholder="Try typing: 1 2 3 | 4 5 6&#10;or: C D E F G A B&#10;or: 1# 2b 3##"></textarea>
+            
+            <!-- Font Selection Dropdown -->
+            <div class="mt-2">
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <label for="font-selector" class="form-label mb-0 small text-muted">Font:</label>
+                    </div>
+                    <div class="col-auto">
+                        <select id="font-selector" class="form-select form-select-sm" style="width: auto;">
+                            <option value="'DejaVu Sans Mono', monospace" selected>DejaVu Sans Mono (Default)</option>
+                            <optgroup label="🌐 Web Fonts (Always Available)">
+                                <option value="'Roboto Mono', monospace">Roboto Mono</option>
+                                <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                                <option value="'Source Code Pro', monospace">Source Code Pro</option>
+                                <option value="'Fira Code', monospace">Fira Code</option>
+                                <option value="'Space Mono', monospace">Space Mono</option>
+                                <option value="'IBM Plex Mono', monospace">IBM Plex Mono</option>
+                                <option value="'Inconsolata', monospace">Inconsolata</option>
+                                <option value="'PT Mono', monospace">PT Mono</option>
+                                <option value="'Noto Sans Mono', monospace">Noto Sans Mono</option>
+                                <option value="'Overpass Mono', monospace">Overpass Mono</option>
+                            </optgroup>
+                            <optgroup label="🍎 macOS Fonts">
+                                <option value="'Monaco', monospace">Monaco</option>
+                                <option value="'Menlo', monospace">Menlo</option>
+                                <option value="'SF Mono', monospace">SF Mono</option>
+                            </optgroup>
+                            <optgroup label="🪟 Windows Fonts">
+                                <option value="'Consolas', monospace">Consolas</option>
+                                <option value="'Cascadia Code', monospace">Cascadia Code</option>
+                            </optgroup>
+                            <optgroup label="🐧 Linux Fonts">
+                                <option value="'Liberation Mono', monospace">Liberation Mono</option>
+                                <option value="'Ubuntu Mono', monospace">Ubuntu Mono</option>
+                            </optgroup>
+                            <optgroup label="📱 Universal">
+                                <option value="'Courier New', monospace">Courier New</option>
+                                <option value="'Anonymous Pro', monospace">Anonymous Pro</option>
+                                <option value="'Droid Sans Mono', monospace">Droid Sans Mono</option>
+                                <option value="monospace">Generic Monospace</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <small class="text-muted">Test: ┃▬•|-.123SRGCDEfghABC</small>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <ul class="nav nav-tabs" id="outputTabs" role="tablist">

@@ -40,6 +40,54 @@ pub fn parse_content_line(line: &str, line_num: usize) -> Result<ContentLine, Pa
                     in_beat_group: false,
                 })
             },
+            // Western notation: C D E F G A B
+            'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B' => {
+                let pitch_code = PitchCode::from_source(&ch.to_string());
+                MusicalElement::Note(Note {
+                    syllable: ch.to_string(),
+                    octave: 0,
+                    pitch_code,
+                    notation_system: NotationSystem::Western,
+                    source: Source {
+                        value: ch.to_string(),
+                        position: Position { line: line_num, column: col },
+                    },
+                    in_slur: false,
+                    in_beat_group: false,
+                })
+            },
+            // Sargam notation: S R G M P D N (both cases)
+            'S' | 's' | 'R' | 'r' | 'M' | 'm' | 'P' | 'p' | 'N' | 'n' => {
+                let pitch_code = PitchCode::from_source(&ch.to_string());
+                MusicalElement::Note(Note {
+                    syllable: ch.to_string(),
+                    octave: 0,
+                    pitch_code,
+                    notation_system: NotationSystem::Sargam,
+                    source: Source {
+                        value: ch.to_string(),
+                        position: Position { line: line_num, column: col },
+                    },
+                    in_slur: false,
+                    in_beat_group: false,
+                })
+            },
+            // Handle lowercase sargam 'g' and 'd' separately (they're komal variants)
+            'g' | 'd' => {
+                let pitch_code = PitchCode::from_source(&ch.to_string());
+                MusicalElement::Note(Note {
+                    syllable: ch.to_string(),
+                    octave: 0,
+                    pitch_code,
+                    notation_system: NotationSystem::Sargam,
+                    source: Source {
+                        value: ch.to_string(),
+                        position: Position { line: line_num, column: col },
+                    },
+                    in_slur: false,
+                    in_beat_group: false,
+                })
+            },
             '-' => MusicalElement::Dash {
                 source: Source {
                     value: ch.to_string(),

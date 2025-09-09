@@ -14,12 +14,113 @@ function saveActiveTabFromBootstrap() {
     }
 }
 
+// Unicode character replacements for better visual width
+const UNICODE_REPLACEMENTS = {
+    '-': '▬',  // Black rectangle for dashes
+    '.': '•',  // Bullet for dots
+    '|': '┃'   // Heavy vertical line for barlines
+};
+
+// Apply Unicode replacements to input (for display)
+function applyUnicodeReplacements(text) {
+    let result = text;
+    for (const [original, replacement] of Object.entries(UNICODE_REPLACEMENTS)) {
+        result = result.replace(new RegExp('\\' + original, 'g'), replacement);
+    }
+    return result;
+}
+
+// Convert Unicode back to standard characters for backend processing
+function convertUnicodeToStandard(text) {
+    let result = text;
+    
+    // Simple direct replacements - more reliable than complex regex
+    result = result.replace(/▬/g, '-');  // Black rectangle -> dash
+    result = result.replace(/•/g, '.');  // Bullet -> dot
+    result = result.replace(/┃/g, '|');  // Heavy vertical line -> pipe
+    
+    console.log('🔍 Unicode conversion debug:', {
+        input: text,
+        output: result,
+        changed: text !== result,
+        hasBarline: text.includes('┃'),
+        hasDash: text.includes('▬'),
+        hasDot: text.includes('•')
+    });
+    
+    return result;
+}
+
 // Add event listeners to Bootstrap tab buttons
 document.addEventListener('DOMContentLoaded', function() {
     const tabButtons = document.querySelectorAll('.nav-link');
     tabButtons.forEach(button => {
         button.addEventListener('shown.bs.tab', saveActiveTabFromBootstrap);
     });
+    
+    // Add font selector functionality
+    const fontSelector = document.getElementById('font-selector');
+    const inputText = document.getElementById('input-text');
+    
+    if (fontSelector && inputText) {
+        fontSelector.addEventListener('change', function() {
+            const selectedFont = this.value;
+            inputText.style.fontFamily = selectedFont;
+            
+            // Save font choice to localStorage
+            try {
+                localStorage.setItem('music-text-font', selectedFont);
+                console.log('Font changed to:', selectedFont);
+            } catch (e) {
+                console.warn('Failed to save font choice:', e);
+            }
+        });
+        
+        // Load saved font choice
+        try {
+            const savedFont = localStorage.getItem('music-text-font');
+            if (savedFont) {
+                fontSelector.value = savedFont;
+                inputText.style.fontFamily = savedFont;
+                console.log('Loaded saved font:', savedFont);
+            }
+        } catch (e) {
+            console.warn('Failed to load saved font:', e);
+        }
+    }
+    
+    // Add Unicode replacement functionality to input
+    if (inputText) {
+        // Handle keydown events for immediate replacement
+        inputText.addEventListener('keydown', function(e) {
+            const replacement = UNICODE_REPLACEMENTS[e.key];
+            if (replacement) {
+                e.preventDefault();
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                const value = e.target.value;
+                
+                e.target.value = value.substring(0, start) + replacement + value.substring(end);
+                e.target.setSelectionRange(start + 1, start + 1);
+                
+                // Trigger input event to update parsing
+                e.target.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+        
+        // Handle input events for paste operations
+        inputText.addEventListener('input', function(e) {
+            const originalValue = e.target.value;
+            const newValue = applyUnicodeReplacements(originalValue);
+            
+            if (originalValue !== newValue) {
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                e.target.value = newValue;
+                e.target.setSelectionRange(start, end);
+            }
+        });
+    }
 });
 
 function saveInputText(text) {
@@ -168,10 +269,18 @@ async function parseInput(input) {
             ctx.fillText('Rendering VexFlow...', 20, 100);
         }
         
+        // Convert Unicode characters back to standard characters for backend
+        const standardInput = convertUnicodeToStandard(input);
+        console.log('🔄 Converting Unicode to standard for backend:', {
+            original: input.slice(0, 50) + (input.length > 50 ? '...' : ''),
+            converted: standardInput.slice(0, 50) + (standardInput.length > 50 ? '...' : ''),
+            hasUnicode: input !== standardInput
+        });
+        
         // Fetch all outputs from unified endpoint
-        const apiUrl = `/api/parse?input=${encodeURIComponent(input)}`;
+        const apiUrl = `/api/parse?input=${encodeURIComponent(standardInput)}`;
         console.log('🔄 Making API request:', { 
-            input: input.slice(0, 100) + (input.length > 100 ? '...' : ''),
+            input: standardInput.slice(0, 100) + (standardInput.length > 100 ? '...' : ''),
             url: apiUrl,
             timestamp: new Date().toISOString()
         });
@@ -434,7 +543,9 @@ document.getElementById('input-text').addEventListener('input', function(e) {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
         console.log('⏰ Debounce timer triggered, calling parseInput');
-        parseInput(inputValue);
+        // Get the current value from textarea (which should have Unicode replacements)
+        const currentValue = e.target.value;
+        parseInput(currentValue);
     }, 1000); // Increased debounce to reduce API calls
     
     // If SVG tab is active, also trigger SVG generation with 3-second debounce
@@ -617,6 +728,14 @@ async function generateSvgFromLilypond() {
     
     const notation = inputField.value.trim();
     
+    // Convert Unicode characters back to standard characters for backend
+    const standardNotation = convertUnicodeToStandard(notation);
+    console.log('🔄 Converting Unicode to standard for SVG generation:', {
+        original: notation.slice(0, 50) + (notation.length > 50 ? '...' : ''),
+        converted: standardNotation.slice(0, 50) + (standardNotation.length > 50 ? '...' : ''),
+        hasUnicode: notation !== standardNotation
+    });
+    
     // Update button state
     const button = document.getElementById("generate-svg-btn");
     const svgContent = document.getElementById("svg-content");
@@ -632,7 +751,7 @@ async function generateSvgFromLilypond() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                notation: notation
+                notation: standardNotation
             })
         });
         

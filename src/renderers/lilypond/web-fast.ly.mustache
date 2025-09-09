@@ -1,6 +1,8 @@
 \version "{{version}}"
 \language "english"
 
+#(set-global-staff-size 40)
+
 \paper {
   indent = 0\mm
   tagline = ##f
@@ -11,7 +13,6 @@
 {{#lyrics}}
 melody = {
   \fixed c' {
-    \autoBeamOff
     {{{staves}}}
   }
 }

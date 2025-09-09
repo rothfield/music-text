@@ -35,14 +35,20 @@
     color: #ecf0f1;
 }
 
+/* Musical notation input: DejaVu Sans Mono 24px for optimal Unicode character width consistency */
+/* Motivation: ▬ (dash), • (dot), ┃ (barline) need equal visual "inked width" for column alignment */
 #input-text {
-    font-family: Arial, monospace;
-    font-size: 20pt;
-    font-weight: bold;
-    transition: height 0.2s ease-out;
-    resize: none;
-    overflow: hidden;
-    min-height: 60px;
+    font-family: 'DejaVu Sans Mono', monospace; /* DejaVu Sans Mono chosen for best Unicode musical character rendering */
+    font-size: 24px; /* 24px optimal size for character width visibility and readability */
+    font-weight: bold; /* Bold weight improves character distinction and visual consistency */
+    border: 1px solid #ccc; /* Clean border for input field definition */
+    padding: 10px; /* Comfortable padding for text input */
+    resize: vertical; /* Allow vertical resize for longer musical passages */
+    width: 100%; /* Full width for musical notation layout */
+    height: 100px; /* Fixed height optimized for musical input patterns */
+    letter-spacing: 0; /* Reset letter spacing to prevent character bleeding */
+    line-height: 1.2; /* Controlled line height to contain Unicode characters properly */
+    overflow: hidden; /* Prevent character bleeding outside boundaries */
 }
 
 .json-output {

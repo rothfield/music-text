@@ -1,6 +1,15 @@
 # Music-Text
 
-A Rust-based musical notation parser using Pest grammar for parsing multiple notation systems and converting them to various musical formats (VexFlow, LilyPond, etc.).
+A Rust-based musical notation parser using hand-written recursive descent parsing for multiple notation systems and converting them to various musical formats (VexFlow, LilyPond, etc.).
+
+## 🚨 CRITICAL: Monospaced Font Required
+
+**IMPORTANT**: Music-Text notation is **column-based** and requires a **monospaced font** for proper alignment. When using Music-Text:
+- **Terminal/CLI**: Use a monospaced font (most terminals already do)
+- **Text Editors**: Use a monospaced font like Courier New, Consolas, or Monaco
+- **Web Interface**: The textarea is configured to use monospace fonts automatically
+
+Column alignment is essential for features like slurs, octave markers, and multi-line annotations to work correctly.
 
 ## Current Architecture (As-Is)
 
@@ -13,14 +22,15 @@ A Rust-based musical notation parser using Pest grammar for parsing multiple not
 
 ### Core Components
 
-1. **Pest Grammar Parser** (`src/document/grammar.pest`)
+1. **Hand-Written Recursive Descent Parser** (`src/document/manual_parser/`)
    - Handles multiple notation systems (sargam, number, western, abc, doremi)
-   - Supports multi-line notation with annotations
+   - Supports multi-line notation with annotations and multi-stave structures
    - Processes barlines, beats, segments, and musical structure
+   - Clean paragraph-based document structure parsing
 
 2. **Document Processing Pipeline**
    - **Document Model** (`src/document/model.rs`): Core data structures for musical notation
-   - **Tree Transformer** (`src/document/tree_transformer/`): Transforms Pest parse tree to document model
+   - **Manual Parser** (`src/document/manual_parser/`): Direct document structure parsing
    - **Pipeline** (`src/pipeline.rs`): Orchestrates the processing pipeline
    - **Stave Parser** (`src/stave_parser.rs`): Parses individual staves
 
@@ -40,6 +50,8 @@ A Rust-based musical notation parser using Pest grammar for parsing multiple not
 4. **Web Interface**
    - **Web Server** (`src/web_server.rs`): Integrated Rust web server module on port 3000
    - **Web UI** (`webapp/`): Interactive data flow pipeline visualization with VexFlow rendering
+   - **⚠️ NOTE**: No separate Node.js server for production - the Rust binary serves static files and API endpoints directly
+   - **⚠️ NOTE**: Node.js is only used for Playwright browser testing (`npx playwright test`)
 
 ## Supported Notation Systems
 
@@ -120,41 +132,47 @@ Fast LilyPond SVG generation endpoint
 ```bash
 # Clean build (removes previous artifacts)
 cargo clean
-cargo build
+cargo build --release
+
+# ALWAYS compile after finishing tasks
+cargo build --release
 ```
 
 ### Running the Application
 
 #### Web Server with UI (Port 3000)
 ```bash
-# Start the integrated web server
-./target/debug/music-text --web
+# Start the integrated web server (use release build)
+./target/release/music-text --web
+
+# ALWAYS restart server after code changes
+pkill -f "music-text.*--web"  # Kill old servers
+./target/release/music-text --web
 
 # Then visit http://localhost:3000 for the interactive UI
 ```
 
 #### CLI Usage
 ```bash
-# Parse with different output stages
-./target/debug/music-text pest "|1 2 3"        # Show raw PEST parse tree
-./target/debug/music-text document "|1 2 3"    # Show parsed document structure
-./target/debug/music-text processed "|1 2 3"   # Show processed staves
-./target/debug/music-text minimal-lily "|1 2 3" # Show minimal LilyPond notation
-./target/debug/music-text full-lily "|1 2 3"    # Show full LilyPond score
-./target/debug/music-text vexflow "|1 2 3"      # Show VexFlow data structure
-./target/debug/music-text vexflow-svg "|1 2 3"  # Show VexFlow SVG rendering
-./target/debug/music-text all "|1 2 3"          # Show all stages
+# Parse with different output stages (use release build)
+./target/release/music-text document "|1 2 3"    # Show parsed document structure
+./target/release/music-text processed "|1 2 3"   # Show processed staves
+./target/release/music-text minimal-lily "|1 2 3" # Show minimal LilyPond notation
+./target/release/music-text full-lily "|1 2 3"    # Show full LilyPond score
+./target/release/music-text vexflow "|1 2 3"      # Show VexFlow data structure
+./target/release/music-text vexflow-svg "|1 2 3"  # Show VexFlow SVG rendering
+./target/release/music-text all "|1 2 3"          # Show all stages
 
 # Generate LilyPond SVG files directly (RECOMMENDED WORKFLOW)
-cat row.txt | ./target/debug/music-text lilypond-svg -o row    # Creates row.ly and row.svg
-echo "|1 2 3" | ./target/debug/music-text lilypond-svg        # Creates output.ly and output.svg
+cat row.txt | ./target/release/music-text lilypond-svg -o row    # Creates row.ly and row.svg
+echo "|1 2 3" | ./target/release/music-text lilypond-svg        # Creates output.ly and output.svg
 
 # Read from stdin
-echo "|1 2 3" | ./target/debug/music-text document
-cat input.notation | ./target/debug/music-text full-lily
+echo "|1 2 3" | ./target/release/music-text document
+cat input.notation | ./target/release/music-text full-lily
 
 # Manual SVG generation using LilyPond compiler
-cat row.txt | ./target/debug/music-text full-lily > row.ly
+cat row.txt | ./target/release/music-text full-lily > row.ly
 lilypond --format=svg row.ly    # Creates row.svg
 lilypond --format=png row.ly    # Creates row.png
 ```
@@ -182,14 +200,16 @@ pkill -f "music-text --web"
    - YAML representation
 
 ### Current Status
-- ✅ Pest grammar parsing
-- ✅ AST generation
+- ✅ Hand-written recursive descent parser (replaced Pest)
+- ✅ AST generation with proper document structure
+- ✅ Multi-stave parsing and professional score generation
 - ✅ Spatial processing (slurs, octaves, lyrics)
 - ✅ Web UI with data flow visualization
 - ✅ API endpoints for parsing
+- ✅ Complete LilyPond score rendering with simultaneous music
+- ✅ Professional SVG generation via web server
 - ⚠️ Rhythm FSM integration (in development)
-- ⚠️ Empty segments issue (being investigated)
-- ✅ Leading newline handling (fixed)
+- ✅ Multi-stave marker detection fixed
 
 ## Examples
 
@@ -217,6 +237,19 @@ Input: "1-2-3"
 Output: 3/2 tuplet with dotted quarter C, quarter D, eighth E
 ```
 
+### Multi-Stave Grouping
+```
+Input:
+____
+|123
+
+|345
+_____
+
+|333
+Output: 3-stave staff system with proper grouping and all 9 notes correctly transcribed
+```
+
 ### Multi-line with Annotations
 ```
 Input:
@@ -241,15 +274,12 @@ music-text/
 │   └── document/                # Document processing
 │       ├── mod.rs               # Module exports
 │       ├── model.rs             # Domain models
-│       ├── pest_interface.rs    # Pest integration
-│       ├── grammar.pest         # Pest grammar file
-│       └── tree_transformer/    # AST transformation
-│           ├── mod.rs           # Transformer exports
-│           ├── document.rs      # Document transformer
-│           ├── stave.rs         # Stave transformer
-│           ├── content_line.rs  # Content line transformer
-│           ├── pitch.rs         # Pitch transformer
-│           └── helpers.rs       # Helper functions
+│       └── manual_parser/       # Hand-written recursive descent parser
+│           ├── mod.rs           # Parser exports
+│           ├── document.rs      # Document structure parser
+│           ├── stave.rs         # Stave parser with multi-stave detection
+│           ├── error.rs         # Error handling
+│           └── element.rs       # Musical element parsing
 ├── webapp/
 │   ├── app.js                   # Web UI JavaScript
 │   ├── index.html               # Web UI HTML
@@ -263,29 +293,31 @@ music-text/
 # Run unit tests
 cargo test
 
-# Test CLI with specific notation
-./target/debug/music-text pest "S R G M"
-./target/debug/music-text full-lily "1 2 3"
+# Test CLI with specific notation (use release build)
+./target/release/music-text document "S R G M"
+./target/release/music-text full-lily "1 2 3"
+
+# Multi-stave testing
+echo -e "____\n|123\n\n|345\n_____\n\n|333" | ./target/release/music-text full-lily
 
 # Start web server for interactive testing
-./target/debug/music-text --web
+./target/release/music-text --web
 # Then visit http://localhost:3000
 ```
 
 ## Known Issues
 
-1. **Empty Segments**: Parser currently not populating segments in AST (under investigation)
-2. **Rhythm FSM Integration**: Not yet connected to the parsing pipeline
-3. **Renderer Integration**: LilyPond and VexFlow renderers not yet connected
+1. **Rhythm FSM Integration**: Not yet fully connected to the parsing pipeline
+2. **VexFlow Renderer**: May need updates for complex multi-stave scenarios
 
 ## Future Work
 
-- Complete rhythm FSM integration
-- Fix empty segments issue in parser
-- Connect output renderers to the pipeline
+- Complete rhythm FSM integration for complex tuplets
 - Add WASM support for browser-side parsing
 - Improve error reporting and recovery
 - Add more comprehensive test suite
+- Optimize LilyPond template generation
+- Expand notation system support
 
 ## License
 

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Musical Character Width Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f0f0f0;
+        }
+        
+        .font-test {
+            background: white;
+            border: 1px solid #ccc;
+            margin: 10px 0;
+            padding: 15px;
+        }
+        
+        .font-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .test-area {
+            font-size: 24px;
+            line-height: 1.2;
+            background: #fafafa;
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin: 5px 0;
+        }
+        
+        .consolas { font-family: 'Consolas', monospace; }
+        .jetbrains { font-family: 'JetBrains Mono', monospace; }
+        .fira { font-family: 'Fira Code', monospace; }
+        .source { font-family: 'Source Code Pro', monospace; }
+        .courier { font-family: 'Courier New', monospace; }
+        .terminus { font-family: 'Terminus', monospace; }
+        .spleen { font-family: 'Spleen', monospace; }
+        
+        .input-area {
+            background: white;
+            border: 2px solid #007acc;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        #test-input {
+            width: 100%;
+            height: 100px;
+            font-family: 'Consolas', monospace;
+            font-size: 24px;
+            font-weight: bold;
+            border: 1px solid #ccc;
+            padding: 10px;
+            resize: vertical;
+        }
+        
+        .char-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .char-box {
+            background: #e8e8e8;
+            border: 1px solid #999;
+            padding: 10px;
+            text-align: center;
+            font-size: 20px;
+        }
+        
+        .char-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .unicode-alternatives {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .alternative-group {
+            margin: 10px 0;
+        }
+        
+        .alternative-group h4 {
+            margin: 5px 0;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Musical Character Width Test</h1>
+    <p>Testing monospace fonts for equal visual (inked) width of musical characters</p>
+    
+    <div class="input-area">
+        <h3>Interactive Test Area</h3>
+        <p>Type musical notation. Keys will be replaced:</p>
+        <ul>
+            <li><strong>-</strong> → <strong>▬</strong> (black rectangle)</li>
+            <li><strong>.</strong> → <strong>•</strong> (bullet)</li>
+            <li><strong>|</strong> → <strong>┃</strong> (heavy solid vertical bar)</li>
+        </ul>
+        <textarea id="test-input" placeholder="Type: 1-2-3 | S.R.G | C-D-E"></textarea>
+    </div>
+
+    <div class="unicode-alternatives">
+        <h3>Unicode Character Alternatives</h3>
+        
+        <div class="alternative-group">
+            <h4>Dash Alternatives:</h4>
+            <div class="char-grid">
+                <div class="char-box">
+                    <div class="char-label">hyphen</div>
+                    <div style="font-family: 'Consolas', monospace;">-</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">figure dash</div>
+                    <div style="font-family: 'Consolas', monospace;">‒</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">en dash</div>
+                    <div style="font-family: 'Consolas', monospace;">–</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">minus sign</div>
+                    <div style="font-family: 'Consolas', monospace;">−</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">em-dash</div>
+                    <div style="font-family: 'Consolas', monospace;">—</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">heavy horizontal</div>
+                    <div style="font-family: 'Consolas', monospace;">━</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">small rectangle</div>
+                    <div style="font-family: 'Consolas', monospace;">▪</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">black rectangle</div>
+                    <div style="font-family: 'Consolas', monospace;">▬</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">horizontal bar</div>
+                    <div style="font-family: 'Consolas', monospace;">▭</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alternative-group">
+            <h4>Dot Alternatives:</h4>
+            <div class="char-grid">
+                <div class="char-box">
+                    <div class="char-label">period</div>
+                    <div style="font-family: 'Consolas', monospace;">.</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">black circle</div>
+                    <div style="font-family: 'Consolas', monospace;">●</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">large circle</div>
+                    <div style="font-family: 'Consolas', monospace;">⬤</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">fisheye</div>
+                    <div style="font-family: 'Consolas', monospace;">◉</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">medium black</div>
+                    <div style="font-family: 'Consolas', monospace;">⚫</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">bullet</div>
+                    <div style="font-family: 'Consolas', monospace;">•</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alternative-group">
+            <h4>Barline Alternatives:</h4>
+            <div class="char-grid">
+                <div class="char-box">
+                    <div class="char-label">pipe</div>
+                    <div style="font-family: 'Consolas', monospace;">|</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">musical barline</div>
+                    <div style="font-family: 'Consolas', monospace;">𝄆</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">musical single bar</div>
+                    <div style="font-family: 'Consolas', monospace;">𝄀</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">musical double bar</div>
+                    <div style="font-family: 'Consolas', monospace;">𝄁</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">musical final bar</div>
+                    <div style="font-family: 'Consolas', monospace;">𝄂</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">box drawing</div>
+                    <div style="font-family: 'Consolas', monospace;">│</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">heavy vertical</div>
+                    <div style="font-family: 'Consolas', monospace;">┃</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">double vertical</div>
+                    <div style="font-family: 'Consolas', monospace;">║</div>
+                </div>
+                <div class="char-box">
+                    <div class="char-label">right half block</div>
+                    <div style="font-family: 'Consolas', monospace;">▐</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Font Tests -->
+    <div class="font-test">
+        <div class="font-name">Consolas</div>
+        <div class="test-area consolas">
+            <div>Numbers: 1 2 3 4 5 6 7 8 9 0</div>
+            <div>Sargam:  S R G M P D N</div>
+            <div>Western: C D E F G A B</div>
+            <div>Symbols: - . | — ● ║</div>
+            <div>Pattern: 1-2-3 | S.R.G | C—D—E</div>
+            <div>Unicode:  1—2—3 ║ S●R●G ║ C—D—E</div>
+        </div>
+    </div>
+
+    <div class="font-test">
+        <div class="font-name">JetBrains Mono</div>
+        <div class="test-area jetbrains">
+            <div>Numbers: 1 2 3 4 5 6 7 8 9 0</div>
+            <div>Sargam:  S R G M P D N</div>
+            <div>Western: C D E F G A B</div>
+            <div>Symbols: - . | — ● ║</div>
+            <div>Pattern: 1-2-3 | S.R.G | C—D—E</div>
+            <div>Unicode:  1—2—3 ║ S●R●G ║ C—D—E</div>
+        </div>
+    </div>
+
+    <div class="font-test">
+        <div class="font-name">Fira Code</div>
+        <div class="test-area fira">
+            <div>Numbers: 1 2 3 4 5 6 7 8 9 0</div>
+            <div>Sargam:  S R G M P D N</div>
+            <div>Western: C D E F G A B</div>
+            <div>Symbols: - . | — ● ║</div>
+            <div>Pattern: 1-2-3 | S.R.G | C—D—E</div>
+            <div>Unicode:  1—2—3 ║ S●R●G ║ C—D—E</div>
+        </div>
+    </div>
+
+    <div class="font-test">
+        <div class="font-name">Source Code Pro</div>
+        <div class="test-area source">
+            <div>Numbers: 1 2 3 4 5 6 7 8 9 0</div>
+            <div>Sargam:  S R G M P D N</div>
+            <div>Western: C D E F G A B</div>
+            <div>Symbols: - . | — ● ║</div>
+            <div>Pattern: 1-2-3 | S.R.G | C—D—E</div>
+            <div>Unicode:  1—2—3 ║ S●R●G ║ C—D—E</div>
+        </div>
+    </div>
+
+    <div class="font-test">
+        <div class="font-name">Courier New</div>
+        <div class="test-area courier">
+            <div>Numbers: 1 2 3 4 5 6 7 8 9 0</div>
+            <div>Sargam:  S R G M P D N</div>
+            <div>Western: C D E F G A B</div>
+            <div>Symbols: - . | — ● ║</div>
+            <div>Pattern: 1-2-3 | S.R.G | C—D—E</div>
+            <div>Unicode:  1—2—3 ║ S●R●G ║ C—D—E</div>
+        </div>
+    </div>
+
+    <script>
+        // Key replacement functionality
+        const testInput = document.getElementById('test-input');
+        
+        testInput.addEventListener('input', function(e) {
+            let value = e.target.value;
+            
+            // Replace characters
+            value = value.replace(/-/g, '▬');  // hyphen to black rectangle
+            value = value.replace(/\./g, '•'); // period to bullet
+            value = value.replace(/\|/g, '┃'); // pipe to heavy vertical
+            
+            // Update the textarea if changes were made
+            if (value !== e.target.value) {
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                e.target.value = value;
+                
+                // Restore cursor position
+                e.target.setSelectionRange(start, end);
+            }
+        });
+        
+        // Prevent default for specific keys and replace immediately
+        testInput.addEventListener('keydown', function(e) {
+            if (e.key === '-') {
+                e.preventDefault();
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                const value = e.target.value;
+                
+                e.target.value = value.substring(0, start) + '▬' + value.substring(end);
+                e.target.setSelectionRange(start + 1, start + 1);
+            }
+            else if (e.key === '.') {
+                e.preventDefault();
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                const value = e.target.value;
+                
+                e.target.value = value.substring(0, start) + '•' + value.substring(end);
+                e.target.setSelectionRange(start + 1, start + 1);
+            }
+            else if (e.key === '|') {
+                e.preventDefault();
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                const value = e.target.value;
+                
+                e.target.value = value.substring(0, start) + '┃' + value.substring(end);
+                e.target.setSelectionRange(start + 1, start + 1);
+            }
+        });
+        
+        // Update font of test input dynamically
+        let currentFont = 0;
+        const fonts = ['Consolas', 'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'Courier New'];
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F1') {
+                e.preventDefault();
+                currentFont = (currentFont + 1) % fonts.length;
+                testInput.style.fontFamily = `'${fonts[currentFont]}', monospace`;
+                console.log(`Switched to: ${fonts[currentFont]}`);
+            }
+        });
+        
+        console.log('Font Test Page Loaded');
+        console.log('Press F1 to cycle fonts in test area');
+        console.log('Type -, ., | to see Unicode replacements');
+    </script>
+</body>
+</html>

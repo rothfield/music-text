@@ -82,8 +82,8 @@ impl LilyPondRenderer {
             // Wrap stave in \new Staff context with proper indentation
             let indent = if staves.len() > 1 && in_multi_stave_group { "    " } else if staves.len() > 1 { "  " } else { "" };
             let wrapped_notes = format!(
-                "{}\\new Staff {{\n{}  \\fixed c' {{\n{}    \\autoBeamOff\n{}    {}\n{}  }}\n{}}}",
-                indent, indent, indent, indent, stave_notes.trim(), indent, indent
+                "{}\\new Staff {{\n{}  \\fixed c' {{\n{}    {}\n{}  }}\n{}}}",
+                indent, indent, indent, stave_notes.trim(), indent, indent
             );
             
             notes_result.push_str(&wrapped_notes);
@@ -124,17 +124,39 @@ impl LilyPondRenderer {
         let mut lyrics_result = String::new();
         let mut has_lyrics = false;
         let mut is_first_item = true;
+        let mut previous_beat_last_note: Option<Degree> = None;
         
         for rhythm_item in &stave.rhythm_items {
             match rhythm_item {
                 Item::Beat(beat) => {
                     is_first_item = false;
+                    
+                    // Check for ties to previous beat
+                    let need_tie_to_previous = beat.tied_to_previous && 
+                        previous_beat_last_note.is_some() &&
+                        beat.elements.first().map_or(false, |elem| {
+                            if let Event::Note { degree, .. } = &elem.event {
+                                Some(*degree) == previous_beat_last_note
+                            } else {
+                                false
+                            }
+                        });
+                    
                     if beat.is_tuplet {
                         if let Some((num, den)) = beat.tuplet_ratio {
                             notes_result.push_str(&format!("\\tuplet {}/{} {{ ", num, den));
                             
-                            for beat_element in &beat.elements {
-                                let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                            for (i, beat_element) in beat.elements.iter().enumerate() {
+                                let (mut lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                                
+                                // Add tie to first note if needed
+                                if i == 0 && need_tie_to_previous {
+                                    // Modify the previous notes_result to add tie mark
+                                    if let Some(last_space) = notes_result.rfind(' ') {
+                                        notes_result.insert_str(last_space, "~");
+                                    }
+                                }
+                                
                                 notes_result.push_str(&lily_note);
                                 
                                 if let Some(syl) = syllable {
@@ -151,8 +173,17 @@ impl LilyPondRenderer {
                         }
                     } else {
                         // Regular beat - no tuplet wrapper
-                        for beat_element in &beat.elements {
-                            let (lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                        for (i, beat_element) in beat.elements.iter().enumerate() {
+                            let (mut lily_note, syllable) = self.convert_beat_element_to_lilypond_with_lyrics(beat_element);
+                            
+                            // Add tie to first note if needed
+                            if i == 0 && need_tie_to_previous {
+                                // Modify the previous notes_result to add tie mark
+                                if let Some(last_space) = notes_result.rfind(' ') {
+                                    notes_result.insert_str(last_space, "~");
+                                }
+                            }
+                            
                             notes_result.push_str(&lily_note);
                             
                             if let Some(syl) = syllable {
@@ -163,6 +194,13 @@ impl LilyPondRenderer {
                                 // Add placeholder for notes without syllables
                                 lyrics_result.push_str("_ ");
                             }
+                        }
+                    }
+                    
+                    // Update previous beat last note for tie detection
+                    if let Some(last_element) = beat.elements.last() {
+                        if let Event::Note { degree, .. } = &last_element.event {
+                            previous_beat_last_note = Some(*degree);
                         }
                     }
                 }
