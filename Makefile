@@ -1,32 +1,39 @@
 .PHONY: help build clean run web test test-cli test-web logs dev mtx zellij-clean
 
+# PERMANENT DEVELOPMENT MODE: Always use fastest debug build with warnings suppressed
+# Philosophy: We are ALWAYS in dev mode for fastest iteration
+RUST_BUILD_FLAGS := RUSTFLAGS="-A warnings"
+
 help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Available targets:'
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
-build: ## Build release binary
-	cargo build --release
-
-build-dev: ## Build with permissive warnings for development
-	RUSTFLAGS="-A warnings" cargo build --release
-
-build-fast: ## Build debug mode with warnings ignored (fastest)
-	RUSTFLAGS="-A warnings" cargo build
+build: ## Build fast debug binary with all features (permanent dev mode)
+	$(RUST_BUILD_FLAGS) cargo build --features gui
 
 clean: ## Clean build artifacts and logs
 	cargo clean
 	rm -f development.log
 
-run: ## Start web server on port 3000
-	./target/release/music-text --web
+run: build ## Start web server on port 3000
+	./target/debug/music-text --web
 
-web: ## Start web server on port 3000 (alias for run)
-	./target/release/music-text --web
+web: build ## Start web server on port 3000 (alias for run)
+	./target/debug/music-text --web
 
-cli-test: ## Test CLI with example input
-	./target/release/music-text pest "|1 2 3"
+gui: build ## Launch GUI editor
+	./target/debug/music-text gui
+
+repl: build ## Start interactive REPL for musical notation
+	./target/debug/music-text repl
+
+perf: build ## Run parser performance benchmarks
+	./target/debug/music-text perf
+
+cli-test: build ## Test CLI with example input
+	./target/debug/music-text pest "|1 2 3"
 
 kill: ## Stop the web server
 	@pkill -f "music-text --web" && echo "✓ Web server stopped" || echo "✗ No web server running"
@@ -39,11 +46,11 @@ test: ## Run all tests
 
 test-cli: build ## Test CLI with various inputs
 	@echo "Testing pest output..."
-	@./target/release/music-text pest "|1 2 3" > /dev/null && echo "✓ pest works"
+	@./target/debug/music-text pest "|1 2 3" > /dev/null && echo "✓ pest works"
 	@echo "Testing document output..."
-	@./target/release/music-text document "|S R G M|" > /dev/null && echo "✓ document works"
+	@./target/debug/music-text document "|S R G M|" > /dev/null && echo "✓ document works"
 	@echo "Testing lilypond output..."
-	@./target/release/music-text full-lily "|1-2-3|" > /dev/null && echo "✓ lilypond works"
+	@./target/debug/music-text full-lily "|1-2-3|" > /dev/null && echo "✓ lilypond works"
 
 test-web: ## Run Playwright browser tests
 	npx playwright test
@@ -54,10 +61,10 @@ test-web-headed: ## Run Playwright tests with visible browser
 logs: ## Tail the development log
 	tail -f development.log
 
-dev: ## Start development server and watch logs in split terminal
+dev: build ## Start development server and watch logs in split terminal
 	@echo "Starting server on http://localhost:3000"
 	@echo "Press Ctrl+C to stop"
-	@./target/release/music-text --web
+	@./target/debug/music-text --web
 
 fresh: clean build ## Clean and rebuild everything
 	@echo "Fresh build complete!"
@@ -68,13 +75,11 @@ install-test-deps: ## Install Playwright for browser testing
 	npx playwright install
 
 install-completions: build ## Install shell completions for fish
-	./target/release/music-text completions fish > ~/.config/fish/completions/music-text.fish
+	./target/debug/music-text completions fish > ~/.config/fish/completions/music-text.fish
 	@echo "✓ Fish completions installed"
 
 # Quick development shortcuts
 b: build
-bd: build-dev
-bf: build-fast
 c: clean
 w: web
 k: kill

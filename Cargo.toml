@@ -7,6 +7,21 @@ edition = "2021"
 name = "music-text"
 path = "src/main.rs"
 
+[profile.dev]
+# Development profile optimizations for faster compilation
+strip = false
+debug = true
+
+[profile.release]
+# Release profile optimizations
+strip = true
+debug = false
+lto = true
+
+[features]
+default = []
+gui = ["eframe", "egui"]
+
 [dependencies]
 clap = { version = "4.5", features = ["derive", "cargo"] }
 clap_complete = "4.5"
@@ -22,6 +37,11 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.6", features = ["v4"] }
 mustache = "0.9"
 fraction = { version = "0.13", features = ["with-serde-support"] }
+rustyline = { version = "14.0.0", features = ["derive"] }
+
+# GUI dependencies (optional)
+eframe = { version = "0.28", optional = true }
+egui = { version = "0.28", optional = true }
 
 [build-dependencies]
 serde = { version = "1.0", features = ["derive"] }

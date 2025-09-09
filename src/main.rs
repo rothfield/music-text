@@ -4,6 +4,8 @@ use std::io::{self, Read};
 use std::fs;
 use clap::{Parser, Subcommand, CommandFactory};
 use clap_complete::{generate, Generator, Shell};
+use rustyline::error::ReadlineError;
+use rustyline::{DefaultEditor, Result};
 
 mod web_server;
 mod lilypond_generator;
@@ -21,6 +23,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Launch GUI editor
+    #[cfg(feature = "gui")]
+    Gui,
+    /// Start interactive REPL
+    Repl,
+    /// Run performance benchmarks
+    Perf,
     /// Show raw PEST parse tree
     Pest { input: Option<String> },
     /// Show parsed document structure (JSON)
@@ -66,6 +75,21 @@ fn main() {
     }
     
     match cli.command {
+        #[cfg(feature = "gui")]
+        Some(Commands::Gui) => {
+            println!("Launching GUI editor...");
+            run_gui();
+        },
+        Some(Commands::Repl) => {
+            println!("Starting interactive REPL...");
+            if let Err(err) = run_repl() {
+                eprintln!("REPL error: {:?}", err);
+            }
+        },
+        Some(Commands::Perf) => {
+            println!("Running performance benchmarks...");
+            run_performance_tests();
+        },
         Some(Commands::Pest { input }) => process_stage("pest", input),
         Some(Commands::Document { input }) => process_stage("document", input),
         Some(Commands::Processed { input }) => process_stage("processed", input),
@@ -307,5 +331,169 @@ fn generate_lilypond_svg_files(input: Option<String>, output_prefix: String) {
         let error_msg = result.error.unwrap_or("Unknown error".to_string());
         eprintln!("SVG generation failed: {}", error_msg);
         std::process::exit(1);
+    }
+}
+
+#[cfg(feature = "gui")]
+fn run_gui() {
+    use eframe::egui;
+    
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([800.0, 600.0])
+            .with_title("Music-Text GUI"),
+        ..Default::default()
+    };
+    
+    let _ = eframe::run_native(
+        "Music-Text",
+        options,
+        Box::new(|_cc| Ok(Box::new(MusicTextApp::default()))),
+    );
+}
+
+#[cfg(feature = "gui")]
+struct MusicTextApp {
+    input_text: String,
+    output_text: String,
+}
+
+#[cfg(feature = "gui")]
+impl Default for MusicTextApp {
+    fn default() -> Self {
+        Self {
+            input_text: "|1 2 3".to_owned(),
+            output_text: String::new(),
+        }
+    }
+}
+
+#[cfg(feature = "gui")]
+impl eframe::App for MusicTextApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Music-Text GUI");
+            
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.label("Input:");
+                    ui.text_edit_multiline(&mut self.input_text);
+                });
+                
+                ui.vertical(|ui| {
+                    ui.label("Output:");
+                    ui.text_edit_multiline(&mut self.output_text);
+                });
+            });
+            
+            if ui.button("Parse").clicked() {
+                self.parse_input();
+            }
+        });
+    }
+}
+
+#[cfg(feature = "gui")]
+impl MusicTextApp {
+    fn parse_input(&mut self) {
+        match process_notation(&self.input_text) {
+            Ok(result) => {
+                self.output_text = result.minimal_lilypond;
+            }
+            Err(e) => {
+                self.output_text = format!("Error: {}", e);
+            }
+        }
+    }
+}
+
+fn run_repl() -> Result<()> {
+    println!("Music-Text Interactive REPL");
+    println!("Enter musical notation, then '$' on its own line to submit.");
+    println!("Ctrl+D or Ctrl+C to exit.\n");
+
+    let mut rl = DefaultEditor::new()?;
+    #[cfg(feature = "with-file-history")]
+    if rl.load_history("history.txt").is_err() {
+        println!("No previous history.");
+    }
+    
+    let mut input_buffer = Vec::new();
+    let mut first_line = true;
+    
+    loop {
+        let prompt = if first_line { "music-text> " } else { "" };
+        let readline = rl.readline(prompt);
+        
+        match readline {
+            Ok(line) => {
+                // Check for submission trigger
+                if line.trim() == "$" {
+                    if !input_buffer.is_empty() {
+                        let complete_input = input_buffer.join("\n");
+                        rl.add_history_entry(complete_input.as_str())?;
+
+                        // Process the accumulated input
+                        match process_notation(&complete_input) {
+                            Ok(result) => {
+                                println!("\n{}\n", result.minimal_lilypond);
+                            }
+                            Err(e) => {
+                                println!("Error: {}\n", e);
+                            }
+                        }
+                    }
+                    // Reset for next input
+                    input_buffer.clear();
+                    first_line = true;
+                } else {
+                    // Accumulate input (including blank lines)
+                    input_buffer.push(line);
+                    first_line = false;
+                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("CTRL-C");
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("CTRL-D");
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
+    }
+    #[cfg(feature = "with-file-history")]
+    rl.save_history("history.txt")?;
+    Ok(())
+}
+
+fn run_performance_tests() {
+    use std::time::Instant;
+    
+    let test_cases = vec![
+        "|1 2 3",
+        "|SRG MPD",
+        "|1-2-3 4-5",
+        "____\n|123\n\n|345\n_____\n\n|333",
+    ];
+    
+    println!("Running performance benchmarks...\n");
+    
+    for (i, test_case) in test_cases.iter().enumerate() {
+        println!("Test {}: {}", i + 1, test_case.replace('\n', "\\n"));
+        
+        let start = Instant::now();
+        for _ in 0..100 {
+            let _ = process_notation(test_case);
+        }
+        let duration = start.elapsed();
+        
+        println!("  100 iterations: {:?} ({:.2}ms per iteration)\n", 
+                 duration, 
+                 duration.as_millis() as f64 / 100.0);
     }
 }
