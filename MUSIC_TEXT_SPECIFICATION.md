@@ -14,7 +14,7 @@ music-text follows a consistent hierarchical structure based on grammar decompos
 
 ```
 Document
-├── DirectivesSection (optional - document-level metadata)
+├── DirectivesSection (optional - document-level Directives)
 │   ├── Title Line ("Amazing Grace" - standalone text)
 │   ├── Key: C / D / Bb (🚧 planned)
 │   ├── Tonic: C / D / Bb (movable-do system - 🚧 planned)
@@ -82,7 +82,7 @@ Document Processing
 ### Format Overview
 
 music-text documents contain:
-- **DirectivesSection**: Optional metadata (title, tonic, tempo)
+- **DirectivesSection**: Optional Directives (title, tonic, tempo)
 - **Staves**: Musical content with spatial annotations
 - **Lines**: Different types within each stave (content, upper, lower, lyrics)
 
@@ -289,7 +289,7 @@ _
 
 ## Document Structure
 
-### Metadata Section (Optional)
+### Directives Section (Optional)
 ```
 Key: D major
 Time: 4/4
@@ -318,7 +318,7 @@ _   _
 1-2 3-4
 ```
 
-### With metadata and segments
+### With Directives and segments
 ```
 Key: G
 Time: 3/4
@@ -342,8 +342,8 @@ Time: 3/4
 ## Grammar Summary
 
 ```
-document     ::= metadata* music_lines
-metadata     ::= key ':' value newline  
+document     ::= Directives* music_lines
+Directives     ::= key ':' value newline  
 music_lines  ::= (octave_line | pitch_line)*
 octave_line  ::= octave_markers
 pitch_line   ::= segments

@@ -2,6 +2,18 @@
 
 A Rust-based musical notation parser using hand-written recursive descent parsing for multiple notation systems and converting them to various musical formats (VexFlow, LilyPond, etc.).
 
+## 🚀 PERMANENT DEVELOPMENT MODE
+
+**This project is permanently in development mode for fastest iteration.**
+
+- **ONE BINARY**: Always build and use the debug binary with warnings suppressed
+- **ALL FEATURES INCLUDED**: GUI, web server, CLI - all in one binary
+- **FASTEST COMPILATION**: `RUSTFLAGS="-A warnings" cargo build --features gui`
+- **NO RELEASE BUILDS**: We prioritize iteration speed over optimization
+- **INSTANT FEEDBACK**: Focus on rapid development cycles
+
+**📋 Note**: Use `MUSIC_TEXT_SPECIFICATION.md` as the source of truth for terminology and naming conventions.
+
 ## 🚨 CRITICAL: Monospaced Font Required
 
 **IMPORTANT**: Music-Text notation is **column-based** and requires a **monospaced font** for proper alignment. When using Music-Text:
@@ -127,52 +139,63 @@ Fast LilyPond SVG generation endpoint
 
 ### Prerequisites
 - Rust 1.70+
+- System GUI libraries (for egui/eframe support)
 
 ### Build
 ```bash
-# Clean build (removes previous artifacts)
-cargo clean
-cargo build --release
+# Fast debug build with all features (permanent dev mode)
+RUSTFLAGS="-A warnings" cargo build --features gui
 
-# ALWAYS compile after finishing tasks
-cargo build --release
+# Or use make for convenience (automatically includes GUI)
+make build
+
+# Clean and rebuild
+make fresh
 ```
 
 ### Running the Application
 
 #### Web Server with UI (Port 3000)
 ```bash
-# Start the integrated web server (use release build)
-./target/release/music-text --web
+# Start the integrated web server (fast debug build with GUI)
+RUSTFLAGS="-A warnings" cargo run --features gui -- --web
+
+# Or use make
+make web
 
 # ALWAYS restart server after code changes
-pkill -f "music-text.*--web"  # Kill old servers
-./target/release/music-text --web
+make kill  # Kill old servers
+make web   # Start fresh
 
 # Then visit http://localhost:3000 for the interactive UI
 ```
 
 #### CLI Usage
 ```bash
-# Parse with different output stages (use release build)
-./target/release/music-text document "|1 2 3"    # Show parsed document structure
-./target/release/music-text processed "|1 2 3"   # Show processed staves
-./target/release/music-text minimal-lily "|1 2 3" # Show minimal LilyPond notation
-./target/release/music-text full-lily "|1 2 3"    # Show full LilyPond score
-./target/release/music-text vexflow "|1 2 3"      # Show VexFlow data structure
-./target/release/music-text vexflow-svg "|1 2 3"  # Show VexFlow SVG rendering
-./target/release/music-text all "|1 2 3"          # Show all stages
+# Parse with different output stages (one binary with all features)
+RUSTFLAGS="-A warnings" cargo run --features gui -- document "|1 2 3"    # Show parsed document structure
+RUSTFLAGS="-A warnings" cargo run --features gui -- processed "|1 2 3"   # Show processed staves
+RUSTFLAGS="-A warnings" cargo run --features gui -- minimal-lily "|1 2 3" # Show minimal LilyPond notation
+RUSTFLAGS="-A warnings" cargo run --features gui -- full-lily "|1 2 3"    # Show full LilyPond score
+RUSTFLAGS="-A warnings" cargo run --features gui -- vexflow "|1 2 3"      # Show VexFlow data structure
+RUSTFLAGS="-A warnings" cargo run --features gui -- vexflow-svg "|1 2 3"  # Show VexFlow SVG rendering
+RUSTFLAGS="-A warnings" cargo run --features gui -- all "|1 2 3"          # Show all stages
+
+# Or after building once, use the binary directly (includes all features)
+./target/debug/music-text document "|1 2 3"
+./target/debug/music-text full-lily "|1 2 3"
+./target/debug/music-text gui  # Launch native GUI editor
 
 # Generate LilyPond SVG files directly (RECOMMENDED WORKFLOW)
-cat row.txt | ./target/release/music-text lilypond-svg -o row    # Creates row.ly and row.svg
-echo "|1 2 3" | ./target/release/music-text lilypond-svg        # Creates output.ly and output.svg
+cat row.txt | ./target/debug/music-text lilypond-svg -o row    # Creates row.ly and row.svg
+echo "|1 2 3" | ./target/debug/music-text lilypond-svg        # Creates output.ly and output.svg
 
 # Read from stdin
-echo "|1 2 3" | ./target/release/music-text document
-cat input.notation | ./target/release/music-text full-lily
+echo "|1 2 3" | ./target/debug/music-text document
+cat input.notation | ./target/debug/music-text full-lily
 
 # Manual SVG generation using LilyPond compiler
-cat row.txt | ./target/release/music-text full-lily > row.ly
+cat row.txt | ./target/debug/music-text full-lily > row.ly
 lilypond --format=svg row.ly    # Creates row.svg
 lilypond --format=png row.ly    # Creates row.png
 ```
@@ -293,16 +316,22 @@ music-text/
 # Run unit tests
 cargo test
 
-# Test CLI with specific notation (use release build)
-./target/release/music-text document "S R G M"
-./target/release/music-text full-lily "1 2 3"
+# Test CLI with specific notation (fast debug build)
+./target/debug/music-text document "S R G M"
+./target/debug/music-text full-lily "1 2 3"
+
+# Or use make shortcuts
+make test-cli
 
 # Multi-stave testing
-echo -e "____\n|123\n\n|345\n_____\n\n|333" | ./target/release/music-text full-lily
+echo -e "____\n|123\n\n|345\n_____\n\n|333" | ./target/debug/music-text full-lily
 
 # Start web server for interactive testing
-./target/release/music-text --web
+make web
 # Then visit http://localhost:3000
+
+# Run browser tests
+make test-web
 ```
 
 ## Known Issues
@@ -319,6 +348,13 @@ echo -e "____\n|123\n\n|345\n_____\n\n|333" | ./target/release/music-text full-l
 - Optimize LilyPond template generation
 - Expand notation system support
 
+## Coding Guidelines
+
+### File Organization Rules
+- **NO mod.rs files**: Always use direct module imports. Each module should be a single `.rs` file or directory with named module files.
+- **Example**: Use `src/document/document_parser.rs` instead of `src/document/document_parser/mod.rs`
+- **Benefit**: Clearer module structure and easier navigation
+
 ## License
 
-MI
+MIT

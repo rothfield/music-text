@@ -29,3 +29,12 @@
    - ~~Fix unused variables: `complete_pitch`, `base_pitch`, `octave`~~
    - ~~Remove unreachable patterns and dead enum variants: `InBeat`~~
    - ~~Remove old_models references and unify data structures~~
+
+6. **Document & Code Blocks Architecture Refactor** - Implement clean separation following HTML + code blocks pattern: 🔄 **IN PROGRESS**
+   - ✅ Written refactor plan to `REFACTOR_PLAN_DOCUMENT_CODE_BLOCKS.md`
+   - ✅ Renamed `src/document/manual_parser/` → `src/document/document_parser/`
+   - ❌ Create `src/stave/` and move `src/stave_parser.rs` → `src/stave/parser.rs`
+   - ❌ Create `src/rhythm/` and move `src/rhythm_fsm.rs` → `src/rhythm/analyzer.rs`
+   - ❌ Update all import paths throughout codebase
+   - ❌ Add "no mod.rs files" rule to README coding guidelines
+   - ❌ Test build and functionality after refactor
