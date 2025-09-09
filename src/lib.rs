@@ -1,19 +1,20 @@
 pub mod document;
-pub mod stave_parser;
+pub mod stave;
+pub mod rhythm;
 pub mod pipeline;
 pub mod renderers;
 pub mod converters;
-pub mod rhythm_fsm;
 pub mod old_models;
+pub mod smoke_test;
 
 // Re-export main parsing functionality
 pub use document::{
     parse_document, ParseError,
-    Document, Stave, ContentLine, MusicalElement, Position, TextLine
+    Document, Stave, ContentLine, ContentElement, Position, TextLine
 };
 
 // Re-export stave parsing functionality
-pub use stave_parser::{
+pub use stave::{
     parse_document_staves, ProcessedStave
 };
 
@@ -23,6 +24,6 @@ pub use pipeline::{
 };
 
 // Re-export rhythm FSM functionality
-pub use rhythm_fsm::{
+pub use rhythm::{
     process_rhythm, Beat, BeatElement, Event, Item
 };

@@ -1,5 +1,5 @@
-use crate::stave_parser::ProcessedStave;
-use crate::rhythm_fsm::{Item, Event, Beat};
+use crate::stave::ProcessedStave;
+use crate::rhythm::{Item, Event, Beat};
 use crate::old_models::{Degree, BarlineType};
 use serde::{Serialize, Deserialize};
 

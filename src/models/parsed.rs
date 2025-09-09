@@ -3,7 +3,7 @@
 // for the flat AST level (before FSM processing)
 
 use serde::{Deserialize, Serialize};
-use crate::models::{Document, Node, Metadata}; // Keep using existing for compatibility
+// Removed legacy compatibility imports - using greenfield approach
 use crate::models::Degree;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -149,7 +149,6 @@ pub enum ParsedElement {
 /// Complete document structure using ParsedElement (replacement for Document)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParsedDocument {
-    pub metadata: Metadata, // Reuse existing metadata structure
     pub elements: Vec<ParsedElement>, // Final processed elements after FSM
     pub notation_system: Option<String>,
 }
@@ -212,130 +211,5 @@ impl ParsedElement {
 impl Position {
     pub fn new(row: usize, col: usize) -> Self {
         Self { row, col }
-    }
-}
-
-/// Convert ParsedElement back to legacy Node for compatibility with FSM and converters
-/// This allows incremental refactoring without breaking existing code
-impl From<ParsedElement> for Node {
-    fn from(element: ParsedElement) -> Self {
-        match element {
-            ParsedElement::Note { degree, octave, value, position, children, duration, slur: _ } => {
-                let mut node = Node::new(
-                    "PITCH".to_string(),
-                    value,
-                    position.row,
-                    position.col,
-                );
-                node.degree = Some(degree);
-                node.octave = Some(octave);
-                
-                // Store duration if present
-                if let Some((num, denom)) = duration {
-                    node.duration_fraction = Some(format!("{}/{}", num, denom));
-                }
-                
-                // Convert children to child nodes
-                for child in children {
-                    let child_node = match child {
-                        ParsedChild::OctaveMarker { symbol, .. } => {
-                            Node::new("OCTAVE_MARKER".to_string(), symbol, position.row, position.col)
-                        },
-                        ParsedChild::Ornament { kind, .. } => {
-                            let ornament_type = match kind {
-                                OrnamentType::Mordent => "MORDENT",
-                                OrnamentType::Trill => "TRILL", 
-                                OrnamentType::Turn => "TURN",
-                                OrnamentType::Grace => "GRACE",
-                            };
-                            Node::new(ornament_type.to_string(), kind.to_string(), position.row, position.col)
-                        },
-                        ParsedChild::Syllable { text, .. } => {
-                            Node::new("SYL".to_string(), text, position.row, position.col)
-                        },
-                    };
-                    node.nodes.push(child_node);
-                }
-                
-                node
-            },
-            
-            ParsedElement::Rest { value, position, duration } => {
-                let mut node = Node::new("REST".to_string(), value, position.row, position.col);
-                if let Some((num, denom)) = duration {
-                    node.duration_fraction = Some(format!("{}/{}", num, denom));
-                }
-                node
-            },
-            
-            ParsedElement::Dash { degree, octave, position, duration } => {
-                let mut node = Node::new("DASH".to_string(), "-".to_string(), position.row, position.col);
-                node.degree = degree;
-                node.octave = octave;
-                if let Some((num, denom)) = duration {
-                    node.duration_fraction = Some(format!("{}/{}", num, denom));
-                }
-                node
-            },
-            
-            ParsedElement::Barline { style, position, tala } => {
-                let mut node = Node::new("BARLINE".to_string(), style.clone(), position.row, position.col);
-                // Store tala as an attribute in the legacy Node
-                if let Some(tala_num) = tala {
-                    // We'll need to extend the Node structure or use the unused fields
-                    // For now, we can store it in the value field with a prefix
-                    node.value = format!("{}|tala:{}", style, tala_num);
-                }
-                node
-            },
-            
-            ParsedElement::SlurStart { position } => {
-                Node::new("SLUR_START".to_string(), "(".to_string(), position.row, position.col)
-            },
-            
-            ParsedElement::SlurEnd { position } => {
-                Node::new("SLUR_END".to_string(), ")".to_string(), position.row, position.col)
-            },
-            
-            ParsedElement::Whitespace { width, position } => {
-                Node::new("WHITESPACE".to_string(), " ".repeat(width), position.row, position.col)
-            },
-            
-            ParsedElement::Newline { position } => {
-                Node::new("NEWLINE".to_string(), "\n".to_string(), position.row, position.col)
-            },
-            
-            ParsedElement::Word { text, position } => {
-                Node::new("WORD".to_string(), text, position.row, position.col)
-            },
-            
-            ParsedElement::Tala { number, position } => {
-                Node::new("TALA".to_string(), number.to_string(), position.row, position.col)
-            },
-            
-            ParsedElement::Symbol { value, position } => {
-                Node::new("SYMBOLS".to_string(), value, position.row, position.col)
-            },
-            
-            ParsedElement::Unknown { value, position } => {
-                Node::new("UNKNOWN".to_string(), value, position.row, position.col)
-            },
-        }
-    }
-}
-
-/// Convert a vector of ParsedElements to Nodes for compatibility
-pub fn parsed_elements_to_nodes(elements: Vec<ParsedElement>) -> Vec<Node> {
-    elements.into_iter().map(|e| e.into()).collect()
-}
-
-/// Convert ParsedDocument to legacy Document for backward compatibility
-impl From<ParsedDocument> for Document {
-    fn from(doc_v2: ParsedDocument) -> Self {
-        Document {
-            metadata: doc_v2.metadata,
-            nodes: parsed_elements_to_nodes(doc_v2.elements),
-            notation_system: doc_v2.notation_system,
-        }
     }
 }

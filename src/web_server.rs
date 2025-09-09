@@ -10,6 +10,7 @@ use tower_http::{cors::CorsLayer, services::ServeDir};
 use music_text::{parse_document, process_notation};
 use music_text::document::model::NotationSystem;
 use music_text::renderers::render_full_lilypond;
+use music_text::smoke_test;
 use log::{info, warn, error};
 use crate::lilypond_generator::LilyPondGenerator;
 
@@ -267,6 +268,21 @@ pub fn start() {
         .init();
     
     info!("Music Text Parser server starting up");
+    
+    // Run comprehensive smoke tests on startup
+    info!("🔥🔥🔥 RUNNING COMPREHENSIVE SMOKE TESTS 🔥🔥🔥");
+    match smoke_test::run_smoke_tests() {
+        Ok(_) => {
+            info!("✅✅✅ ALL SMOKE TESTS PASSED - SERVER READY ✅✅✅");
+        },
+        Err(e) => {
+            error!("🚨🚨🚨 SMOKE TESTS FAILED! 🚨🚨🚨");
+            error!("🚨 ERROR: {}", e);
+            error!("🚨 SERVER MAY NOT FUNCTION CORRECTLY!");
+            error!("🚨 Please review the errors above and fix before deploying!");
+            // Continue running server but with loud warnings
+        }
+    }
     
     let app = Router::new()
         .route("/api/parse", get(parse_text))

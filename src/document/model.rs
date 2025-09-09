@@ -136,21 +136,86 @@ impl PitchCode {
     }
 }
 
-// Note object with syllable and octave
+// Raw pitch string object for ContentLine
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PitchString {
+    pub source: Source,         // Raw pitch string ("1", "S", "C", etc.) + position
+}
+
+// ContentElement struct types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Barline {
+    pub source: Source,
+    pub in_slur: bool,
+    pub in_beat_group: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Space {
+    pub count: usize,
+    pub source: Source,
+    pub in_slur: bool,
+    pub in_beat_group: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Dash {
+    pub source: Source,
+    pub in_slur: bool,
+    pub in_beat_group: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlurBegin {
+    pub source: Source,
+    pub in_slur: bool,
+    pub in_beat_group: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SlurEnd {
+    pub source: Source,
+    pub in_slur: bool,
+    pub in_beat_group: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeatGroupBegin {
+    pub source: Source,
+    pub in_slur: bool,
+    pub in_beat_group: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeatGroupEnd {
+    pub source: Source,
+    pub in_slur: bool,
+    pub in_beat_group: bool,
+}
+
+// Note object with pitchString attribute
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Note {
-    pub syllable: String,        // Original syllable (1, 2, C, D, etc.)
-    pub octave: i8,             // Octave -4..4
-    pub pitch_code: PitchCode,  // Normalized pitch code
+    pub pitch_string: PitchString,       // Raw pitch string
+    pub octave: i8,                     // Octave -4..4
+    pub pitch_code: PitchCode,          // Normalized pitch code
     pub notation_system: NotationSystem, // Which notation system this note uses
-    pub source: Source,         // Source tracking (includes complete pitch token in value)
-    pub in_slur: bool,          // Whether this note is within a slur
-    pub in_beat_group: bool,    // Whether this note is within a beat group
+    pub in_slur: bool,                  // Whether this note is within a slur
+    pub in_beat_group: bool,            // Whether this note is within a beat group
+}
+
+// Directive structure for key:value pairs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Directive {
+    pub key: String,
+    pub value: String,
+    pub source: Source,
 }
 
 // Document structure types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
+    pub directives: Vec<Directive>,
     pub staves: Vec<Stave>,
     pub source: Source,
 }
@@ -180,7 +245,10 @@ impl Document {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stave {
     pub text_lines_before: Vec<TextLine>,
-    pub content_line: ContentLine,
+    pub content_line: Vec<crate::old_models::ParsedElement>, // Direct ParsedElement from parseMainLine
+    pub upper_lines: Vec<UpperLine>,   // Spatial annotations above content
+    pub lower_lines: Vec<LowerLine>,   // Spatial annotations below content
+    pub lyrics_lines: Vec<LyricsLine>, // Syllables for assignment to notes
     pub text_lines_after: Vec<TextLine>,
     pub notation_system: NotationSystem,
     pub source: Source,
@@ -196,47 +264,91 @@ pub struct TextLine {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentLine {
-    pub elements: Vec<MusicalElement>,
+    pub elements: Vec<ContentElement>,
+    pub source: Source,
+}
+
+// Spatial annotation lines per MUSIC_TEXT_SPECIFICATION.md
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpperLine {
+    pub elements: Vec<UpperElement>,
     pub source: Source,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum MusicalElement {
-    Note(Note),
-    Barline {
+pub struct LowerLine {
+    pub elements: Vec<LowerElement>,
+    pub source: Source,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LyricsLine {
+    pub syllables: Vec<Syllable>,
+    pub source: Source,
+}
+
+// UpperLine elements from specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UpperElement {
+    UpperOctaveMarker {
+        marker: String,  // "." or ":"
         source: Source,
-        in_slur: bool,
-        in_beat_group: bool,
     },
-    Space { 
+    Slur {
+        underscores: String,  // "_____" 
+        source: Source,
+    },
+    Ornament {
+        pitches: Vec<String>,  // 123, <456> grace notes/melismas (🚧 planned)
+        source: Source,
+    },
+    Chord {
+        chord: String,  // [Am] chord symbols (🚧 planned)
+        source: Source,
+    },
+    Space {
         count: usize,
         source: Source,
-        in_slur: bool,
-        in_beat_group: bool,
     },
-    Dash {
+}
+
+// LowerLine elements from specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LowerElement {
+    LowerOctaveMarker {
+        marker: String,  // "." or ":"
         source: Source,
-        in_slur: bool,
-        in_beat_group: bool,
     },
-    SlurBegin {
+    BeatGroup {
+        underscores: String,  // "_____ beat grouping underscores (🚧 planned)
         source: Source,
-        in_slur: bool,
-        in_beat_group: bool,
     },
-    SlurEnd {
+    FlatMarker {
+        marker: String,  // "_" flat marker, Bhatkande notation only (🚧 planned)
         source: Source,
-        in_slur: bool,
-        in_beat_group: bool,
     },
-    BeatGroupBegin {
+    Space {
+        count: usize,
         source: Source,
-        in_slur: bool,
-        in_beat_group: bool,
     },
-    BeatGroupEnd {
-        source: Source,
-        in_slur: bool,
-        in_beat_group: bool,
-    },
+}
+
+// LyricsLine elements
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Syllable {
+    pub content: String,  // "he-llo", "world", etc.
+    pub source: Source,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ContentElement {
+    PitchString(PitchString),
+    Barline(Barline),
+    Space(Space),
+    Dash(Dash),
+    SlurBegin(SlurBegin),
+    SlurEnd(SlurEnd),
+    BeatGroupBegin(BeatGroupBegin),
+    BeatGroupEnd(BeatGroupEnd),
 }

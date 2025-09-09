@@ -1,5 +1,5 @@
-use crate::stave_parser::ProcessedStave;
-use crate::rhythm_fsm::{Item, Event};
+use crate::stave::ProcessedStave;
+use crate::rhythm::{Item, Event};
 use crate::old_models::Degree;
 use super::formatters::{MinimalFormatter, FullFormatter, WebFastFormatter};
 use serde::Serialize;
@@ -235,7 +235,7 @@ impl LilyPondRenderer {
     }
     
     /// Convert a beat element to LilyPond notation and extract syllable for lyrics
-    fn convert_beat_element_to_lilypond_with_lyrics(&self, beat_element: &crate::rhythm_fsm::BeatElement) -> (String, Option<String>) {
+    fn convert_beat_element_to_lilypond_with_lyrics(&self, beat_element: &crate::rhythm::BeatElement) -> (String, Option<String>) {
         match &beat_element.event {
             Event::Note { degree, .. } => {
                 let lily_pitch = degree_to_lilypond_simple(*degree);
@@ -371,9 +371,9 @@ impl Default for LilyPondRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stave_parser::ProcessedStave;
+    use crate::stave::ProcessedStave;
     use crate::document::model::{NotationSystem, Source, Position};
-    use crate::rhythm_fsm::{Item, Beat, BeatElement, Event};
+    use crate::rhythm::{Item, Beat, BeatElement, Event};
     use crate::old_models::{Degree, BarlineType};
 
     #[test]

@@ -1,7 +1,7 @@
 pub mod renderer;
 pub mod formatters;
 
-use crate::stave_parser::ProcessedStave;
+use crate::stave::ProcessedStave;
 use renderer::LilyPondRenderer;
 
 // Re-export the main functions for rhythm-aware processing
