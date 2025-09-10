@@ -13,6 +13,9 @@ help: ## Show this help message
 build: ## Build fast debug binary with all features (permanent dev mode)
 	$(RUST_BUILD_FLAGS) cargo build --features gui
 
+build-quiet: ## Build quietly without output
+	@$(RUST_BUILD_FLAGS) cargo build --features gui > /dev/null 2>&1
+
 clean: ## Clean build artifacts and logs
 	cargo clean
 	rm -f development.log
@@ -26,8 +29,8 @@ web: build ## Start web server on port 3000 (alias for run)
 gui: build ## Launch GUI editor
 	./target/debug/music-text gui
 
-repl: build ## Start interactive REPL for musical notation
-	./target/debug/music-text repl
+repl: ## Start interactive REPL for musical notation
+	@./target/debug/music-text repl
 
 perf: build ## Run parser performance benchmarks
 	./target/debug/music-text perf

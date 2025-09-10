@@ -2,10 +2,11 @@
 /// Converts flat element lists into beat-grouped structures with proper fraction-based durations
 
 // ContentElement import removed - no longer needed with direct ParsedElement architecture
-use crate::old_models::*;
+use crate::rhythm::types::*;
+use crate::rhythm::converters::BarlineType;
 use fraction::Fraction;
 
-// FSM output structures (from old parser_v2_fsm.rs)
+// FSM output structures for rhythm processing
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Event {
     Note {
@@ -271,15 +272,12 @@ impl FSM {
     fn start_beat_with_tied_note(&mut self, dash_element: &ParsedElement) {
         if let Some(degree) = self.last_note_across_beats {
             // Create tied note with same pitch as last note
-            let tied_note = ParsedElement::Note {
+            let tied_note = ParsedElement::new_note(
                 degree,
-                octave: 0, // Default octave - could be improved
-                value: format!("{:?}", degree),
-                position: dash_element.position().clone(),
-                children: vec![],
-                duration: None,
-                slur: None,
-            };
+                0, // Default octave - could be improved
+                format!("{:?}", degree),
+                dash_element.position().clone(),
+            );
 
             let mut beat = Beat {
                 divisions: 1,
@@ -437,7 +435,7 @@ impl ParsedElement {
 }
 
 /// Convert ContentElements to FSM output using sophisticated rhythm processing
-pub fn process_rhythm(elements: &[crate::old_models::ParsedElement]) -> Vec<Item> {
+pub fn process_rhythm(elements: &[ParsedElement]) -> Vec<Item> {
     // Elements are already ParsedElement - no conversion needed!
     let parsed_elements = elements.to_vec();
     
@@ -449,7 +447,7 @@ pub fn process_rhythm(elements: &[crate::old_models::ParsedElement]) -> Vec<Item
 
 /// Batch rhythm processing - processes all staves together for better context
 /// This allows the FSM to track extension chains and ties across stave boundaries
-pub fn process_rhythm_batch(all_stave_content_lines: &[&Vec<crate::old_models::ParsedElement>]) -> Vec<Vec<Item>> {
+pub fn process_rhythm_batch(all_stave_content_lines: &[&Vec<ParsedElement>]) -> Vec<Vec<Item>> {
     let mut all_results = Vec::new();
     
     for content_line in all_stave_content_lines {

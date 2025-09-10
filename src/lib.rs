@@ -4,7 +4,9 @@ pub mod rhythm;
 pub mod pipeline;
 pub mod renderers;
 pub mod converters;
-pub mod old_models;
+// REMOVED: spatial_parser module - legacy code using old AST types
+// Functionality moved to document parser with modern ParsedElement types
+// old_models.rs has been extracted to appropriate modules
 pub mod smoke_test;
 
 // Re-export main parsing functionality

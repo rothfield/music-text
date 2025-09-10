@@ -11,6 +11,7 @@ A Rust-based musical notation parser using hand-written recursive descent parsin
 - **FASTEST COMPILATION**: `RUSTFLAGS="-A warnings" cargo build --features gui`
 - **NO RELEASE BUILDS**: We prioritize iteration speed over optimization
 - **INSTANT FEEDBACK**: Focus on rapid development cycles
+- **⚠️ IMPORTANT**: Always use `make build` instead of direct cargo commands to ensure proper flags and configuration
 
 **📋 Note**: Use `MUSIC_TEXT_SPECIFICATION.md` as the source of truth for terminology and naming conventions.
 
@@ -82,8 +83,9 @@ The parser supports multiple musical notation input systems, all with tonic-base
 - **Rhythm parsing**: Complex tuplets, ties, and duration handling via FSM
 - **Multi-line notation**: Supports upper annotation lines (ornaments, chords, tala), content lines, lower annotation lines (octave markers), and lyrics
 - **Barlines and structure**: Full support for single bars, double bars, repeats, and segment organization
-- **Slurs and ornaments**: Parenthetical slurs and ornament notation
-- **Spatial beat grouping**: Underline notation below content lines for complex rhythmic groupings
+- **Spatial slurs**: Underscore notation above content lines for phrase markings (`_____`)
+- **Spatial beat grouping**: Underscore notation below content lines for rhythmic groupings (`_____`)
+- **Hybrid annotation model**: Both boundary information (Start/Middle/End roles) and convenience boolean flags
 
 ## Grammar Structure
 
@@ -157,11 +159,11 @@ make fresh
 
 #### Web Server with UI (Port 3000)
 ```bash
-# Start the integrated web server (fast debug build with GUI)
-RUSTFLAGS="-A warnings" cargo run --features gui -- --web
-
-# Or use make
+# Start the integrated web server (recommended)
 make web
+
+# Or manually (if needed)
+RUSTFLAGS="-A warnings" cargo run --features gui -- --web
 
 # ALWAYS restart server after code changes
 make kill  # Kill old servers
@@ -172,19 +174,24 @@ make web   # Start fresh
 
 #### CLI Usage
 ```bash
-# Parse with different output stages (one binary with all features)
-RUSTFLAGS="-A warnings" cargo run --features gui -- document "|1 2 3"    # Show parsed document structure
-RUSTFLAGS="-A warnings" cargo run --features gui -- processed "|1 2 3"   # Show processed staves
-RUSTFLAGS="-A warnings" cargo run --features gui -- minimal-lily "|1 2 3" # Show minimal LilyPond notation
-RUSTFLAGS="-A warnings" cargo run --features gui -- full-lily "|1 2 3"    # Show full LilyPond score
-RUSTFLAGS="-A warnings" cargo run --features gui -- vexflow "|1 2 3"      # Show VexFlow data structure
-RUSTFLAGS="-A warnings" cargo run --features gui -- vexflow-svg "|1 2 3"  # Show VexFlow SVG rendering
-RUSTFLAGS="-A warnings" cargo run --features gui -- all "|1 2 3"          # Show all stages
+# Parse with different output stages (recommended: build first with make)
+make build  # Build the binary first
 
-# Or after building once, use the binary directly (includes all features)
-./target/debug/music-text document "|1 2 3"
-./target/debug/music-text full-lily "|1 2 3"
-./target/debug/music-text gui  # Launch native GUI editor
+# Then use the binary directly (includes all features)
+./target/debug/music-text document "|1 2 3"    # Show parsed document structure
+./target/debug/music-text processed "|1 2 3"   # Show processed staves
+./target/debug/music-text minimal-lily "|1 2 3" # Show minimal LilyPond notation
+./target/debug/music-text full-lily "|1 2 3"    # Show full LilyPond score
+./target/debug/music-text vexflow "|1 2 3"      # Show VexFlow data structure
+./target/debug/music-text vexflow-svg "|1 2 3"  # Show VexFlow SVG rendering
+./target/debug/music-text all "|1 2 3"          # Show all stages
+
+# Or use cargo run (slower compilation)
+RUSTFLAGS="-A warnings" cargo run --features gui -- document "|1 2 3"
+
+# Other shortcuts
+make gui    # Launch native GUI editor  
+make repl   # Start interactive REPL
 
 # Generate LilyPond SVG files directly (RECOMMENDED WORKFLOW)
 cat row.txt | ./target/debug/music-text lilypond-svg -o row    # Creates row.ly and row.svg
@@ -210,12 +217,13 @@ pkill -f "music-text --web"
 ## Data Flow Pipeline
 
 ### Parsing Flow
-1. **Input Text** → Pest Grammar Parser
-2. **Pest Parse Tree** → AST Conversion (`src/parser.rs`)
-3. **Raw AST** → Spatial Processing (`src/spatial_parser.rs`)
-   - Slur analysis
+1. **Input Text** → Document Parser (`src/document/document_parser/`)
+2. **Raw Document** → Spatial Processing
    - Octave marker assignment
+   - Slur analysis and assignment
+   - Beat group assignment
    - Syllable to note mapping
+3. **Processed Document** → Stave Processing (`src/stave/`)
 4. **Spatial AST** → Rhythm FSM (when implemented)
 5. **Enriched AST** → Output Renderers
    - LilyPond source generation
@@ -226,11 +234,13 @@ pkill -f "music-text --web"
 - ✅ Hand-written recursive descent parser (replaced Pest)
 - ✅ AST generation with proper document structure
 - ✅ Multi-stave parsing and professional score generation
-- ✅ Spatial processing (slurs, octaves, lyrics)
+- ✅ Spatial processing (octaves, slurs, beat groups, lyrics)
+- ✅ Hybrid annotation model with boundary information and convenience flags
 - ✅ Web UI with data flow visualization
 - ✅ API endpoints for parsing
 - ✅ Complete LilyPond score rendering with simultaneous music
 - ✅ Professional SVG generation via web server
+- ✅ Interactive REPL with terse interface (Ctrl+D to submit, Ctrl+C to exit)
 - ⚠️ Rhythm FSM integration (in development)
 - ✅ Multi-stave marker detection fixed
 

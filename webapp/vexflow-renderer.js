@@ -16,12 +16,12 @@ async function loadVexFlow() {
     if (vexflowLoaded) return true;
     
     try {
-        console.log('🎵 Loading VexFlow library...');
+        // console.log('🎵 Loading VexFlow library...');
         
         // Check if VexFlow is already available
         if (window.Vex && window.Vex.Flow) {
             vexflowLoaded = true;
-            console.log('✅ VexFlow already available');
+            // console.log('✅ VexFlow already available');
             return true;
         }
         
@@ -33,7 +33,7 @@ async function loadVexFlow() {
             script.onload = () => {
                 if (window.Vex && window.Vex.Flow) {
                     vexflowLoaded = true;
-                    console.log('✅ VexFlow library loaded successfully');
+                    // console.log('✅ VexFlow library loaded successfully');
                     resolve(true);
                 } else {
                     console.error('❌ VexFlow loaded but Vex.Flow not available');
@@ -63,7 +63,7 @@ function isVexFlowLoaded() {
  * Main rendering function for sophisticated VexFlow notation from FSM data
  */
 async function renderVexFlowNotation(vexflowData, containerId = 'vexflow-output') {
-    console.log('🎵 renderVexFlowFromFSM called with:', vexflowData);
+    // console.log('🎵 renderVexFlowFromFSM called with:', vexflowData);
     
     // Ensure VexFlow is loaded
     if (!isVexFlowLoaded()) {
@@ -101,7 +101,7 @@ async function renderVexFlowNotation(vexflowData, containerId = 'vexflow-output'
         
         for (let staveIndex = 0; staveIndex < staves.length; staveIndex++) {
             const staveData = staves[staveIndex];
-            console.log('🎵 Processing stave:', staveIndex, staveData);
+            // console.log('🎵 Processing stave:', staveIndex, staveData);
             
             // Create stave
             const stave = new Stave(20, currentY, Math.min(1200, containerWidth - 40));
@@ -148,7 +148,7 @@ async function renderVexFlowNotation(vexflowData, containerId = 'vexflow-output'
             currentY += 120;
         }
         
-        console.log('✅ Sophisticated VexFlow rendering completed successfully');
+        // console.log('✅ Sophisticated VexFlow rendering completed successfully');
         return true;
         
     } catch (error) {
@@ -221,7 +221,7 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
     
     for (let i = 0; i < elements.length; i++) {
         const element = elements[i];
-        console.log('🎵 Processing sophisticated element:', element.type, element);
+        // console.log('🎵 Processing sophisticated element:', element.type, element);
         
         switch (element.type) {
             case 'Note':
@@ -243,7 +243,7 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
                     
                     // Create tuplet with proper ratio
                     const tupletRatio = element.ratio || [element.divisions, getNextPowerOf2(element.divisions)];
-                    console.log('🎵 Creating tuplet with ratio:', tupletRatio, 'notes:', tupletResult.notes.length);
+                    // console.log('🎵 Creating tuplet with ratio:', tupletRatio, 'notes:', tupletResult.notes.length);
                     
                     const tuplet = new Tuplet(tupletResult.notes, {
                         notes_occupied: tupletRatio[1],  // denominator (space of)
@@ -437,4 +437,4 @@ window.VexFlowRenderer = {
     renderVexFlowNotation
 };
 
-console.log('🎵 Advanced VexFlow Renderer module loaded with sophisticated tuplet support');
+// console.log('🎵 Advanced VexFlow Renderer module loaded with sophisticated tuplet support');

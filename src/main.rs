@@ -81,7 +81,6 @@ fn main() {
             run_gui();
         },
         Some(Commands::Repl) => {
-            println!("Starting interactive REPL...");
             if let Err(err) = run_repl() {
                 eprintln!("REPL error: {:?}", err);
             }
@@ -408,21 +407,15 @@ impl MusicTextApp {
 }
 
 fn run_repl() -> Result<()> {
-    println!("Music-Text Interactive REPL");
-    println!("Enter musical notation, then '$' on its own line to submit.");
-    println!("Ctrl+D or Ctrl+C to exit.\n");
 
     let mut rl = DefaultEditor::new()?;
     #[cfg(feature = "with-file-history")]
-    if rl.load_history("history.txt").is_err() {
-        println!("No previous history.");
-    }
+    let _ = rl.load_history("history.txt");
     
     let mut input_buffer = Vec::new();
-    let mut first_line = true;
     
     loop {
-        let prompt = if first_line { "music-text> " } else { "" };
+        let prompt = "";
         let readline = rl.readline(prompt);
         
         match readline {
@@ -445,11 +438,9 @@ fn run_repl() -> Result<()> {
                     }
                     // Reset for next input
                     input_buffer.clear();
-                    first_line = true;
                 } else {
                     // Accumulate input (including blank lines)
                     input_buffer.push(line);
-                    first_line = false;
                 }
             }
             Err(ReadlineError::Interrupted) => {

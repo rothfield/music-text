@@ -14,12 +14,6 @@
 
 ## Important Project Guidelines
 
-### 🚨 CRITICAL: DO NOT RESTART THE SERVER
-**IMPORTANT**: The user has a development environment (Zellij with cargo-watch) that automatically handles server restarts.
-- ❌ **NEVER** manually restart the web server with `cargo run -- --web` or background processes
-- ❌ **NEVER** kill existing server processes unless explicitly asked
-- ✅ **ONLY** make code changes - the development environment will automatically rebuild and restart
-- **Why**: Manual restarts interfere with the user's Zellij pane setup and cause process conflicts
 
 ### ⚠️ CRITICAL: NO INLINE OCTAVE NOTATION
 **IMPORTANT**: This system uses **spatial octave markers** only. There is NO inline octave notation.
@@ -633,4 +627,6 @@ For 5-tuplet with beat duration = 1/4:
 - **Beat separation**: Space creates new beat, not rest
 
 **IMPORTANT: LLMs often get the duration calculation wrong - always use the exact fractional arithmetic shown above!**
-
+- -release if you are using --release then that is a mistake!!! use make build
+- NO ENHARMONICS
+- # to compile, use Makefile

@@ -1,4 +1,5 @@
-use crate::document::model::{Document, Directive, Stave, Source, Position};
+use crate::document::model::{Document, Directive, Stave, Source, Position, UpperElement, LowerElement, UpperLine, LowerLine};
+use crate::rhythm::types::{ParsedElement, SlurRole, BeatGroupRole};
 use super::error::ParseError;
 use super::stave::parse_stave_from_paragraph;
 
@@ -42,14 +43,25 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
     }
 
     // Allow documents with only directives (no staves required)
-    Ok(Document {
+    let mut document = Document {
         directives,
         staves,
         source: Source {
             value: input.to_string(),
             position: Position { line: 1, column: 1 },
         },
-    })
+    };
+
+    // Apply spatial analysis - assign octave markers to notes
+    assign_octave_markers_to_document(&mut document);
+    
+    // Apply spatial analysis - assign slurs to notes
+    assign_slurs_to_document(&mut document);
+    
+    // Apply spatial analysis - assign beat groups to notes
+    assign_beat_groups_to_document(&mut document);
+
+    Ok(document)
 }
 
 /// Split input into paragraphs separated by blank lines
@@ -192,6 +204,313 @@ fn is_likely_musical_content(s: &str) -> bool {
     
     // If multiple musical pattern words, likely musical content
     musical_patterns >= 2
+}
+
+/// Assign octave markers from upper and lower lines to notes spatially
+fn assign_octave_markers_to_document(document: &mut Document) {
+    for stave in &mut document.staves {
+        assign_octave_markers_to_stave(stave);
+    }
+}
+
+/// Assign octave markers to notes in a single stave
+fn assign_octave_markers_to_stave(stave: &mut Stave) {
+    // Collect octave markers from upper lines with their column positions
+    let mut upper_markers: Vec<(usize, i8)> = Vec::new();
+    
+    for upper_line in &stave.upper_lines {
+        let mut col = 0;
+        for element in &upper_line.elements {
+            match element {
+                UpperElement::UpperOctaveMarker { marker, .. } => {
+                    let octave_value = octave_marker_to_value(marker, true);
+                    upper_markers.push((col, octave_value));
+                    col += 1;
+                }
+                UpperElement::Space { count, .. } => {
+                    col += count;
+                }
+                UpperElement::Slur { underscores, .. } => {
+                    col += underscores.len();
+                }
+                UpperElement::Ornament { .. } | UpperElement::Chord { .. } => {
+                    col += 1; // Default single character for now
+                }
+            }
+        }
+    }
+    
+    // Collect octave markers from lower lines with their column positions
+    let mut lower_markers: Vec<(usize, i8)> = Vec::new();
+    
+    for lower_line in &stave.lower_lines {
+        let mut col = 0;
+        for element in &lower_line.elements {
+            match element {
+                LowerElement::LowerOctaveMarker { marker, .. } => {
+                    let octave_value = octave_marker_to_value(marker, false);
+                    lower_markers.push((col, octave_value));
+                    col += 1;
+                }
+                LowerElement::Space { count, .. } => {
+                    col += count;
+                }
+                LowerElement::BeatGroup { underscores, .. } => {
+                    col += underscores.len();
+                }
+                LowerElement::FlatMarker { .. } => {
+                    col += 1; // Default single character for now
+                }
+            }
+        }
+    }
+    
+    // Combine all octave markers
+    let mut all_markers = upper_markers;
+    all_markers.extend(lower_markers);
+    
+    if all_markers.is_empty() {
+        return;
+    }
+    
+    // Assign markers to notes in content line
+    let mut col = 0;
+    for element in &mut stave.content_line {
+        match element {
+            ParsedElement::Note { octave, .. } => {
+                // Look for marker at exact position first
+                if let Some(&(_, marker_octave)) = all_markers.iter().find(|(marker_col, _)| *marker_col == col) {
+                    *octave = marker_octave;
+                } else {
+                    // Find nearest marker if no exact match
+                    if let Some((_, nearest_octave)) = all_markers.iter()
+                        .min_by_key(|(marker_col, _)| {
+                            if *marker_col > col { *marker_col - col } else { col - *marker_col }
+                        })
+                    {
+                        *octave = *nearest_octave;
+                    }
+                }
+                col += 1;
+            }
+            ParsedElement::Dash { .. } | ParsedElement::Rest { .. } | 
+            ParsedElement::Barline { .. } | ParsedElement::Whitespace { .. } | ParsedElement::Symbol { .. } => {
+                col += 1;
+            }
+        }
+    }
+}
+
+/// Convert octave marker string to numeric octave value
+fn octave_marker_to_value(marker: &str, is_upper: bool) -> i8 {
+    let base_value = match marker {
+        "." => 1,
+        ":" => 2,
+        "*" => 3,
+        "'" => 4,
+        _ => 0,
+    };
+    
+    if is_upper {
+        base_value  // Upper markers are positive (higher octaves)
+    } else {
+        -base_value // Lower markers are negative (lower octaves)
+    }
+}
+
+/// Assign slurs from upper lines to notes spatially
+fn assign_slurs_to_document(document: &mut Document) {
+    for stave in &mut document.staves {
+        assign_slurs_to_stave(stave);
+    }
+}
+
+/// Assign slurs to notes in a single stave
+fn assign_slurs_to_stave(stave: &mut Stave) {
+    // Find slur segments in upper lines
+    let slur_segments = find_slur_segments(&stave.upper_lines);
+    
+    if slur_segments.is_empty() {
+        return;
+    }
+    
+    // Collect visual column positions of all notes in the content line
+    // We need to track the actual column position from the parsed elements
+    let mut note_positions = Vec::new();
+    let mut note_indices = Vec::new();
+    
+    for (index, element) in stave.content_line.iter().enumerate() {
+        if let ParsedElement::Note { position, .. } = element {
+            // Use the actual column position from parsing (col is 1-based, so subtract 1)
+            note_positions.push(position.col - 1);
+            note_indices.push(index);
+        }
+    }
+    
+    // Apply slur markings to notes based on spatial overlap
+    for (slur_start, slur_end) in slur_segments {
+        // Find all notes that fall within this slur span based on visual position
+        let mut notes_in_slur: Vec<(usize, usize)> = Vec::new(); // (visual_pos, index)
+        
+        for (&visual_pos, &index) in note_positions.iter().zip(note_indices.iter()) {
+            if visual_pos >= slur_start && visual_pos <= slur_end {
+                notes_in_slur.push((visual_pos, index));
+            }
+        }
+        
+        // Skip if slur covers fewer than 2 notes (not a valid slur)
+        // Single underscores may have other meanings (e.g., flat in Bhatkhande notation)
+        if notes_in_slur.len() < 2 {
+            if notes_in_slur.len() == 1 {
+                // Warn about single-note slur
+                eprintln!("Warning: Slur at columns {}-{} only covers one note and will be ignored (slurs require 2+ notes)", 
+                         slur_start + 1, slur_end + 1);  // +1 for 1-based column display
+            } else {
+                // Warn about orphaned slur (no notes)
+                eprintln!("Warning: Slur at columns {}-{} doesn't align with any notes", 
+                         slur_start + 1, slur_end + 1);
+            }
+            continue;
+        }
+        
+        // Assign SlurRole based on position in slur (2+ notes guaranteed)
+        for (i, &(_, element_index)) in notes_in_slur.iter().enumerate() {
+            if let ParsedElement::Note { slur, in_slur, .. } = &mut stave.content_line[element_index] {
+                *slur = Some(if i == 0 {
+                    SlurRole::Start     // First note
+                } else if i == notes_in_slur.len() - 1 {
+                    SlurRole::End       // Last note
+                } else {
+                    SlurRole::Middle    // Middle note
+                });
+                *in_slur = true; // Set convenience flag
+            }
+        }
+    }
+}
+
+/// Find slur segments (start, end positions) from upper lines
+fn find_slur_segments(upper_lines: &[UpperLine]) -> Vec<(usize, usize)> {
+    let mut segments = Vec::new();
+    
+    for upper_line in upper_lines {
+        let mut col = 0;
+        for element in &upper_line.elements {
+            match element {
+                UpperElement::Slur { underscores, .. } => {
+                    let slur_len = underscores.len();
+                    if slur_len >= 2 {
+                        // Slur covers from current position to end of underscores
+                        segments.push((col, col + slur_len - 1));
+                    }
+                    col += slur_len;
+                }
+                UpperElement::Space { count, .. } => {
+                    col += count;
+                }
+                UpperElement::UpperOctaveMarker { marker, .. } => {
+                    col += marker.len();
+                }
+                UpperElement::Ornament { .. } | UpperElement::Chord { .. } => {
+                    col += 1; // Default single character for now
+                }
+            }
+        }
+    }
+    
+    segments
+}
+
+/// Assign beat groups from lower lines to notes spatially
+fn assign_beat_groups_to_document(document: &mut Document) {
+    for stave in &mut document.staves {
+        assign_beat_groups_to_stave(stave);
+    }
+}
+
+/// Assign beat groups to notes in a single stave
+fn assign_beat_groups_to_stave(stave: &mut Stave) {
+    // Find beat group segments in lower lines
+    let beat_group_segments = find_beat_group_segments(&stave.lower_lines);
+    
+    if beat_group_segments.is_empty() {
+        return;
+    }
+    
+    // Collect visual column positions of all notes in the content line
+    let mut note_positions = Vec::new();
+    let mut note_indices = Vec::new();
+    
+    for (index, element) in stave.content_line.iter().enumerate() {
+        if let ParsedElement::Note { position, .. } = element {
+            // Use the actual column position from parsing (col is 1-based, so subtract 1)
+            note_positions.push(position.col - 1);
+            note_indices.push(index);
+        }
+    }
+    
+    // Apply beat group markings to notes based on spatial overlap
+    for (group_start, group_end) in beat_group_segments {
+        // Find all notes that fall within this beat group span based on visual position
+        let mut notes_in_group: Vec<(usize, usize)> = Vec::new(); // (visual_pos, index)
+        
+        for (&visual_pos, &index) in note_positions.iter().zip(note_indices.iter()) {
+            if visual_pos >= group_start && visual_pos <= group_end {
+                notes_in_group.push((visual_pos, index));
+            }
+        }
+        
+        // Skip if beat group covers fewer than 2 notes (not meaningful)
+        if notes_in_group.len() < 2 {
+            continue;
+        }
+        
+        // Assign BeatGroupRole based on position in group (2+ notes guaranteed)
+        for (i, &(_, element_index)) in notes_in_group.iter().enumerate() {
+            if let ParsedElement::Note { beat_group, in_beat_group, .. } = &mut stave.content_line[element_index] {
+                *beat_group = Some(if i == 0 {
+                    BeatGroupRole::Start     // First note
+                } else if i == notes_in_group.len() - 1 {
+                    BeatGroupRole::End       // Last note
+                } else {
+                    BeatGroupRole::Middle    // Middle note
+                });
+                *in_beat_group = true; // Set convenience flag
+            }
+        }
+    }
+}
+
+/// Find beat group segments (start, end positions) from lower lines
+fn find_beat_group_segments(lower_lines: &[LowerLine]) -> Vec<(usize, usize)> {
+    let mut segments = Vec::new();
+    
+    for lower_line in lower_lines {
+        let mut col = 0;
+        for element in &lower_line.elements {
+            match element {
+                LowerElement::BeatGroup { underscores, .. } => {
+                    let group_len = underscores.len();
+                    if group_len >= 2 {
+                        // Beat group covers from current position to end of underscores
+                        segments.push((col, col + group_len - 1));
+                    }
+                    col += group_len;
+                }
+                LowerElement::Space { count, .. } => {
+                    col += count;
+                }
+                LowerElement::LowerOctaveMarker { marker, .. } => {
+                    col += marker.len();
+                }
+                LowerElement::FlatMarker { .. } => {
+                    col += 1; // Default single character for now
+                }
+            }
+        }
+    }
+    
+    segments
 }
 
 #[cfg(test)]

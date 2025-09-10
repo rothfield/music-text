@@ -1,8 +1,51 @@
-use crate::document::model::PitchCode;
-use crate::old_models::{ParsedElement, Degree, Position as OldPosition};
+use crate::document::model::{PitchCode, NotationSystem};
+use crate::rhythm::types::{ParsedElement, Degree, Position};
 use super::error::ParseError;
 
 // Old ContentLine function removed - using new ParsedElement architecture
+
+/// Detect the notation system for a single line using the same logic as the model
+fn detect_line_notation_system(line: &str) -> NotationSystem {
+    // Count occurrences of each notation system's unique characters
+    let mut votes = [0; 5]; // [Number, Western, Sargam, Bhatkhande, Tabla]
+    
+    for ch in line.chars() {
+        match ch {
+            '1'..='7' => votes[0] += 1, // Number
+            'C' | 'E' | 'F' | 'A' | 'B' => votes[1] += 1, // Clearly Western
+            's' | 'r' | 'g' | 'm' | 'n' | 'd' | 'p' => votes[2] += 1, // Clearly Sargam
+            'स' | 'र' | 'ग' | 'म' | 'प' | 'ध' | 'द' | 'न' => votes[3] += 1, // Bhatkhande
+            _ => {}
+        }
+    }
+    
+    // Handle ambiguous characters by context
+    for ch in line.chars() {
+        match ch {
+            'G' | 'D' | 'R' | 'M' | 'P' | 'N' => {
+                // If we already have strong Sargam indicators, count as Sargam
+                if votes[2] > 0 {
+                    votes[2] += 1;
+                } else {
+                    votes[1] += 1; // Default to Western
+                }
+            }
+            'S' => votes[2] += 1, // S is always Sargam (no Western equivalent)
+            _ => {}
+        }
+    }
+    
+    // Return the system with the most votes
+    let max_idx = votes.iter().position(|&x| x == *votes.iter().max().unwrap()).unwrap();
+    match max_idx {
+        0 => NotationSystem::Number,
+        1 => NotationSystem::Western,
+        2 => NotationSystem::Sargam,
+        3 => NotationSystem::Bhatkhande,
+        4 => NotationSystem::Tabla,
+        _ => NotationSystem::Number, // Default
+    }
+}
 
 /// Check if a line contains musical content
 pub fn is_content_line(line: &str) -> bool {
@@ -84,11 +127,15 @@ fn is_part_of_english_word(chars: &[char], i: usize) -> bool {
     let prev_char = if i > 0 { Some(chars[i - 1]) } else { None };
     let next_char = if i + 1 < chars.len() { Some(chars[i + 1]) } else { None };
     
-    // If surrounded by lowercase letters, it's likely part of an English word
-    let prev_is_lowercase = prev_char.map_or(false, |c| c.is_ascii_lowercase());
-    let next_is_lowercase = next_char.map_or(false, |c| c.is_ascii_lowercase());
+    // If surrounded by lowercase letters that are NOT musical notes, it's likely part of an English word
+    let prev_is_non_musical_lowercase = prev_char.map_or(false, |c| 
+        c.is_ascii_lowercase() && !matches!(c, 's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n')
+    );
+    let next_is_non_musical_lowercase = next_char.map_or(false, |c| 
+        c.is_ascii_lowercase() && !matches!(c, 's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n')
+    );
     
-    prev_is_lowercase || next_is_lowercase
+    prev_is_non_musical_lowercase || next_is_non_musical_lowercase
 }
 
 /// Count musical pitches in a line (legacy function - kept for compatibility)
@@ -198,11 +245,14 @@ pub fn parse_content_line(line: &str, line_num: usize) -> Result<Vec<ParsedEleme
     let mut elements = Vec::new();
     let mut col = 1;
     
+    // Detect the notation system for this line to handle ambiguous characters
+    let notation_system = detect_line_notation_system(line);
+    
     for ch in line.chars() {
         let element = match ch {
             '|' => ParsedElement::Barline {
                 style: "|".to_string(),
-                position: OldPosition {
+                position: Position {
                     row: line_num,
                     col,
                 },
@@ -221,77 +271,65 @@ pub fn parse_content_line(line: &str, line_num: usize) -> Result<Vec<ParsedEleme
                 };
                 let degree = convert_pitchcode_to_degree(pitch_code);
                 
-                ParsedElement::Note {
+                ParsedElement::new_note(
                     degree,
-                    octave: 0, // Default octave, will be updated by spatial processing
-                    value: ch.to_string(),
-                    position: OldPosition {
+                    0, // Default octave, will be updated by spatial processing
+                    ch.to_string(),
+                    Position {
                         row: line_num,
                         col,
                     },
-                    children: vec![], // No children at content line level
-                    duration: None, // Will be set by FSM
-                    slur: None, // Will be set by spatial processing
-                }
+                )
             },
-            // Western notation: C D E F G A B
+            // Western notation: C D E F G A B (but G, D, R, M, P, N might be Sargam based on context)
             'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B' => {
-                let pitch_code = PitchCode::from_source(&ch.to_string());
+                let pitch_code = PitchCode::from_source_with_context(&ch.to_string(), notation_system);
                 let degree = convert_pitchcode_to_degree(pitch_code);
                 
-                ParsedElement::Note {
+                ParsedElement::new_note(
                     degree,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: OldPosition {
+                    0,
+                    ch.to_string(),
+                    Position {
                         row: line_num,
                         col,
                     },
-                    children: vec![],
-                    duration: None,
-                    slur: None,
-                }
+                )
             },
             // Sargam notation: S R G M P D N (both cases)
             'S' | 's' | 'R' | 'r' | 'M' | 'm' | 'P' | 'p' | 'N' | 'n' => {
-                let pitch_code = PitchCode::from_source(&ch.to_string());
+                let pitch_code = PitchCode::from_source_with_context(&ch.to_string(), notation_system);
                 let degree = convert_pitchcode_to_degree(pitch_code);
                 
-                ParsedElement::Note {
+                ParsedElement::new_note(
                     degree,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: OldPosition {
+                    0,
+                    ch.to_string(),
+                    Position {
                         row: line_num,
                         col,
                     },
-                    children: vec![],
-                    duration: None,
-                    slur: None,
-                }
+                )
             },
             // Handle lowercase sargam 'g' and 'd' separately (they're komal variants)
             'g' | 'd' => {
-                let pitch_code = PitchCode::from_source(&ch.to_string());
+                let pitch_code = PitchCode::from_source_with_context(&ch.to_string(), notation_system);
                 let degree = convert_pitchcode_to_degree(pitch_code);
                 
-                ParsedElement::Note {
+                ParsedElement::new_note(
                     degree,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: OldPosition {
+                    0,
+                    ch.to_string(),
+                    Position {
                         row: line_num,
                         col,
                     },
-                    children: vec![],
-                    duration: None,
-                    slur: None,
-                }
+                )
             },
             '-' => ParsedElement::Dash {
                 degree: None, // Will be inherited from previous note
                 octave: None, // Will be inherited from previous note
-                position: OldPosition {
+                position: Position {
                     row: line_num,
                     col,
                 },
@@ -299,7 +337,7 @@ pub fn parse_content_line(line: &str, line_num: usize) -> Result<Vec<ParsedEleme
             },
             ' ' => ParsedElement::Whitespace {
                 value: " ".to_string(),
-                position: OldPosition {
+                position: Position {
                     row: line_num,
                     col,
                 },

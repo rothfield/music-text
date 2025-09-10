@@ -8,7 +8,7 @@ use crate::rhythm::process_rhythm_batch;
 pub fn parse_document_staves(document: Document) -> Result<Vec<ProcessedStave>, String> {
     // Step 1: All staves are already spatially complete from parse_document
     // Step 2: Batch rhythm processing - collect all content lines  
-    let all_content_lines: Vec<&Vec<crate::old_models::ParsedElement>> = document.staves
+    let all_content_lines: Vec<&Vec<crate::rhythm::types::ParsedElement>> = document.staves
         .iter()
         .map(|stave| &stave.content_line)
         .collect();

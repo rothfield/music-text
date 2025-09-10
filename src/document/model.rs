@@ -78,6 +78,27 @@ pub enum PitchCode {
 
 impl PitchCode {
     /// Convert complete source pitch token to normalized pitch code  
+    /// Context-aware version that handles ambiguous characters based on notation system
+    pub fn from_source_with_context(source_pitch: &str, notation_system: NotationSystem) -> Self {
+        // Handle ambiguous characters based on context
+        match (source_pitch, notation_system) {
+            ("G", NotationSystem::Sargam) => PitchCode::N3,  // Sargam Ga
+            ("G", NotationSystem::Western) => PitchCode::N5,  // Western G
+            ("D", NotationSystem::Sargam) => PitchCode::N6,   // Sargam Dha  
+            ("D", NotationSystem::Western) => PitchCode::N2,  // Western D
+            ("R", NotationSystem::Sargam) => PitchCode::N2,   // Sargam Re
+            ("R", NotationSystem::Western) => PitchCode::N2,  // R not standard Western, default to N2
+            ("M", NotationSystem::Sargam) => PitchCode::N4s,  // Sargam Ma tivra
+            ("M", NotationSystem::Western) => PitchCode::N4s, // M not standard Western, default to N4s
+            ("P", NotationSystem::Sargam) => PitchCode::N5,   // Sargam Pa
+            ("P", NotationSystem::Western) => PitchCode::N5,  // P not standard Western, default to N5
+            ("N", NotationSystem::Sargam) => PitchCode::N7,   // Sargam Ni
+            ("N", NotationSystem::Western) => PitchCode::N7,  // N not standard Western, default to N7
+            _ => Self::from_source(source_pitch), // Fall back to original method
+        }
+    }
+    
+    /// Convert complete source pitch token to normalized pitch code  
     /// Now handles all 35 combinations explicitly
     pub fn from_source(source_pitch: &str) -> Self {
         match source_pitch {
@@ -245,7 +266,7 @@ impl Document {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stave {
     pub text_lines_before: Vec<TextLine>,
-    pub content_line: Vec<crate::old_models::ParsedElement>, // Direct ParsedElement from parseMainLine
+    pub content_line: Vec<crate::rhythm::types::ParsedElement>, // Direct ParsedElement from parseMainLine
     pub upper_lines: Vec<UpperLine>,   // Spatial annotations above content
     pub lower_lines: Vec<LowerLine>,   // Spatial annotations below content
     pub lyrics_lines: Vec<LyricsLine>, // Syllables for assignment to notes

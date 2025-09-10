@@ -1,6 +1,6 @@
 use crate::stave::ProcessedStave;
 use crate::rhythm::{Item, Event};
-use crate::old_models::Degree;
+use crate::rhythm::types::Degree;
 use super::formatters::{MinimalFormatter, FullFormatter, WebFastFormatter};
 use serde::Serialize;
 
@@ -237,8 +237,8 @@ impl LilyPondRenderer {
     /// Convert a beat element to LilyPond notation and extract syllable for lyrics
     fn convert_beat_element_to_lilypond_with_lyrics(&self, beat_element: &crate::rhythm::BeatElement) -> (String, Option<String>) {
         match &beat_element.event {
-            Event::Note { degree, .. } => {
-                let lily_pitch = degree_to_lilypond_simple(*degree);
+            Event::Note { degree, octave, .. } => {
+                let lily_pitch = degree_to_lilypond_with_octave(*degree, *octave);
                 // Use the sophisticated FSM-calculated tuplet_duration instead of simple subdivision mapping
                 let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
                 
@@ -362,6 +362,24 @@ fn degree_to_lilypond_simple(degree: Degree) -> String {
     }
 }
 
+/// Convert degree and octave to LilyPond pitch notation with octave markers
+fn degree_to_lilypond_with_octave(degree: Degree, octave: i8) -> String {
+    let base_pitch = degree_to_lilypond_simple(degree);
+    let octave_markers = octave_to_lilypond_markers(octave);
+    format!("{}{}", base_pitch, octave_markers)
+}
+
+/// Convert octave number to LilyPond octave markers
+/// Octave 0 = default (c), +1 = higher (c'), -1 = lower (c,)
+fn octave_to_lilypond_markers(octave: i8) -> String {
+    match octave {
+        0 => "".to_string(),  // Default octave
+        n if n > 0 => "'".repeat(n as usize),  // Higher octaves: c' c'' c'''
+        n if n < 0 => ",".repeat((-n) as usize),  // Lower octaves: c, c,, c,,,
+        _ => "".to_string(),  // Fallback
+    }
+}
+
 impl Default for LilyPondRenderer {
     fn default() -> Self {
         Self::new()
@@ -374,7 +392,8 @@ mod tests {
     use crate::stave::ProcessedStave;
     use crate::document::model::{NotationSystem, Source, Position};
     use crate::rhythm::{Item, Beat, BeatElement, Event};
-    use crate::old_models::{Degree, BarlineType};
+    use crate::rhythm::types::Degree;
+    use crate::rhythm::converters::BarlineType;
 
     #[test]
     fn test_row_row_row_multi_stave() {
@@ -509,7 +528,7 @@ mod tests {
                 tuplet_duration: fraction::Fraction::new(1u32, 4u32), // Quarter note base
                 tuplet_display_duration: None,
                 value: "test".to_string(),
-                position: crate::old_models::Position { row: 1, col: 1 },
+                position: crate::rhythm::types::Position { row: 1, col: 1 },
             });
         }
         
@@ -560,7 +579,7 @@ mod tests {
             tuplet_duration: fraction::Fraction::new(1u32, 4u32),
             tuplet_display_duration: None,
             value: "1".to_string(),
-            position: crate::old_models::Position { row: 1, col: 1 },
+            position: crate::rhythm::types::Position { row: 1, col: 1 },
         };
         
         let beat = Beat {

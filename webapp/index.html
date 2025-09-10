@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Music Text Parser</title>
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="stylesheet" href="assets/bootstrap.min.css">
     <link rel="stylesheet" href="styles.css">
     <!-- Google Fonts for monospace options -->
@@ -14,65 +15,71 @@
     <script src="assets/vexflow4.js"></script>
 </head>
 <body>
-    <div class="status-bar">
-        <span class="status-title">Music Text Parser</span>
-        <span class="status-separator">|</span>
-        <span class="status-prompt">Enter your music notation:</span>
-        <span class="status-separator">|</span>
-        <span class="status-systems">Detected: <span id="detected-systems">Enter some music to see detected systems...</span></span>
-    </div>
-    
     <div class="container-fluid">
         <div class="mb-3">
-            <textarea id="input-text" class="form-control" rows="3" placeholder="Try typing: 1 2 3 | 4 5 6&#10;or: C D E F G A B&#10;or: 1# 2b 3##"></textarea>
+            <!-- Status/Controls Bar above textarea -->
+            <div class="status-bar mb-2">
+                <span class="status-systems">Detected: <span id="detected-systems">Enter some music...</span></span>
+                <span class="status-separator">|</span>
+                <div class="form-check form-switch d-inline-block">
+                    <input class="form-check-input" type="checkbox" id="unicode-toggle" checked>
+                    <label class="form-check-label text-light" for="unicode-toggle">Unicode</label>
+                </div>
+                <span class="status-separator">|</span>
+                <button class="btn btn-sm btn-link text-light p-0" id="fonts-button" style="text-decoration: none;">Fonts...</button>
+            </div>
             
-            <!-- Font Selection Dropdown -->
-            <div class="mt-2">
-                <div class="row align-items-center">
-                    <div class="col-auto">
-                        <label for="font-selector" class="form-label mb-0 small text-muted">Font:</label>
-                    </div>
-                    <div class="col-auto">
-                        <select id="font-selector" class="form-select form-select-sm" style="width: auto;">
-                            <option value="'DejaVu Sans Mono', monospace" selected>DejaVu Sans Mono (Default)</option>
-                            <optgroup label="🌐 Web Fonts (Always Available)">
-                                <option value="'Roboto Mono', monospace">Roboto Mono</option>
-                                <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
-                                <option value="'Source Code Pro', monospace">Source Code Pro</option>
-                                <option value="'Fira Code', monospace">Fira Code</option>
-                                <option value="'Space Mono', monospace">Space Mono</option>
-                                <option value="'IBM Plex Mono', monospace">IBM Plex Mono</option>
-                                <option value="'Inconsolata', monospace">Inconsolata</option>
-                                <option value="'PT Mono', monospace">PT Mono</option>
-                                <option value="'Noto Sans Mono', monospace">Noto Sans Mono</option>
-                                <option value="'Overpass Mono', monospace">Overpass Mono</option>
-                            </optgroup>
-                            <optgroup label="🍎 macOS Fonts">
-                                <option value="'Monaco', monospace">Monaco</option>
-                                <option value="'Menlo', monospace">Menlo</option>
-                                <option value="'SF Mono', monospace">SF Mono</option>
-                            </optgroup>
-                            <optgroup label="🪟 Windows Fonts">
-                                <option value="'Consolas', monospace">Consolas</option>
-                                <option value="'Cascadia Code', monospace">Cascadia Code</option>
-                            </optgroup>
-                            <optgroup label="🐧 Linux Fonts">
-                                <option value="'Liberation Mono', monospace">Liberation Mono</option>
-                                <option value="'Ubuntu Mono', monospace">Ubuntu Mono</option>
-                            </optgroup>
-                            <optgroup label="📱 Universal">
-                                <option value="'Courier New', monospace">Courier New</option>
-                                <option value="'Anonymous Pro', monospace">Anonymous Pro</option>
-                                <option value="'Droid Sans Mono', monospace">Droid Sans Mono</option>
-                                <option value="monospace">Generic Monospace</option>
-                            </optgroup>
+            <!-- Font Configuration Section inside control bar area (hidden by default) -->
+            <div class="border rounded p-2 bg-light mb-2" id="font-config" style="display: none;">
+                <!-- All Controls on Single Line -->
+                <div class="d-flex align-items-center gap-3" style="font-size: 11px;">
+                    <!-- Font Family -->
+                    <div class="d-flex align-items-center gap-1">
+                        <label for="font-select" class="text-muted mb-0" style="font-size: 10px;">Font:</label>
+                        <select id="font-select" class="form-select" style="font-size: 10px; padding: 2px 4px; height: auto; min-width: 80px;">
+                            <option value="'JuliaMono', monospace" selected>Julia</option>
+                            <option value="'Consolas', monospace">Consolas</option>
+                            <option value="'Monaco', monospace">Monaco</option>
+                            <option value="'Courier New', monospace">Courier</option>
+                            <option value="monospace">System</option>
                         </select>
                     </div>
-                    <div class="col-auto">
-                        <small class="text-muted">Test: ┃▬•|-.123SRGCDEfghABC</small>
+                    
+                    <!-- Font Size -->
+                    <div class="d-flex align-items-center gap-1">
+                        <label for="font-size" class="text-muted mb-0" style="font-size: 10px;">Size:</label>
+                        <span id="font-size-value" class="text-muted" style="font-size: 10px; min-width: 24px;">14px</span>
+                        <input type="range" id="font-size" class="form-range" min="10" max="24" step="1" value="14" style="width: 60px;">
+                    </div>
+                    
+                    <!-- Letter Spacing -->
+                    <div class="d-flex align-items-center gap-1">
+                        <label for="spacing-slider" class="text-muted mb-0" style="font-size: 10px;">Spacing:</label>
+                        <span id="spacing-value" class="text-muted" style="font-size: 10px; min-width: 30px;">0.1em</span>
+                        <input type="range" id="spacing-slider" class="form-range" min="-0.1" max="0.5" step="0.05" value="0.1" style="width: 60px;">
+                    </div>
+                    
+                    <!-- Line Height -->
+                    <div class="d-flex align-items-center gap-1">
+                        <label for="height-slider" class="text-muted mb-0" style="font-size: 10px;">Height:</label>
+                        <span id="height-value" class="text-muted" style="font-size: 10px; min-width: 30px;">1.6em</span>
+                        <input type="range" id="height-slider" class="form-range" min="1.0" max="2.5" step="0.1" value="1.6" style="width: 60px;">
+                    </div>
+                    
+                    <!-- Sample Text -->
+                    <span class="text-muted" style="font-size: 10px;">
+                        ♯ ♭ ┃ ▬ • ≋ vs # b | - . ~
+                    </span>
+                    
+                    <!-- Reset and Close Buttons -->
+                    <div class="d-flex align-items-center gap-1" style="margin-left: auto;">
+                        <button class="btn btn-outline-secondary" id="reset-font-btn" style="font-size: 10px; padding: 2px 6px;">Reset</button>
+                        <button class="btn-close" id="close-font-config" aria-label="Close" style="font-size: 10px; padding: 2px;"></button>
                     </div>
                 </div>
             </div>
+            
+            <textarea id="input-text" class="form-control" rows="3"></textarea>
         </div>
         
         <ul class="nav nav-tabs" id="outputTabs" role="tablist">

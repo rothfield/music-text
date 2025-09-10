@@ -1,6 +1,7 @@
 use crate::stave::ProcessedStave;
 use crate::rhythm::{Item, Event, Beat};
-use crate::old_models::{Degree, BarlineType};
+use crate::rhythm::types::{Degree, SlurRole, ParsedChild, OrnamentType};
+use crate::rhythm::converters::BarlineType;
 use serde::{Serialize, Deserialize};
 
 /// VexFlow output structures for sophisticated rendering
@@ -172,9 +173,8 @@ fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>) -> 
             Event::Note { degree, octave, children, slur } => {
                 // Handle slur start
                 if let Some(slur_role) = slur {
-                    use crate::old_models::SlurRole;
                     match slur_role {
-                        SlurRole::Start | SlurRole::StartEnd => {
+                        SlurRole::Start => {
                             elements.push(VexFlowElement::SlurStart);
                             slur_stack.push(true);
                         },
@@ -189,19 +189,19 @@ fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>) -> 
                 // Extract syllable from children
                 let syllable = children.iter()
                     .find_map(|child| match child {
-                        crate::old_models::ParsedChild::Syllable { text, .. } => Some(text.clone()),
+                        ParsedChild::Syllable { text, .. } => Some(text.clone()),
                         _ => None,
                     });
                 
                 // Extract ornaments from children  
                 let ornaments: Vec<String> = children.iter()
                     .filter_map(|child| match child {
-                        crate::old_models::ParsedChild::Ornament { kind, .. } => {
+                        ParsedChild::Ornament { kind, .. } => {
                             Some(match kind {
-                                crate::old_models::OrnamentType::Mordent => "Mordent".to_string(),
-                                crate::old_models::OrnamentType::Trill => "Trill".to_string(),
-                                crate::old_models::OrnamentType::Turn => "Turn".to_string(),
-                                crate::old_models::OrnamentType::Grace => "Grace".to_string(),
+                                OrnamentType::Mordent => "Mordent".to_string(),
+                                OrnamentType::Trill => "Trill".to_string(),
+                                OrnamentType::Turn => "Turn".to_string(),
+                                OrnamentType::Grace => "Grace".to_string(),
                             })
                         },
                         _ => None,
@@ -221,9 +221,8 @@ fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>) -> 
                 
                 // Handle slur end
                 if let Some(slur_role) = slur {
-                    use crate::old_models::SlurRole;
                     match slur_role {
-                        SlurRole::End | SlurRole::StartEnd => {
+                        SlurRole::End => {
                             elements.push(VexFlowElement::SlurEnd);
                             if !slur_stack.is_empty() {
                                 slur_stack.pop();

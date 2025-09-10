@@ -18,15 +18,121 @@ function saveActiveTabFromBootstrap() {
 const UNICODE_REPLACEMENTS = {
     '-': '▬',  // Black rectangle for dashes
     '.': '•',  // Bullet for dots
-    '|': '┃'   // Heavy vertical line for barlines
+    '|': '┃',  // Heavy vertical line for barlines
+    '~': '≋',  // Triple tilde (U+224B) - represents ornament/mordent
+    '#': '♯',  // Musical sharp sign (U+266F)
+    'b': '♭'   // Musical flat sign (U+266D) - replaces b only in musical contexts
 };
 
-// Apply Unicode replacements to input (for display)
-function applyUnicodeReplacements(text) {
-    let result = text;
-    for (const [original, replacement] of Object.entries(UNICODE_REPLACEMENTS)) {
-        result = result.replace(new RegExp('\\' + original, 'g'), replacement);
+// Valid pitch patterns from server
+let VALID_FLAT_PATTERNS = [];
+let VALID_SHARP_PATTERNS = [];
+
+// Fetch valid pitch patterns from server at startup
+async function loadValidPitches() {
+    console.log('🔄 Loading valid pitch patterns from server...');
+    try {
+        const response = await fetch('/api/valid-pitches');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        VALID_FLAT_PATTERNS = data.flat_patterns || [];
+        VALID_SHARP_PATTERNS = data.sharp_patterns || [];
+        console.log('✅ Loaded valid pitch patterns:', { 
+            flats: VALID_FLAT_PATTERNS.length, 
+            sharps: VALID_SHARP_PATTERNS.length,
+            flatSample: VALID_FLAT_PATTERNS.slice(0, 3),
+            sharpSample: VALID_SHARP_PATTERNS.slice(0, 3)
+        });
+    } catch (error) {
+        console.error('❌ Failed to load valid pitch patterns, falling back to regex:', error);
+        // Fallback - will use the old regex method if server fails
+        VALID_FLAT_PATTERNS = [];
+        VALID_SHARP_PATTERNS = [];
     }
+}
+
+// Fonts that support proper Unicode monospace rendering
+const UNICODE_CAPABLE_FONTS = [
+    'JuliaMono',
+    'JuliaMono Latin', 
+    'DejaVu Sans Mono'
+    // Note: Kurinto Mono removed - breaks monospace alignment for | character
+    // Note: JuliaMono Latin likely doesn't have Unicode musical symbols - will fallback to ASCII
+];
+
+// On-demand font loading for fonts that need special handling
+const ON_DEMAND_FONTS = {
+    'Kurinto Mono': 'https://github.com/welai/kurinto/raw/master/fonts/ttf/KurintoMono-Regular.ttf'
+};
+
+// Track loaded fonts to avoid duplicate loading
+const loadedFonts = new Set();
+
+// Load font on demand
+async function loadFontOnDemand(fontName) {
+    if (loadedFonts.has(fontName)) {
+        return; // Already loaded
+    }
+    
+    const fontUrl = ON_DEMAND_FONTS[fontName];
+    if (!fontUrl) {
+        return; // Not an on-demand font
+    }
+    
+    try {
+        console.log(`Loading font on demand: ${fontName}`);
+        const fontFace = new FontFace(fontName, `url(${fontUrl})`);
+        const loadedFont = await fontFace.load();
+        document.fonts.add(loadedFont);
+        loadedFonts.add(fontName);
+        console.log(`Successfully loaded: ${fontName}`);
+    } catch (error) {
+        console.warn(`Failed to load font ${fontName}:`, error);
+    }
+}
+
+// Check if current font supports Unicode replacements
+function isUnicodeCapableFont(fontFamily) {
+    return UNICODE_CAPABLE_FONTS.some(font => 
+        fontFamily.toLowerCase().includes(font.toLowerCase())
+    );
+}
+
+// Apply Unicode replacements to input (for display) - only for Unicode-capable fonts
+function applyUnicodeReplacements(text, fontFamily) {
+    // Only apply Unicode replacements if font supports them
+    if (!fontFamily || !isUnicodeCapableFont(fontFamily)) {
+        return text; // Return original ASCII characters
+    }
+    
+    let result = text;
+    
+    // Apply most replacements globally
+    for (const [original, replacement] of Object.entries(UNICODE_REPLACEMENTS)) {
+        if (original !== 'b' && original !== '#') { // Handle 'b' and '#' separately for precise pitch replacement
+            result = result.replace(new RegExp('\\' + original, 'g'), replacement);
+        }
+    }
+    
+    // Simple flat/sharp replacement - basic character replacement
+    console.log('🎵 Before b/# replacement:', { input: result.slice(0, 30) });
+    
+    const beforeB = result;
+    result = result.replace(/b/g, '♭'); // Replace all 'b' with flat symbol
+    const afterB = result;
+    
+    const beforeSharp = result;
+    result = result.replace(/#/g, '♯'); // Replace all '#' with sharp symbol
+    const afterSharp = result;
+    
+    console.log('🎵 b/# replacement results:', {
+        bChanged: beforeB !== afterB,
+        sharpChanged: beforeSharp !== afterSharp,
+        final: result.slice(0, 30)
+    });
+    
     return result;
 }
 
@@ -38,6 +144,9 @@ function convertUnicodeToStandard(text) {
     result = result.replace(/▬/g, '-');  // Black rectangle -> dash
     result = result.replace(/•/g, '.');  // Bullet -> dot
     result = result.replace(/┃/g, '|');  // Heavy vertical line -> pipe
+    result = result.replace(/≋/g, '~');  // Triple tilde -> tilde
+    result = result.replace(/♯/g, '#');  // Musical sharp -> hash
+    result = result.replace(/♭/g, 'b');  // Musical flat -> b
     
     console.log('🔍 Unicode conversion debug:', {
         input: text,
@@ -45,42 +154,321 @@ function convertUnicodeToStandard(text) {
         changed: text !== result,
         hasBarline: text.includes('┃'),
         hasDash: text.includes('▬'),
-        hasDot: text.includes('•')
+        hasDot: text.includes('•'),
+        hasSharp: text.includes('♯'),
+        hasFlat: text.includes('♭')
     });
     
     return result;
 }
 
 // Add event listeners to Bootstrap tab buttons
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    // Simple Unicode replacement - no server patterns needed
+    
     const tabButtons = document.querySelectorAll('.nav-link');
     tabButtons.forEach(button => {
         button.addEventListener('shown.bs.tab', saveActiveTabFromBootstrap);
     });
     
-    // Add font selector functionality
-    const fontSelector = document.getElementById('font-selector');
+    // UI Elements
     const inputText = document.getElementById('input-text');
+    const unicodeToggle = document.getElementById('unicode-toggle');
+    console.log('🔍 DOM elements found:', { 
+        inputText: !!inputText, 
+        unicodeToggle: !!unicodeToggle,
+        unicodeToggleId: unicodeToggle?.id,
+        unicodeToggleChecked: unicodeToggle?.checked 
+    });
+    const fontsButton = document.getElementById('fonts-button');
+    const fontConfig = document.getElementById('font-config');
+    const fontSelect = document.getElementById('font-select');
+    const fontSize = document.getElementById('font-size');
+    const fontSizeValue = document.getElementById('font-size-value');
+    const spacingSlider = document.getElementById('spacing-slider');
+    const spacingValue = document.getElementById('spacing-value');
+    const heightSlider = document.getElementById('height-slider');
+    const heightValue = document.getElementById('height-value');
+    const resetFontBtn = document.getElementById('reset-font-btn');
+    const closeFontConfig = document.getElementById('close-font-config');
     
-    if (fontSelector && inputText) {
-        fontSelector.addEventListener('change', function() {
+    // Fonts Button - Toggle font configuration visibility  
+    if (fontsButton && fontConfig) {
+        fontsButton.addEventListener('click', function() {
+            if (fontConfig.style.display === 'none') {
+                fontConfig.style.display = 'block';
+                fontsButton.textContent = 'Hide';
+            } else {
+                fontConfig.style.display = 'none';
+                fontsButton.textContent = 'Fonts...';
+            }
+        });
+    }
+    
+    // Close Font Config Button
+    if (closeFontConfig && fontConfig && fontsButton) {
+        closeFontConfig.addEventListener('click', function() {
+            fontConfig.style.display = 'none';
+            fontsButton.textContent = 'Fonts...';
+        });
+    }
+    
+    // Unicode Toggle
+    let useUnicode = true;
+    
+    if (unicodeToggle && inputText) {
+        console.log('🎛️ Setting up Unicode toggle...');
+        // Load saved Unicode preference
+        try {
+            const savedUnicode = localStorage.getItem('music-text-use-unicode');
+            if (savedUnicode !== null) {
+                useUnicode = savedUnicode === 'true';
+                unicodeToggle.checked = useUnicode;
+                console.log('📂 Loaded Unicode preference from localStorage:', useUnicode);
+            } else {
+                console.log('📂 No saved Unicode preference, using default:', useUnicode);
+            }
+        } catch (e) {
+            console.warn('Failed to load Unicode preference:', e);
+        }
+        
+        console.log('🔗 Attaching event listener to Unicode toggle...');
+        unicodeToggle.addEventListener('change', function() {
+            console.log('🎯 Unicode toggle clicked! New state:', this.checked, 'Previous state:', useUnicode);
+            console.log('🎯 Input text before toggle:', inputText.value.slice(0, 30));
+            useUnicode = this.checked;
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('music-text-use-unicode', useUnicode.toString());
+                console.log('💾 Saved Unicode preference to localStorage:', useUnicode);
+            } catch (e) {
+                console.warn('Failed to save Unicode preference:', e);
+            }
+            
+            // Refresh the display
+            console.log('🔄 About to call refreshTextDisplay...');
+            refreshTextDisplay();
+            console.log('✅ refreshTextDisplay completed');
+        });
+        console.log('✅ Unicode toggle event listener attached successfully!');
+    } else {
+        console.error('❌ Unicode toggle setup failed:', { 
+            unicodeToggle: !!unicodeToggle, 
+            inputText: !!inputText 
+        });
+    }
+    
+    function refreshTextDisplay() {
+        if (!inputText) {
+            console.log('🔄 refreshTextDisplay: inputText is null/undefined');
+            return;
+        }
+        
+        console.log('🔄 refreshTextDisplay called:', { 
+            useUnicode, 
+            inputValue: inputText.value.slice(0, 50),
+            inputLength: inputText.value.length 
+        });
+        
+        const currentText = convertUnicodeToStandard(inputText.value);
+        if (useUnicode) {
+            const currentFont = inputText.style.fontFamily || (fontSelect ? fontSelect.value : "'JuliaMono', monospace");
+            console.log('🎵 About to apply Unicode replacements:', { currentFont, currentText: currentText.slice(0, 50) });
+            const displayText = applyUnicodeReplacements(currentText, currentFont);
+            inputText.value = displayText;
+            console.log('🎵 Unicode applied:', { result: displayText.slice(0, 50) });
+        } else {
+            inputText.value = currentText;
+            console.log('🎵 Unicode OFF - using standard text:', { result: currentText.slice(0, 50) });
+        }
+        
+        // Trigger parsing update
+        inputText.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    
+    // Font Family Selection
+    if (fontSelect && inputText) {
+        fontSelect.addEventListener('change', function() {
             const selectedFont = this.value;
             inputText.style.fontFamily = selectedFont;
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('music-text-font-family', selectedFont);
+            } catch (e) {
+                console.warn('Failed to save font preference:', e);
+            }
+        });
+        
+        // Load saved font family
+        try {
+            const savedFont = localStorage.getItem('music-text-font-family');
+            if (savedFont) {
+                fontSelect.value = savedFont;
+                inputText.style.fontFamily = savedFont;
+            }
+        } catch (e) {
+            console.warn('Failed to load saved font:', e);
+        }
+    }
+
+    // Font Size
+    if (fontSize && fontSizeValue && inputText) {
+        fontSize.addEventListener('input', function() {
+            const size = this.value + 'px';
+            inputText.style.fontSize = size;
+            fontSizeValue.textContent = size;
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('music-text-font-size', this.value);
+            } catch (e) {
+                console.warn('Failed to save font size:', e);
+            }
+        });
+        
+        // Load saved font size
+        try {
+            const savedSize = localStorage.getItem('music-text-font-size');
+            if (savedSize) {
+                fontSize.value = savedSize;
+                inputText.style.fontSize = savedSize + 'px';
+                fontSizeValue.textContent = savedSize + 'px';
+            }
+        } catch (e) {
+            console.warn('Failed to load saved font size:', e);
+        }
+    }
+
+    // Letter Spacing Slider
+    if (spacingSlider && spacingValue && inputText) {
+        spacingSlider.addEventListener('input', function() {
+            const spacing = parseFloat(this.value);
+            inputText.style.letterSpacing = spacing + 'em';
+            spacingValue.textContent = spacing + 'em';
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('music-text-letter-spacing', spacing.toString());
+            } catch (e) {
+                console.warn('Failed to save letter spacing:', e);
+            }
+        });
+        
+        // Load saved letter spacing
+        try {
+            const savedSpacing = localStorage.getItem('music-text-letter-spacing');
+            if (savedSpacing !== null) {
+                const spacing = parseFloat(savedSpacing);
+                spacingSlider.value = spacing;
+                inputText.style.letterSpacing = spacing + 'em';
+                spacingValue.textContent = spacing + 'em';
+            }
+        } catch (e) {
+            console.warn('Failed to load saved letter spacing:', e);
+        }
+    }
+
+    // Line Height Slider
+    if (heightSlider && heightValue && inputText) {
+        heightSlider.addEventListener('input', function() {
+            const height = parseFloat(this.value);
+            inputText.style.lineHeight = height + 'em';
+            heightValue.textContent = height + 'em';
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('music-text-line-height', height.toString());
+            } catch (e) {
+                console.warn('Failed to save line height:', e);
+            }
+        });
+        
+        // Load saved line height
+        try {
+            const savedHeight = localStorage.getItem('music-text-line-height');
+            if (savedHeight !== null) {
+                const height = parseFloat(savedHeight);
+                heightSlider.value = height;
+                inputText.style.lineHeight = height + 'em';
+                heightValue.textContent = height + 'em';
+            }
+        } catch (e) {
+            console.warn('Failed to load saved line height:', e);
+        }
+    }
+
+    // Reset Font Settings
+    if (resetFontBtn) {
+        resetFontBtn.addEventListener('click', function() {
+            // Reset font family
+            if (fontSelect) {
+                fontSelect.value = "'JuliaMono', monospace";
+                inputText.style.fontFamily = "'JuliaMono', monospace";
+                localStorage.removeItem('music-text-font-family');
+            }
+            
+            // Reset font size
+            if (fontSize && fontSizeValue) {
+                fontSize.value = '14';
+                inputText.style.fontSize = '14px';
+                fontSizeValue.textContent = '14px';
+                localStorage.removeItem('music-text-font-size');
+            }
+            
+            // Reset letter spacing
+            if (spacingSlider && spacingValue) {
+                spacingSlider.value = '0.1';
+                inputText.style.letterSpacing = '0.1em';
+                spacingValue.textContent = '0.1em';
+                localStorage.removeItem('music-text-letter-spacing');
+            }
+            
+            // Reset line height
+            if (heightSlider && heightValue) {
+                heightSlider.value = '1.6';
+                inputText.style.lineHeight = '1.6em';
+                heightValue.textContent = '1.6em';
+                localStorage.removeItem('music-text-line-height');
+            }
+        });
+    }
+    
+    if (fontSelect && inputText) {
+        fontSelect.addEventListener('change', async function() {
+            const selectedFont = this.value;
+            
+            // Extract font name for on-demand loading
+            const fontName = selectedFont.replace(/['"]/g, '').split(',')[0];
+            
+            // Load font on demand if needed
+            await loadFontOnDemand(fontName);
+            
+            inputText.style.fontFamily = selectedFont;
+            
+            // Refresh display with font-aware Unicode replacements
+            const currentText = convertUnicodeToStandard(inputText.value);
+            const displayText = applyUnicodeReplacements(currentText, selectedFont);
+            inputText.value = displayText;
             
             // Save font choice to localStorage
             try {
                 localStorage.setItem('music-text-font', selectedFont);
-                console.log('Font changed to:', selectedFont);
+                console.log('Font changed to:', selectedFont, 'Unicode capable:', isUnicodeCapableFont(selectedFont));
             } catch (e) {
                 console.warn('Failed to save font choice:', e);
             }
+            
+            // Trigger input event to refresh parsing with new display
+            inputText.dispatchEvent(new Event('input', { bubbles: true }));
         });
         
         // Load saved font choice
         try {
             const savedFont = localStorage.getItem('music-text-font');
             if (savedFont) {
-                fontSelector.value = savedFont;
+                fontSelect.value = savedFont;
                 inputText.style.fontFamily = savedFont;
                 console.log('Loaded saved font:', savedFont);
             }
@@ -89,12 +477,187 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Add slider controls functionality
+    if (spacingSlider && spacingValue && inputText) {
+        spacingSlider.addEventListener('input', function() {
+            const spacing = parseFloat(this.value);
+            inputText.style.letterSpacing = spacing + 'em';
+            spacingValue.textContent = spacing + 'em';
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('music-text-horizontal-spacing', spacing.toString());
+            } catch (e) {
+                console.warn('Failed to save horizontal spacing:', e);
+            }
+        });
+        
+        // Load saved horizontal spacing
+        try {
+            const savedSpacing = localStorage.getItem('music-text-horizontal-spacing');
+            if (savedSpacing !== null) {
+                const spacing = parseFloat(savedSpacing);
+                spacingSlider.value = spacing;
+                inputText.style.letterSpacing = spacing + 'em';
+                spacingValue.textContent = spacing + 'em';
+            }
+        } catch (e) {
+            console.warn('Failed to load saved horizontal spacing:', e);
+        }
+    }
+    
+    if (heightSlider && heightValue && inputText) {
+        heightSlider.addEventListener('input', function() {
+            const lineHeight = parseFloat(this.value);
+            inputText.style.lineHeight = lineHeight + 'em';
+            heightValue.textContent = lineHeight + 'em';
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('music-text-vertical-spacing', lineHeight.toString());
+            } catch (e) {
+                console.warn('Failed to save vertical spacing:', e);
+            }
+        });
+        
+        // Load saved vertical spacing
+        try {
+            const savedLineHeight = localStorage.getItem('music-text-vertical-spacing');
+            if (savedLineHeight !== null) {
+                const lineHeight = parseFloat(savedLineHeight);
+                heightSlider.value = lineHeight;
+                inputText.style.lineHeight = lineHeight + 'em';
+                heightValue.textContent = lineHeight + 'em';
+            }
+        } catch (e) {
+            console.warn('Failed to load saved vertical spacing:', e);
+        }
+    }
+    
+    // Font size slider functionality
+    if (fontSize && fontSizeValue && inputText) {
+        fontSize.addEventListener('input', function() {
+            const fontSize = parseInt(this.value);
+            inputText.style.fontSize = fontSize + 'px';
+            fontSizeValue.textContent = fontSize + 'px';
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('music-text-font-size', fontSize.toString());
+            } catch (e) {
+                console.warn('Failed to save font size:', e);
+            }
+        });
+        
+        // Load saved font size
+        try {
+            const savedFontSize = localStorage.getItem('music-text-font-size');
+            if (savedFontSize !== null) {
+                const fontSize = parseInt(savedFontSize);
+                fontSize.value = fontSize;
+                inputText.style.fontSize = fontSize + 'px';
+                fontSizeValue.textContent = fontSize + 'px';
+            }
+        } catch (e) {
+            console.warn('Failed to load saved font size:', e);
+        }
+    }
+    
+    // Font controls buttons (only if they exist)
+    const resetDefaultsBtn = document.getElementById('reset-defaults-btn');
+    const showControlsBtn = document.getElementById('show-controls-btn'); 
+    const closeControlsBtn = document.getElementById('close-controls-btn');
+    const fontControls = document.getElementById('font-controls');
+    
+    // Default values
+    const DEFAULTS = {
+        spacing: 0.1,
+        height: 1.6,
+        size: 10,
+        font: "'JuliaMono', monospace"
+    };
+    
+    if (resetDefaultsBtn) {
+        resetDefaultsBtn.addEventListener('click', function() {
+            // Reset all values to defaults
+            if (spacingSlider) {
+                spacingSlider.value = DEFAULTS.spacing;
+                inputText.style.letterSpacing = DEFAULTS.spacing + 'em';
+                spacingValue.textContent = DEFAULTS.spacing + 'em';
+                localStorage.setItem('music-text-horizontal-spacing', DEFAULTS.spacing.toString());
+            }
+            
+            if (heightSlider) {
+                heightSlider.value = DEFAULTS.height;
+                inputText.style.lineHeight = DEFAULTS.height + 'em';
+                heightValue.textContent = DEFAULTS.height + 'em';
+                localStorage.setItem('music-text-vertical-spacing', DEFAULTS.height.toString());
+            }
+            
+            if (fontSize) {
+                fontSize.value = DEFAULTS.size;
+                inputText.style.fontSize = DEFAULTS.size + 'px';
+                fontSizeValue.textContent = DEFAULTS.size + 'px';
+                localStorage.setItem('music-text-font-size', DEFAULTS.size.toString());
+            }
+            
+            if (fontSelect) {
+                fontSelect.value = DEFAULTS.font;
+                inputText.style.fontFamily = DEFAULTS.font;
+                localStorage.setItem('music-text-font-family', DEFAULTS.font);
+            }
+        });
+    }
+    
+    // Show/hide controls functionality
+    if (closeControlsBtn) {
+        closeControlsBtn.addEventListener('click', function() {
+            if (fontControls) fontControls.style.display = 'none';
+            if (showControlsBtn) showControlsBtn.style.display = 'inline-block';
+            localStorage.setItem('music-text-controls-hidden', 'true');
+        });
+    }
+    
+    if (showControlsBtn) {
+        showControlsBtn.addEventListener('click', function() {
+            if (fontControls) fontControls.style.display = 'block';
+            if (showControlsBtn) showControlsBtn.style.display = 'none';
+            localStorage.removeItem('music-text-controls-hidden');
+        });
+    }
+    
+    // Check if controls should be hidden on load
+    if (localStorage.getItem('music-text-controls-hidden') === 'true') {
+        if (fontControls) fontControls.style.display = 'none';
+        if (showControlsBtn) showControlsBtn.style.display = 'inline-block';
+    }
+    
     // Add Unicode replacement functionality to input
     if (inputText) {
-        // Handle keydown events for immediate replacement
+        // Handle keydown events for immediate replacement - only for Unicode-capable fonts
         inputText.addEventListener('keydown', function(e) {
+            const currentFont = e.target.style.fontFamily || fontSelect?.value;
             const replacement = UNICODE_REPLACEMENTS[e.key];
-            if (replacement) {
+            
+            // Handle special case for 'b' - check if it should be a flat symbol
+            if (e.key === 'b' && isUnicodeCapableFont(currentFont)) {
+                const start = e.target.selectionStart;
+                const value = e.target.value;
+                const charBefore = start > 0 ? value[start - 1] : '';
+                
+                // Check if the previous character suggests this 'b' is a flat symbol
+                if (/[1-7SsRrGgMmPpDdNnAaBbCcEeFf]/.test(charBefore)) {
+                    e.preventDefault();
+                    const end = e.target.selectionEnd;
+                    e.target.value = value.substring(0, start) + '♭' + value.substring(end);
+                    e.target.setSelectionRange(start + 1, start + 1);
+                    e.target.dispatchEvent(new Event('input', { bubbles: true }));
+                    return;
+                }
+            }
+            
+            // Only replace if font supports Unicode AND we have a replacement (excluding 'b')
+            if (replacement && e.key !== 'b' && isUnicodeCapableFont(currentFont)) {
                 e.preventDefault();
                 const start = e.target.selectionStart;
                 const end = e.target.selectionEnd;
@@ -106,14 +669,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Trigger input event to update parsing
                 e.target.dispatchEvent(new Event('input', { bubbles: true }));
             }
+            // If font doesn't support Unicode, let the original character be typed
         });
         
-        // Handle input events for paste operations
+        // Handle input events for paste operations - font-aware
         inputText.addEventListener('input', function(e) {
+            // Only apply Unicode replacements if Unicode mode is enabled
+            console.log('⌨️ Input event: checking Unicode mode:', { 
+                useUnicode, 
+                inputValue: e.target.value.slice(0, 30) 
+            });
+            
+            if (!useUnicode) {
+                console.log('⌨️ Input event: Unicode mode OFF, skipping replacements');
+                return;
+            }
+            
+            console.log('⌨️ Input event: Unicode mode ON, proceeding with replacements');
+            
+            const currentFont = e.target.style.fontFamily || fontSelect?.value;
             const originalValue = e.target.value;
-            const newValue = applyUnicodeReplacements(originalValue);
+            const newValue = applyUnicodeReplacements(originalValue, currentFont);
             
             if (originalValue !== newValue) {
+                console.log('⌨️ Input event: Unicode replacements applied:', { originalValue, newValue });
                 const start = e.target.selectionStart;
                 const end = e.target.selectionEnd;
                 e.target.value = newValue;
@@ -378,11 +957,11 @@ async function parseInput(input) {
             
             // VexFlow - Enhanced rendering with professional features
             if (data.vexflow) {
-                console.log('🎼 Rendering enhanced VexFlow output:', {
-                    hasVexflowData: !!data.vexflow,
-                    staves: data.vexflow.staves?.length,
-                    hasAdvancedFeatures: data.vexflow.staves?.some(s => s.notes?.some(n => n.type === 'Tuplet' || n.type === 'SlurStart'))
-                });
+                // console.log('🎼 Rendering enhanced VexFlow output:', {
+                //     hasVexflowData: !!data.vexflow,
+                //     staves: data.vexflow.staves?.length,
+                //     hasAdvancedFeatures: data.vexflow.staves?.some(s => s.notes?.some(n => n.type === 'Tuplet' || n.type === 'SlurStart'))
+                // });
                 
                 const vexflowOutput = document.getElementById('vexflow-output');
                 
@@ -403,15 +982,14 @@ async function parseInput(input) {
                     window.VexFlowRenderer.renderVexFlowNotation(data.vexflow, 'vexflow-notation')
                         .then(success => {
                             if (success) {
-                                console.log('✅ Enhanced VexFlow rendering completed');
+                                // console.log('✅ Enhanced VexFlow rendering completed');
                             } else {
                                 console.warn('⚠️ VexFlow rendering had issues');
                             }
                         })
                         .catch(error => {
                             console.error('🚨 VexFlow rendering failed:', error);
-                            document.getElementById('vexflow-notation').innerHTML = 
-                                `<div class="alert alert-warning">VexFlow rendering failed: ${error.message}</div>`;
+                            // VexFlow error handling - display in canvas area if needed
                         });
                 } else {
                     console.warn('⚠️ VexFlowRenderer not available, loading...');
@@ -428,9 +1006,12 @@ async function parseInput(input) {
                 const vexflowDataDiv = document.getElementById('vexflow-data');
                 vexflowDataDiv.innerHTML = '<div class="syntax-highlight">' + syntaxHighlight(vexJsonString) + '</div>';
                 
-                document.getElementById('toggle-vexflow-data').addEventListener('click', function() {
-                    const dataDiv = document.getElementById('vexflow-data');
-                    const button = this;
+                // Toggle VexFlow data visibility (if toggle button exists)
+                const toggleButton = document.getElementById('toggle-vexflow-data');
+                if (toggleButton) {
+                    toggleButton.addEventListener('click', function() {
+                        const dataDiv = document.getElementById('vexflow-data');
+                        const button = this;
                     if (dataDiv.style.display === 'none') {
                         dataDiv.style.display = 'block';
                         button.textContent = 'Hide JSON Data';
@@ -438,10 +1019,11 @@ async function parseInput(input) {
                         dataDiv.style.display = 'none';
                         button.textContent = 'Show JSON Data';
                     }
-                });
+                    });
+                }
                 
             } else {
-                console.log('⚠️ No VexFlow data available');
+                // console.log('⚠️ No VexFlow data available');
                 const vexflowOutput = document.getElementById('vexflow-output');
                 vexflowOutput.innerHTML = '<div class="text-muted">No VexFlow data available - check parser output</div>';
             }
@@ -552,7 +1134,7 @@ document.getElementById('input-text').addEventListener('input', function(e) {
     if (isSvgTabActive()) {
         clearTimeout(svgDebounceTimer);
         svgDebounceTimer = setTimeout(() => {
-            console.log('🎵 SVG debounce timer triggered, generating SVG automatically');
+            // console.log('🎵 SVG debounce timer triggered, generating SVG automatically');
             generateSvgFromLilypond();
         }, 3000); // 3-second debounce for SVG generation
     }
@@ -669,7 +1251,7 @@ async function loadVexFlowRenderer() {
         
         return new Promise((resolve, reject) => {
             script.onload = () => {
-                console.log('✅ VexFlow renderer loaded');
+                // console.log('✅ VexFlow renderer loaded');
                 resolve();
             };
             script.onerror = () => {
@@ -717,7 +1299,7 @@ if (document.readyState === 'loading') {
 
 // SVG Generation function
 async function generateSvgFromLilypond() {
-    console.log("🎵 generateSvgFromLilypond() called");
+    // console.log("🎵 generateSvgFromLilypond() called");
     
     // Get notation directly from input field
     const inputField = document.getElementById("input-text");

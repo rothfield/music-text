@@ -70,6 +70,12 @@ struct SvgGenerateResponse {
     error: Option<String>,
 }
 
+#[derive(Serialize)]
+struct ValidPitchesResponse {
+    flat_patterns: Vec<String>,
+    sharp_patterns: Vec<String>,
+}
+
 // Using hand-written parser instead of Pest
 
 async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<ParseResponse> {
@@ -243,6 +249,74 @@ async fn generate_lilypond_svg(Json(request): Json<SvgGenerateRequest>) -> Json<
     })
 }
 
+async fn get_valid_pitches() -> Json<ValidPitchesResponse> {
+    // Generate all valid pitch patterns that can have flats/sharps
+    let flat_patterns = vec![
+        // Number notation
+        "1b".to_string(), "1bb".to_string(),
+        "2b".to_string(), "2bb".to_string(),
+        "3b".to_string(), "3bb".to_string(),
+        "4b".to_string(), "4bb".to_string(),
+        "5b".to_string(), "5bb".to_string(),
+        "6b".to_string(), "6bb".to_string(),
+        "7b".to_string(), "7bb".to_string(),
+        // Western notation
+        "Cb".to_string(), "Cbb".to_string(),
+        "Db".to_string(), "Dbb".to_string(),
+        "Eb".to_string(), "Ebb".to_string(),
+        "Fb".to_string(), "Fbb".to_string(),
+        "Gb".to_string(), "Gbb".to_string(),
+        "Ab".to_string(), "Abb".to_string(),
+        "Bb".to_string(), "Bbb".to_string(),
+        // Sargam notation
+        "Sb".to_string(), "Sbb".to_string(),
+        "sb".to_string(), // lowercase s
+        "Rb".to_string(), "Rbb".to_string(),
+        "rb".to_string(), // lowercase r (komal Re)
+        "Gb".to_string(), "Gbb".to_string(), // Ga
+        "gb".to_string(), // lowercase g (komal Ga)
+        "Mb".to_string(), "Mbb".to_string(), "mb".to_string(), "mbb".to_string(),
+        "Pb".to_string(), "Pbb".to_string(),
+        "pb".to_string(), // lowercase p
+        "Db".to_string(), "Dbb".to_string(), // Dha
+        "db".to_string(), // lowercase d (komal Dha)
+        "Nb".to_string(), "Nbb".to_string(),
+        "nb".to_string(), // lowercase n (komal Ni)
+    ];
+    
+    let sharp_patterns = vec![
+        // Number notation
+        "1#".to_string(), "1##".to_string(),
+        "2#".to_string(), "2##".to_string(),
+        "3#".to_string(), "3##".to_string(),
+        "4#".to_string(), "4##".to_string(),
+        "5#".to_string(), "5##".to_string(),
+        "6#".to_string(), "6##".to_string(),
+        "7#".to_string(), "7##".to_string(),
+        // Western notation
+        "C#".to_string(), "C##".to_string(),
+        "D#".to_string(), "D##".to_string(),
+        "E#".to_string(), "E##".to_string(),
+        "F#".to_string(), "F##".to_string(),
+        "G#".to_string(), "G##".to_string(),
+        "A#".to_string(), "A##".to_string(),
+        "B#".to_string(), "B##".to_string(),
+        // Sargam notation
+        "S#".to_string(), "S##".to_string(),
+        "R#".to_string(), "R##".to_string(),
+        "G#".to_string(), "G##".to_string(), // Ga
+        "M#".to_string(), "M##".to_string(), "m#".to_string(), "m##".to_string(),
+        "P#".to_string(), "P##".to_string(),
+        "D#".to_string(), "D##".to_string(), // Dha
+        "N#".to_string(), "N##".to_string(),
+    ];
+    
+    Json(ValidPitchesResponse {
+        flat_patterns,
+        sharp_patterns,
+    })
+}
+
 pub fn start() {
     tokio::runtime::Runtime::new()
         .expect("Failed to create Tokio runtime")
@@ -287,6 +361,7 @@ pub fn start() {
     let app = Router::new()
         .route("/api/parse", get(parse_text))
         .route("/api/lilypond-svg", post(generate_lilypond_svg))
+        .route("/api/valid-pitches", get(get_valid_pitches))
         .nest_service("/", ServeDir::new("webapp"))
         .layer(CorsLayer::permissive());
 
