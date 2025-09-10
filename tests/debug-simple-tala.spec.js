@@ -19,7 +19,7 @@ test('debug simplest possible tala case', async ({ page }) => {
 C`;
     
     console.log('Testing simplest tala case:', testInput);
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     await page.waitForTimeout(2000);
     
     console.log('=== All Logs ===');

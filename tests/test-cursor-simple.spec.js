@@ -8,10 +8,10 @@ test('should save and restore basic cursor position', async ({ page }) => {
   await page.evaluate(() => localStorage.clear());
   
   // Add some test content
-  await page.fill('#notation-input', '1 2 3 4 5');
+  await page.fill('#input-text', '1 2 3 4 5');
   
   // Position cursor after "3 " (position 6)
-  await page.click('#notation-input');
+  await page.click('#input-text');
   await page.keyboard.press('Home');
   for (let i = 0; i < 6; i++) {
     await page.keyboard.press('ArrowRight');

@@ -7,7 +7,7 @@ test('tala markers render above barlines', async ({ page }) => {
     const testInput = `      0
 C D E |`;
     
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     await page.waitForTimeout(1000); // Wait for auto-rendering
     
     // Check that VexFlow canvas is rendered
@@ -28,8 +28,8 @@ C D E |`;
     });
     
     // Trigger re-render to capture console logs
-    await page.fill('#notation-input', '');
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', '');
+    await page.fill('#input-text', testInput);
     await page.waitForTimeout(2000);
     
     // Check if tala debug messages are present
@@ -50,7 +50,7 @@ test('tala with crossed zero renders properly', async ({ page }) => {
     const testInput = `      0
 C D E |`;
     
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     await page.waitForTimeout(2000);
     
     // Check that VexFlow canvas has content
@@ -69,7 +69,7 @@ test('tala with regular number renders properly', async ({ page }) => {
     const testInput = `   3
 C D E |`;
     
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     await page.waitForTimeout(2000);
     
     // Check that VexFlow canvas has content

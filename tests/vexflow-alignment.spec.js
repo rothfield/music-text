@@ -10,7 +10,7 @@ test('test VexFlow alignment with actual content', async ({ page }) => {
   await page.waitForTimeout(2000);
   
   // Enter notation to trigger VexFlow rendering
-  const textarea = page.locator('#notation-input');
+  const textarea = page.locator('#input-text');
   await textarea.fill('1-2-3');
   
   // Wait for VexFlow to render
@@ -27,7 +27,7 @@ test('test VexFlow alignment with actual content', async ({ page }) => {
   
   // Get alignment measurements
   const measurements = await page.evaluate(() => {
-    const textarea = document.querySelector('#notation-input');
+    const textarea = document.querySelector('#input-text');
     const vexflowContainer = document.querySelector('#live-vexflow-container');
     const vexflowSvg = document.querySelector('#live-vexflow-notation svg');
     

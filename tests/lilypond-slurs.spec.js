@@ -9,7 +9,7 @@ test.describe('LilyPond Slur Rendering', () => {
     // Test simple slur notation - use overline notation
     // ___
     // S R G
-    await page.fill('#notation-input', '___\nS R G');
+    await page.fill('#input-text', '___\nS R G');
     
     // Click the Generate LilyPond button
     await page.click('#generate-lilypond-btn');
@@ -35,7 +35,7 @@ test.describe('LilyPond Slur Rendering', () => {
     // ___
     // __ 
     // S R G
-    await page.fill('#notation-input', '___\n__ \nS R G');
+    await page.fill('#input-text', '___\n__ \nS R G');
     await page.click('#generate-lilypond-btn');
     
     await page.waitForTimeout(3000);
@@ -55,7 +55,7 @@ test.describe('LilyPond Slur Rendering', () => {
     // Test slur across beat boundaries
     // _____
     // S R | G M
-    await page.fill('#notation-input', '_____\nS R | G M');
+    await page.fill('#input-text', '_____\nS R | G M');
     await page.click('#generate-lilypond-btn');
     
     await page.waitForTimeout(3000);
@@ -75,7 +75,7 @@ test.describe('LilyPond Slur Rendering', () => {
     // Test slur with tuplet notation
     // ___
     // 1-2
-    await page.fill('#notation-input', '___\n1-2');
+    await page.fill('#input-text', '___\n1-2');
     await page.click('#generate-lilypond-btn');
     
     await page.waitForTimeout(3000);

@@ -7,7 +7,7 @@ test.describe('FSM SlurStart/SlurEnd Passthrough', () => {
 
   test('FSM passes through SlurStart and SlurEnd', async ({ page }) => {
     // Test with 3 overlines over 4 notes - this should generate SlurStart and SlurEnd in FSM output
-    await page.fill('#notation-input', '___\n1234');
+    await page.fill('#input-text', '___\n1234');
     await page.waitForTimeout(2000);
     
     // Check if the page renders without error (indicates FSM processed input successfully)

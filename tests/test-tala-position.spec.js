@@ -12,7 +12,7 @@ test('test tala positioning above barline', async ({ page }) => {
     
     for (const test of tests) {
         console.log(`Testing: ${test.name}`);
-        await page.fill('#notation-input', test.input);
+        await page.fill('#input-text', test.input);
         await page.waitForTimeout(2000);
         
         // Take screenshot

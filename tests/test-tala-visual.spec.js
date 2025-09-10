@@ -8,7 +8,7 @@ test('visual test of tala rendering', async ({ page }) => {
 C D E |`;
     
     console.log('Testing tala 0 above barline...');
-    await page.fill('#notation-input', testInput1);
+    await page.fill('#input-text', testInput1);
     await page.waitForTimeout(2000);
     
     // Take screenshot for visual verification
@@ -20,7 +20,7 @@ C D E |`;
 C D E |`;
     
     console.log('Testing tala 3 above barline...');
-    await page.fill('#notation-input', testInput2);
+    await page.fill('#input-text', testInput2);
     await page.waitForTimeout(2000);
     
     await page.screenshot({ path: 'test-results/tala-3-test.png', fullPage: true });
@@ -31,7 +31,7 @@ C D E |`;
 C | D | E | F |`;
     
     console.log('Testing multiple talas...');
-    await page.fill('#notation-input', testInput3);
+    await page.fill('#input-text', testInput3);
     await page.waitForTimeout(2000);
     
     await page.screenshot({ path: 'test-results/tala-multiple-test.png', fullPage: true });

@@ -22,7 +22,7 @@ test('debug same input without tala', async ({ page }) => {
     const testInput = `C D E |`;
     
     console.log('Filling input with:', testInput);
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     
     // Wait longer for processing
     await page.waitForTimeout(3000);

@@ -7,7 +7,7 @@ test('VexFlow beaming for SSSS pattern', async ({ page }) => {
   await page.waitForTimeout(2000);
   
   // Enter SSSS pattern
-  const textarea = page.locator('#notation-input');
+  const textarea = page.locator('#input-text');
   await textarea.fill('| SSSS | RRRR |');
   
   // Wait for rendering

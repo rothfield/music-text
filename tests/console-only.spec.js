@@ -6,8 +6,8 @@ test('check console for 1# sharp notation', async ({ page }) => {
     page.on('console', msg => messages.push(msg.text()));
     
     await page.goto('http://localhost:3000');
-    await page.waitForSelector('#notation-input');
-    await page.type('#notation-input', '1#');
+    await page.waitForSelector('#input-text');
+    await page.type('#input-text', '1#');
     await page.waitForTimeout(2000); // Wait for auto-processing
     
     // Capture the full VexFlow JavaScript from the page

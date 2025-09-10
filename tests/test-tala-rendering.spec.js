@@ -18,7 +18,7 @@ test('test tala rendering with debug output', async ({ page }) => {
 C D E |`;
     
     console.log('Testing tala 0 rendering...');
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     await page.waitForTimeout(2000);
     
     // Check if tala drawing happened

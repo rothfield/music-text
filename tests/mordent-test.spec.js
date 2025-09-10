@@ -8,7 +8,7 @@ test('mordent ornament rendering test', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   
   // Input the mordent notation
-  await page.fill('#notation-input', '~1~');
+  await page.fill('#input-text', '~1~');
   
   // Click render or wait for auto-rendering
   await page.click('#render-btn, #update-btn, button:has-text("Render"), button:has-text("Update")');

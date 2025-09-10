@@ -8,7 +8,7 @@ test('check beam visibility in VexFlow', async ({ page }) => {
   await page.waitForTimeout(3000);
   
   // Enter SSSS pattern that should create beams
-  await page.fill('#notation-input', '| SSSS | RRRR |');
+  await page.fill('#input-text', '| SSSS | RRRR |');
   
   // Wait for rendering
   await page.waitForTimeout(2000);
@@ -75,7 +75,7 @@ test('check beam visibility in VexFlow', async ({ page }) => {
   }
   
   // Also test with a simpler pattern
-  await page.fill('#notation-input', 'SSSS');
+  await page.fill('#input-text', 'SSSS');
   await page.waitForTimeout(2000);
   
   const simpleBeams = await page.locator(`${svgSelector} path`).count();

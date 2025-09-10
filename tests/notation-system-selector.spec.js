@@ -30,7 +30,7 @@ test.describe('Notation System Selector', () => {
     await page.waitForLoadState('networkidle');
     
     // Fill textarea with mixed notation that could be interpreted differently
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await textarea.fill('C D E');
     
     // Initially should auto-detect as Western

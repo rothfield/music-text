@@ -14,7 +14,7 @@ test('verify complete tala implementation', async ({ page }) => {
 C | D`;
     
     console.log('Testing input:', testInput.replace('\n', '\\n'));
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     await page.waitForTimeout(2000);
     
     // Check for tala-related logs

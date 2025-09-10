@@ -6,7 +6,7 @@ test.describe('VexFlow Rendering Check', () => {
   });
 
   test('renders simple pattern without errors', async ({ page }) => {
-    await page.fill('#notation-input', '1 2 3');
+    await page.fill('#input-text', '1 2 3');
     await page.waitForTimeout(2000);
     
     // Check if VexFlow canvas has content
@@ -21,7 +21,7 @@ test.describe('VexFlow Rendering Check', () => {
   test('renders cross-beat slur pattern', async ({ page }) => {
     // ___
     // 1-2 3
-    await page.fill('#notation-input', '___\n1-2 3');
+    await page.fill('#input-text', '___\n1-2 3');
     await page.waitForTimeout(3000);
     
     const vexflowContainer = await page.locator('#vexflow-canvas');
@@ -51,7 +51,7 @@ test.describe('VexFlow Rendering Check', () => {
     
     for (const pattern of patterns) {
       console.log(`\n--- Testing pattern: ${pattern} ---`);
-      await page.fill('#notation-input', pattern);
+      await page.fill('#input-text', pattern);
       await page.waitForTimeout(2000);
       
       const vexflowContainer = await page.locator('#vexflow-canvas');

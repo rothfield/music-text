@@ -9,10 +9,10 @@ test.describe('Cursor Position Storage', () => {
     
     // Add test content
     const testInput = '1 2 3 4 5';
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     
     // Position cursor in the middle (after "3 ")
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await textarea.click();
     await page.keyboard.press('Home');
     for (let i = 0; i < 6; i++) {
@@ -70,10 +70,10 @@ test.describe('Cursor Position Storage', () => {
     
     // Add test content
     const testInput = 'hello world test';
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     
     // Select "world" (characters 6-11)
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await textarea.click();
     await page.keyboard.press('Home');
     for (let i = 0; i < 6; i++) {
@@ -116,10 +116,10 @@ test.describe('Cursor Position Storage', () => {
     
     // Add initial content
     const initialText = '1 2 3';
-    await page.fill('#notation-input', initialText);
+    await page.fill('#input-text', initialText);
     
     // Position cursor at the end
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await textarea.click();
     await page.keyboard.press('End');
     

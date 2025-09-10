@@ -12,7 +12,7 @@ test('simple mordent test', async ({ page }) => {
   await page.waitForTimeout(2000);
   
   // Look for the input textarea
-  const textarea = await page.locator('textarea, #notation-input, input[type="text"]').first();
+  const textarea = await page.locator('textarea, #input-text, input[type="text"]').first();
   await textarea.fill('~\n1');
   
   // Wait and take screenshot to see the current state

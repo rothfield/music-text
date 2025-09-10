@@ -18,7 +18,7 @@ test('debug same input without tala to verify fix', async ({ page }) => {
     const testInput = `C`;
     
     console.log('Testing without tala:', testInput);
-    await page.fill('#notation-input', testInput);
+    await page.fill('#input-text', testInput);
     await page.waitForTimeout(2000);
     
     console.log('=== Width Debug Logs ===');

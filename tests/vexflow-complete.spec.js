@@ -5,10 +5,10 @@ test('VexFlow comprehensive notation test', async ({ page }) => {
     page.on('console', msg => messages.push(msg.text()));
     
     await page.goto('http://localhost:3000');
-    await page.waitForSelector('#notation-input');
+    await page.waitForSelector('#input-text');
     
     // Test regular note
-    await page.fill('#notation-input', '1');
+    await page.fill('#input-text', '1');
     await page.waitForTimeout(1000);
     
     let sharpMessages = messages.filter(m => m.includes('Note keys:'));
@@ -17,7 +17,7 @@ test('VexFlow comprehensive notation test', async ({ page }) => {
     
     // Test sharp note
     messages.length = 0; // Clear messages
-    await page.fill('#notation-input', '1#');
+    await page.fill('#input-text', '1#');
     await page.waitForTimeout(1000);
     
     sharpMessages = messages.filter(m => m.includes('Note keys:'));
@@ -26,7 +26,7 @@ test('VexFlow comprehensive notation test', async ({ page }) => {
     
     // Test flat note
     messages.length = 0;
-    await page.fill('#notation-input', '3b');
+    await page.fill('#input-text', '3b');
     await page.waitForTimeout(1000);
     
     sharpMessages = messages.filter(m => m.includes('Note keys:'));
@@ -35,7 +35,7 @@ test('VexFlow comprehensive notation test', async ({ page }) => {
     
     // Test sequence
     messages.length = 0;
-    await page.fill('#notation-input', '1 2# 3 4b');
+    await page.fill('#input-text', '1 2# 3 4b');
     await page.waitForTimeout(1000);
     
     sharpMessages = messages.filter(m => m.includes('Note keys:'));

@@ -23,7 +23,7 @@ test('take full page screenshot', async ({ page }) => {
   
   // Get viewport width vs textarea width ratio
   const measurements = await page.evaluate(() => {
-    const textarea = document.querySelector('#notation-input');
+    const textarea = document.querySelector('#input-text');
     const container = document.querySelector('.container');
     
     return {

@@ -8,7 +8,7 @@ test('syllable support functionality', async ({ page }) => {
 hel- lo wor- ld`;
   
   // Enter the test input
-  await page.fill('#notation-input', testInput);
+  await page.fill('#input-text', testInput);
   await page.click('#parse-btn');
   
   // Wait for rendering to complete

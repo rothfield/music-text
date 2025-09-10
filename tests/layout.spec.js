@@ -18,7 +18,7 @@ test.describe('Layout and Responsive Design', () => {
     // Wait for page to fully load
     await page.waitForLoadState('networkidle');
     
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     const inputSection = page.locator('.input-section');
     
     // Ensure elements are visible
@@ -58,7 +58,7 @@ test.describe('Layout and Responsive Design', () => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.reload();
     
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await expect(textarea).toBeVisible();
     
     // Test mobile layout
@@ -90,7 +90,7 @@ test.describe('Layout and Responsive Design', () => {
   test('font size is readable and appropriate', async ({ page }) => {
     await page.goto('/');
     
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     
     // Check computed font size
     const fontSize = await textarea.evaluate(el => {
@@ -136,7 +136,7 @@ test.describe('Layout and Responsive Design', () => {
   test('box-sizing is applied correctly', async ({ page }) => {
     await page.goto('/');
     
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     
     // Check box-sizing property
     const boxSizing = await textarea.evaluate(el => {

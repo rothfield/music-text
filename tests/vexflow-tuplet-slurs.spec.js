@@ -7,7 +7,7 @@ test.describe('VexFlow Tuplet Slurs', () => {
 
   test('renders slur within tuplet - 1 overline', async ({ page }) => {
     // Test pattern: _\n123 - single overline should create NO slur
-    await page.fill('#notation-input', '_\n123');
+    await page.fill('#input-text', '_\n123');
     await page.waitForTimeout(2000);
     
     const vexflowContainer = await page.locator('#vexflow-canvas');
@@ -27,7 +27,7 @@ test.describe('VexFlow Tuplet Slurs', () => {
 
   test('renders slur within tuplet - 2 overlines', async ({ page }) => {
     // Test pattern: __\n123 - double overline should create slur over 2 notes
-    await page.fill('#notation-input', '__\n123');
+    await page.fill('#input-text', '__\n123');
     await page.waitForTimeout(2000);
     
     const vexflowContainer = await page.locator('#vexflow-canvas');
@@ -46,7 +46,7 @@ test.describe('VexFlow Tuplet Slurs', () => {
 
   test('renders slur within tuplet - 3 overlines', async ({ page }) => {
     // Test pattern: ___\n123 - triple overline should create slur over all 3 notes
-    await page.fill('#notation-input', '___\n123');
+    await page.fill('#input-text', '___\n123');
     await page.waitForTimeout(2000);
     
     const vexflowContainer = await page.locator('#vexflow-canvas');
@@ -75,7 +75,7 @@ test.describe('VexFlow Tuplet Slurs', () => {
     await page.goto('http://localhost:3000');
     
     // Test tuplet slur pattern
-    await page.fill('#notation-input', '_\n123');
+    await page.fill('#input-text', '_\n123');
     await page.waitForTimeout(3000);
     
     console.log('=== Tuplet Slur Console Messages ===');

@@ -22,7 +22,7 @@ test('debug mordent rendering', async ({ page }) => {
   await page.waitForLoadState('domcontentloaded');
   
   // Input the mordent
-  const textarea = await page.locator('textarea, #notation-input, input').first();
+  const textarea = await page.locator('textarea, #input-text, input').first();
   await textarea.fill('~1~');
   
   // Wait for processing

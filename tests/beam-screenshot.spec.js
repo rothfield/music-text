@@ -8,7 +8,7 @@ test('capture VexFlow beaming screenshot', async ({ page }) => {
   await page.waitForTimeout(3000);
   
   // Enter SSSS pattern
-  await page.fill('#notation-input', '| SSSS | RRRR |\n| 1111 | 2222 |');
+  await page.fill('#input-text', '| SSSS | RRRR |\n| 1111 | 2222 |');
   
   // Wait for rendering
   await page.waitForTimeout(2000);

@@ -9,7 +9,7 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
     // Test: slur from tuplet to next beat
     // ___
     // 1-2 3
-    await page.fill('#notation-input', '___\n1-2 3');
+    await page.fill('#input-text', '___\n1-2 3');
     
     // Wait for VexFlow auto-rendering
     await page.waitForTimeout(2000);
@@ -35,7 +35,7 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
     // Test: slur within single beat
     // __
     // 1 2 3
-    await page.fill('#notation-input', '__\n1 2 3');
+    await page.fill('#input-text', '__\n1 2 3');
     
     await page.waitForTimeout(2000);
     
@@ -52,7 +52,7 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
     // Test: slur across barline
     // ___
     // 1 2 | 3
-    await page.fill('#notation-input', '___\n1 2 | 3');
+    await page.fill('#input-text', '___\n1 2 | 3');
     
     await page.waitForTimeout(2000);
     
@@ -69,7 +69,7 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
     // Test: multiple cross-beat slurs
     // ___  ___
     // 1-2  3 4-5
-    await page.fill('#notation-input', '___  ___\n1-2  3 4-5');
+    await page.fill('#input-text', '___  ___\n1-2  3 4-5');
     
     await page.waitForTimeout(2000);
     
@@ -85,7 +85,7 @@ test.describe('VexFlow Cross-Beat Slurs', () => {
   test('compares VexFlow with LilyPond slur consistency', async ({ page }) => {
     // Test that VexFlow and LilyPond produce consistent slur behavior
     const testPattern = '___\n1-2 3';
-    await page.fill('#notation-input', testPattern);
+    await page.fill('#input-text', testPattern);
     
     // Wait for VexFlow auto-rendering
     await page.waitForTimeout(2000);

@@ -11,7 +11,7 @@ test('detailed width investigation', async ({ page }) => {
     const body = document.body;
     const inputSection = document.querySelector('.input-section');
     const inputWrapper = document.querySelector('.input-wrapper');
-    const textarea = document.querySelector('#notation-input');
+    const textarea = document.querySelector('#input-text');
     
     function getElementDetails(el, name) {
       if (!el) return { name, error: 'Element not found' };

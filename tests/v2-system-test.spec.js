@@ -14,7 +14,7 @@ title: V2 Test
 | 1 2 3 |
   one two three`;
   
-  await page.fill('#notation-input', v2Input);
+  await page.fill('#input-text', v2Input);
   
   // Wait for auto-rendering or click update
   try {
@@ -39,7 +39,7 @@ title: V2 Test
   page.on('console', msg => logs.push(msg.text()));
   
   // Refresh to trigger parsing again
-  await page.fill('#notation-input', v2Input + ' ');
+  await page.fill('#input-text', v2Input + ' ');
   await page.waitForTimeout(2000);
   
   // Look for successful parsing indicators in console

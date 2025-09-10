@@ -9,12 +9,12 @@ test.describe('All Notation System Options', () => {
     await page.selectOption('#notation-system', 'auto');
     
     // Input number notation
-    await page.fill('#notation-input', '1 2 3');
+    await page.fill('#input-text', '1 2 3');
     await page.waitForTimeout(500);
     
     // Should auto-detect as Number notation
     // (We can't easily test the exact output without complex setup, but this tests the flow)
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await expect(textarea).toHaveValue('1 2 3');
   });
 
@@ -27,10 +27,10 @@ test.describe('All Notation System Options', () => {
     await expect(page.locator('#notation-system')).toHaveValue('Number');
     
     // Input number notation
-    await page.fill('#notation-input', '1-2-3 4-5');
+    await page.fill('#input-text', '1-2-3 4-5');
     await page.waitForTimeout(500);
     
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await expect(textarea).toHaveValue('1-2-3 4-5');
   });
 
@@ -43,10 +43,10 @@ test.describe('All Notation System Options', () => {
     await expect(page.locator('#notation-system')).toHaveValue('Western');
     
     // Input western notation
-    await page.fill('#notation-input', 'C D E F G');
+    await page.fill('#input-text', 'C D E F G');
     await page.waitForTimeout(500);
     
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await expect(textarea).toHaveValue('C D E F G');
   });
 
@@ -59,10 +59,10 @@ test.describe('All Notation System Options', () => {
     await expect(page.locator('#notation-system')).toHaveValue('Sargam');
     
     // Input sargam notation
-    await page.fill('#notation-input', 'S R G M P');
+    await page.fill('#input-text', 'S R G M P');
     await page.waitForTimeout(500);
     
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await expect(textarea).toHaveValue('S R G M P');
   });
 
@@ -75,10 +75,10 @@ test.describe('All Notation System Options', () => {
     await expect(page.locator('#notation-system')).toHaveValue('Tabla');
     
     // Input tabla notation
-    await page.fill('#notation-input', 'dha ge na ka');
+    await page.fill('#input-text', 'dha ge na ka');
     await page.waitForTimeout(500);
     
-    const textarea = page.locator('#notation-input');
+    const textarea = page.locator('#input-text');
     await expect(textarea).toHaveValue('dha ge na ka');
   });
 

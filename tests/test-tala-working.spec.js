@@ -18,7 +18,7 @@ test('verify tala is working correctly', async ({ page }) => {
     const withTala = `    0       3
 C D | E F | G A`;
     
-    await page.fill('#notation-input', withTala);
+    await page.fill('#input-text', withTala);
     await page.waitForTimeout(2000);
     
     // Clear logs for next test
@@ -28,7 +28,7 @@ C D | E F | G A`;
     console.log('\n=== Test 2: WITHOUT tala markers ===');
     const withoutTala = `C D | E F | G A`;
     
-    await page.fill('#notation-input', withoutTala);
+    await page.fill('#input-text', withoutTala);
     await page.waitForTimeout(2000);
     
     // Test 3: Mixed - some barlines with tala, some without
@@ -36,6 +36,6 @@ C D | E F | G A`;
     const mixedTala = `    0           5
 C D | E F | G A |`;
     
-    await page.fill('#notation-input', mixedTala);
+    await page.fill('#input-text', mixedTala);
     await page.waitForTimeout(2000);
 });
