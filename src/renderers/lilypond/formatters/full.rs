@@ -28,11 +28,8 @@ struct Staff {
     staff_clef: Option<String>,
     voices: Vec<Voice>,
     lyrics: Vec<Lyrics>,
-}
-
-#[derive(Serialize, Clone)]
-struct StaffGroup {
-    staves: Vec<Staff>,
+    begin_stave_group_str: Option<String>,  // "\new StaffGroup <<" when starting group
+    end_stave_group_str: Option<String>,    // ">>" when ending group
 }
 
 #[derive(Serialize)]
@@ -42,7 +39,7 @@ struct TemplateContext {
     header: Option<Header>,
     paper: Option<String>,
     layout: Option<String>,
-    staff_groups: Vec<StaffGroup>,
+    staves: Vec<Staff>,
     midi: Option<String>,
 }
 
@@ -83,30 +80,28 @@ impl FullFormatter {
 
 \score {
   <<
-    {{#staff_groups}}
-    \new StaffGroup <<
-      {{#staves}}
-      \new Staff <<
-        {{#staff_clef}}\clef {{staff_clef}}{{/staff_clef}}
-        {{#voices}}
-        \new Voice = "{{id}}" { 
-          {{#voice_directive}}\{{voice_directive}}{{/voice_directive}}
-          {{#fixed}}\fixed {{fixed}} { {{{music}}} }{{/fixed}}
-          {{^fixed}}{{{music}}}{{/fixed}}
-        }
-        {{/voices}}
+    {{#staves}}
+    {{{begin_stave_group_str}}}
+    \new Staff <<
+      {{#staff_clef}}\clef {{staff_clef}}{{/staff_clef}}
+      {{#voices}}
+      \new Voice = "{{id}}" { 
+        {{#voice_directive}}\{{voice_directive}}{{/voice_directive}}
+        {{#fixed}}\fixed {{fixed}} { {{{music}}} }{{/fixed}}
+        {{^fixed}}{{{music}}}{{/fixed}}
+      }
+      {{/voices}}
 
-        {{#lyrics}}
-        \new Lyrics \lyricsto "{{voice_id}}" {
-          \lyricmode {
-            {{#syllables}}{{.}} {{/syllables}}
-          }
+      {{#lyrics}}
+      \new Lyrics \lyricsto "{{voice_id}}" {
+        \lyricmode {
+          {{#syllables}}{{.}} {{/syllables}}
         }
-        {{/lyrics}}
-      >>
-      {{/staves}}
+      }
+      {{/lyrics}}
     >>
-    {{/staff_groups}}
+    {{{end_stave_group_str}}}
+    {{/staves}}
   >>
   {{#midi}}\midi { {{{midi}}} }{{/midi}}
 }"#;
@@ -128,12 +123,8 @@ impl FullFormatter {
     
     /// Build TemplateContext from ProcessedStave objects
     fn build_template_context(&self, staves: &[crate::stave::ProcessedStave]) -> TemplateContext {
-        let mut staff_groups = Vec::new();
+        let mut output_staves = Vec::new();
         let mut voice_counter = 1;
-        
-        // Group staves into staff groups based on multi-stave markers
-        let mut current_group_staves = Vec::new();
-        let mut in_multi_stave_group = false;
         
         for processed_stave in staves {
             // Get lyrics from the stave source
@@ -164,33 +155,20 @@ impl FullFormatter {
                 staff_clef: Some("treble".to_string()),
                 voices: vec![voice],
                 lyrics,
+                begin_stave_group_str: if processed_stave.begin_multi_stave {
+                    Some("\\new StaffGroup <<".to_string())
+                } else {
+                    None
+                },
+                end_stave_group_str: if processed_stave.end_multi_stave {
+                    Some(">>".to_string())
+                } else {
+                    None
+                },
             };
             
-            // Check for multi-stave group markers
-            if processed_stave.begin_multi_stave {
-                in_multi_stave_group = true;
-                current_group_staves.clear();
-            }
-            
-            current_group_staves.push(staff);
-            
-            if processed_stave.end_multi_stave || (!in_multi_stave_group && !processed_stave.begin_multi_stave) {
-                // End of group or single stave
-                staff_groups.push(StaffGroup {
-                    staves: current_group_staves.clone(),
-                });
-                current_group_staves.clear();
-                in_multi_stave_group = false;
-            }
-            
+            output_staves.push(staff);
             voice_counter += 1;
-        }
-        
-        // Handle any remaining staves in group
-        if !current_group_staves.is_empty() {
-            staff_groups.push(StaffGroup {
-                staves: current_group_staves,
-            });
         }
         
         TemplateContext {
@@ -203,35 +181,21 @@ impl FullFormatter {
             }),
             paper: None,
             layout: None,
-            staff_groups,
+            staves: output_staves,
             midi: None,
         }
     }
     
     /// Extract lyrics from ProcessedStave source
     fn extract_lyrics_from_stave(&self, stave: &crate::stave::ProcessedStave) -> Vec<String> {
-        // Extract lyrics from the stave source text
-        let source_text = &stave.source.value;
-        
-        // Look for non-musical content lines (lyrics)
+        // Extract lyrics from the actual lyrics_lines in the stave
         let mut lyrics_syllables = Vec::new();
-        for line in source_text.lines() {
-            let trimmed = line.trim();
-            if !trimmed.is_empty() 
-                && !trimmed.starts_with('|') 
-                && !trimmed.starts_with('=')
-                && !trimmed.starts_with('#')
-                && !trimmed.contains('•')
-                && !trimmed.contains('.')
-                && !trimmed.contains('_')
-                && !trimmed.starts_with("key:")
-                && !trimmed.starts_with("tempo:")
-            {
-                let syllables: Vec<String> = trimmed.split_whitespace()
-                    .map(|s| s.to_string())
-                    .collect();
-                lyrics_syllables.extend(syllables);
-            }
+        
+        for lyrics_line in &stave.lyrics_lines {
+            lyrics_syllables.extend(
+                lyrics_line.syllables.iter()
+                    .map(|syllable| syllable.content.clone())
+            );
         }
         
         lyrics_syllables
@@ -329,10 +293,17 @@ impl FullFormatter {
                         }
                     }
                 }
-                Item::Barline(_, _) => {
+                Item::Barline(barline_type, _) => {
                     // Skip leading barlines as they create invalid LilyPond syntax
                     if !is_first_item {
-                        notes_result.push_str("| ");
+                        use crate::rhythm::converters::BarlineType;
+                        match barline_type {
+                            BarlineType::Single => notes_result.push_str("| "),
+                            BarlineType::Double => notes_result.push_str("\\bar \"||\" "),
+                            BarlineType::RepeatStart => notes_result.push_str("\\bar \"|:\" "),
+                            BarlineType::RepeatEnd => notes_result.push_str("\\bar \":|\" "),
+                            BarlineType::RepeatBoth => notes_result.push_str("\\bar \"|:|\" "),
+                        }
                     }
                     is_first_item = false;
                     // No lyrics entry needed for barlines

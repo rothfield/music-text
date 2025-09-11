@@ -125,6 +125,12 @@ pub enum ParsedElement {
         value: String,
         position: Position,
     },
+    
+    /// Unrecognized consecutive characters
+    Unknown {
+        value: String,      // The consecutive unrecognized characters
+        position: Position, // Start position in source
+    },
 }
 
 impl ParsedElement {

@@ -443,6 +443,7 @@ impl ParsedElement {
             ParsedElement::Barline { position, .. } => position,
             ParsedElement::Whitespace { position, .. } => position,
             ParsedElement::Symbol { position, .. } => position,
+            ParsedElement::Unknown { position, .. } => position,
         }
     }
 }

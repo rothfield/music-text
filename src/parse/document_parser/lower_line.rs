@@ -28,22 +28,22 @@ pub fn parse_lower_line(line: &str, line_num: usize) -> Result<LowerLine, ParseE
                 },
             },
             
-            // BeatGroup: consecutive underscores (same symbol as slurs, different spatial context)
+            // LowerUnderscores: consecutive underscores for beat grouping
             '_' => {
-                let mut underscores = String::new();
-                underscores.push(ch);
+                let mut chars_collected = String::new();
+                chars_collected.push(ch);
                 let start_col = col;
                 
                 // Collect consecutive underscores
                 while let Some(&'_') = chars.peek() {
-                    underscores.push(chars.next().unwrap());
+                    chars_collected.push(chars.next().unwrap());
                     col += 1;
                 }
                 
-                LowerElement::BeatGroup {
-                    underscores: underscores.clone(),
+                LowerElement::LowerUnderscores {
+                    value: chars_collected.clone(),
                     source: Source {
-                        value: underscores,
+                        value: chars_collected,
                         position: Position { line: line_num, column: start_col },
                     },
                 }
@@ -113,10 +113,10 @@ mod tests {
         let lower_line = parse_lower_line(line, 1).unwrap();
         assert_eq!(lower_line.elements.len(), 1);
         
-        if let LowerElement::BeatGroup { underscores, .. } = &lower_line.elements[0] {
-            assert_eq!(underscores, "___");
+        if let LowerElement::LowerUnderscores { value, .. } = &lower_line.elements[0] {
+            assert_eq!(value, "___");
         } else {
-            panic!("Expected BeatGroup");
+            panic!("Expected LowerUnderscores");
         }
     }
     
@@ -126,14 +126,14 @@ mod tests {
         let lower_line = parse_lower_line(line, 1).unwrap();
         assert_eq!(lower_line.elements.len(), 4); // dot, beat group, spaces, colon
         
-        // Should be: LowerOctaveMarker("."), BeatGroup("___"), Space(2), LowerOctaveMarker(":")
+        // Should be: LowerOctaveMarker("."), LowerUnderscores("___"), Space(2), LowerOctaveMarker(":")
         match (&lower_line.elements[0], &lower_line.elements[1], &lower_line.elements[2], &lower_line.elements[3]) {
             (LowerElement::LowerOctaveMarker { marker: m1, .. }, 
-             LowerElement::BeatGroup { underscores, .. },
+             LowerElement::LowerUnderscores { value, .. },
              LowerElement::Space { .. },
              LowerElement::LowerOctaveMarker { marker: m2, .. }) => {
                 assert_eq!(m1, ".");
-                assert_eq!(underscores, "___");
+                assert_eq!(value, "___");
                 assert_eq!(m2, ":");
             }
             _ => panic!("Unexpected element sequence"),

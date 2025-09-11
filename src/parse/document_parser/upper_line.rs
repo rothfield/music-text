@@ -28,22 +28,43 @@ pub fn parse_upper_line(line: &str, line_num: usize) -> Result<UpperLine, ParseE
                 },
             },
             
-            // Slur: consecutive underscores
+            // UpperUnderscores: consecutive underscores for slurs
             '_' => {
-                let mut underscores = String::new();
-                underscores.push(ch);
+                let mut chars_collected = String::new();
+                chars_collected.push(ch);
                 let start_col = col;
                 
                 // Collect consecutive underscores
                 while let Some(&'_') = chars.peek() {
-                    underscores.push(chars.next().unwrap());
+                    chars_collected.push(chars.next().unwrap());
                     col += 1;
                 }
                 
-                UpperElement::Slur {
-                    underscores: underscores.clone(),
+                UpperElement::UpperUnderscores {
+                    value: chars_collected.clone(),
                     source: Source {
-                        value: underscores,
+                        value: chars_collected,
+                        position: Position { line: line_num, column: start_col },
+                    },
+                }
+            },
+            
+            // UpperHashes: consecutive hashes for multi-stave markers
+            '#' => {
+                let mut chars_collected = String::new();
+                chars_collected.push(ch);
+                let start_col = col;
+                
+                // Collect consecutive hashes
+                while let Some(&'#') = chars.peek() {
+                    chars_collected.push(chars.next().unwrap());
+                    col += 1;
+                }
+                
+                UpperElement::UpperHashes {
+                    value: chars_collected.clone(),
+                    source: Source {
+                        value: chars_collected,
                         position: Position { line: line_num, column: start_col },
                     },
                 }
