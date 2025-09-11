@@ -1,6 +1,6 @@
 use crate::parse::model::{Stave, TextLine, Source, Position, UpperLine, LowerLine, LyricsLine, Syllable};
 use super::error::ParseError;
-use super::content_line::{parse_content_line, is_content_line, detect_line_notation_system};
+use super::content_line::{parse_content_line, is_content_line};
 use super::upper_line::parse_upper_line;
 use super::lower_line::parse_lower_line;
 use super::hash_line::is_hash_line;
@@ -78,7 +78,7 @@ fn parse_lower_lines(lines: &[&str], start_line: usize, content_index: usize) ->
 
 /// Phase 1: Identify the content line in a paragraph
 /// Must have exactly one content line (identified by barlines or 3+ musical elements)
-fn identify_content_line(lines: &[&str], start_line: usize) -> Result<usize, ParseError> {
+fn identify_content_line(lines: &[&str], start_line: usize) -> Result<(usize, crate::parse::model::NotationSystem), ParseError> {
     let mut content_line_index = None;
     
     for (i, line) in lines.iter().enumerate() {
@@ -95,7 +95,11 @@ fn identify_content_line(lines: &[&str], start_line: usize) -> Result<usize, Par
     }
 
     match content_line_index {
-        Some(i) => Ok(i),
+        Some(i) => {
+            let content_line_text = lines[i];
+            let notation_system = crate::parse::document_parser::content_line::detect_line_notation_system(content_line_text);
+            Ok((i, notation_system))
+        },
         None => {
             Err(ParseError {
                 message: "No musical content line found in stave".to_string(),
@@ -120,11 +124,11 @@ pub fn parse_stave_from_paragraph(paragraph: &str, start_line: usize) -> Result<
     }
 
     // Phase 1: Identify content line
-    let content_index = identify_content_line(&lines, start_line)?;
+    let (content_index, notation_system) = identify_content_line(&lines, start_line)?;
 
     // Phase 2: Parse content line (tokenization)
     let content_line_text = lines[content_index];
-    let content_line = parse_content_line(content_line_text, start_line + content_index)?;
+    let content_line = parse_content_line(content_line_text, start_line + content_index, notation_system)?;
 
     // Phase 3: Parse spatial annotations above content
     let (upper_lines, text_lines_before) = parse_upper_lines(&lines[..content_index], start_line)?;
@@ -150,7 +154,7 @@ pub fn parse_stave_from_paragraph(paragraph: &str, start_line: usize) -> Result<
         lower_lines,   // ✅ Parsed spatial annotations below content  
         lyrics_lines,  // ✅ Parsed syllables for note assignment
         text_lines_after,
-        notation_system: detect_line_notation_system(content_line_text),
+        notation_system,
         source: Source {
             value: paragraph.to_string(),
             position: Position {
@@ -190,23 +194,23 @@ pub fn is_upper_line(line: &str) -> bool {
 pub fn is_lower_line(line: &str) -> bool {
     let trimmed = line.trim();
     
-    // Check for lower octave markers: dots (.), bullets (•), and colons (:)
-    if trimmed.chars().any(|c| c == '.' || c == '•' || c == ':') {
+    // Check for beat groups: underscores pattern (mostly underscores and spaces)
+    if trimmed.chars().any(|c| c == '_') && 
+       trimmed.chars().all(|c| c == '_' || c.is_whitespace()) {
         return true;
     }
     
-    // Check for beat groups: underscores below content
-    // (Note: This is spatial context - we'll determine upper vs lower based on position)
-    if trimmed.chars().any(|c| c == '_') {
+    // Check for octave markers: dots/colons pattern (mostly dots/colons and spaces)
+    if (trimmed.chars().any(|c| c == '.' || c == '•' || c == ':')) && 
+       trimmed.chars().all(|c| matches!(c, '.' | '•' | ':' | ' ')) {
         return true;
     }
-    
-    // Check for flat markers: "_" (Bhatkande notation only - 🚧 planned)
     
     false
 }
 
-/// Detect LyricsLine: contains syllables (he-llo, world, etc.)
+/// Detect LyricsLine: based on doremi-script grammar approach
+/// A lyrics line contains syllables matching [a-zA-Z'!.,?]+ patterns separated by whitespace
 pub fn is_lyrics_line(line: &str) -> bool {
     let trimmed = line.trim();
     
@@ -215,19 +219,54 @@ pub fn is_lyrics_line(line: &str) -> bool {
         return false;
     }
     
-    // Check for syllable patterns with hyphens
-    if trimmed.contains('-') {
+    // Check if it looks like a lower annotation pattern first
+    if is_lower_annotation_pattern(trimmed) {
+        return false;
+    }
+    
+    // A lyrics line should consist of valid syllable patterns
+    // Valid syllables are sequences of letters, apostrophes, exclamation marks, and punctuation
+    // Split by whitespace and check each token
+    for token in trimmed.split_whitespace() {
+        // Each token should be a valid syllable (may end with hyphen for continuation)
+        let is_valid_syllable = token.chars().all(|c| {
+            c.is_alphabetic() || 
+            c == '\'' || 
+            c == '!' || 
+            c == '.' || 
+            c == ',' || 
+            c == '?' || 
+            c == '-'
+        });
+        
+        // Must have at least one letter to be a syllable
+        let has_letter = token.chars().any(|c| c.is_alphabetic());
+        
+        if !is_valid_syllable || !has_letter {
+            return false;
+        }
+    }
+    
+    // If all tokens are valid syllables, it's a lyrics line
+    true
+}
+
+/// Check if a line matches lower annotation patterns like _________ or . . . :
+fn is_lower_annotation_pattern(line: &str) -> bool {
+    let trimmed = line.trim();
+    
+    // Underscores pattern: _________ (beat grouping)
+    if trimmed.chars().all(|c| c == '_' || c.is_whitespace()) && trimmed.contains('_') {
         return true;
     }
     
-    // Check for word patterns (letters/spaces, no musical symbols)
-    let has_letters = trimmed.chars().any(|c| c.is_alphabetic());
-    let has_musical_symbols = trimmed.chars().any(|c| {
-        matches!(c, '|' | '1'..='7' | 'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N' | 
-                     'C' | 'E' | 'F' | 'A' | 'B' | '#' | 'b')
-    });
+    // Dots and colons pattern: . . . : (tala markers)
+    // Only match if the line is MOSTLY dots/colons/spaces (no letters)
+    if trimmed.chars().all(|c| matches!(c, '.' | ':' | ' ')) && (trimmed.contains('.') || trimmed.contains(':')) {
+        return true;
+    }
     
-    has_letters && !has_musical_symbols
+    false
 }
 
 /// Parse a lyrics line into syllables

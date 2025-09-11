@@ -2,6 +2,7 @@ use crate::parse::model::{Document, Directive, Stave, Source, Position, UpperEle
 use crate::rhythm::types::{ParsedElement, SlurRole, BeatGroupRole};
 use super::error::ParseError;
 use super::stave::parse_stave_from_paragraph;
+use super::content_line::{parse_content_line, count_musical_elements, detect_line_notation_system};
 
 /// Result of parsing a paragraph
 #[derive(Debug)]
@@ -21,6 +22,11 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
                 position: Position { line: 1, column: 1 },
             },
         });
+    }
+
+    // Check for single-line document special case first
+    if let Some(doc) = try_parse_single_line_document(input)? {
+        return Ok(doc);
     }
 
     // Parse input directly without preprocessing
@@ -221,7 +227,7 @@ fn assign_octave_markers_to_stave(stave: &mut Stave) {
     let mut upper_markers: Vec<(usize, i8)> = Vec::new();
     
     for upper_line in &stave.upper_lines {
-        let mut col = 0;
+        let mut col = 1;
         for element in &upper_line.elements {
             match element {
                 UpperElement::UpperOctaveMarker { marker, .. } => {
@@ -246,7 +252,7 @@ fn assign_octave_markers_to_stave(stave: &mut Stave) {
     let mut lower_markers: Vec<(usize, i8)> = Vec::new();
     
     for lower_line in &stave.lower_lines {
-        let mut col = 0;
+        let mut col = 1;
         for element in &lower_line.elements {
             match element {
                 LowerElement::LowerOctaveMarker { marker, .. } => {
@@ -275,21 +281,14 @@ fn assign_octave_markers_to_stave(stave: &mut Stave) {
         return;
     }
     
-    // Assign markers to notes in content line
-    let mut col = 0;
+    // Assign markers to notes in content line based on column positions
     for element in &mut stave.content_line {
-        match element {
-            ParsedElement::Note { octave, .. } => {
-                // Only use exact position matches, no fuzzy assignment
-                if let Some(&(_, marker_octave)) = all_markers.iter().find(|(marker_col, _)| *marker_col == col) {
-                    *octave = marker_octave;
-                }
-                // No fuzzy assignment - keep default octave if no exact match
-                col += 1;
-            }
-            ParsedElement::Dash { .. } | ParsedElement::Rest { .. } | 
-            ParsedElement::Barline { .. } | ParsedElement::Whitespace { .. } | ParsedElement::Symbol { .. } => {
-                col += 1;
+        if let ParsedElement::Note { octave, position, .. } = element {
+            let note_col = position.col;
+            
+            // Find octave marker at the same column position (both use 1-based indexing)
+            if let Some(&(_, marker_octave)) = all_markers.iter().find(|(marker_col, _)| *marker_col == note_col) {
+                *octave = marker_octave;
             }
         }
     }
@@ -507,6 +506,98 @@ fn find_beat_group_segments(lower_lines: &[LowerLine]) -> Vec<(usize, usize)> {
     segments
 }
 
+/// Check if input qualifies as single-line document
+/// Returns true if exactly one non-empty line after trimming whitespace
+fn is_single_line_document(input: &str) -> bool {
+    let non_empty_lines: Vec<&str> = input.lines()
+        .map(|line| line.trim())           // Trim each line
+        .filter(|line| !line.is_empty())   // Keep non-empty
+        .collect();
+    
+    non_empty_lines.len() == 1
+}
+
+/// Calculate percentage of musical characters in a line
+/// Uses existing count_musical_elements function for consistency
+fn calculate_musical_percentage(line: &str) -> f32 {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return 0.0;
+    }
+    
+    let musical_count = count_musical_elements(trimmed) as f32;
+    let total_count = trimmed.chars().filter(|c| !c.is_whitespace()).count() as f32;
+    
+    if total_count == 0.0 {
+        0.0
+    } else {
+        (musical_count / total_count) * 100.0
+    }
+}
+
+/// Try to parse single-line input as musical document
+/// Returns Some(Document) if successful, None if not applicable, Err if parsing fails
+fn try_parse_single_line_document(input: &str) -> Result<Option<Document>, ParseError> {
+    // Check if input qualifies as single-line document
+    if !is_single_line_document(input) {
+        return Ok(None);
+    }
+    
+    // Get the single non-empty line
+    let line = input.lines()
+        .map(|line| line.trim())
+        .find(|line| !line.is_empty())
+        .unwrap(); // Safe because is_single_line_document returned true
+    
+    // Check if line meets musical content threshold (25%)
+    if calculate_musical_percentage(line) < 25.0 {
+        // Return empty document for non-musical single-line input
+        return Ok(Some(Document {
+            directives: Vec::new(),
+            staves: Vec::new(),
+            source: Source {
+                value: input.to_string(),
+                position: Position { line: 1, column: 1 },
+            },
+        }));
+    }
+    
+    // Detect notation system first
+    let notation_system = detect_line_notation_system(line);
+    
+    // Parse the line as a content line
+    let elements = parse_content_line(line, 1, notation_system)?;
+    
+    // Create a simple stave with the parsed content
+    let stave = Stave {
+        content_line: elements,
+        upper_lines: Vec::new(),
+        lower_lines: Vec::new(),
+        lyrics_lines: Vec::new(),
+        text_lines_before: Vec::new(),
+        text_lines_after: Vec::new(),
+        notation_system,
+        source: Source {
+            value: line.to_string(),
+            position: Position { line: 1, column: 1 },
+        },
+        begin_multi_stave: false,
+        end_multi_stave: false,
+    };
+    
+    // Create document with the single stave
+    let document = Document {
+        directives: Vec::new(),
+        staves: vec![stave],
+        source: Source {
+            value: input.to_string(),
+            position: Position { line: 1, column: 1 },
+        },
+    };
+    
+    Ok(Some(document))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -516,5 +607,138 @@ mod tests {
         let input = "line1\nline2\n\nline3\nline4\n\n\nline5";
         let paragraphs = split_into_paragraphs(input);
         assert_eq!(paragraphs, vec!["line1\nline2", "line3\nline4", "line5"]);
+    }
+
+    // Single-line document parsing tests
+    
+    #[test]
+    fn test_single_note() {
+        let result = parse_document("1");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+        assert!(doc.staves[0].content_line.len() > 0);
+    }
+
+    #[test]
+    fn test_single_line_western_notation() {
+        let result = parse_document("C");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+    }
+
+    #[test]
+    fn test_single_line_sargam_notation() {
+        let result = parse_document("S");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+    }
+
+    #[test]
+    fn test_single_line_with_threshold() {
+        // 50% musical content (1 out of 2 chars)
+        let result = parse_document("1x");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+
+        // 28.5% musical content (2 out of 7 chars) - just above 25%
+        let result = parse_document("12hello");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+        
+        // 0% musical content - should return empty document
+        let result = parse_document("hello");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 0);
+    }
+
+    #[test]
+    fn test_single_line_with_blanks() {
+        // Trailing blank lines
+        let result = parse_document("1\n\n\n");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+
+        // Leading/trailing spaces
+        let result = parse_document("  1  ");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+
+        // Mixed whitespace
+        let result = parse_document("   1  \n  \n\n ");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+    }
+
+    #[test]
+    fn test_single_line_document_detection() {
+        assert!(is_single_line_document("1"));
+        assert!(is_single_line_document("  1  "));
+        assert!(is_single_line_document("1\n\n"));
+        assert!(is_single_line_document("   1  \n  \n\n "));
+        
+        assert!(!is_single_line_document("1\n2"));
+        assert!(!is_single_line_document("1\n  2  \n"));
+        assert!(!is_single_line_document("   \n  \n  "));
+    }
+
+    #[test]
+    fn test_calculate_musical_percentage() {
+        // 100% musical
+        assert_eq!(calculate_musical_percentage("123"), 100.0);
+        assert_eq!(calculate_musical_percentage("SRG"), 100.0);
+        assert_eq!(calculate_musical_percentage("CDE"), 100.0);
+        
+        // 50% musical
+        assert_eq!(calculate_musical_percentage("1x"), 50.0);
+        
+        // ~28.5% musical (2/7)
+        let percentage = calculate_musical_percentage("12hello");
+        assert!((percentage - 28.57).abs() < 0.1); // Allow small floating point variance
+        
+        // 0% musical
+        assert_eq!(calculate_musical_percentage("hello"), 0.0);
+        assert_eq!(calculate_musical_percentage("xyz"), 0.0);
+        
+        // Empty
+        assert_eq!(calculate_musical_percentage(""), 0.0);
+        assert_eq!(calculate_musical_percentage("   "), 0.0);
+    }
+
+    #[test]
+    fn test_multiline_uses_normal_parsing() {
+        // Multi-line input should NOT trigger single-line parsing
+        let result = parse_document("title: test\n\n123");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        // Should parse as directive + stave via normal parsing
+        assert_eq!(doc.directives.len(), 1);
+        assert_eq!(doc.staves.len(), 1);
+    }
+
+    #[test] 
+    fn test_notation_system_detection_integration() {
+        // Test that notation systems are properly detected
+        let number_result = parse_document("123");
+        assert!(number_result.is_ok());
+        
+        let western_result = parse_document("CDE");
+        assert!(western_result.is_ok());
+        
+        let sargam_result = parse_document("SRG");
+        assert!(sargam_result.is_ok());
+        
+        // All should produce staves with content
+        assert!(number_result.unwrap().staves[0].content_line.len() > 0);
+        assert!(western_result.unwrap().staves[0].content_line.len() > 0);
+        assert!(sargam_result.unwrap().staves[0].content_line.len() > 0);
     }
 }
