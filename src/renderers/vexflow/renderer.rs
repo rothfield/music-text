@@ -28,11 +28,9 @@ pub enum VexFlowElement {
 }
 
 pub fn convert_to_vexflow(document: &Document) -> Result<VexFlowOutput, String> {
-    eprintln!("DEBUG: Converting document with {} staves", document.staves.len());
     let mut staves = Vec::new();
     
     for stave in &document.staves {
-        eprintln!("DEBUG: Processing stave with {} measures", stave.content_line.measures.len());
         let mut vex_notes = Vec::new();
         
         for measure in &stave.content_line.measures {

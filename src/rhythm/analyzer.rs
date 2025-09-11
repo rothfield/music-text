@@ -163,6 +163,7 @@ struct FSM {
     state: State,
     extension_chain_active: bool,
     last_note_across_beats: Option<Degree>,
+    pending_tie: bool,  // Track when a dash has created a tie intention
     current_beat: Option<Beat>,
     output: Vec<Item>,
 }
@@ -173,6 +174,7 @@ impl FSM {
             state: State::S0,
             extension_chain_active: false,
             last_note_across_beats: None,
+            pending_tie: false,
             current_beat: None,
             output: vec![],
         }
@@ -183,11 +185,11 @@ impl FSM {
             match (&self.state, element) {
                 // S0 State - Initial/Between elements
                 (State::S0, ParsedElement::Note { .. }) => {
-                    println!("FSM: S0 -> Note, starting new beat");
                     self.start_beat_with_note(element);
                 },
                 (State::S0, ParsedElement::Dash { .. }) => {
                     if self.extension_chain_active && self.last_note_across_beats.is_some() {
+                        self.pending_tie = true;  // Mark that we have a tie intention
                         self.start_beat_with_tied_note(element);
                     } else {
                         self.start_beat_with_rest(element);
@@ -209,7 +211,6 @@ impl FSM {
                     self.extend_last_element();
                 },
                 (State::CollectingPitch, ParsedElement::Note { .. }) => {
-                    println!("FSM: CollectingPitch -> Note, adding to beat");
                     self.add_note_to_beat(element);
                 },
                 (State::CollectingPitch, ParsedElement::Whitespace { .. }) => {
@@ -249,7 +250,6 @@ impl FSM {
 
         // Finish any pending beat
         if matches!(self.state, State::S0 | State::CollectingPitch | State::CollectingRests) {
-            println!("FSM: EOI - finishing pending beat in state {:?}", self.state);
             self.finish_beat();
         }
         self.state = State::Halt;
@@ -258,7 +258,6 @@ impl FSM {
     fn start_beat_with_note(&mut self, element: &ParsedElement) {
         // Finish any existing beat first
         if self.current_beat.is_some() {
-            println!("FSM: start_beat_with_note called with existing beat - finishing first");
             self.finish_beat();
         }
         let tied_to_previous = self.check_for_tie(element);
@@ -345,13 +344,18 @@ impl FSM {
 
     fn check_for_tie(&mut self, element: &ParsedElement) -> bool {
         if let ParsedElement::Note { degree, .. } = element {
-            if let Some(pending_pitch) = self.last_note_across_beats {
-                if *degree == pending_pitch {
-                    self.last_note_across_beats = None; // Clear after using
-                    return true;
+            if self.pending_tie {
+                if let Some(pending_pitch) = self.last_note_across_beats {
+                    if *degree == pending_pitch {
+                        self.pending_tie = false;  // Clear tie intention after using
+                        self.last_note_across_beats = None; // Clear after using
+                        return true;
+                    }
                 }
             }
         }
+        // Clear any unused tie intention
+        self.pending_tie = false;
         false
     }
 
@@ -365,6 +369,7 @@ impl FSM {
     fn handle_breathmark(&mut self) {
         self.extension_chain_active = false;
         self.last_note_across_beats = None;
+        self.pending_tie = false;  // Clear any pending ties
         self.output.push(Item::Breathmark);
     }
 

@@ -120,3 +120,8 @@
     color: #6a737d;
     font-weight: 600;
 }
+
+/* Fix Bootstrap p-3 class overriding word wrap */
+.p-3 {
+    white-space: pre-wrap !important;
+}

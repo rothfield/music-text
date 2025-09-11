@@ -1,5 +1,4 @@
 use music_text::{parse_document, process_notation};
-use music_text::renderers::render_web_fast_lilypond;
 use std::io::{self, Read};
 use std::fs;
 use clap::{Parser, Subcommand, CommandFactory};
@@ -33,12 +32,8 @@ enum Commands {
     Document { input: Option<String> },
     /// Show processed staves (JSON)
     Processed { input: Option<String> },
-    /// Show minimal LilyPond notation
-    #[command(name = "minimal-lily")]
-    MinimalLily { input: Option<String> },
-    /// Show full LilyPond score
-    #[command(name = "full-lily")]
-    FullLily { input: Option<String> },
+    /// Show LilyPond notation
+    Lilypond { input: Option<String> },
     /// Show VexFlow data structure (JSON)
     Vexflow { input: Option<String> },
     /// Show VexFlow SVG rendering
@@ -88,8 +83,7 @@ fn main() {
         },
         Some(Commands::Document { input }) => process_stage("document", input),
         Some(Commands::Processed { input }) => process_stage("processed", input),
-        Some(Commands::MinimalLily { input }) => process_stage("minimal-lily", input),
-        Some(Commands::FullLily { input }) => process_stage("full-lily", input),
+        Some(Commands::Lilypond { input }) => process_stage("lilypond", input),
         Some(Commands::Vexflow { input }) => process_stage("vexflow", input),
         Some(Commands::VexflowSvg { input }) => process_stage("vexflow-svg", input),
         Some(Commands::All { input }) => process_stage("all", input),
@@ -128,8 +122,7 @@ fn process_stage(stage: &str, input: Option<String>) {
         "parse" => show_parse_output(&input),
         "document" => show_document(&input),
         "processed" => show_processed(&input),
-        "minimal-lily" => show_minimal_lilypond(&input),
-        "full-lily" => show_full_lilypond(&input),
+        "lilypond" => show_lilypond(&input),
         "vexflow" => show_vexflow(&input),
         "vexflow-svg" => show_vexflow_svg(&input),
         "all" => show_all_stages(&input),
@@ -180,22 +173,10 @@ fn show_processed(input: &str) {
     }
 }
 
-fn show_minimal_lilypond(input: &str) {
+fn show_lilypond(input: &str) {
     match process_notation(input) {
         Ok(result) => {
-            println!("{}", result.minimal_lilypond);
-        }
-        Err(e) => {
-            eprintln!("Processing error: {}", e);
-            std::process::exit(1);
-        }
-    }
-}
-
-fn show_full_lilypond(input: &str) {
-    match process_notation(input) {
-        Ok(result) => {
-            println!("{}", result.full_lilypond);
+            println!("{}", result.lilypond);
         }
         Err(e) => {
             eprintln!("Processing error: {}", e);
@@ -243,11 +224,8 @@ fn show_all_stages(input: &str) {
             println!("=== PROCESSED STAVES ===");
             println!("{}\n", serde_json::to_string_pretty(&result.processed_staves).unwrap());
             
-            println!("=== MINIMAL LILYPOND ===");
-            println!("{}\n", result.minimal_lilypond);
-            
-            println!("=== FULL LILYPOND ===");
-            println!("{}\n", result.full_lilypond);
+            println!("=== LILYPOND ===");
+            println!("{}\n", result.lilypond);
             
             println!("=== VEXFLOW DATA ===");
             println!("{}\n", serde_json::to_string_pretty(&result.vexflow_data).unwrap());
@@ -281,16 +259,17 @@ fn generate_lilypond_svg_files(input: Option<String>, output_prefix: String) {
     }
     
     // Process notation using the same pipeline as web UI
-    let processed_staves = match process_notation(&input) {
-        Ok(result) => result.processed_staves,
+    let result = match process_notation(&input) {
+        Ok(result) => result,
         Err(e) => {
             eprintln!("Processing error: {}", e);
             std::process::exit(1);
         }
     };
     
-    // Generate optimized LilyPond source using web fast renderer
-    let lilypond_source = render_web_fast_lilypond(&processed_staves);
+    // Generate LilyPond source
+    let lilypond_source = result.lilypond;
+    let processed_staves = result.processed_staves;
     
     // Write .ly file to disk
     let ly_filename = format!("{}.ly", output_prefix);
@@ -392,7 +371,7 @@ impl MusicTextApp {
     fn parse_input(&mut self) {
         match process_notation(&self.input_text) {
             Ok(result) => {
-                self.output_text = result.minimal_lilypond;
+                self.output_text = result.lilypond;
             }
             Err(e) => {
                 self.output_text = format!("Error: {}", e);
@@ -424,7 +403,7 @@ fn run_repl() -> Result<()> {
                         // Process the accumulated input
                         match process_notation(&complete_input) {
                             Ok(result) => {
-                                println!("\n{}\n", result.minimal_lilypond);
+                                println!("\n{}\n", result.lilypond);
                             }
                             Err(e) => {
                                 println!("Error: {}\n", e);

@@ -3,7 +3,7 @@
 
 use crate::{parse_document, process_notation};
 use crate::parse::model::NotationSystem;
-use crate::renderers::render_full_lilypond;
+use crate::renderers::render_lilypond;
 use log::{info, error};
 
 /// Comprehensive test input covering ALL music-text features
@@ -451,7 +451,7 @@ fn test_parse_and_render(test_name: &str, input: &str) -> Result<String, String>
     }
     
     // Step 4: Render to LilyPond
-    let lilypond = render_full_lilypond(&result.processed_staves);
+    let lilypond = render_lilypond(&result.processed_staves);
     if lilypond.is_empty() {
         return Err(format!("{}: Empty LilyPond output", test_name));
     }

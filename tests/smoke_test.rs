@@ -96,6 +96,18 @@ const SMOKE_TEST_SINGLE_NOTE: &str = r#"|1"#;
 /// Test edge case: very long line
 const SMOKE_TEST_LONG_LINE: &str = r#"|1 2 3 4 5 6 7 1 2 3 4 5 6 7 1 2 3 4 5 6 7 1 2 3 4 5 6 7|"#;
 
+/// Test row.txt minimal-lily command functionality
+const SMOKE_TEST_ROW_TXT: &str = r#"###
+  |1 1 1-2 3|3-2 3-4 5 -|
+
+  |5 5 5-5 5|5-5 5-5 5 -|
+
+  |1 1 1-1 1|1-1 1-1 1 -|
+###"#;
+
+/// Test separate notes should not be tied
+const SMOKE_TEST_NO_TIES: &str = r#"|1 1"#;
+
 /// Run comprehensive smoke tests on server startup
 pub fn run_smoke_tests() -> Result<(), String> {
     info!("🔥 SMOKE TEST: Starting comprehensive music-text feature validation...");
@@ -402,6 +414,30 @@ pub fn run_smoke_tests() -> Result<(), String> {
         }
     }
     
+    // Test row.txt minimal-lily functionality
+    match test_parse_and_render("Row.txt minimal-lily", SMOKE_TEST_ROW_TXT) {
+        Ok(result) => {
+            test_results.push(("✅ Row.txt minimal-lily", result));
+        },
+        Err(e) => {
+            error!("❌ ROW.TXT MINIMAL-LILY TEST FAILED: {}", e);
+            test_results.push(("❌ Row.txt minimal-lily", e.clone()));
+            all_passed = false;
+        }
+    }
+    
+    // Test separate notes should not be tied
+    match test_no_ties("No ties for separate notes", SMOKE_TEST_NO_TIES) {
+        Ok(result) => {
+            test_results.push(("✅ No ties for separate notes", result));
+        },
+        Err(e) => {
+            error!("❌ NO TIES TEST FAILED: {}", e);
+            test_results.push(("❌ No ties for separate notes", e.clone()));
+            all_passed = false;
+        }
+    }
+    
     // Test 22: Feature detection tests
     info!("🧪 Testing feature detection...");
     match test_feature_detection() {
@@ -460,6 +496,67 @@ fn test_parse_and_render(test_name: &str, input: &str) -> Result<String, String>
     validate_lilypond_output(test_name, &lilypond)?;
     
     Ok(format!("{} test passed - {} staves, {} chars LilyPond", 
+        test_name, result.processed_staves.len(), lilypond.len()))
+}
+
+/// Test that separate notes are not tied in LilyPond output
+fn test_no_ties(test_name: &str, input: &str) -> Result<String, String> {
+    // Step 1: Parse document
+    let _document = parse_document(input)
+        .map_err(|e| format!("Parse failed for {}: {}", test_name, e))?;
+    
+    // Step 2: Process notation (includes rhythm FSM)
+    let result = process_notation(input)
+        .map_err(|e| format!("Process notation failed for {}: {}", test_name, e))?;
+    
+    // Step 3: Check that we got staves
+    if result.processed_staves.is_empty() {
+        return Err(format!("{}: No staves produced", test_name));
+    }
+    
+    // Step 4: Render to LilyPond
+    let lilypond = render_full_lilypond(&result.processed_staves);
+    if lilypond.is_empty() {
+        return Err(format!("{}: Empty LilyPond output", test_name));
+    }
+    
+    // Step 5: Validate no ties between separate notes
+    if lilypond.contains("c4~ c4") {
+        return Err(format!("{}: Found unexpected tie 'c4~ c4' in LilyPond output", test_name));
+    }
+    
+    // Step 6: Validate basic LilyPond structure
+    validate_lilypond_output(test_name, &lilypond)?;
+    
+    Ok(format!("{} test passed - no ties found in {} chars LilyPond", 
+        test_name, lilypond.len()))
+}
+
+/// Enhanced test for multi-stave documents with specific structure validation
+fn test_multi_stave_structure(test_name: &str, input: &str) -> Result<String, String> {
+    // Step 1: Parse document
+    let _document = parse_document(input)
+        .map_err(|e| format!("Parse failed for {}: {}", test_name, e))?;
+    
+    // Step 2: Process notation (includes rhythm FSM)
+    let result = process_notation(input)
+        .map_err(|e| format!("Process notation failed for {}: {}", test_name, e))?;
+    
+    // Step 3: Check that we got staves
+    if result.processed_staves.is_empty() {
+        return Err(format!("{}: No staves produced", test_name));
+    }
+    
+    // Step 4: Render to LilyPond
+    let lilypond = render_full_lilypond(&result.processed_staves);
+    if lilypond.is_empty() {
+        return Err(format!("{}: Empty LilyPond output", test_name));
+    }
+    
+    // Step 5: Validate multi-stave structure with specific assertions
+    validate_multi_stave_lilypond_output(test_name, &lilypond)?;
+    
+    Ok(format!("{} test passed - {} staves, {} chars LilyPond with correct structure", 
         test_name, result.processed_staves.len(), lilypond.len()))
 }
 
@@ -612,6 +709,36 @@ fn validate_lilypond_output(test_name: &str, lilypond: &str) -> Result<(), Strin
     Ok(())
 }
 
+/// Enhanced validation for multi-stave documents with specific structure assertions
+fn validate_multi_stave_lilypond_output(test_name: &str, lilypond: &str) -> Result<(), String> {
+    // First run basic validation
+    validate_lilypond_output(test_name, lilypond)?;
+    
+    // Check for exactly one StaffGroup
+    let staff_group_count = lilypond.matches("\\new StaffGroup").count();
+    if staff_group_count != 1 {
+        return Err(format!("{}: Expected exactly 1 StaffGroup, found {}", test_name, staff_group_count));
+    }
+    
+    // Check for exactly three new Staff blocks (but not StaffGroup)
+    let staff_count = lilypond.matches("\\new Staff {").count();
+    if staff_count != 3 {
+        return Err(format!("{}: Expected exactly 3 Staff blocks, found {}", test_name, staff_count));
+    }
+    
+    // Check for tuplet notation
+    if !lilypond.contains("\\tuplet 3/2") {
+        return Err(format!("{}: Missing \\tuplet 3/2 notation", test_name));
+    }
+    
+    // Check for specific tuplet patterns like { e4 d8 }
+    if !lilypond.contains("{ e4 d8 }") {
+        return Err(format!("{}: Missing expected tuplet pattern {{ e4 d8 }}", test_name));
+    }
+    
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -706,6 +833,34 @@ mod tests {
         assert!(test_parse_and_render("Empty barline", SMOKE_TEST_EMPTY_BARLINE).is_ok());
         assert!(test_parse_and_render("Single note", SMOKE_TEST_SINGLE_NOTE).is_ok());
         assert!(test_parse_and_render("Long line", SMOKE_TEST_LONG_LINE).is_ok());
+    }
+    
+    #[test]
+    fn test_row_txt_minimal_lily() {
+        match test_parse_and_render("Row.txt minimal-lily", SMOKE_TEST_ROW_TXT) {
+            Ok(_) => {},
+            Err(e) => panic!("Row.txt minimal-lily test failed: {}", e),
+        }
+    }
+    
+    #[test]
+    fn test_separate_notes_no_ties() {
+        match test_no_ties("No ties for separate notes", SMOKE_TEST_NO_TIES) {
+            Ok(_) => {},
+            Err(e) => panic!("No ties test failed: {}", e),
+        }
+    }
+    
+    #[test]
+    fn test_actual_row_txt_file() {
+        // Test using the actual row.txt file content with enhanced structure validation
+        let row_txt_content = std::fs::read_to_string("row.txt")
+            .expect("Failed to read row.txt file");
+        
+        match test_multi_stave_structure("Actual row.txt file", &row_txt_content) {
+            Ok(_) => {},
+            Err(e) => panic!("Actual row.txt file test failed: {}", e),
+        }
     }
     
     #[test]

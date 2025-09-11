@@ -1,7 +1,6 @@
 use crate::parse::{parse_document, Document};
 use crate::stave::{parse_document_staves, ProcessedStave};
-use crate::renderers::{render_minimal_lilypond, render_full_lilypond, render_vexflow_svg, render_vexflow_data};
-use log::warn;
+use crate::renderers::{render_lilypond, render_vexflow_svg, render_vexflow_data};
 use serde::{Deserialize, Serialize};
 
 /// The complete processing pipeline output
@@ -10,8 +9,7 @@ pub struct ProcessingResult {
     pub original_input: String,
     pub parsed_document: Document,
     pub processed_staves: Vec<ProcessedStave>,
-    pub minimal_lilypond: String,
-    pub full_lilypond: String,
+    pub lilypond: String,
     pub vexflow_svg: String,
     pub vexflow_data: serde_json::Value,
 }
@@ -23,7 +21,6 @@ pub struct ProcessingResult {
 /// 
 /// Input String → document_parser → stave_parser → converters → ProcessingResult
 pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
-    warn!("PIPELINE: Starting process_notation with input: '{}'", input);
     // Stage 1: Parse text into Document structure
     let parsed_document = parse_document(input)?;
     
@@ -31,9 +28,7 @@ pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
     let processed_staves = parse_document_staves(parsed_document.clone())?;
     
     // Stage 3: Convert to output formats
-    let minimal_lilypond = render_minimal_lilypond(&processed_staves);
-    warn!("Generated minimal LilyPond source: {}", minimal_lilypond);
-    let full_lilypond = render_full_lilypond(&processed_staves);
+    let lilypond = render_lilypond(&processed_staves);
     let vexflow_svg = render_vexflow_svg(&processed_staves);
     let vexflow_data = render_vexflow_data(&processed_staves);
     
@@ -41,8 +36,7 @@ pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
         original_input: input.to_string(),
         parsed_document,
         processed_staves,
-        minimal_lilypond,
-        full_lilypond,
+        lilypond,
         vexflow_svg,
         vexflow_data,
     })

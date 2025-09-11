@@ -130,6 +130,7 @@ export class LoadingStateManager {
         }
     }
 
+
     static setEmptyState(element, message = 'No content available') {
         if (!element) return;
         element.innerHTML = message;
@@ -145,8 +146,7 @@ export class OutputDisplayManager {
         this.outputs = {
             document: document.querySelector('#document-tab .json-output'),
             processed: document.querySelector('#processed-tab .json-output'),
-            minimalLily: document.querySelector('#minimal-lily-tab .json-output'),
-            fullLily: document.querySelector('#full-lily-tab .json-output'),
+            lilypond: document.querySelector('#lilypond-tab .json-output'),
             svg: document.getElementById('svg-content'),
             vexflowOutput: document.getElementById('vexflow-output'),
             detectedSystems: document.getElementById('detected-systems')
@@ -172,8 +172,7 @@ export class OutputDisplayManager {
             // Update each output section
             this.updateDocumentOutput(data.parsed_document);
             this.updateProcessedOutput(data.processed_staves);
-            this.updateMinimalLilyOutput(data.minimal_lilypond);
-            this.updateFullLilyOutput(data.full_lilypond);
+            this.updateLilypondOutput(data.lilypond);
             this.updateSvgOutput(data.lilypond_svg);
             
         } else {
@@ -198,19 +197,11 @@ export class OutputDisplayManager {
         }
     }
 
-    updateMinimalLilyOutput(lilyOutput) {
+    updateLilypondOutput(lilyOutput) {
         if (lilyOutput) {
-            LoadingStateManager.setContentState(this.outputs.minimalLily, lilyOutput);
+            LoadingStateManager.setContentState(this.outputs.lilypond, lilyOutput);
         } else {
-            LoadingStateManager.setEmptyState(this.outputs.minimalLily, 'No minimal LilyPond available');
-        }
-    }
-
-    updateFullLilyOutput(lilyOutput) {
-        if (lilyOutput) {
-            LoadingStateManager.setContentState(this.outputs.fullLily, lilyOutput);
-        } else {
-            LoadingStateManager.setEmptyState(this.outputs.fullLily, 'No full LilyPond available');
+            LoadingStateManager.setEmptyState(this.outputs.lilypond, 'No LilyPond available');
         }
     }
 
@@ -241,8 +232,7 @@ export class OutputDisplayManager {
         // Set all outputs to loading state
         LoadingStateManager.setLoadingState(this.outputs.document, 'Parsing...');
         LoadingStateManager.setLoadingState(this.outputs.processed, 'Processing...');
-        LoadingStateManager.setLoadingState(this.outputs.minimalLily, 'Generating...');
-        LoadingStateManager.setLoadingState(this.outputs.fullLily, 'Generating...');
+        LoadingStateManager.setLoadingState(this.outputs.lilypond, 'Generating...');
         LoadingStateManager.setLoadingState(this.outputs.svg, 'Rendering...');
     }
 
@@ -251,8 +241,7 @@ export class OutputDisplayManager {
         
         LoadingStateManager.setEmptyState(this.outputs.document, 'Parsed document structure will appear here...');
         LoadingStateManager.setEmptyState(this.outputs.processed, 'Processed staves will appear here...');
-        LoadingStateManager.setEmptyState(this.outputs.minimalLily, 'Minimal LilyPond notation will appear here...');
-        LoadingStateManager.setEmptyState(this.outputs.fullLily, 'Full LilyPond score will appear here...');
+        LoadingStateManager.setEmptyState(this.outputs.lilypond, 'LilyPond source will appear here...');
         LoadingStateManager.setEmptyState(this.outputs.svg, 'LilyPond SVG rendering will appear here...');
     }
 }
