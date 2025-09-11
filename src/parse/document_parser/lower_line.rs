@@ -1,4 +1,4 @@
-use crate::document::model::{LowerLine, LowerElement, Source, Position};
+use crate::parse::model::{LowerLine, LowerElement, Source, Position};
 use super::error::ParseError;
 
 /// Parse a lower line into spatial annotation elements

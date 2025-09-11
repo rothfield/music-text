@@ -113,7 +113,7 @@ class MusicTextApp {
         console.log('✅ Unicode toggle event listener attached successfully!');
 
         // Setup Unicode input handling
-        setupUnicodeInput(this.inputText, this.fontManager?.fontSelect, this.useUnicode);
+        // setupUnicodeInput(this.inputText, this.fontManager?.fontSelect, this.useUnicode);
     }
 
     setupInputHandling() {
@@ -141,14 +141,14 @@ class MusicTextApp {
                 this.parseInput(e.target.value);
             }, DEBOUNCE_DELAYS.PARSE);
             
-            // SVG generation if SVG tab is active
-            if (this.tabManager.isSvgTabActive()) {
-                clearTimeout(this.svgDebounceTimer);
-                this.svgDebounceTimer = setTimeout(() => {
-                    console.log('🎵 SVG debounce timer triggered, generating SVG automatically');
-                    this.generateSvgFromLilypond();
-                }, DEBOUNCE_DELAYS.SVG);
-            }
+            // SVG generation disabled - only generate on manual button click
+            // if (this.tabManager.isSvgTabActive()) {
+            //     clearTimeout(this.svgDebounceTimer);
+            //     this.svgDebounceTimer = setTimeout(() => {
+            //         console.log('🎵 SVG debounce timer triggered, generating SVG automatically');
+            //         this.generateSvgFromLilypond();
+            //     }, DEBOUNCE_DELAYS.SVG);
+            // }
         });
     }
 

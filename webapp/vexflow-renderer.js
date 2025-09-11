@@ -227,6 +227,21 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
             case 'Note':
                 const note = createAdvancedVexFlowNote(element);
                 notes.push(note);
+                
+                // Check for ties - if this note is tied, create StaveTie to previous note
+                if (element.tied && notes.length >= 2) {
+                    const prevNote = notes[notes.length - 2];
+                    const currNote = notes[notes.length - 1];
+                    
+                    const tie = new StaveTie({
+                        first_note: prevNote,
+                        last_note: currNote,
+                        first_indices: [0],
+                        last_indices: [0]
+                    });
+                    tie.setContext(context);
+                    ties.push(tie);
+                }
                 break;
                 
             case 'Rest':
@@ -238,8 +253,35 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
                 // Handle sophisticated tuplet processing
                 const tupletResult = processTupletAdvanced(element, context);
                 if (tupletResult.notes.length > 0) {
+                    // Check for ties involving tuplet notes before adding them
+                    const originalNotesLength = notes.length;
+                    
                     // Add tuplet notes to main notes array
                     tupletResult.notes.forEach(n => notes.push(n));
+                    
+                    // Check for ties involving the tuplet notes
+                    for (let i = 0; i < element.notes.length; i++) {
+                        const tupletElement = element.notes[i];
+                        const noteInMainArray = notes[originalNotesLength + i];
+                        
+                        // Check if this tuplet note should be tied to previous note
+                        if (tupletElement.tied && notes.length >= 2) {
+                            const noteIndex = originalNotesLength + i;
+                            if (noteIndex > 0) {
+                                const prevNote = notes[noteIndex - 1];
+                                const currNote = notes[noteIndex];
+                                
+                                const tie = new StaveTie({
+                                    first_note: prevNote,
+                                    last_note: currNote,
+                                    first_indices: [0],
+                                    last_indices: [0]
+                                });
+                                tie.setContext(context);
+                                ties.push(tie);
+                            }
+                        }
+                    }
                     
                     // Create tuplet with proper ratio
                     const tupletRatio = element.ratio || [element.divisions, getNextPowerOf2(element.divisions)];

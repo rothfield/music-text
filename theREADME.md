@@ -24,28 +24,29 @@ A Rust-based musical notation parser using hand-written recursive descent parsin
 
 Column alignment is essential for features like slurs, octave markers, and multi-line annotations to work correctly.
 
-## Current Architecture (As-Is)
+## Current Architecture (Post-Refactoring)
 
-### Architecture Pattern: AST-First Rendering
+### Architecture Pattern: Incremental Pipeline (Parse → Analyze → Render)
 
-**Key Principle**: AST → Renderers (not FSM → Renderers)
-- **FSM Role**: Rhythm analysis and tuplet detection only
-- **Renderer Role**: Transform AST to output formats (LilyPond, VexFlow, etc.)  
-- **Clean Separation**: FSM enriches/analyzes AST, renderers consume AST
+**Key Principle**: Clear separation of parsing, analysis, and rendering concerns
+- **Parse Stage**: Text input to structured representation  
+- **Analysis Stage**: Rhythm FSM, temporal analysis, and semantic processing
+- **Render Stage**: Multi-format output generation
 
 ### Core Components
 
-1. **Hand-Written Recursive Descent Parser** (`src/document/manual_parser/`)
+1. **Hand-Written Recursive Descent Parser** (`src/parse/`)
+   - **RENAMED** from `src/document/` during incremental refactoring
    - Handles multiple notation systems (sargam, number, western, abc, doremi)
    - Supports multi-line notation with annotations and multi-stave structures
    - Processes barlines, beats, segments, and musical structure
    - Clean paragraph-based document structure parsing
 
-2. **Document Processing Pipeline**
-   - **Document Model** (`src/document/model.rs`): Core data structures for musical notation
-   - **Manual Parser** (`src/document/manual_parser/`): Direct document structure parsing
+2. **Processing Pipeline**
+   - **Parse Model** (`src/parse/model.rs`): Core data structures for musical notation
+   - **Document Parser** (`src/parse/document_parser/`): Direct document structure parsing
    - **Pipeline** (`src/pipeline.rs`): Orchestrates the processing pipeline
-   - **Stave Parser** (`src/stave_parser.rs`): Parses individual staves
+   - **Stave Parser** (`src/stave/`): Processes individual staves
 
 3. **Output Generation**
 

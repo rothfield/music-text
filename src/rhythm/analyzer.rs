@@ -183,6 +183,7 @@ impl FSM {
             match (&self.state, element) {
                 // S0 State - Initial/Between elements
                 (State::S0, ParsedElement::Note { .. }) => {
+                    println!("FSM: S0 -> Note, starting new beat");
                     self.start_beat_with_note(element);
                 },
                 (State::S0, ParsedElement::Dash { .. }) => {
@@ -208,6 +209,7 @@ impl FSM {
                     self.extend_last_element();
                 },
                 (State::CollectingPitch, ParsedElement::Note { .. }) => {
+                    println!("FSM: CollectingPitch -> Note, adding to beat");
                     self.add_note_to_beat(element);
                 },
                 (State::CollectingPitch, ParsedElement::Whitespace { .. }) => {
@@ -247,12 +249,18 @@ impl FSM {
 
         // Finish any pending beat
         if matches!(self.state, State::S0 | State::CollectingPitch | State::CollectingRests) {
+            println!("FSM: EOI - finishing pending beat in state {:?}", self.state);
             self.finish_beat();
         }
         self.state = State::Halt;
     }
 
     fn start_beat_with_note(&mut self, element: &ParsedElement) {
+        // Finish any existing beat first
+        if self.current_beat.is_some() {
+            println!("FSM: start_beat_with_note called with existing beat - finishing first");
+            self.finish_beat();
+        }
         let tied_to_previous = self.check_for_tie(element);
         
         let mut beat = Beat {
@@ -434,14 +442,11 @@ impl ParsedElement {
     }
 }
 
-/// Convert ContentElements to FSM output using sophisticated rhythm processing
+
+/// Convert ParsedElements to FSM output using hierarchical state design
 pub fn process_rhythm(elements: &[ParsedElement]) -> Vec<Item> {
-    // Elements are already ParsedElement - no conversion needed!
-    let parsed_elements = elements.to_vec();
-    
-    // Process with sophisticated FSM
     let mut fsm = FSM::new();
-    fsm.process(&parsed_elements);
+    fsm.process(elements);
     fsm.output
 }
 

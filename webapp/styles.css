@@ -53,8 +53,8 @@
 /* Musical notation input: JetBrains Mono 24px for optimal Unicode character width consistency */
 /* Motivation: ▬ (dash), • (dot), ┃ (barline) need equal visual "inked width" for column alignment */
 #input-text.form-control {
-    font-family: 'JuliaMono', 'DejaVu Sans Mono', 'Courier New', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; /* JuliaMono as default for best Unicode support */
-    font-size: 10px; /* Default size - controlled by slider */
+    font-family: 'DejaVu Sans Mono', monospace;
+    font-size: 24px; /* Fixed size */
     font-weight: bold !important; /* Bold weight improves character distinction and visual consistency */
     border: 1px solid #ccc; /* Clean border for input field definition */
     padding: 10px; /* Comfortable padding for text input */

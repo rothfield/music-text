@@ -1,4 +1,6 @@
-// Document parser module - Hand-written recursive descent parser
+// Parse Module - Stage 1 of Pipeline Architecture  
+// Hand-written recursive descent parser for music notation text
+// RENAMED from document/ during incremental refactoring
 // Clean, maintainable, and debuggable music notation parsing
 
 pub mod document_parser;

@@ -390,7 +390,7 @@ impl Default for LilyPondRenderer {
 mod tests {
     use super::*;
     use crate::stave::ProcessedStave;
-    use crate::document::model::{NotationSystem, Source, Position};
+    use crate::parse::model::{NotationSystem, Source, Position};
     use crate::rhythm::{Item, Beat, BeatElement, Event};
     use crate::rhythm::types::Degree;
     use crate::rhythm::converters::BarlineType;

@@ -1,9 +1,9 @@
-use crate::document::model::{Stave, TextLine, NotationSystem, Source, Position, UpperLine, LowerLine, LyricsLine, Syllable};
+use crate::parse::model::{Stave, TextLine, Source, Position, UpperLine, LowerLine, LyricsLine, Syllable};
 use super::error::ParseError;
-use super::content_line::{parse_content_line, is_content_line};
+use super::content_line::{parse_content_line, is_content_line, detect_line_notation_system};
 use super::upper_line::parse_upper_line;
 use super::lower_line::parse_lower_line;
-use super::underline::is_underscore_line;
+use super::hash_line::is_hash_line;
 
 /// Phase 3: Parse spatial annotations above content line
 /// Returns (upper_lines, remaining_text_lines) 
@@ -135,13 +135,13 @@ pub fn parse_stave_from_paragraph(paragraph: &str, start_line: usize) -> Result<
     // Detect multi-stave markers
     let begin_multi_stave = text_lines_before
         .first()
-        .map(|line| is_underscore_line(&line.content))
+        .map(|line| is_hash_line(&line.content))
         .unwrap_or(false);
 
-    // Check if ANY line after the content line is an underscore line
+    // Check if ANY line after the content line is a hash line
     let end_multi_stave = text_lines_after
         .iter()
-        .any(|line| is_underscore_line(&line.content));
+        .any(|line| is_hash_line(&line.content));
 
     Ok(Stave {
         text_lines_before,
@@ -150,7 +150,7 @@ pub fn parse_stave_from_paragraph(paragraph: &str, start_line: usize) -> Result<
         lower_lines,   // ✅ Parsed spatial annotations below content  
         lyrics_lines,  // ✅ Parsed syllables for note assignment
         text_lines_after,
-        notation_system: NotationSystem::Number, // Default for now
+        notation_system: detect_line_notation_system(content_line_text),
         source: Source {
             value: paragraph.to_string(),
             position: Position {

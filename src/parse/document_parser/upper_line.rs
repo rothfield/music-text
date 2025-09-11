@@ -1,4 +1,4 @@
-use crate::document::model::{UpperLine, UpperElement, Source, Position};
+use crate::parse::model::{UpperLine, UpperElement, Source, Position};
 use super::error::ParseError;
 
 /// Parse an upper line into spatial annotation elements

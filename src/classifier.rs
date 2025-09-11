@@ -164,7 +164,7 @@ mod tests {
         
         assert_eq!(stave.upper_lines.len(), 1);
         assert!(matches!(
-            stave.upper_lines[0].items[0],
+            &stave.upper_lines[0].items[0],
             AnnotationItem::UpperOctaveMarker { marker, .. } if marker == "."
         ));
     }
@@ -192,7 +192,7 @@ mod tests {
         
         assert_eq!(stave.lower_lines.len(), 1);
         assert!(matches!(
-            stave.lower_lines[0].items[0],
+            &stave.lower_lines[0].items[0],
             AnnotationItem::LowerOctaveMarker { marker, .. } if marker == "."
         ));
     }

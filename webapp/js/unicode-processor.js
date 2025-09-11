@@ -106,7 +106,7 @@ export function setupUnicodeInput(inputElement, fontSelectElement, useUnicodeFla
 
     // Handle keydown events for immediate replacement - only for Unicode-capable fonts
     inputElement.addEventListener('keydown', function(e) {
-        const currentFont = e.target.style.fontFamily || fontSelectElement?.value;
+        const currentFont = fontSelectElement?.value;
         const replacement = UNICODE_REPLACEMENTS[e.key];
         
         // Handle special case for 'b' - check if it should be a flat symbol
@@ -157,7 +157,7 @@ export function setupUnicodeInput(inputElement, fontSelectElement, useUnicodeFla
         
         console.log('⌨️ Input event: Unicode mode ON, proceeding with replacements');
         
-        const currentFont = e.target.style.fontFamily || fontSelectElement?.value;
+        const currentFont = fontSelectElement?.value;
         const originalValue = e.target.value;
         const newValue = applyUnicodeReplacements(originalValue, currentFont);
         

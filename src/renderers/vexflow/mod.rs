@@ -125,12 +125,25 @@ fn convert_stave_to_vexflow(stave: &ProcessedStave) -> VexFlowStave {
     let mut vexflow_elements = Vec::new();
     let mut slur_stack = Vec::new(); // Track slur nesting
     
+    // Pre-process to identify which beats need ties
+    let beat_items: Vec<&Beat> = stave.rhythm_items.iter()
+        .filter_map(|item| match item {
+            Item::Beat(beat) => Some(beat),
+            _ => None,
+        })
+        .collect();
+    
+    let mut beat_index = 0;
     for rhythm_item in &stave.rhythm_items {
         match rhythm_item {
             Item::Beat(beat) => {
+                // Check if the next beat is tied to this one
+                let next_beat_is_tied = beat_index + 1 < beat_items.len() && 
+                                       beat_items[beat_index + 1].tied_to_previous;
+                
                 if beat.is_tuplet {
                     // Handle tuplet as a group
-                    let tuplet_elements = convert_beat_to_vexflow_elements(beat, &mut slur_stack);
+                    let tuplet_elements = convert_beat_to_vexflow_elements(beat, &mut slur_stack, next_beat_is_tied);
                     let tuplet_ratio = beat.tuplet_ratio.unwrap_or((beat.divisions, next_power_of_2(beat.divisions)));
                     
                     vexflow_elements.push(VexFlowElement::Tuplet {
@@ -140,9 +153,10 @@ fn convert_stave_to_vexflow(stave: &ProcessedStave) -> VexFlowStave {
                     });
                 } else {
                     // Regular beat - add elements directly
-                    let beat_elements = convert_beat_to_vexflow_elements(beat, &mut slur_stack);
+                    let beat_elements = convert_beat_to_vexflow_elements(beat, &mut slur_stack, next_beat_is_tied);
                     vexflow_elements.extend(beat_elements);
                 }
+                beat_index += 1;
             },
             Item::Barline(barline_type, _tala) => {
                 vexflow_elements.push(VexFlowElement::BarLine {
@@ -165,10 +179,10 @@ fn convert_stave_to_vexflow(stave: &ProcessedStave) -> VexFlowStave {
 }
 
 /// Convert a beat to VexFlow elements with slur handling
-fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>) -> Vec<VexFlowElement> {
+fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>, next_beat_is_tied: bool) -> Vec<VexFlowElement> {
     let mut elements = Vec::new();
     
-    for beat_element in &beat.elements {
+    for (element_index, beat_element) in beat.elements.iter().enumerate() {
         match &beat_element.event {
             Event::Note { degree, octave, children, slur } => {
                 // Handle slur start
@@ -207,12 +221,17 @@ fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>) -> 
                         _ => None,
                     }).collect();
                 
+                // Determine if this note should be marked as tied
+                // For VexFlow: only the second note (receiving end) of a tied pair should be marked as tied
+                let is_first_element = element_index == 0;
+                let is_tied = is_first_element && beat.tied_to_previous;
+                
                 elements.push(VexFlowElement::Note {
                     keys: vec![keys],
                     duration,
                     dots,
                     accidentals,
-                    tied: false, // Will be determined later based on ties
+                    tied: is_tied,
                     beam_start: false, // Will be determined by beaming logic
                     beam_end: false,
                     syl: syllable,

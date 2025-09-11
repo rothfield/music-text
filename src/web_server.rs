@@ -8,11 +8,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use music_text::{parse_document, process_notation};
-use music_text::document::model::NotationSystem;
+use music_text::parse::model::NotationSystem;
 use music_text::renderers::render_full_lilypond;
 use music_text::smoke_test;
 use log::{info, warn, error};
-use crate::lilypond_generator::LilyPondGenerator;
+use music_text::renderers::LilyPondGenerator;
 
 /// Check for Unicode characters that should have been converted to standard ASCII
 fn check_for_unicode_chars(input: &str) -> Result<(), String> {
@@ -46,7 +46,6 @@ fn check_for_unicode_chars(input: &str) -> Result<(), String> {
 #[derive(Serialize)]
 struct ParseResponse {
     success: bool,
-    pest_output: Option<serde_json::Value>,
     parsed_document: Option<serde_json::Value>,
     processed_staves: Option<serde_json::Value>,
     detected_notation_systems: Option<Vec<NotationSystem>>,
@@ -76,7 +75,6 @@ struct ValidPitchesResponse {
     sharp_patterns: Vec<String>,
 }
 
-// Using hand-written parser instead of Pest
 
 async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<ParseResponse> {
     let input = params.get("input").cloned().unwrap_or_default();
@@ -91,7 +89,6 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
         error!("🚨 PARSE ENDPOINT: {}", unicode_error);
         return Json(ParseResponse {
             success: false,
-            pest_output: None,
             parsed_document: None,
             processed_staves: None,
             detected_notation_systems: None,
@@ -110,7 +107,6 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
         info!("📤 API /parse response - empty input, returning empty response");
         return Json(ParseResponse {
             success: true,
-            pest_output: None,
             parsed_document: None,
             processed_staves: None,
             detected_notation_systems: None,
@@ -124,7 +120,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
     }
     
     // Get parse output
-    let parse_result = match parse_document(&input) {
+    let _parse_result = match parse_document(&input) {
         Ok(document) => {
             Some(serde_json::to_value(&document).unwrap())
         }
@@ -132,8 +128,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
             error!("📤 API /parse response - document parsing failed: {}", e);
             return Json(ParseResponse {
                 success: false,
-                pest_output: None,
-                parsed_document: None,
+                    parsed_document: None,
                 processed_staves: None,
                 detected_notation_systems: None,
                 minimal_lilypond: None,
@@ -175,7 +170,6 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
     
     Json(ParseResponse {
         success: true,
-        pest_output: parse_result,
         parsed_document: parsed_doc,
         processed_staves,
         detected_notation_systems: detected_systems,

@@ -49,7 +49,6 @@ export class ApiClient {
                 error: data.error?.slice(0, 200),
                 detectedSystems: data.detected_notation_systems,
                 outputsGenerated: {
-                    pest: !!data.pest_output,
                     document: !!data.parsed_document,
                     lily: !!data.minimal_lilypond,
                     vexflow: !!data.vexflow

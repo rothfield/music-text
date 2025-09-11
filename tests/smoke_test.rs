@@ -1,9 +1,9 @@
 // Comprehensive smoke test for all music-text features
 // Based on bansuri.ly and covering all notation systems and features
 
-use crate::{parse_document, process_notation};
-use crate::parse::model::NotationSystem;
-use crate::renderers::render_full_lilypond;
+use music_text::{parse_document, process_notation};
+use music_text::parse::model::{NotationSystem, UpperElement, LowerElement};
+use music_text::renderers::render_full_lilypond;
 use log::{info, error};
 
 /// Comprehensive test input covering ALL music-text features
@@ -507,7 +507,7 @@ fn test_feature_detection() -> Result<String, String> {
     // Check for slur element
     let has_slur = stave.upper_lines.iter().any(|line| {
         line.elements.iter().any(|elem| {
-            matches!(elem, crate::parse::model::UpperElement::Slur { .. })
+            matches!(elem, UpperElement::Slur { .. })
         })
     });
     
@@ -533,7 +533,7 @@ fn test_feature_detection() -> Result<String, String> {
     // Check for beat group element
     let has_beat_group = stave.lower_lines.iter().any(|line| {
         line.elements.iter().any(|elem| {
-            matches!(elem, crate::parse::model::LowerElement::BeatGroup { .. })
+            matches!(elem, LowerElement::BeatGroup { .. })
         })
     });
     

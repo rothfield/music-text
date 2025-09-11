@@ -1,13 +1,23 @@
-use crate::document::model::{PitchCode, NotationSystem};
+use crate::parse::model::{PitchCode, NotationSystem};
 use crate::rhythm::types::{ParsedElement, Degree, Position};
 use super::error::ParseError;
+use crate::tokenizer::classify_and_tokenize;
+use crate::models::pitch_systems::tabla;
 
 // Old ContentLine function removed - using new ParsedElement architecture
 
 /// Detect the notation system for a single line using the same logic as the model
-fn detect_line_notation_system(line: &str) -> NotationSystem {
+pub fn detect_line_notation_system(line: &str) -> NotationSystem {
     // Count occurrences of each notation system's unique characters
     let mut votes = [0; 5]; // [Number, Western, Sargam, Bhatkhande, Tabla]
+    
+    // Check for tabla bols (multi-character patterns)
+    let tabla_bols = ["dha", "ge", "na", "ka", "ta", "trka", "terekita", "dhin"];
+    for bol in &tabla_bols {
+        if line.contains(bol) {
+            votes[4] += bol.len(); // Weight by length for longer bols
+        }
+    }
     
     for ch in line.chars() {
         match ch {
@@ -65,41 +75,57 @@ pub fn is_content_line(line: &str) -> bool {
 pub fn count_musical_elements(line: &str) -> usize {
     let mut count = 0;
     let chars: Vec<char> = line.chars().collect();
+    let mut i = 0;
     
-    for i in 0..chars.len() {
+    while i < chars.len() {
         let ch = chars[i];
         
         // Dashes (note extensions)
         if ch == '-' {
             count += 1;
+            i += 1;
             continue;
         }
         
         // Number pitches: 1-7 - avoid counting digits that are clearly part of numbers
         if ch.is_ascii_digit() && ch >= '1' && ch <= '7' && !is_part_of_number(&chars, i) {
             count += 1;
+            i += 1;
             continue;
         }
         
         // Western pitches: C D E F G A B - avoid counting letters that are part of words
         if matches!(ch, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B') && !is_part_of_english_word(&chars, i) {
             count += 1;
+            i += 1;
             continue;
         }
         
         // Sargam pitches: S R G M P D N (both cases) - avoid counting letters that are part of words
         if matches!(ch, 'S' | 's' | 'R' | 'r' | 'G' | 'g' | 'M' | 'm' | 'P' | 'p' | 'D' | 'd' | 'N' | 'n') && !is_part_of_english_word(&chars, i) {
             count += 1;
+            i += 1;
             continue;
         }
         
-        // Tabla syllables (simplified check - just look for common starts)
-        if i + 2 < chars.len() {
-            let three_char: String = chars[i..i+3].iter().collect();
-            if matches!(three_char.to_lowercase().as_str(), "dhi" | "dha" | "trk" | "tak") {
+        // Tabla syllables - check for all valid tabla bols
+        let remaining_chars = &chars[i..];
+        let remaining_str: String = remaining_chars.iter().collect();
+        
+        // Check for tabla syllables using the same logic as the tabla module
+        let tabla_bols = ["terekita", "trka", "dhin", "dha", "ge", "na", "ka", "ta"];
+        let mut found_bol = false;
+        for bol in &tabla_bols {
+            if remaining_str.to_lowercase().starts_with(&bol.to_lowercase()) {
                 count += 1;
-                continue;
+                i += bol.len(); // Move past this tabla syllable
+                found_bol = true;
+                break;
             }
+        }
+        
+        if !found_bol {
+            i += 1; // Move to next character if no tabla syllable found
         }
     }
     
@@ -142,35 +168,50 @@ fn is_part_of_english_word(chars: &[char], i: usize) -> bool {
 pub fn count_musical_pitches(line: &str) -> usize {
     let mut count = 0;
     let chars: Vec<char> = line.chars().collect();
+    let mut i = 0;
     
-    for i in 0..chars.len() {
+    while i < chars.len() {
         let ch = chars[i];
         
         // Number pitches: 1-7
         if ch.is_ascii_digit() && ch >= '1' && ch <= '7' {
             count += 1;
+            i += 1;
             continue;
         }
         
         // Western pitches: C D E F G A B
         if matches!(ch, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B') {
             count += 1;
+            i += 1;
             continue;
         }
         
         // Sargam pitches: S R G M P D N (both cases)
         if matches!(ch, 'S' | 's' | 'R' | 'r' | 'G' | 'g' | 'M' | 'm' | 'P' | 'p' | 'D' | 'd' | 'N' | 'n') {
             count += 1;
+            i += 1;
             continue;
         }
         
-        // Tabla syllables (simplified check - just look for common starts)
-        if i + 2 < chars.len() {
-            let three_char: String = chars[i..i+3].iter().collect();
-            if matches!(three_char.to_lowercase().as_str(), "dhi" | "dha" | "trk" | "tak") {
+        // Tabla syllables - check for all valid tabla bols
+        let remaining_chars = &chars[i..];
+        let remaining_str: String = remaining_chars.iter().collect();
+        
+        // Check for tabla syllables using the same logic as the tabla module
+        let tabla_bols = ["terekita", "trka", "dhin", "dha", "ge", "na", "ka", "ta"];
+        let mut found_bol = false;
+        for bol in &tabla_bols {
+            if remaining_str.to_lowercase().starts_with(&bol.to_lowercase()) {
                 count += 1;
-                continue;
+                i += bol.len(); // Move past this tabla syllable
+                found_bol = true;
+                break;
             }
+        }
+        
+        if !found_bol {
+            i += 1; // Move to next character if no tabla syllable found
         }
     }
     
@@ -198,6 +239,10 @@ mod tests {
         assert!(!is_content_line("--"));         // Only 2 dashes
         assert!(!is_content_line("____"));       // Underscores (not dashes)
         assert!(!is_content_line("text line"));  // No musical elements
+        
+        // Tabla content lines - regression test for "takata" bug
+        assert!(is_content_line("ta ka ta"));    // Should recognize as content line
+        assert!(is_content_line("takata"));      // Compact notation should also work
     }
 
     #[test]
@@ -221,6 +266,12 @@ mod tests {
         assert_eq!(count_musical_elements("12"), 2);       // 2 pitches
         assert_eq!(count_musical_elements("____"), 0);     // Underscores don't count
         assert_eq!(count_musical_elements("text"), 0);     // No musical elements
+        
+        // Tabla syllables - regression test for "takata" bug
+        assert_eq!(count_musical_elements("ta ka ta"), 3); // Should count all 3 tabla syllables
+        assert_eq!(count_musical_elements("takata"), 3);   // Compact notation should also work
+        assert_eq!(count_musical_elements("dha ge na"), 3); // Different tabla syllables
+        assert_eq!(count_musical_elements("ka"), 1);       // Single tabla syllable should count
     }
 
     #[test]
@@ -236,6 +287,11 @@ mod tests {
         // Dashes are NOT counted by this legacy function
         assert_eq!(count_musical_pitches("1--"), 1);       // Only counts the pitch
         assert_eq!(count_musical_pitches("---"), 0);       // No pitches
+        
+        // Tabla syllables
+        assert_eq!(count_musical_pitches("ta ka ta"), 3);  // Should count all 3 tabla syllables
+        assert_eq!(count_musical_pitches("takata"), 3);    // Compact notation should also work
+        assert_eq!(count_musical_pitches("dha ge na"), 3); // Different tabla syllables
     }
 }
 
@@ -243,11 +299,83 @@ mod tests {
 /// This is the new architecture: text -> ParsedElement directly
 pub fn parse_content_line(line: &str, line_num: usize) -> Result<Vec<ParsedElement>, ParseError> {
     let mut elements = Vec::new();
-    let mut col = 1;
     
     // Detect the notation system for this line to handle ambiguous characters
     let notation_system = detect_line_notation_system(line);
     
+    // For Tabla notation, use tokenizer to handle multi-character syllables
+    if notation_system == NotationSystem::Tabla {
+        let (_detected_system, tokens) = classify_and_tokenize(line);
+        let mut col = 1;
+        let mut i = 0;
+        let chars: Vec<char> = line.chars().collect();
+        
+        while i < chars.len() {
+            let ch = chars[i];
+            
+            // Handle barlines and other special characters
+            if ch == '|' {
+                elements.push(ParsedElement::Barline {
+                    style: "|".to_string(),
+                    position: Position { row: line_num, col },
+                    tala: None,
+                });
+                i += 1;
+                col += 1;
+            } else if ch == '-' {
+                elements.push(ParsedElement::Dash {
+                    degree: None,
+                    octave: None,
+                    position: Position { row: line_num, col },
+                    duration: None,
+                });
+                i += 1;
+                col += 1;
+            } else if ch == ' ' {
+                elements.push(ParsedElement::Whitespace {
+                    value: " ".to_string(),
+                    position: Position { row: line_num, col },
+                });
+                i += 1;
+                col += 1;
+            } else {
+                // Try to match a tabla syllable at this position
+                let mut matched = false;
+                let remaining = &line[i..];
+                
+                // Check if a tabla token starts at this position
+                for token in &tokens {
+                    if remaining.starts_with(token) {
+                        // Found a tabla syllable
+                        if let Some(models_degree) = tabla::lookup(token) {
+                            let rhythm_degree = convert_models_degree_to_rhythm_degree(models_degree);
+                            elements.push(ParsedElement::new_note(
+                                rhythm_degree,
+                                0,
+                                token.to_string(),
+                                Position { row: line_num, col },
+                            ));
+                            i += token.len();
+                            col += token.len();
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if !matched {
+                    // Not a recognized tabla syllable, skip character
+                    i += 1;
+                    col += 1;
+                }
+            }
+        }
+        
+        return Ok(elements);
+    }
+    
+    // For non-Tabla notation, use the existing character-based parsing
+    let mut col = 1;
     for ch in line.chars() {
         let element = match ch {
             '|' => ParsedElement::Barline {
@@ -354,6 +482,47 @@ pub fn parse_content_line(line: &str, line_num: usize) -> Result<Vec<ParsedEleme
     }
     
     Ok(elements)
+}
+
+/// Convert models::pitch::Degree to rhythm::types::Degree
+fn convert_models_degree_to_rhythm_degree(models_degree: crate::models::pitch::Degree) -> Degree {
+    match models_degree {
+        crate::models::pitch::Degree::N1bb => Degree::N1bb,
+        crate::models::pitch::Degree::N1b => Degree::N1b,
+        crate::models::pitch::Degree::N1 => Degree::N1,
+        crate::models::pitch::Degree::N1s => Degree::N1s,
+        crate::models::pitch::Degree::N1ss => Degree::N1ss,
+        crate::models::pitch::Degree::N2bb => Degree::N2bb,
+        crate::models::pitch::Degree::N2b => Degree::N2b,
+        crate::models::pitch::Degree::N2 => Degree::N2,
+        crate::models::pitch::Degree::N2s => Degree::N2s,
+        crate::models::pitch::Degree::N2ss => Degree::N2ss,
+        crate::models::pitch::Degree::N3bb => Degree::N3bb,
+        crate::models::pitch::Degree::N3b => Degree::N3b,
+        crate::models::pitch::Degree::N3 => Degree::N3,
+        crate::models::pitch::Degree::N3s => Degree::N3s,
+        crate::models::pitch::Degree::N3ss => Degree::N3ss,
+        crate::models::pitch::Degree::N4bb => Degree::N4bb,
+        crate::models::pitch::Degree::N4b => Degree::N4b,
+        crate::models::pitch::Degree::N4 => Degree::N4,
+        crate::models::pitch::Degree::N4s => Degree::N4s,
+        crate::models::pitch::Degree::N4ss => Degree::N4ss,
+        crate::models::pitch::Degree::N5bb => Degree::N5bb,
+        crate::models::pitch::Degree::N5b => Degree::N5b,
+        crate::models::pitch::Degree::N5 => Degree::N5,
+        crate::models::pitch::Degree::N5s => Degree::N5s,
+        crate::models::pitch::Degree::N5ss => Degree::N5ss,
+        crate::models::pitch::Degree::N6bb => Degree::N6bb,
+        crate::models::pitch::Degree::N6b => Degree::N6b,
+        crate::models::pitch::Degree::N6 => Degree::N6,
+        crate::models::pitch::Degree::N6s => Degree::N6s,
+        crate::models::pitch::Degree::N6ss => Degree::N6ss,
+        crate::models::pitch::Degree::N7bb => Degree::N7bb,
+        crate::models::pitch::Degree::N7b => Degree::N7b,
+        crate::models::pitch::Degree::N7 => Degree::N7,
+        crate::models::pitch::Degree::N7s => Degree::N7s,
+        crate::models::pitch::Degree::N7ss => Degree::N7ss,
+    }
 }
 
 /// Convert new PitchCode to old Degree format (from rhythm_fsm.rs)

@@ -69,7 +69,7 @@ export class FontManager {
             // Load font on demand if needed
             await loadFontOnDemand(fontName);
             
-            this.inputElement.style.fontFamily = selectedFont;
+            // this.inputElement.style.fontFamily = selectedFont;
             
             // Save font choice
             saveFontFamily(selectedFont);
@@ -88,7 +88,7 @@ export class FontManager {
 
         this.fontSize.addEventListener('input', (e) => {
             const size = parseInt(e.target.value);
-            this.inputElement.style.fontSize = size + 'px';
+            // this.inputElement.style.fontSize = size + 'px';
             this.fontSizeValue.textContent = size + 'px';
             saveFontSize(size);
         });
@@ -99,7 +99,7 @@ export class FontManager {
 
         this.spacingSlider.addEventListener('input', (e) => {
             const spacing = parseFloat(e.target.value);
-            this.inputElement.style.letterSpacing = spacing + 'em';
+            // this.inputElement.style.letterSpacing = spacing + 'em';
             this.spacingValue.textContent = spacing + 'em';
             saveLetterSpacing(spacing);
         });
@@ -110,7 +110,7 @@ export class FontManager {
 
         this.heightSlider.addEventListener('input', (e) => {
             const height = parseFloat(e.target.value);
-            this.inputElement.style.lineHeight = height + 'em';
+            // this.inputElement.style.lineHeight = height + 'em';
             this.heightValue.textContent = height + 'em';
             saveLineHeight(height);
         });
@@ -152,14 +152,14 @@ export class FontManager {
         const savedFont = loadFontFamily();
         if (savedFont && this.fontSelect) {
             this.fontSelect.value = savedFont;
-            this.inputElement.style.fontFamily = savedFont;
+            // this.inputElement.style.fontFamily = savedFont;
         }
 
         // Load saved font size
         const savedSize = loadFontSize();
         if (savedSize && this.fontSize && this.fontSizeValue) {
             this.fontSize.value = savedSize;
-            this.inputElement.style.fontSize = savedSize + 'px';
+            // this.inputElement.style.fontSize = savedSize + 'px';
             this.fontSizeValue.textContent = savedSize + 'px';
         }
 
@@ -167,7 +167,7 @@ export class FontManager {
         const savedSpacing = loadLetterSpacing();
         if (savedSpacing !== 0 && this.spacingSlider && this.spacingValue) {
             this.spacingSlider.value = savedSpacing;
-            this.inputElement.style.letterSpacing = savedSpacing + 'em';
+            // this.inputElement.style.letterSpacing = savedSpacing + 'em';
             this.spacingValue.textContent = savedSpacing + 'em';
         }
 
@@ -175,7 +175,7 @@ export class FontManager {
         const savedHeight = loadLineHeight();
         if (savedHeight !== 0 && this.heightSlider && this.heightValue) {
             this.heightSlider.value = savedHeight;
-            this.inputElement.style.lineHeight = savedHeight + 'em';
+            // this.inputElement.style.lineHeight = savedHeight + 'em';
             this.heightValue.textContent = savedHeight + 'em';
         }
     }
@@ -191,14 +191,14 @@ export class FontManager {
         // Reset font family
         if (this.fontSelect) {
             this.fontSelect.value = DEFAULT_FONT_SETTINGS.font;
-            this.inputElement.style.fontFamily = DEFAULT_FONT_SETTINGS.font;
+            // this.inputElement.style.fontFamily = DEFAULT_FONT_SETTINGS.font;
             saveFontFamily(DEFAULT_FONT_SETTINGS.font);
         }
         
         // Reset font size
         if (this.fontSize && this.fontSizeValue) {
             this.fontSize.value = DEFAULT_FONT_SETTINGS.size;
-            this.inputElement.style.fontSize = DEFAULT_FONT_SETTINGS.size + 'px';
+            // this.inputElement.style.fontSize = DEFAULT_FONT_SETTINGS.size + 'px';
             this.fontSizeValue.textContent = DEFAULT_FONT_SETTINGS.size + 'px';
             saveFontSize(DEFAULT_FONT_SETTINGS.size);
         }
@@ -206,7 +206,7 @@ export class FontManager {
         // Reset letter spacing
         if (this.spacingSlider && this.spacingValue) {
             this.spacingSlider.value = DEFAULT_FONT_SETTINGS.spacing;
-            this.inputElement.style.letterSpacing = DEFAULT_FONT_SETTINGS.spacing + 'em';
+            // this.inputElement.style.letterSpacing = DEFAULT_FONT_SETTINGS.spacing + 'em';
             this.spacingValue.textContent = DEFAULT_FONT_SETTINGS.spacing + 'em';
             saveLetterSpacing(DEFAULT_FONT_SETTINGS.spacing);
         }
@@ -214,7 +214,7 @@ export class FontManager {
         // Reset line height
         if (this.heightSlider && this.heightValue) {
             this.heightSlider.value = DEFAULT_FONT_SETTINGS.height;
-            this.inputElement.style.lineHeight = DEFAULT_FONT_SETTINGS.height + 'em';
+            // this.inputElement.style.lineHeight = DEFAULT_FONT_SETTINGS.height + 'em';
             this.heightValue.textContent = DEFAULT_FONT_SETTINGS.height + 'em';
             saveLineHeight(DEFAULT_FONT_SETTINGS.height);
         }

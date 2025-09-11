@@ -38,6 +38,8 @@ uuid = { version = "1.6", features = ["v4"] }
 mustache = "0.9"
 fraction = { version = "0.13", features = ["with-serde-support"] }
 rustyline = { version = "14.0.0", features = ["derive"] }
+regex = "1.10"
+once_cell = "1.19"
 
 # GUI dependencies (optional)
 eframe = { version = "0.28", optional = true }

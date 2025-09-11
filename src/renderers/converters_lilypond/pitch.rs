@@ -1,6 +1,6 @@
 /// PitchCode to LilyPond note name conversion
-use crate::document::model::PitchCode;
-use crate::converters::transposition::transpose_pitchcode_with_octave;
+use crate::parse::model::PitchCode;
+use crate::renderers::transposition::transpose_pitchcode_with_octave;
 
 /// Convert PitchCode and octave to LilyPond note name
 /// Integrates with tonic-based transposition system

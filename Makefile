@@ -1,4 +1,4 @@
-.PHONY: help build clean run web test test-cli test-web logs dev mtx zellij-clean
+.PHONY: help build clean run web restart test test-cli test-web logs dev mtx zellij-clean
 
 # PERMANENT DEVELOPMENT MODE: Always use fastest debug build with warnings suppressed
 # Philosophy: We are ALWAYS in dev mode for fastest iteration
@@ -40,6 +40,11 @@ cli-test: build ## Test CLI with example input
 
 kill: ## Stop the web server
 	@pkill -f "music-text --web" && echo "✓ Web server stopped" || echo "✗ No web server running"
+
+restart: ## Restart the web server
+	@$(MAKE) kill || true
+	@sleep 1
+	@$(MAKE) web
 
 status: ## Check if web server is running
 	@lsof -i :3000 > /dev/null 2>&1 && echo "✓ Web server is running on http://localhost:3000" || echo "✗ Web server is not running"
@@ -86,6 +91,7 @@ b: build
 c: clean
 w: web
 k: kill
+r: restart
 t: test
 l: logs
 

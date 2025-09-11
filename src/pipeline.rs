@@ -1,4 +1,4 @@
-use crate::document::{parse_document, Document};
+use crate::parse::{parse_document, Document};
 use crate::stave::{parse_document_staves, ProcessedStave};
 use crate::renderers::{render_minimal_lilypond, render_full_lilypond, render_vexflow_svg, render_vexflow_data};
 use log::warn;
@@ -16,13 +16,6 @@ pub struct ProcessingResult {
     pub vexflow_data: serde_json::Value,
 }
 
-/// Raw PEST parse output (not part of main pipeline but useful for debugging)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PestResult {
-    pub success: bool,
-    pub parse_tree: Option<serde_json::Value>,
-    pub error: Option<String>,
-}
 
 
 

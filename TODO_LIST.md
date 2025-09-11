@@ -75,3 +75,11 @@
    - **Multi-character pitches**: Handle tabla syllables like "dha", "dhin", etc.
    - **Clean API**: Provide simple, well-tested functions for pitch string → PitchCode conversion
    - **Unit testing**: Add comprehensive tests for all notation systems and edge cases
+
+12. **Understand and clarify classifier.rs module** - Investigate actual purpose and consider renaming:
+   - **Current confusion**: Name suggests it classifies content lines or notation systems
+   - **Actual purpose**: Only classifies annotation lines (pre/post content) as upper/lower/lyrics
+   - **Parser responsibility**: `identify_content_line()` in parser identifies musical content lines
+   - **Tokenizer responsibility**: `classify_notation_system()` detects notation systems (Western, Sargam, etc.)
+   - **Consider renaming**: `AnnotationClassifier` or `LineTypeClassifier` for clarity
+   - **Document**: Add clear module-level documentation explaining its limited scope

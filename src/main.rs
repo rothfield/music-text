@@ -8,7 +8,6 @@ use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
 
 mod web_server;
-mod lilypond_generator;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -30,8 +29,6 @@ enum Commands {
     Repl,
     /// Run performance benchmarks
     Perf,
-    /// Show raw PEST parse tree
-    Pest { input: Option<String> },
     /// Show parsed document structure (JSON)
     Document { input: Option<String> },
     /// Show processed staves (JSON)
@@ -89,7 +86,6 @@ fn main() {
             println!("Running performance benchmarks...");
             run_performance_tests();
         },
-        Some(Commands::Pest { input }) => process_stage("pest", input),
         Some(Commands::Document { input }) => process_stage("document", input),
         Some(Commands::Processed { input }) => process_stage("processed", input),
         Some(Commands::MinimalLily { input }) => process_stage("minimal-lily", input),
@@ -236,7 +232,6 @@ fn show_all_stages(input: &str) {
     println!("=== INPUT ===");
     println!("{}\n", input);
     
-    println!("=== PEST PARSE TREE ===");
     show_parse_output(input);
     println!();
     
@@ -307,7 +302,7 @@ fn generate_lilypond_svg_files(input: Option<String>, output_prefix: String) {
     
     // Generate SVG using LilyPond generator
     let temp_dir = std::env::temp_dir().join("music-text-cli");
-    let generator = lilypond_generator::LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
+    let generator = music_text::renderers::lilypond_generator::LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
     
     // Use Tokio runtime for async SVG generation
     let rt = tokio::runtime::Runtime::new().unwrap();

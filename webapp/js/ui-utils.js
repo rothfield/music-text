@@ -46,6 +46,16 @@ export class TabManager {
         const tabButtons = document.querySelectorAll('.nav-link');
         tabButtons.forEach(button => {
             button.addEventListener('shown.bs.tab', this.saveActiveTabFromBootstrap);
+            
+            // Auto-generate SVG when LilyPond SVG tab is clicked
+            if (button.id === 'svg-tab-btn') {
+                button.addEventListener('shown.bs.tab', () => {
+                    // Trigger SVG generation if the global function exists
+                    if (typeof window.generateSvgFromLilypond === 'function') {
+                        window.generateSvgFromLilypond();
+                    }
+                });
+            }
         });
     }
 
@@ -133,7 +143,6 @@ export class LoadingStateManager {
 export class OutputDisplayManager {
     constructor() {
         this.outputs = {
-            pest: document.querySelector('#pest-tab .json-output'),
             document: document.querySelector('#document-tab .json-output'),
             processed: document.querySelector('#processed-tab .json-output'),
             minimalLily: document.querySelector('#minimal-lily-tab .json-output'),
@@ -161,7 +170,6 @@ export class OutputDisplayManager {
             this.updateDetectedSystems(data.detected_notation_systems);
             
             // Update each output section
-            this.updatePestOutput(data.pest_output);
             this.updateDocumentOutput(data.parsed_document);
             this.updateProcessedOutput(data.processed_staves);
             this.updateMinimalLilyOutput(data.minimal_lilypond);
@@ -173,15 +181,6 @@ export class OutputDisplayManager {
         }
     }
 
-    updatePestOutput(pestOutput) {
-        if (pestOutput) {
-            LoadingStateManager.setContentState(this.outputs.pest, pestOutput, true);
-            this.outputs.pest.classList.add('active');
-        } else {
-            LoadingStateManager.setEmptyState(this.outputs.pest, 'No PEST output available');
-            this.outputs.pest.classList.add('active');
-        }
-    }
 
     updateDocumentOutput(documentOutput) {
         if (documentOutput) {
@@ -240,7 +239,6 @@ export class OutputDisplayManager {
 
     showLoading() {
         // Set all outputs to loading state
-        LoadingStateManager.setLoadingState(this.outputs.pest, 'Parsing...');
         LoadingStateManager.setLoadingState(this.outputs.document, 'Parsing...');
         LoadingStateManager.setLoadingState(this.outputs.processed, 'Processing...');
         LoadingStateManager.setLoadingState(this.outputs.minimalLily, 'Generating...');
@@ -251,7 +249,6 @@ export class OutputDisplayManager {
     showEmpty() {
         this.outputs.detectedSystems.textContent = 'Enter some music to see detected systems...';
         
-        LoadingStateManager.setEmptyState(this.outputs.pest, 'Type in the textarea above to see the raw PEST parse tree...');
         LoadingStateManager.setEmptyState(this.outputs.document, 'Parsed document structure will appear here...');
         LoadingStateManager.setEmptyState(this.outputs.processed, 'Processed staves will appear here...');
         LoadingStateManager.setEmptyState(this.outputs.minimalLily, 'Minimal LilyPond notation will appear here...');

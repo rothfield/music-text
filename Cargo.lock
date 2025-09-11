@@ -2401,6 +2401,8 @@ dependencies = [
  "fraction",
  "log 0.4.28",
  "mustache",
+ "once_cell",
+ "regex",
  "rustyline",
  "serde",
  "serde_json",

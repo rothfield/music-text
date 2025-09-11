@@ -21,10 +21,10 @@
             <div class="status-bar mb-2">
                 <span class="status-systems">Detected: <span id="detected-systems">Enter some music...</span></span>
                 <span class="status-separator">|</span>
-                <div class="form-check form-switch d-inline-block">
+                <!-- <div class="form-check form-switch d-inline-block">
                     <input class="form-check-input" type="checkbox" id="unicode-toggle" checked>
                     <label class="form-check-label text-light" for="unicode-toggle">Unicode</label>
-                </div>
+                </div> -->
                 <span class="status-separator">|</span>
                 <button class="btn btn-sm btn-link text-light p-0" id="fonts-button" style="text-decoration: none;">Fonts...</button>
             </div>
@@ -84,10 +84,7 @@
         
         <ul class="nav nav-tabs" id="outputTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="pest-tab-btn" data-bs-toggle="tab" data-bs-target="#pest-tab" type="button" role="tab">Raw PEST Output</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="document-tab-btn" data-bs-toggle="tab" data-bs-target="#document-tab" type="button" role="tab">Document Structure</button>
+                <button class="nav-link active" id="document-tab-btn" data-bs-toggle="tab" data-bs-target="#document-tab" type="button" role="tab">Document Structure</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="processed-tab-btn" data-bs-toggle="tab" data-bs-target="#processed-tab" type="button" role="tab">Processed Staves</button>
@@ -107,13 +104,7 @@
         </ul>
         
         <div class="tab-content" id="outputTabContent">
-            <div class="tab-pane fade show active" id="pest-tab" role="tabpanel">
-                <div class="json-output p-3">
-                    Type in the textarea above to see the raw PEST parse tree...
-                </div>
-            </div>
-            
-            <div class="tab-pane fade" id="document-tab" role="tabpanel">
+            <div class="tab-pane fade show active" id="document-tab" role="tabpanel">
                 <div class="json-output p-3">
                     Parsed document structure will appear here...
                 </div>

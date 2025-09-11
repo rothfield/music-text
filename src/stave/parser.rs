@@ -1,4 +1,4 @@
-use crate::document::Document;
+use crate::parse::Document;
 use crate::rhythm::process_rhythm_batch;
 
 /// Pipeline step: Parse document staves into processed staves with batch rhythm processing
@@ -44,11 +44,11 @@ pub fn parse_document_staves(document: Document) -> Result<Vec<ProcessedStave>, 
 /// Contains beat-grouped elements instead of flat element lists
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProcessedStave {
-    pub text_lines_before: Vec<crate::document::TextLine>,
+    pub text_lines_before: Vec<crate::parse::TextLine>,
     pub rhythm_items: Vec<crate::rhythm::Item>,
-    pub text_lines_after: Vec<crate::document::TextLine>,
-    pub notation_system: crate::document::model::NotationSystem,
-    pub source: crate::document::model::Source,
+    pub text_lines_after: Vec<crate::parse::TextLine>,
+    pub notation_system: crate::parse::model::NotationSystem,
+    pub source: crate::parse::model::Source,
     pub begin_multi_stave: bool,  // True if this stave begins a multi-stave group
     pub end_multi_stave: bool,    // True if this stave ends a multi-stave group
 }
@@ -56,7 +56,7 @@ pub struct ProcessedStave {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::parse_document;
+    use crate::parse::parse_document;
 
     #[test]
     fn test_parse_document_staves() {

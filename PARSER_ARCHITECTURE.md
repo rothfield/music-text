@@ -24,7 +24,7 @@ content_line = {
 This rule ensures every content line MUST contain at least one barline - enforced at parse time.
 
 ### Layer 2: Semantics (Parser)
-**File:** `src/document_parser.rs`  
+**File:** `src/parse/document_parser/` (RENAMED from `src/document_parser.rs`)  
 **Responsibility:** Build meaningful data structures from validated input
 
 The parser is completely generic and trusts the grammar:

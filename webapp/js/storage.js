@@ -86,7 +86,7 @@ export function saveActiveTab(tabName) {
 }
 
 export function loadActiveTab() {
-    return Storage.load(STORAGE_KEYS.ACTIVE_TAB, 'pest');
+    return Storage.load(STORAGE_KEYS.ACTIVE_TAB, 'document');
 }
 
 // Font preference storage

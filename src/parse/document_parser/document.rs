@@ -1,4 +1,4 @@
-use crate::document::model::{Document, Directive, Stave, Source, Position, UpperElement, LowerElement, UpperLine, LowerLine};
+use crate::parse::model::{Document, Directive, Stave, Source, Position, UpperElement, LowerElement, UpperLine, LowerLine};
 use crate::rhythm::types::{ParsedElement, SlurRole, BeatGroupRole};
 use super::error::ParseError;
 use super::stave::parse_stave_from_paragraph;
@@ -23,6 +23,8 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
         });
     }
 
+    // Parse input directly without preprocessing
+    
     // Split into paragraphs by blank lines
     let paragraphs = split_into_paragraphs(input);
     let mut directives = Vec::new();
@@ -278,19 +280,11 @@ fn assign_octave_markers_to_stave(stave: &mut Stave) {
     for element in &mut stave.content_line {
         match element {
             ParsedElement::Note { octave, .. } => {
-                // Look for marker at exact position first
+                // Only use exact position matches, no fuzzy assignment
                 if let Some(&(_, marker_octave)) = all_markers.iter().find(|(marker_col, _)| *marker_col == col) {
                     *octave = marker_octave;
-                } else {
-                    // Find nearest marker if no exact match
-                    if let Some((_, nearest_octave)) = all_markers.iter()
-                        .min_by_key(|(marker_col, _)| {
-                            if *marker_col > col { *marker_col - col } else { col - *marker_col }
-                        })
-                    {
-                        *octave = *nearest_octave;
-                    }
                 }
+                // No fuzzy assignment - keep default octave if no exact match
                 col += 1;
             }
             ParsedElement::Dash { .. } | ParsedElement::Rest { .. } | 
