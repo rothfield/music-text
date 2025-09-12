@@ -84,15 +84,37 @@ async function renderVexFlowNotation(vexflowData, containerId = 'vexflow-output'
         // Clear container
         container.innerHTML = '';
         
-        const { Renderer, Stave, Formatter, Voice, Beam, StaveNote, Tuplet, Curve, StaveTie, Ornament } = Vex.Flow;
+        const { Renderer, Stave, Formatter, Voice, Beam, StaveNote, Tuplet, Curve, StaveTie, Ornament, Annotation } = Vex.Flow;
         
-        // Create renderer with proper canvas size
+        // Create renderer using old VexFlow scaling approach
         const renderer = new Renderer(container, Renderer.Backends.SVG);
-        const containerWidth = container.offsetWidth || 800;
-        const estimatedHeight = Math.max(200, (vexflowData.staves?.length || 1) * 150);
-        renderer.resize(containerWidth, estimatedHeight);
+        
+        // Calculate width using old code's approach
+        let minWidth = 400; // Conservative base width
+        const totalNotes = vexflowData.staves?.reduce((sum, stave) => 
+            sum + (stave.notes?.length || 0), 0) || 0;
+        minWidth = totalNotes * 50 + 100; // Like old code: ~50px per note + margins
+        
+        // Add extra width for syllables (like old code)
+        const totalSyllables = vexflowData.staves?.reduce((sum, stave) => 
+            sum + (stave.notes?.filter(n => n.syl)?.length || 0), 0) || 0;
+        if (totalSyllables > 0) {
+            const syllableExtraWidth = totalSyllables * 30; // 30px extra per syllable
+            minWidth += syllableExtraWidth;
+        }
+        
+        const padding = 80; // Minimal margins for full width
+        // Use full viewport width for canvas (like old code)
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 800;
+        const canvasWidth = Math.max(viewportWidth - 20, minWidth + padding); // Nearly full width with 20px margin
+        const canvasHeight = Math.max(200, (vexflowData.staves?.length || 1) * 150);
+        
+        // Set canvas size based on calculated width
+        renderer.resize(canvasWidth, canvasHeight);
         const context = renderer.getContext();
-        context.scale(VEXFLOW_SCALE_FACTOR, VEXFLOW_SCALE_FACTOR);
+        
+        // Apply scaling like old code
+        context.scale(0.9, 0.9);
         
         let currentY = 30;
         
@@ -103,8 +125,8 @@ async function renderVexFlowNotation(vexflowData, containerId = 'vexflow-output'
             const staveData = staves[staveIndex];
             // console.log('🎵 Processing stave:', staveIndex, staveData);
             
-            // Create stave
-            const stave = new Stave(20, currentY, Math.min(1200, containerWidth - 40));
+            // Create stave with full available width (like old code: minimal margins)
+            const stave = new Stave(10, currentY, canvasWidth - 20);
             if (staveIndex === 0) {
                 stave.addClef('treble');
                 
@@ -134,8 +156,27 @@ async function renderVexFlowNotation(vexflowData, containerId = 'vexflow-output'
                 
                 voice.addTickables(notes);
                 
-                // Format and draw
-                new Formatter().joinVoices([voice]).format([voice], stave.getWidth() - 100);
+                // Apply VexFlow's automatic accidental tracking system
+                // This handles courtesy/cautionary accidentals within measures
+                const keySignature = staveData.key_signature || 'C';
+                try {
+                    Vex.Flow.Accidental.applyAccidentals([voice], keySignature);
+                    // console.log('✅ Applied VexFlow accidental tracking with key signature:', keySignature);
+                } catch (error) {
+                    console.warn('⚠️ VexFlow accidental tracking failed:', error);
+                }
+                
+                // Format with minimal width for tighter spacing (like old code)
+                const formatter = new Formatter().joinVoices([voice]);
+                let formatterMinWidth = formatter.preCalculateMinTotalWidth([voice]);
+                
+                // Safety check: if minWidth is NaN (VexFlow bug), use fallback calculation
+                if (isNaN(formatterMinWidth) || formatterMinWidth <= 0) {
+                    formatterMinWidth = notes.length * 50 + 100; // Conservative estimate like old code
+                }
+                
+                // Format with minimal width for tight note spacing
+                formatter.format([voice], formatterMinWidth);
                 voice.draw(context, stave);
                 
                 // Draw advanced features
@@ -143,6 +184,9 @@ async function renderVexFlowNotation(vexflowData, containerId = 'vexflow-output'
                 tuplets.forEach(tuplet => tuplet.draw());
                 ties.forEach(tie => tie.draw());
                 slurs.forEach(slur => slur.draw());
+                
+                // Draw syllables using old code approach - relative to stave bottom
+                drawSyllablesRelativeToStave(context, stave, notes);
             }
             
             currentY += 120;
@@ -209,7 +253,7 @@ function mapBarlineType(barType) {
  * Process sophisticated VexFlow elements with full tuplet, slur, and advanced feature support
  */
 function processVexFlowElementsAdvanced(elements, context, stave) {
-    const { StaveNote, Beam, Tuplet, Curve, StaveTie, Ornament, Dot } = Vex.Flow;
+    const { StaveNote, Beam, Tuplet, Curve, StaveTie, Ornament, Dot, Annotation } = Vex.Flow;
     
     const notes = [];
     const beams = [];
@@ -218,6 +262,7 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
     const ties = [];
     
     let slurStartNote = null;
+    let pendingSlurStart = false;
     
     for (let i = 0; i < elements.length; i++) {
         const element = elements[i];
@@ -227,6 +272,12 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
             case 'Note':
                 const note = createAdvancedVexFlowNote(element);
                 notes.push(note);
+                
+                // If we have a pending slur start, this note begins the slur
+                if (pendingSlurStart) {
+                    slurStartNote = note;
+                    pendingSlurStart = false;
+                }
                 
                 // Check for ties - if this note is tied, create StaveTie to previous note
                 if (element.tied && notes.length >= 2) {
@@ -258,6 +309,19 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
                     
                     // Add tuplet notes to main notes array
                     tupletResult.notes.forEach(n => notes.push(n));
+                    
+                    // Handle slurs within tuplets
+                    if (tupletResult.slurInfo.hasSlurStart && tupletResult.slurInfo.hasSlurEnd) {
+                        const startNote = notes[originalNotesLength + tupletResult.slurInfo.slurStartIndex];
+                        const endNote = notes[originalNotesLength + tupletResult.slurInfo.slurEndIndex];
+                        if (startNote && endNote && startNote !== endNote) {
+                            const slur = new Curve(startNote, endNote, {
+                                cps: [{ x: 0, y: 10 }, { x: 0, y: 10 }]
+                            });
+                            slur.setContext(context);
+                            slurs.push(slur);
+                        }
+                    }
                     
                     // Check for ties involving the tuplet notes
                     for (let i = 0; i < element.notes.length; i++) {
@@ -305,10 +369,12 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
                 break;
                 
             case 'SlurStart':
-                slurStartNote = notes.length > 0 ? notes[notes.length - 1] : null;
+                // Mark that the NEXT note should start a slur
+                pendingSlurStart = true;
                 break;
                 
             case 'SlurEnd':
+                // Create slur from the marked start note to the PREVIOUS note
                 if (slurStartNote && notes.length > 0) {
                     const endNote = notes[notes.length - 1];
                     if (slurStartNote !== endNote) {
@@ -332,7 +398,56 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
         }
     }
     
+    // Add beaming for consecutive beamable notes
+    addBeamsFromFlags(elements, notes, beams, context);
+    
     return { notes, beams, tuplets, slurs, ties };
+}
+
+/**
+ * Add beams based on beam_start and beam_end flags in the elements
+ */
+function addBeamsFromFlags(elements, notes, beams, context) {
+    const { Beam } = Vex.Flow;
+    
+    let noteIndex = 0;
+    let beamStart = -1;
+    let beamNotes = [];
+    
+    for (let i = 0; i < elements.length; i++) {
+        const element = elements[i];
+        
+        if (element.type === 'Note' || element.type === 'Rest') {
+            if (element.type === 'Note') {
+                // Check for beam start
+                if (element.beam_start) {
+                    beamStart = noteIndex;
+                    beamNotes = [notes[noteIndex]];
+                } else if (beamStart !== -1) {
+                    // Continue beam
+                    beamNotes.push(notes[noteIndex]);
+                }
+                
+                // Check for beam end
+                if (element.beam_end && beamStart !== -1) {
+                    // Create beam if we have at least 2 notes
+                    if (beamNotes.length >= 2) {
+                        const beam = new Beam(beamNotes);
+                        beam.setContext(context);
+                        beams.push(beam);
+                    }
+                    
+                    // Reset beam state
+                    beamStart = -1;
+                    beamNotes = [];
+                }
+            }
+            noteIndex++;
+        } else if (element.type === 'Tuplet') {
+            // Skip tuplet notes - they handle beaming separately
+            noteIndex += element.notes ? element.notes.length : 0;
+        }
+    }
 }
 
 /**
@@ -340,34 +455,57 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
  */
 function processTupletAdvanced(tupletElement, context) {
     const tupletNotes = [];
+    let slurInfo = { hasSlurStart: false, hasSlurEnd: false, slurStartIndex: -1, slurEndIndex: -1 };
     
     if (!tupletElement.notes || tupletElement.notes.length === 0) {
-        return { notes: tupletNotes };
+        return { notes: tupletNotes, slurInfo };
     }
     
-    // Process each note in the tuplet
-    for (const noteElement of tupletElement.notes) {
+    // Process each element in the tuplet
+    let noteIndex = 0;
+    for (let i = 0; i < tupletElement.notes.length; i++) {
+        const noteElement = tupletElement.notes[i];
         switch (noteElement.type) {
             case 'Note':
                 const note = createAdvancedVexFlowNote(noteElement);
                 tupletNotes.push(note);
+                
+                // Check if SlurStart was right before this note
+                if (i > 0 && tupletElement.notes[i-1].type === 'SlurStart') {
+                    slurInfo.hasSlurStart = true;
+                    slurInfo.slurStartIndex = noteIndex;
+                }
+                
+                // Check if SlurEnd is right after this note
+                if (i < tupletElement.notes.length - 1 && tupletElement.notes[i+1].type === 'SlurEnd') {
+                    slurInfo.hasSlurEnd = true;
+                    slurInfo.slurEndIndex = noteIndex;
+                }
+                
+                noteIndex++;
                 break;
                 
             case 'Rest':
                 const rest = createAdvancedVexFlowRest(noteElement);
                 tupletNotes.push(rest);
+                noteIndex++;
+                break;
+                
+            case 'SlurStart':
+            case 'SlurEnd':
+                // These are handled in relation to notes above
                 break;
         }
     }
     
-    return { notes: tupletNotes };
+    return { notes: tupletNotes, slurInfo };
 }
 
 /**
  * Create advanced VexFlow note with full ornament, dot, and accidental support
  */
 function createAdvancedVexFlowNote(element) {
-    const { StaveNote, Dot, Ornament, Accidental } = Vex.Flow;
+    const { StaveNote, Dot, Ornament, Accidental, Annotation } = Vex.Flow;
     
     const note = new StaveNote({
         clef: 'treble',
@@ -422,7 +560,49 @@ function createAdvancedVexFlowNote(element) {
         });
     }
     
+    // Add syllable/lyric if present - store for later positioning relative to stave
+    if (element.syl && element.syl.trim()) {
+        // Store syllable for manual rendering like old code did
+        note._syllable = element.syl;
+    }
+    
     return note;
+}
+
+/**
+ * Draw syllables using the old VexFlow approach - relative to stave bottom
+ */
+function drawSyllablesRelativeToStave(context, stave, notes) {
+    const notesWithSyllables = notes.filter(note => note._syllable);
+    if (notesWithSyllables.length === 0) return;
+    
+    // Calculate syllable Y position relative to staff bottom (like old code)
+    let maxY = stave.getYForLine(4) + 10; // Start with staff bottom + small margin
+    
+    // Check note extents (stems, beams, etc.) like old code did
+    notes.forEach(note => {
+        if (note.getBoundingBox) {
+            const bbox = note.getBoundingBox();
+            maxY = Math.max(maxY, bbox.y + bbox.h + 5);
+        }
+    });
+    
+    // Add extra space for syllables (like old code)
+    const syllableY = maxY + 20;
+    
+    // Draw syllables positioned under their notes
+    notesWithSyllables.forEach(note => {
+        if (note.getAbsoluteX && note._syllable) {
+            const noteX = note.getAbsoluteX();
+            
+            context.save();
+            context.font = 'italic 0.8em Arial';  // Like old code
+            context.textAlign = 'center';
+            context.fillStyle = '#000';
+            context.fillText(note._syllable, noteX, syllableY);
+            context.restore();
+        }
+    });
 }
 
 /**

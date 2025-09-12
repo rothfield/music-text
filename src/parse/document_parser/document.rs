@@ -1,5 +1,5 @@
 use crate::parse::model::{Document, Directive, Stave, Source, Position, UpperElement, LowerElement, UpperLine, LowerLine};
-use crate::rhythm::types::{ParsedElement, SlurRole, BeatGroupRole};
+use crate::rhythm::types::{ParsedElement, ParsedChild, SlurRole, BeatGroupRole};
 use super::error::ParseError;
 use super::stave::parse_stave_from_paragraph;
 use super::content_line::{parse_content_line, count_musical_elements, detect_line_notation_system};
@@ -66,6 +66,9 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
     // Apply spatial analysis - assign slurs to notes
     assign_slurs_to_document(&mut document);
     
+    // Apply spatial analysis - assign lyrics to notes (must be after slurs)
+    assign_lyrics_to_document(&mut document);
+    
     // Apply spatial analysis - assign beat groups to notes
     assign_beat_groups_to_document(&mut document);
     
@@ -84,7 +87,7 @@ fn split_into_paragraphs(input: &str) -> Vec<String> {
         if line.trim().is_empty() {
             // Blank line - end current paragraph
             if !current_paragraph.trim().is_empty() {
-                paragraphs.push(current_paragraph.trim().to_string());
+                paragraphs.push(current_paragraph.clone());
                 current_paragraph.clear();
             }
         } else {
@@ -98,7 +101,7 @@ fn split_into_paragraphs(input: &str) -> Vec<String> {
     
     // Don't forget the last paragraph
     if !current_paragraph.trim().is_empty() {
-        paragraphs.push(current_paragraph.trim().to_string());
+        paragraphs.push(current_paragraph);
     }
     
     paragraphs
@@ -343,11 +346,11 @@ fn assign_slurs_to_stave(stave: &mut Stave) {
             if notes_in_slur.len() == 1 {
                 // Warn about single-note slur
                 eprintln!("Warning: Slur at columns {}-{} only covers one note and will be ignored (slurs require 2+ notes)", 
-                         slur_start + 1, slur_end + 1);  // +1 for 1-based column display
+                         slur_start, slur_end);  // Already 1-based column positions
             } else {
                 // Warn about orphaned slur (no notes)
                 eprintln!("Warning: Slur at columns {}-{} doesn't align with any notes", 
-                         slur_start + 1, slur_end + 1);
+                         slur_start, slur_end);  // Already 1-based column positions
             }
             continue;
         }
@@ -373,32 +376,19 @@ fn find_slur_segments(upper_lines: &[UpperLine]) -> Vec<(usize, usize)> {
     let mut segments = Vec::new();
     
     for upper_line in upper_lines {
-        let mut col = 0;
         for element in &upper_line.elements {
             match element {
-                UpperElement::UpperUnderscores { value, .. } => {
+                UpperElement::UpperUnderscores { value, source } => {
                     let slur_len = value.len();
                     if slur_len >= 2 {
-                        // Slur covers from current position to end of underscores
-                        segments.push((col, col + slur_len - 1));
+                        // Use actual source position (1-based) - keep as 1-based to match note positions
+                        let start_pos = source.position.column; 
+                        let end_pos = start_pos + slur_len - 1;
+                        segments.push((start_pos, end_pos));
                     }
-                    col += slur_len;
                 }
-                UpperElement::Space { count, .. } => {
-                    col += count;
-                }
-                UpperElement::UpperOctaveMarker { marker, .. } => {
-                    col += marker.len();
-                }
-                UpperElement::UpperHashes { value, .. } => {
-                    col += value.len();
-                }
-                UpperElement::Ornament { .. } | UpperElement::Chord { .. } => {
-                    col += 1; // Default single character for now
-                }
-                UpperElement::Unknown { value, .. } => {
-                    col += value.len();
-                }
+                // No need to track column positions since we use actual source positions
+                _ => {}
             }
         }
     }
@@ -649,6 +639,60 @@ fn splice_unknown_tokens_to_stave(stave: &mut Stave) {
     
     // Rebuild content line with spliced unknown tokens
     stave.content_line = all_elements.into_iter().map(|(_, element)| element).collect();
+}
+
+/// Assign lyrics to notes in the document (must be after slurs are assigned)
+fn assign_lyrics_to_document(document: &mut Document) {
+    for stave in &mut document.staves {
+        assign_lyrics_to_stave(stave);
+    }
+}
+
+/// Assign lyrics to notes in a single stave, respecting slurs
+fn assign_lyrics_to_stave(stave: &mut Stave) {
+    // Extract and split all syllables from lyrics lines
+    let mut syllables = Vec::new();
+    for lyrics_line in &stave.lyrics_lines {
+        for syllable in &lyrics_line.syllables {
+            // Split hyphenated syllables (like "he-llo" -> ["he", "llo"])
+            let split_syllables: Vec<String> = syllable.content
+                .split('-')
+                .map(|part| part.trim().to_string())
+                .filter(|part| !part.is_empty())
+                .collect();
+            syllables.extend(split_syllables);
+        }
+    }
+    
+    if syllables.is_empty() {
+        return;
+    }
+    
+    let mut syllable_iter = syllables.into_iter();
+    
+    // Assign syllables to singable notes, respecting slurs
+    for element in &mut stave.content_line {
+        if let ParsedElement::Note { children, slur, position, .. } = element {
+            // Only assign syllables to notes that can sing:
+            // - Notes not in slur (slur = None)  
+            // - Start of slur (slur = Some(Start))
+            // - Skip middle and end of slur (they extend the syllable from start)
+            let should_get_syllable = match slur {
+                Some(SlurRole::Middle) | Some(SlurRole::End) => false,
+                _ => true, // None or Start gets a syllable
+            };
+            
+            if should_get_syllable {
+                if let Some(syllable_text) = syllable_iter.next() {
+                    // Add syllable as a child of this note (distance 0 = same level)
+                    children.push(ParsedChild::Syllable {
+                        text: syllable_text,
+                        distance: 0, // Lyrics are typically at the same level as notes
+                    });
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

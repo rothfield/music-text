@@ -10,11 +10,11 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
-build: ## Build fast debug binary with all features (permanent dev mode)
-	$(RUST_BUILD_FLAGS) cargo build --features gui
+build: ## Build fast debug binary (permanent dev mode)
+	$(RUST_BUILD_FLAGS) cargo build
 
 build-quiet: ## Build quietly without output
-	@$(RUST_BUILD_FLAGS) cargo build --features gui > /dev/null 2>&1
+	@$(RUST_BUILD_FLAGS) cargo build > /dev/null 2>&1
 
 clean: ## Clean build artifacts and logs
 	cargo clean
@@ -26,8 +26,6 @@ run: build ## Start web server on port 3000
 web: build ## Start web server on port 3000 (alias for run)
 	./target/debug/music-text --web
 
-gui: build ## Launch GUI editor
-	./target/debug/music-text gui
 
 repl: ## Start interactive REPL for musical notation
 	@./target/debug/music-text repl

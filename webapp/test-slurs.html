@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Slurs</title>
+    <script src="vexflow-renderer.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .test-case {
+            margin-bottom: 30px;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        .notation {
+            background: #f9f9f9;
+            padding: 10px;
+            font-family: monospace;
+        }
+        #vexflow-output {
+            border: 1px solid #ddd;
+            padding: 20px;
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>VexFlow Slur Testing</h1>
+    
+    <div class="test-case">
+        <h2>Test 1: Slur over 4 notes</h2>
+        <div class="notation">____<br>1234</div>
+        <button onclick="testSlur1()">Test</button>
+        <div id="vexflow-output-1"></div>
+    </div>
+    
+    <div class="test-case">
+        <h2>Test 2: Slur over triplet</h2>
+        <div class="notation">___<br>123</div>
+        <button onclick="testSlur2()">Test</button>
+        <div id="vexflow-output-2"></div>
+    </div>
+    
+    <div class="test-case">
+        <h2>Test 3: Slur over quarters</h2>
+        <div class="notation">____<br>1 2 3 4</div>
+        <button onclick="testSlur3()">Test</button>
+        <div id="vexflow-output-3"></div>
+    </div>
+    
+    <script>
+        // Test data from the server output
+        const testData1 = {
+            "staves": [{
+                "notes": [
+                    {"type": "SlurStart"},
+                    {"type": "Note", "keys": ["c/4"], "duration": "16", "dots": 0, "accidentals": [], "beam_start": true, "beam_end": false},
+                    {"type": "Note", "keys": ["d/4"], "duration": "16", "dots": 0, "accidentals": [], "beam_start": false, "beam_end": false},
+                    {"type": "Note", "keys": ["e/4"], "duration": "16", "dots": 0, "accidentals": [], "beam_start": false, "beam_end": false},
+                    {"type": "Note", "keys": ["f/4"], "duration": "16", "dots": 0, "accidentals": [], "beam_start": false, "beam_end": true},
+                    {"type": "SlurEnd"}
+                ]
+            }]
+        };
+        
+        const testData2 = {
+            "staves": [{
+                "notes": [{
+                    "type": "Tuplet",
+                    "divisions": 3,
+                    "ratio": [3, 2],
+                    "notes": [
+                        {"type": "SlurStart"},
+                        {"type": "Note", "keys": ["c/4"], "duration": "8", "dots": 0, "accidentals": [], "beam_start": true, "beam_end": false},
+                        {"type": "Note", "keys": ["d/4"], "duration": "8", "dots": 0, "accidentals": [], "beam_start": false, "beam_end": false},
+                        {"type": "Note", "keys": ["e/4"], "duration": "8", "dots": 0, "accidentals": [], "beam_start": false, "beam_end": true},
+                        {"type": "SlurEnd"}
+                    ]
+                }]
+            }]
+        };
+        
+        const testData3 = {
+            "staves": [{
+                "notes": [
+                    {"type": "SlurStart"},
+                    {"type": "Note", "keys": ["c/4"], "duration": "q", "dots": 0, "accidentals": []},
+                    {"type": "Note", "keys": ["d/4"], "duration": "q", "dots": 0, "accidentals": []},
+                    {"type": "SlurEnd"},
+                    {"type": "Note", "keys": ["e/4"], "duration": "q", "dots": 0, "accidentals": []},
+                    {"type": "Note", "keys": ["f/4"], "duration": "q", "dots": 0, "accidentals": []}
+                ]
+            }]
+        };
+        
+        async function testSlur1() {
+            await renderVexFlowNotation(testData1, 'vexflow-output-1');
+        }
+        
+        async function testSlur2() {
+            await renderVexFlowNotation(testData2, 'vexflow-output-2');
+        }
+        
+        async function testSlur3() {
+            await renderVexFlowNotation(testData3, 'vexflow-output-3');
+        }
+    </script>
+</body>
+</html>

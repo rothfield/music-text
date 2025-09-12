@@ -342,7 +342,7 @@ impl FSM {
 
     fn add_note_to_beat(&mut self, element: &ParsedElement) {
         if let Some(beat) = &mut self.current_beat {
-            beat.divisions += 1;
+            beat.divisions += 1;  // Notes count toward divisions
             beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
             self.update_extension_chain(element);
         }
@@ -369,7 +369,7 @@ impl FSM {
 
     fn add_unknown_to_beat(&mut self, element: &ParsedElement) {
         if let Some(beat) = &mut self.current_beat {
-            beat.divisions += 1;
+            // DON'T increment divisions for unknown tokens - they don't affect beat timing
             beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
         }
     }
@@ -378,7 +378,7 @@ impl FSM {
 
     fn extend_last_element(&mut self) {
         if let Some(beat) = &mut self.current_beat {
-            beat.divisions += 1;
+            beat.divisions += 1;  // Dashes count toward divisions (extend duration)
             if let Some(last) = beat.elements.last_mut() {
                 last.extend_subdivision();
             }

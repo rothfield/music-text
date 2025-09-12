@@ -211,16 +211,26 @@ impl FullFormatter {
         }
     }
     
+    /// Split hyphenated words into individual syllables for LilyPond
+    fn split_syllables(&self, text: &str) -> Vec<String> {
+        // Split on hyphens and filter out empty parts
+        text.split('-')
+            .map(|part| part.trim().to_string())
+            .filter(|part| !part.is_empty())
+            .collect()
+    }
+    
     /// Extract lyrics from ProcessedStave source
     fn extract_lyrics_from_stave(&self, stave: &crate::stave::ProcessedStave) -> Vec<String> {
         // Extract lyrics from the actual lyrics_lines in the stave
         let mut lyrics_syllables = Vec::new();
         
         for lyrics_line in &stave.lyrics_lines {
-            lyrics_syllables.extend(
-                lyrics_line.syllables.iter()
-                    .map(|syllable| syllable.content.clone())
-            );
+            for syllable in &lyrics_line.syllables {
+                // Split hyphenated syllables into individual parts
+                let split_syllables = self.split_syllables(&syllable.content);
+                lyrics_syllables.extend(split_syllables);
+            }
         }
         
         lyrics_syllables
@@ -368,8 +378,8 @@ impl FullFormatter {
                 let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
                 
                 // Add slur markings in LilyPond notation
-                let slur_start = if matches!(slur, Some(SlurRole::Start)) { "( " } else { "" };
-                let slur_end = if matches!(slur, Some(SlurRole::End)) { " )" } else { "" };
+                let slur_start = if matches!(slur, Some(SlurRole::Start)) { "(" } else { "" };
+                let slur_end = if matches!(slur, Some(SlurRole::End)) { ")" } else { "" };
                 
                 let note = format!("{}{}{}{} ", lily_pitch, duration, slur_start, slur_end);
                 
@@ -385,12 +395,9 @@ impl FullFormatter {
                 (note, None) // Rests don't have syllables
             }
             Event::Unknown { text } => {
-                // Display unknown tokens high above the staff in italics
-                // Use spacer rest to position it, with the text as markup
-                // \raise #5 positions it high above the staff
-                let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
-                let note = format!("s{}^\\markup {{ \\raise #5 \\italic \"{}\" }} ", duration, text);
-                (note, None) // Unknown tokens don't have syllables
+                // Render unknown text high above the staff
+                let markup = format!("s4 ^\\markup {{ \\raise #3 \\text \"{}\" }} ", text);
+                (markup, None)
             }
         }
     }

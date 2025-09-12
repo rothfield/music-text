@@ -246,7 +246,16 @@ class MusicTextApp {
             
             if (result.success && result.svg_content) {
                 if (svgContent) {
+                    // Apply styles to float the SVG to the top
+                    svgContent.style.margin = "0";
+                    svgContent.style.padding = "0";
                     svgContent.innerHTML = result.svg_content;
+                    // Find the SVG element and remove any margins
+                    const svgElement = svgContent.querySelector('svg');
+                    if (svgElement) {
+                        svgElement.style.margin = "0";
+                        svgElement.style.display = "block";
+                    }
                 }
                 console.log("✅ SVG generated successfully");
             } else {

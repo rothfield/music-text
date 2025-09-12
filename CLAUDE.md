@@ -1,1 +1,2 @@
 - Always use make build . Never use --release  We are using a ramdisk and we don't want it to fill up!! single binary.
+- WE AREN"T USING NODE SERVER t

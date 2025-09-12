@@ -311,182 +311,99 @@ mod tests {
 pub fn parse_content_line(line: &str, line_num: usize, notation_system: NotationSystem) -> Result<Vec<ParsedElement>, ParseError> {
     let mut elements = Vec::new();
     
-    // For Tabla notation, use tokenizer to handle multi-character syllables
-    if notation_system == NotationSystem::Tabla {
-        let (_detected_system, tokens) = classify_and_tokenize(line);
-        let mut col = 1;
-        let mut i = 0;
-        let chars: Vec<char> = line.chars().collect();
-        
-        while i < chars.len() {
-            let ch = chars[i];
-            
-            // Handle barlines and other special characters
-            if ch == '|' {
-                elements.push(ParsedElement::Barline {
-                    style: "|".to_string(),
-                    position: Position { row: line_num, col },
-                    tala: None,
-                });
-                i += 1;
-                col += 1;
-            } else if ch == '-' {
-                elements.push(ParsedElement::Dash {
-                    degree: None,
-                    octave: None,
-                    position: Position { row: line_num, col },
-                    duration: None,
-                });
-                i += 1;
-                col += 1;
-            } else if ch == ' ' {
-                elements.push(ParsedElement::Whitespace {
-                    value: " ".to_string(),
-                    position: Position { row: line_num, col },
-                });
-                i += 1;
-                col += 1;
-            } else {
-                // Try to match a tabla syllable at this position
-                let mut matched = false;
-                let remaining = &line[i..];
-                
-                // Check if a tabla token starts at this position
-                for token in &tokens {
-                    if remaining.starts_with(token) {
-                        // Found a tabla syllable
-                        if let Some(models_degree) = tabla::lookup(token) {
-                            let rhythm_degree = convert_models_degree_to_rhythm_degree(models_degree);
-                            elements.push(ParsedElement::new_note(
-                                rhythm_degree,
-                                0,
-                                token.to_string(),
-                                Position { row: line_num, col },
-                            ));
-                            i += token.len();
-                            col += token.len();
-                            matched = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if !matched {
-                    // Not a recognized tabla syllable, skip character
-                    i += 1;
-                    col += 1;
-                }
-            }
-        }
-        
-        return Ok(elements);
-    }
+    // Get tokens for the specific notation system only (longest first)
+    let tokens = match notation_system {
+        NotationSystem::Tabla => crate::models::pitch_systems::tabla::get_all_symbols(),
+        NotationSystem::Number => crate::models::pitch_systems::number::get_all_symbols(),
+        NotationSystem::Western => crate::models::pitch_systems::western::get_all_symbols(),
+        NotationSystem::Sargam => crate::models::pitch_systems::sargam::get_all_symbols(),
+        NotationSystem::Bhatkhande => crate::models::pitch_systems::bhatkhande::get_all_symbols(),
+    };
     
-    // For non-Tabla notation, use the existing character-based parsing
     let mut col = 1;
-    let mut unknown_buffer = String::new();
-    let mut unknown_start_col = 0;
+    let mut i = 0;
+    let chars: Vec<char> = line.chars().collect();
     
-    for ch in line.chars() {
-        match ch {
-            '|' => {
-                // Flush any pending unknown characters first
-                if !unknown_buffer.is_empty() {
-                    elements.push(ParsedElement::Unknown {
-                        value: unknown_buffer.clone(),
-                        position: Position { row: line_num, col: unknown_start_col },
-                    });
-                    unknown_buffer.clear();
-                }
-                elements.push(ParsedElement::Barline {
-                    style: "|".to_string(),
-                    position: Position {
-                        row: line_num,
-                        col,
-                    },
-                    tala: None,
-                });
-            },
-            '-' => {
-                // Flush any pending unknown characters first
-                if !unknown_buffer.is_empty() {
-                    elements.push(ParsedElement::Unknown {
-                        value: unknown_buffer.clone(),
-                        position: Position { row: line_num, col: unknown_start_col },
-                    });
-                    unknown_buffer.clear();
-                }
-                elements.push(ParsedElement::Dash {
-                    degree: None, // Will be inherited from previous note
-                    octave: None, // Will be inherited from previous note
-                    position: Position {
-                        row: line_num,
-                        col,
-                    },
-                    duration: None, // Will be set by FSM
-                });
-            },
-            ' ' => {
-                // Flush any pending unknown characters first
-                if !unknown_buffer.is_empty() {
-                    elements.push(ParsedElement::Unknown {
-                        value: unknown_buffer.clone(),
-                        position: Position { row: line_num, col: unknown_start_col },
-                    });
-                    unknown_buffer.clear();
-                }
-                elements.push(ParsedElement::Whitespace {
-                    value: " ".to_string(),
-                    position: Position {
-                        row: line_num,
-                        col,
-                    },
-                });
-            },
-            _ => {
-                // Try to parse as pitch for the detected system
-                if is_valid_pitch_for_system(ch, notation_system) {
-                    // Flush any pending unknown characters first
-                    if !unknown_buffer.is_empty() {
-                        elements.push(ParsedElement::Unknown {
-                            value: unknown_buffer.clone(),
-                            position: Position { row: line_num, col: unknown_start_col },
-                        });
-                        unknown_buffer.clear();
-                    }
-                    
-                    // Parse as pitch
-                    let pitch_code = PitchCode::from_source_with_context(&ch.to_string(), notation_system);
-                    let degree = convert_pitchcode_to_degree(pitch_code);
-                    
-                    elements.push(ParsedElement::new_note(
-                        degree,
-                        0,
-                        ch.to_string(),
-                        Position {
-                            row: line_num,
-                            col,
+    while i < chars.len() {
+        let ch = chars[i];
+        
+        // Handle barlines and other special characters first
+        if ch == '|' {
+            elements.push(ParsedElement::Barline {
+                style: "|".to_string(),
+                position: Position { row: line_num, col },
+                tala: None,
+            });
+            i += 1;
+            col += 1;
+        } else if ch == '-' {
+            elements.push(ParsedElement::Dash {
+                degree: None,
+                octave: None,
+                position: Position { row: line_num, col },
+                duration: None,
+            });
+            i += 1;
+            col += 1;
+        } else if ch == ' ' {
+            elements.push(ParsedElement::Whitespace {
+                value: " ".to_string(),
+                position: Position { row: line_num, col },
+            });
+            i += 1;
+            col += 1;
+        } else {
+            // Try to match the longest token for this specific notation system at this position
+            let mut matched = false;
+            let remaining = &line[i..];
+            
+            // Check tokens in order (longest first since get_all_symbols() returns them sorted)
+            for token in &tokens {
+                if remaining.to_lowercase().starts_with(&token.to_lowercase()) {
+                    // Found a token - try to parse it for this notation system
+                    let degree_opt = match notation_system {
+                        NotationSystem::Tabla => {
+                            tabla::lookup(token).map(convert_models_degree_to_rhythm_degree)
                         },
-                    ));
-                } else {
-                    // Not valid for this system - collect as unknown
-                    if unknown_buffer.is_empty() {
-                        unknown_start_col = col;
+                        NotationSystem::Number => {
+                            crate::models::pitch_systems::number::lookup(token)
+                                .map(convert_models_degree_to_rhythm_degree)
+                        },
+                        NotationSystem::Western => {
+                            crate::models::pitch_systems::western::lookup(token)
+                                .map(convert_models_degree_to_rhythm_degree)
+                        },
+                        NotationSystem::Sargam => {
+                            crate::models::pitch_systems::sargam::lookup(token)
+                                .map(convert_models_degree_to_rhythm_degree)
+                        },
+                        NotationSystem::Bhatkhande => {
+                            crate::models::pitch_systems::bhatkhande::lookup(token)
+                                .map(convert_models_degree_to_rhythm_degree)
+                        },
+                    };
+                    
+                    if let Some(degree) = degree_opt {
+                        elements.push(ParsedElement::new_note(
+                            degree,
+                            0,
+                            token.to_string(),
+                            Position { row: line_num, col },
+                        ));
+                        i += token.len();
+                        col += token.len();
+                        matched = true;
+                        break;
                     }
-                    unknown_buffer.push(ch);
                 }
             }
+            
+            if !matched {
+                // Not a recognized token for this system, treat as single character unknown
+                i += 1;
+                col += 1;
+            }
         }
-        
-        col += 1;
-    }
-    
-    // Flush any remaining unknown characters
-    if !unknown_buffer.is_empty() {
-        elements.push(ParsedElement::Unknown {
-            value: unknown_buffer,
-            position: Position { row: line_num, col: unknown_start_col },
-        });
     }
     
     Ok(elements)
