@@ -51,6 +51,31 @@ impl FullFormatter {
         Self
     }
     
+    /// Collect unknown tokens from upper and lower lines with their column positions
+    fn collect_unknown_tokens(&self, stave: &crate::stave::ProcessedStave) -> Vec<(usize, String)> {
+        let mut tokens = Vec::new();
+        
+        // Collect from upper lines
+        for upper_line in &stave.upper_lines {
+            for element in &upper_line.elements {
+                if let crate::parse::model::UpperElement::Unknown { value, source } = element {
+                    tokens.push((source.position.column, value.clone()));
+                }
+            }
+        }
+        
+        // Collect from lower lines
+        for lower_line in &stave.lower_lines {
+            for element in &lower_line.elements {
+                if let crate::parse::model::LowerElement::Unknown { value, source } = element {
+                    tokens.push((source.position.column, value.clone()));
+                }
+            }
+        }
+        
+        tokens
+    }
+    
     /// Format staves using comprehensive template  
     pub fn format_staves(&self, staves: &[crate::stave::ProcessedStave]) -> String {
         let context = self.build_template_context(staves);
@@ -214,6 +239,10 @@ impl FullFormatter {
         let mut has_lyrics = false;
         let mut is_first_item = true;
         let mut previous_beat_last_note: Option<Degree> = None;
+        let mut current_column = 1;  // Track current column position
+        
+        // Collect unknown tokens from upper and lower lines
+        let unknown_tokens = self.collect_unknown_tokens(stave);
         
         for rhythm_item in &stave.rhythm_items {
             match rhythm_item {
@@ -350,6 +379,14 @@ impl FullFormatter {
                 let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
                 let note = format!("r{} ", duration);
                 (note, None) // Rests don't have syllables
+            }
+            Event::Unknown { text } => {
+                // Display unknown tokens high above the staff in italics
+                // Use spacer rest to position it, with the text as markup
+                // \raise #5 positions it high above the staff
+                let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
+                let note = format!("s{}^\\markup {{ \\raise #5 \\italic \"{}\" }} ", duration, text);
+                (note, None) // Unknown tokens don't have syllables
             }
         }
     }

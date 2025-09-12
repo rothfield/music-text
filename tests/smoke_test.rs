@@ -3,7 +3,7 @@
 
 use music_text::{parse_document, process_notation};
 use music_text::parse::model::{NotationSystem, UpperElement, LowerElement};
-use music_text::renderers::render_full_lilypond;
+use music_text::renderers::render_lilypond;
 use log::{info, error};
 
 /// Comprehensive test input covering ALL music-text features
@@ -487,7 +487,7 @@ fn test_parse_and_render(test_name: &str, input: &str) -> Result<String, String>
     }
     
     // Step 4: Render to LilyPond
-    let lilypond = render_full_lilypond(&result.processed_staves);
+    let lilypond = render_lilypond(&result.processed_staves);
     if lilypond.is_empty() {
         return Err(format!("{}: Empty LilyPond output", test_name));
     }
@@ -515,7 +515,7 @@ fn test_no_ties(test_name: &str, input: &str) -> Result<String, String> {
     }
     
     // Step 4: Render to LilyPond
-    let lilypond = render_full_lilypond(&result.processed_staves);
+    let lilypond = render_lilypond(&result.processed_staves);
     if lilypond.is_empty() {
         return Err(format!("{}: Empty LilyPond output", test_name));
     }
@@ -548,7 +548,7 @@ fn test_multi_stave_structure(test_name: &str, input: &str) -> Result<String, St
     }
     
     // Step 4: Render to LilyPond
-    let lilypond = render_full_lilypond(&result.processed_staves);
+    let lilypond = render_lilypond(&result.processed_staves);
     if lilypond.is_empty() {
         return Err(format!("{}: Empty LilyPond output", test_name));
     }
@@ -604,7 +604,7 @@ fn test_feature_detection() -> Result<String, String> {
     // Check for slur element
     let has_slur = stave.upper_lines.iter().any(|line| {
         line.elements.iter().any(|elem| {
-            matches!(elem, UpperElement::Slur { .. })
+            matches!(elem, UpperElement::UpperUnderscores { .. })
         })
     });
     
@@ -630,7 +630,7 @@ fn test_feature_detection() -> Result<String, String> {
     // Check for beat group element
     let has_beat_group = stave.lower_lines.iter().any(|line| {
         line.elements.iter().any(|elem| {
-            matches!(elem, LowerElement::BeatGroup { .. })
+            matches!(elem, LowerElement::LowerUnderscores { .. })
         })
     });
     

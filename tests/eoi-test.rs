@@ -47,7 +47,7 @@ mod eoi_tests {
         }
         
         println!("\n=== LilyPond Comparison ===");
-        println!("123 minimal: {}", result1.minimal_lilypond);
-        println!("123 4 minimal: {}", result2.minimal_lilypond);
+        println!("123 lilypond: {}", result1.lilypond);
+        println!("123 4 lilypond: {}", result2.lilypond);
     }
 }

@@ -336,6 +336,10 @@ pub enum UpperElement {
         count: usize,
         source: Source,
     },
+    Unknown {
+        value: String,
+        source: Source,
+    },
 }
 
 // LowerLine elements from specification
@@ -355,6 +359,10 @@ pub enum LowerElement {
     },
     Space {
         count: usize,
+        source: Source,
+    },
+    Unknown {
+        value: String,
         source: Source,
     },
 }

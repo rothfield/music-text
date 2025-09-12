@@ -51,10 +51,10 @@ mod rhythm_analyzer_debug {
         
         // Check LilyPond outputs
         println!("\n=== Minimal LilyPond ===");
-        println!("{}", result.minimal_lilypond);
+        println!("{}", result.lilypond);
         
         println!("\n=== Full LilyPond ===");
-        println!("{}", result.full_lilypond);
+        println!("{}", result.lilypond);
     }
 
     #[test]

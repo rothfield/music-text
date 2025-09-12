@@ -259,6 +259,9 @@ fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>, nex
                     dots,
                 });
             },
+            Event::Unknown { .. } => {
+                // Skip unknown tokens in VexFlow for now
+            },
         }
     }
     

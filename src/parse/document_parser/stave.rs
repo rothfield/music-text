@@ -19,15 +19,24 @@ fn parse_upper_lines(lines: &[&str], start_line: usize) -> Result<(Vec<UpperLine
             let upper_line = parse_upper_line(line, line_num)?;
             upper_lines.push(upper_line);
         } else if is_lyrics_line(line) {
-            // Lyrics can appear above content too (less common but allowed)
-            // For now, treat as text line - lyrics parsing is 🚧 planned
-            text_lines_before.push(TextLine {
-                content: line.to_string(),
-                source: Source {
-                    value: line.to_string(),
-                    position: Position { line: line_num, column: 1 },
-                },
-            });
+            // Single words before content are likely titles/annotations, not lyrics
+            // Only treat multi-word lines as problematic lyrics before content
+            if line.split_whitespace().count() > 1 {
+                return Err(ParseError {
+                    message: "Multi-word lyrics lines cannot appear before content line in a stave".to_string(),
+                    line: line_num,
+                    column: 1,
+                });
+            } else {
+                // Treat single word as generic text line
+                text_lines_before.push(TextLine {
+                    content: line.to_string(),
+                    source: Source {
+                        value: line.to_string(),
+                        position: Position { line: line_num, column: 1 },
+                    },
+                });
+            }
         } else {
             // Generic text line (title, directives, etc.)
             text_lines_before.push(TextLine {

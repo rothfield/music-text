@@ -1,9 +1,9 @@
 use music_text::parse_document;
-use music_text::renderers::render_minimal_lilypond;
+use music_text::renderers::render_lilypond;
 
 fn parse_and_render_lilypond(input: &str) -> Result<String, String> {
         match music_text::process_notation(input) {
-            Ok(result) => Ok(result.minimal_lilypond),
+            Ok(result) => Ok(result.lilypond),
             Err(e) => Err(format!("Parse failed: {}", e))
         }
     }
