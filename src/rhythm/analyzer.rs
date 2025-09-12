@@ -16,6 +16,7 @@ pub enum Event {
         slur: Option<SlurRole>,
     },
     Rest,  // Rests have no additional data
+    Unknown { text: String },  // Unknown tokens from upper/lower lines
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -92,6 +93,10 @@ impl From<ParsedElement> for BeatElement {
             ParsedElement::Rest { value, position, .. } => {
                 (Event::Rest, value, position)
             },
+            ParsedElement::Unknown { value, position } => {
+                let event = Event::Unknown { text: value.clone() };
+                (event, value, position)
+            },
             ParsedElement::Dash { degree, octave, position, .. } => {
                 // Dash creates a tied note if it has degree/octave, otherwise it's handled as rest
                 if let (Some(deg), Some(oct)) = (degree, octave) {
@@ -153,10 +158,10 @@ pub enum Item {
 // FSM State Machine (simplified version of old rhythm_fsm.rs)
 #[derive(Debug, PartialEq)]
 enum State {
-    S0,                  // Initial/Between elements
-    CollectingPitch,    // Extending current note with dashes
-    CollectingRests,    // Processing leading dashes as rests
-    Halt,               // End of processing
+    S0,                       // Initial/Between elements
+    ExtendingPitchInBeat,     // Extending current note with dashes
+    ExtendingDashInBeat,      // Extending dashes (rests/ties) with more dashes
+    Halt,                     // End of processing
 }
 
 struct FSM {
@@ -204,38 +209,50 @@ impl FSM {
                 (State::S0, ParsedElement::Whitespace { .. }) => {
                     // Whitespace in S0 is ignored (beat separators handled elsewhere)
                 },
+                (State::S0, ParsedElement::Unknown { .. }) => {
+                    self.start_beat_with_unknown(element);
+                    // Stay in S0 - self-transition
+                },
 
 
-                // CollectingPitch State - Extending current note
-                (State::CollectingPitch, ParsedElement::Dash { .. }) => {
+                // ExtendingPitchInBeat State - Extending current note with dashes
+                (State::ExtendingPitchInBeat, ParsedElement::Dash { .. }) => {
                     self.extend_last_element();
                 },
-                (State::CollectingPitch, ParsedElement::Note { .. }) => {
+                (State::ExtendingPitchInBeat, ParsedElement::Note { .. }) => {
                     self.add_note_to_beat(element);
                 },
-                (State::CollectingPitch, ParsedElement::Whitespace { .. }) => {
+                (State::ExtendingPitchInBeat, ParsedElement::Unknown { .. }) => {
+                    self.add_unknown_to_beat(element);
+                    // Stay in ExtendingPitchInBeat - self-transition
+                },
+                (State::ExtendingPitchInBeat, ParsedElement::Whitespace { .. }) => {
                     self.finish_beat();
                     self.state = State::S0;
                 },
-                (State::CollectingPitch, ParsedElement::Barline { .. }) => {
+                (State::ExtendingPitchInBeat, ParsedElement::Barline { .. }) => {
                     self.finish_beat();
                     self.emit_barline(element);
                     self.state = State::S0;
                 },
 
-                // CollectingRests State - Processing rest extensions
-                (State::CollectingRests, ParsedElement::Dash { .. }) => {
+                // ExtendingDashInBeat State - Extending dashes (rests/ties) with more dashes
+                (State::ExtendingDashInBeat, ParsedElement::Dash { .. }) => {
                     self.extend_last_element();
                 },
-                (State::CollectingRests, ParsedElement::Note { .. }) => {
+                (State::ExtendingDashInBeat, ParsedElement::Note { .. }) => {
                     self.add_note_to_beat(element);
-                    self.state = State::CollectingPitch;
+                    self.state = State::ExtendingPitchInBeat;
                 },
-                (State::CollectingRests, ParsedElement::Whitespace { .. }) => {
+                (State::ExtendingDashInBeat, ParsedElement::Unknown { .. }) => {
+                    self.add_unknown_to_beat(element);
+                    // Stay in ExtendingDashInBeat - self-transition
+                },
+                (State::ExtendingDashInBeat, ParsedElement::Whitespace { .. }) => {
                     self.finish_beat();
                     self.state = State::S0;
                 },
-                (State::CollectingRests, ParsedElement::Barline { .. }) => {
+                (State::ExtendingDashInBeat, ParsedElement::Barline { .. }) => {
                     self.finish_beat();
                     self.emit_barline(element);
                     self.state = State::S0;
@@ -249,7 +266,7 @@ impl FSM {
         }
 
         // Finish any pending beat
-        if matches!(self.state, State::S0 | State::CollectingPitch | State::CollectingRests) {
+        if matches!(self.state, State::S0 | State::ExtendingPitchInBeat | State::ExtendingDashInBeat) {
             self.finish_beat();
         }
         self.state = State::Halt;
@@ -273,7 +290,7 @@ impl FSM {
         beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
         self.current_beat = Some(beat);
         self.update_extension_chain(element);
-        self.state = State::CollectingPitch;
+        self.state = State::ExtendingPitchInBeat;
     }
 
     fn start_beat_with_tied_note(&mut self, dash_element: &ParsedElement) {
@@ -296,7 +313,7 @@ impl FSM {
             
             beat.elements.push(BeatElement::from(tied_note).with_subdivisions(1));
             self.current_beat = Some(beat);
-            self.state = State::CollectingPitch;
+            self.state = State::ExtendingPitchInBeat;
         } else {
             // Fallback to rest if no previous note
             self.start_beat_with_rest(dash_element);
@@ -320,7 +337,7 @@ impl FSM {
         
         beat.elements.push(BeatElement::from(rest_element).with_subdivisions(1));
         self.current_beat = Some(beat);
-        self.state = State::CollectingRests;
+        self.state = State::ExtendingDashInBeat;
     }
 
     fn add_note_to_beat(&mut self, element: &ParsedElement) {
@@ -328,6 +345,32 @@ impl FSM {
             beat.divisions += 1;
             beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
             self.update_extension_chain(element);
+        }
+    }
+
+    fn start_beat_with_unknown(&mut self, element: &ParsedElement) {
+        // Finish any existing beat first
+        if self.current_beat.is_some() {
+            self.finish_beat();
+        }
+        
+        let mut beat = Beat {
+            divisions: 1,
+            elements: vec![],
+            tied_to_previous: false,
+            is_tuplet: false,
+            tuplet_ratio: None,
+        };
+        
+        beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
+        self.current_beat = Some(beat);
+        // Don't change state - unknown tokens are self-transitions
+    }
+
+    fn add_unknown_to_beat(&mut self, element: &ParsedElement) {
+        if let Some(beat) = &mut self.current_beat {
+            beat.divisions += 1;
+            beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
         }
     }
 
@@ -435,7 +478,7 @@ impl FSM {
 }
 
 impl ParsedElement {
-    fn position(&self) -> &Position {
+    pub fn position(&self) -> &Position {
         match self {
             ParsedElement::Note { position, .. } => position,
             ParsedElement::Rest { position, .. } => position,
@@ -443,6 +486,7 @@ impl ParsedElement {
             ParsedElement::Barline { position, .. } => position,
             ParsedElement::Whitespace { position, .. } => position,
             ParsedElement::Symbol { position, .. } => position,
+            ParsedElement::Unknown { position, .. } => position,
         }
     }
 }

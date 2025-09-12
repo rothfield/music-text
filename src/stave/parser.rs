@@ -28,6 +28,9 @@ pub fn parse_document_staves(document: Document) -> Result<Vec<ProcessedStave>, 
             text_lines_before: stave.text_lines_before,
             rhythm_items,
             text_lines_after: stave.text_lines_after,
+            upper_lines: stave.upper_lines,
+            lower_lines: stave.lower_lines,
+            lyrics_lines: stave.lyrics_lines,
             notation_system: stave.notation_system,
             source: stave.source,
             begin_multi_stave: stave.begin_multi_stave,
@@ -47,6 +50,9 @@ pub struct ProcessedStave {
     pub text_lines_before: Vec<crate::parse::TextLine>,
     pub rhythm_items: Vec<crate::rhythm::Item>,
     pub text_lines_after: Vec<crate::parse::TextLine>,
+    pub upper_lines: Vec<crate::parse::model::UpperLine>,  // Preserve for rendering unknown tokens
+    pub lower_lines: Vec<crate::parse::model::LowerLine>,  // Preserve for rendering unknown tokens
+    pub lyrics_lines: Vec<crate::parse::model::LyricsLine>,
     pub notation_system: crate::parse::model::NotationSystem,
     pub source: crate::parse::model::Source,
     pub begin_multi_stave: bool,  // True if this stave begins a multi-stave group

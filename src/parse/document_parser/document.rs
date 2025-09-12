@@ -2,6 +2,7 @@ use crate::parse::model::{Document, Directive, Stave, Source, Position, UpperEle
 use crate::rhythm::types::{ParsedElement, SlurRole, BeatGroupRole};
 use super::error::ParseError;
 use super::stave::parse_stave_from_paragraph;
+use super::content_line::{parse_content_line, count_musical_elements, detect_line_notation_system};
 
 /// Result of parsing a paragraph
 #[derive(Debug)]
@@ -21,6 +22,11 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
                 position: Position { line: 1, column: 1 },
             },
         });
+    }
+
+    // Check for single-line document special case first
+    if let Some(doc) = try_parse_single_line_document(input)? {
+        return Ok(doc);
     }
 
     // Parse input directly without preprocessing
@@ -62,6 +68,9 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
     
     // Apply spatial analysis - assign beat groups to notes
     assign_beat_groups_to_document(&mut document);
+    
+    // Apply spatial analysis - splice unknown tokens into content lines
+    splice_unknown_tokens_to_document(&mut document);
 
     Ok(document)
 }
@@ -215,29 +224,24 @@ fn assign_octave_markers_to_document(document: &mut Document) {
     }
 }
 
+/// Splice unknown tokens from upper and lower lines into content line based on column position
+fn splice_unknown_tokens_to_document(document: &mut Document) {
+    for stave in &mut document.staves {
+        splice_unknown_tokens_to_stave(stave);
+    }
+}
+
 /// Assign octave markers to notes in a single stave
 fn assign_octave_markers_to_stave(stave: &mut Stave) {
     // Collect octave markers from upper lines with their column positions
     let mut upper_markers: Vec<(usize, i8)> = Vec::new();
     
     for upper_line in &stave.upper_lines {
-        let mut col = 0;
         for element in &upper_line.elements {
-            match element {
-                UpperElement::UpperOctaveMarker { marker, .. } => {
-                    let octave_value = octave_marker_to_value(marker, true);
-                    upper_markers.push((col, octave_value));
-                    col += 1;
-                }
-                UpperElement::Space { count, .. } => {
-                    col += count;
-                }
-                UpperElement::Slur { underscores, .. } => {
-                    col += underscores.len();
-                }
-                UpperElement::Ornament { .. } | UpperElement::Chord { .. } => {
-                    col += 1; // Default single character for now
-                }
+            if let UpperElement::UpperOctaveMarker { marker, source } = element {
+                let octave_value = octave_marker_to_value(marker, true);
+                // Use actual source column position (1-based)
+                upper_markers.push((source.position.column, octave_value));
             }
         }
     }
@@ -246,23 +250,11 @@ fn assign_octave_markers_to_stave(stave: &mut Stave) {
     let mut lower_markers: Vec<(usize, i8)> = Vec::new();
     
     for lower_line in &stave.lower_lines {
-        let mut col = 0;
         for element in &lower_line.elements {
-            match element {
-                LowerElement::LowerOctaveMarker { marker, .. } => {
-                    let octave_value = octave_marker_to_value(marker, false);
-                    lower_markers.push((col, octave_value));
-                    col += 1;
-                }
-                LowerElement::Space { count, .. } => {
-                    col += count;
-                }
-                LowerElement::BeatGroup { underscores, .. } => {
-                    col += underscores.len();
-                }
-                LowerElement::FlatMarker { .. } => {
-                    col += 1; // Default single character for now
-                }
+            if let LowerElement::LowerOctaveMarker { marker, source } = element {
+                let octave_value = octave_marker_to_value(marker, false);
+                // Use actual source column position (1-based)
+                lower_markers.push((source.position.column, octave_value));
             }
         }
     }
@@ -275,21 +267,14 @@ fn assign_octave_markers_to_stave(stave: &mut Stave) {
         return;
     }
     
-    // Assign markers to notes in content line
-    let mut col = 0;
+    // Assign markers to notes in content line based on column positions
     for element in &mut stave.content_line {
-        match element {
-            ParsedElement::Note { octave, .. } => {
-                // Only use exact position matches, no fuzzy assignment
-                if let Some(&(_, marker_octave)) = all_markers.iter().find(|(marker_col, _)| *marker_col == col) {
-                    *octave = marker_octave;
-                }
-                // No fuzzy assignment - keep default octave if no exact match
-                col += 1;
-            }
-            ParsedElement::Dash { .. } | ParsedElement::Rest { .. } | 
-            ParsedElement::Barline { .. } | ParsedElement::Whitespace { .. } | ParsedElement::Symbol { .. } => {
-                col += 1;
+        if let ParsedElement::Note { octave, position, .. } = element {
+            let note_col = position.col;
+            
+            // Find octave marker at the same column position (both use 1-based indexing)
+            if let Some(&(_, marker_octave)) = all_markers.iter().find(|(marker_col, _)| *marker_col == note_col) {
+                *octave = marker_octave;
             }
         }
     }
@@ -335,8 +320,8 @@ fn assign_slurs_to_stave(stave: &mut Stave) {
     
     for (index, element) in stave.content_line.iter().enumerate() {
         if let ParsedElement::Note { position, .. } = element {
-            // Use the actual column position from parsing (col is 1-based, so subtract 1)
-            note_positions.push(position.col - 1);
+            // Use column position directly (1-based, same as underscore groups)
+            note_positions.push(position.col);
             note_indices.push(index);
         }
     }
@@ -391,8 +376,8 @@ fn find_slur_segments(upper_lines: &[UpperLine]) -> Vec<(usize, usize)> {
         let mut col = 0;
         for element in &upper_line.elements {
             match element {
-                UpperElement::Slur { underscores, .. } => {
-                    let slur_len = underscores.len();
+                UpperElement::UpperUnderscores { value, .. } => {
+                    let slur_len = value.len();
                     if slur_len >= 2 {
                         // Slur covers from current position to end of underscores
                         segments.push((col, col + slur_len - 1));
@@ -405,8 +390,14 @@ fn find_slur_segments(upper_lines: &[UpperLine]) -> Vec<(usize, usize)> {
                 UpperElement::UpperOctaveMarker { marker, .. } => {
                     col += marker.len();
                 }
+                UpperElement::UpperHashes { value, .. } => {
+                    col += value.len();
+                }
                 UpperElement::Ornament { .. } | UpperElement::Chord { .. } => {
                     col += 1; // Default single character for now
+                }
+                UpperElement::Unknown { value, .. } => {
+                    col += value.len();
                 }
             }
         }
@@ -424,10 +415,10 @@ fn assign_beat_groups_to_document(document: &mut Document) {
 
 /// Assign beat groups to notes in a single stave
 fn assign_beat_groups_to_stave(stave: &mut Stave) {
-    // Find beat group segments in lower lines
-    let beat_group_segments = find_beat_group_segments(&stave.lower_lines);
+    // Find underscore group segments in lower lines
+    let underscore_group_segments = find_underscore_group_segments(&stave.lower_lines);
     
-    if beat_group_segments.is_empty() {
+    if underscore_group_segments.is_empty() {
         return;
     }
     
@@ -437,14 +428,14 @@ fn assign_beat_groups_to_stave(stave: &mut Stave) {
     
     for (index, element) in stave.content_line.iter().enumerate() {
         if let ParsedElement::Note { position, .. } = element {
-            // Use the actual column position from parsing (col is 1-based, so subtract 1)
-            note_positions.push(position.col - 1);
+            // Use column position directly (1-based, same as underscore groups)
+            note_positions.push(position.col);
             note_indices.push(index);
         }
     }
     
     // Apply beat group markings to notes based on spatial overlap
-    for (group_start, group_end) in beat_group_segments {
+    for (group_start, group_end) in underscore_group_segments {
         // Find all notes that fall within this beat group span based on visual position
         let mut notes_in_group: Vec<(usize, usize)> = Vec::new(); // (visual_pos, index)
         
@@ -475,36 +466,189 @@ fn assign_beat_groups_to_stave(stave: &mut Stave) {
     }
 }
 
-/// Find beat group segments (start, end positions) from lower lines
-fn find_beat_group_segments(lower_lines: &[LowerLine]) -> Vec<(usize, usize)> {
+/// Find underscore group segments (start, end positions) from lower lines using actual source positions
+fn find_underscore_group_segments(lower_lines: &[LowerLine]) -> Vec<(usize, usize)> {
     let mut segments = Vec::new();
     
     for lower_line in lower_lines {
-        let mut col = 0;
         for element in &lower_line.elements {
-            match element {
-                LowerElement::BeatGroup { underscores, .. } => {
-                    let group_len = underscores.len();
-                    if group_len >= 2 {
-                        // Beat group covers from current position to end of underscores
-                        segments.push((col, col + group_len - 1));
-                    }
-                    col += group_len;
-                }
-                LowerElement::Space { count, .. } => {
-                    col += count;
-                }
-                LowerElement::LowerOctaveMarker { marker, .. } => {
-                    col += marker.len();
-                }
-                LowerElement::FlatMarker { .. } => {
-                    col += 1; // Default single character for now
+            if let LowerElement::LowerUnderscores { value, source } = element {
+                let group_len = value.len();
+                if group_len >= 2 {
+                    // Use actual source position from token
+                    let group_start = source.position.column; // 1-based from source
+                    let group_end = group_start + group_len - 1;
+                    segments.push((group_start, group_end));
                 }
             }
         }
     }
     
     segments
+}
+
+/// Check if input qualifies as single-line document
+/// Returns true if exactly one non-empty line after trimming whitespace
+fn is_single_line_document(input: &str) -> bool {
+    let non_empty_lines: Vec<&str> = input.lines()
+        .map(|line| line.trim())           // Trim each line
+        .filter(|line| !line.is_empty())   // Keep non-empty
+        .collect();
+    
+    non_empty_lines.len() == 1
+}
+
+/// Calculate percentage of musical characters in a line
+/// Uses existing count_musical_elements function for consistency
+fn calculate_musical_percentage(line: &str) -> f32 {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return 0.0;
+    }
+    
+    let musical_count = count_musical_elements(trimmed) as f32;
+    let total_count = trimmed.chars().filter(|c| !c.is_whitespace()).count() as f32;
+    
+    if total_count == 0.0 {
+        0.0
+    } else {
+        (musical_count / total_count) * 100.0
+    }
+}
+
+/// Try to parse single-line input as musical document
+/// Returns Some(Document) if successful, None if not applicable, Err if parsing fails
+fn try_parse_single_line_document(input: &str) -> Result<Option<Document>, ParseError> {
+    // Check if input qualifies as single-line document
+    if !is_single_line_document(input) {
+        return Ok(None);
+    }
+    
+    // Get the single non-empty line
+    let line = input.lines()
+        .map(|line| line.trim())
+        .find(|line| !line.is_empty())
+        .unwrap(); // Safe because is_single_line_document returned true
+    
+    // Check if line meets musical content threshold (25%)
+    if calculate_musical_percentage(line) < 25.0 {
+        // Return empty document for non-musical single-line input
+        return Ok(Some(Document {
+            directives: Vec::new(),
+            staves: Vec::new(),
+            source: Source {
+                value: input.to_string(),
+                position: Position { line: 1, column: 1 },
+            },
+        }));
+    }
+    
+    // Detect notation system first
+    let notation_system = detect_line_notation_system(line);
+    
+    // Parse the line as a content line
+    let elements = parse_content_line(line, 1, notation_system)?;
+    
+    // Create a simple stave with the parsed content
+    let stave = Stave {
+        content_line: elements,
+        upper_lines: Vec::new(),
+        lower_lines: Vec::new(),
+        lyrics_lines: Vec::new(),
+        text_lines_before: Vec::new(),
+        text_lines_after: Vec::new(),
+        notation_system,
+        source: Source {
+            value: line.to_string(),
+            position: Position { line: 1, column: 1 },
+        },
+        begin_multi_stave: false,
+        end_multi_stave: false,
+    };
+    
+    // Create document with the single stave
+    let document = Document {
+        directives: Vec::new(),
+        staves: vec![stave],
+        source: Source {
+            value: input.to_string(),
+            position: Position { line: 1, column: 1 },
+        },
+    };
+    
+    Ok(Some(document))
+}
+
+/// Splice unknown tokens from upper lines, lower lines, and text lines into content line based on column position  
+fn splice_unknown_tokens_to_stave(stave: &mut Stave) {
+    let mut unknown_tokens: Vec<(usize, ParsedElement)> = Vec::new();
+    
+    // Collect unknown tokens from upper lines
+    for upper_line in &stave.upper_lines {
+        for element in &upper_line.elements {
+            if let UpperElement::Unknown { value, source } = element {
+                let unknown_element = ParsedElement::Unknown {
+                    value: value.clone(),
+                    position: crate::rhythm::types::Position { 
+                        row: source.position.line, 
+                        col: source.position.column 
+                    },
+                };
+                unknown_tokens.push((source.position.column, unknown_element));
+            }
+        }
+    }
+    
+    // Collect unknown tokens from lower lines
+    for lower_line in &stave.lower_lines {
+        for element in &lower_line.elements {
+            if let LowerElement::Unknown { value, source } = element {
+                let unknown_element = ParsedElement::Unknown {
+                    value: value.clone(),
+                    position: crate::rhythm::types::Position { 
+                        row: source.position.line, 
+                        col: source.position.column 
+                    },
+                };
+                unknown_tokens.push((source.position.column, unknown_element));
+            }
+        }
+    }
+    
+    // Collect unknown tokens from text lines before content
+    for text_line in &stave.text_lines_before {
+        let unknown_element = ParsedElement::Unknown {
+            value: text_line.content.clone(),
+            position: crate::rhythm::types::Position { 
+                row: text_line.source.position.line, 
+                col: text_line.source.position.column 
+            },
+        };
+        unknown_tokens.push((text_line.source.position.column, unknown_element));
+    }
+    
+    // If no unknown tokens, nothing to do
+    if unknown_tokens.is_empty() {
+        return;
+    }
+    
+    // Create a new content line with unknown tokens spliced in by column position
+    let mut all_elements: Vec<(usize, ParsedElement)> = Vec::new();
+    
+    // Add existing content line elements
+    for element in stave.content_line.drain(..) {
+        let col = element.position().col;
+        all_elements.push((col, element));
+    }
+    
+    // Add unknown tokens
+    all_elements.extend(unknown_tokens);
+    
+    // Sort all elements by column position
+    all_elements.sort_by_key(|(col, _)| *col);
+    
+    // Rebuild content line with spliced unknown tokens
+    stave.content_line = all_elements.into_iter().map(|(_, element)| element).collect();
 }
 
 #[cfg(test)]
@@ -516,5 +660,181 @@ mod tests {
         let input = "line1\nline2\n\nline3\nline4\n\n\nline5";
         let paragraphs = split_into_paragraphs(input);
         assert_eq!(paragraphs, vec!["line1\nline2", "line3\nline4", "line5"]);
+    }
+
+    // Single-line document parsing tests
+    
+    #[test]
+    fn test_single_note() {
+        let result = parse_document("1");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+        assert!(doc.staves[0].content_line.len() > 0);
+    }
+
+    #[test]
+    fn test_single_line_western_notation() {
+        let result = parse_document("C");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+    }
+
+    #[test]
+    fn test_single_line_sargam_notation() {
+        let result = parse_document("S");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+    }
+
+    #[test]
+    fn test_single_line_with_threshold() {
+        // 50% musical content (1 out of 2 chars)
+        let result = parse_document("1x");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+
+        // 28.5% musical content (2 out of 7 chars) - just above 25%
+        let result = parse_document("12hello");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+        
+        // 0% musical content - should return empty document
+        let result = parse_document("hello");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 0);
+    }
+
+    #[test]
+    fn test_single_line_with_blanks() {
+        // Trailing blank lines
+        let result = parse_document("1\n\n\n");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+
+        // Leading/trailing spaces
+        let result = parse_document("  1  ");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+
+        // Mixed whitespace
+        let result = parse_document("   1  \n  \n\n ");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1);
+    }
+
+    #[test]
+    fn test_single_line_document_detection() {
+        assert!(is_single_line_document("1"));
+        assert!(is_single_line_document("  1  "));
+        assert!(is_single_line_document("1\n\n"));
+        assert!(is_single_line_document("   1  \n  \n\n "));
+        
+        assert!(!is_single_line_document("1\n2"));
+        assert!(!is_single_line_document("1\n  2  \n"));
+        assert!(!is_single_line_document("   \n  \n  "));
+    }
+
+    #[test]
+    fn test_calculate_musical_percentage() {
+        // 100% musical
+        assert_eq!(calculate_musical_percentage("123"), 100.0);
+        assert_eq!(calculate_musical_percentage("SRG"), 100.0);
+        assert_eq!(calculate_musical_percentage("CDE"), 100.0);
+        
+        // 50% musical
+        assert_eq!(calculate_musical_percentage("1x"), 50.0);
+        
+        // ~28.5% musical (2/7)
+        let percentage = calculate_musical_percentage("12hello");
+        assert!((percentage - 28.57).abs() < 0.1); // Allow small floating point variance
+        
+        // 0% musical
+        assert_eq!(calculate_musical_percentage("hello"), 0.0);
+        assert_eq!(calculate_musical_percentage("xyz"), 0.0);
+        
+        // Empty
+        assert_eq!(calculate_musical_percentage(""), 0.0);
+        assert_eq!(calculate_musical_percentage("   "), 0.0);
+    }
+
+    #[test]
+    fn test_multiline_uses_normal_parsing() {
+        // Multi-line input should NOT trigger single-line parsing
+        let result = parse_document("title: test\n\n123");
+        assert!(result.is_ok());
+        let doc = result.unwrap();
+        // Should parse as directive + stave via normal parsing
+        assert_eq!(doc.directives.len(), 1);
+        assert_eq!(doc.staves.len(), 1);
+    }
+
+    #[test] 
+    fn test_notation_system_detection_integration() {
+        // Test that notation systems are properly detected
+        let number_result = parse_document("123");
+        assert!(number_result.is_ok());
+        
+        let western_result = parse_document("CDE");
+        assert!(western_result.is_ok());
+        
+        let sargam_result = parse_document("SRG");
+        assert!(sargam_result.is_ok());
+        
+        // All should produce staves with content
+        assert!(number_result.unwrap().staves[0].content_line.len() > 0);
+        assert!(western_result.unwrap().staves[0].content_line.len() > 0);
+        assert!(sargam_result.unwrap().staves[0].content_line.len() > 0);
+    }
+
+    #[test]
+    fn test_beat_group_assignment() {
+        // Test case: two notes with beat group underneath
+        let input = "|1 3\n ___";
+        let result = parse_document(input);
+        assert!(result.is_ok(), "Failed to parse beat group test case");
+        
+        let doc = result.unwrap();
+        assert_eq!(doc.staves.len(), 1, "Should have exactly one stave");
+        
+        let stave = &doc.staves[0];
+        
+        // Check that beat group was parsed
+        assert_eq!(stave.lower_lines.len(), 1, "Should have 1 lower line");
+        
+        // Check lower line has beat group
+        let beat_group_line = &stave.lower_lines[0];
+        let has_beat_group = beat_group_line.elements.iter().any(|elem| {
+            matches!(elem, crate::parse::model::LowerElement::LowerUnderscores { .. })
+        });
+        assert!(has_beat_group, "Lower line should contain beat group");
+        
+        // Check content line has notes
+        let notes: Vec<_> = stave.content_line.iter()
+            .filter_map(|elem| match elem {
+                crate::rhythm::types::ParsedElement::Note { degree, octave, beat_group, in_beat_group, .. } => {
+                    Some((degree, octave, beat_group, in_beat_group))
+                }
+                _ => None
+            })
+            .collect();
+        
+        assert_eq!(notes.len(), 2, "Should have exactly 2 notes");
+        
+        // Beat group assignment should work now
+        assert!(notes.iter().any(|(_, _, beat_group, in_beat_group)| 
+            beat_group.is_some() && **in_beat_group), 
+            "At least one note should be assigned to beat group");
+        
+        println!("Beat group test - Notes found: {:?}", notes);
+        println!("Beat group test - Lower lines: {}", stave.lower_lines.len());
     }
 }

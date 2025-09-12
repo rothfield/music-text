@@ -6,6 +6,17 @@ use crate::models::pitch_systems::tabla;
 
 // Old ContentLine function removed - using new ParsedElement architecture
 
+/// Check if a character is valid for the given notation system
+fn is_valid_pitch_for_system(ch: char, system: NotationSystem) -> bool {
+    match system {
+        NotationSystem::Number => matches!(ch, '1'..='7'),
+        NotationSystem::Western => matches!(ch, 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B'),
+        NotationSystem::Sargam => matches!(ch, 'S' | 's' | 'R' | 'r' | 'G' | 'g' | 'M' | 'm' | 'P' | 'p' | 'D' | 'd' | 'N' | 'n'),
+        NotationSystem::Bhatkhande => matches!(ch, 'स' | 'र' | 'ग' | 'म' | 'प' | 'ध' | 'द' | 'न'),
+        NotationSystem::Tabla => false, // Tabla uses multi-character tokens, handled separately
+    }
+}
+
 /// Detect the notation system for a single line using the same logic as the model
 pub fn detect_line_notation_system(line: &str) -> NotationSystem {
     // Count occurrences of each notation system's unique characters
@@ -297,11 +308,8 @@ mod tests {
 
 /// Phase 2: Parse content line text into ParsedElements (tokenization)
 /// This is the new architecture: text -> ParsedElement directly
-pub fn parse_content_line(line: &str, line_num: usize) -> Result<Vec<ParsedElement>, ParseError> {
+pub fn parse_content_line(line: &str, line_num: usize, notation_system: NotationSystem) -> Result<Vec<ParsedElement>, ParseError> {
     let mut elements = Vec::new();
-    
-    // Detect the notation system for this line to handle ambiguous characters
-    let notation_system = detect_line_notation_system(line);
     
     // For Tabla notation, use tokenizer to handle multi-character syllables
     if notation_system == NotationSystem::Tabla {
@@ -376,109 +384,109 @@ pub fn parse_content_line(line: &str, line_num: usize) -> Result<Vec<ParsedEleme
     
     // For non-Tabla notation, use the existing character-based parsing
     let mut col = 1;
+    let mut unknown_buffer = String::new();
+    let mut unknown_start_col = 0;
+    
     for ch in line.chars() {
-        let element = match ch {
-            '|' => ParsedElement::Barline {
-                style: "|".to_string(),
-                position: Position {
-                    row: line_num,
-                    col,
-                },
-                tala: None,
-            },
-            '1'..='7' => {
-                let pitch_code = match ch {
-                    '1' => PitchCode::N1,
-                    '2' => PitchCode::N2, 
-                    '3' => PitchCode::N3,
-                    '4' => PitchCode::N4,
-                    '5' => PitchCode::N5,
-                    '6' => PitchCode::N6,
-                    '7' => PitchCode::N7,
-                    _ => unreachable!(),
-                };
-                let degree = convert_pitchcode_to_degree(pitch_code);
-                
-                ParsedElement::new_note(
-                    degree,
-                    0, // Default octave, will be updated by spatial processing
-                    ch.to_string(),
-                    Position {
+        match ch {
+            '|' => {
+                // Flush any pending unknown characters first
+                if !unknown_buffer.is_empty() {
+                    elements.push(ParsedElement::Unknown {
+                        value: unknown_buffer.clone(),
+                        position: Position { row: line_num, col: unknown_start_col },
+                    });
+                    unknown_buffer.clear();
+                }
+                elements.push(ParsedElement::Barline {
+                    style: "|".to_string(),
+                    position: Position {
                         row: line_num,
                         col,
                     },
-                )
+                    tala: None,
+                });
             },
-            // Western notation: C D E F G A B (but G, D, R, M, P, N might be Sargam based on context)
-            'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B' => {
-                let pitch_code = PitchCode::from_source_with_context(&ch.to_string(), notation_system);
-                let degree = convert_pitchcode_to_degree(pitch_code);
-                
-                ParsedElement::new_note(
-                    degree,
-                    0,
-                    ch.to_string(),
-                    Position {
+            '-' => {
+                // Flush any pending unknown characters first
+                if !unknown_buffer.is_empty() {
+                    elements.push(ParsedElement::Unknown {
+                        value: unknown_buffer.clone(),
+                        position: Position { row: line_num, col: unknown_start_col },
+                    });
+                    unknown_buffer.clear();
+                }
+                elements.push(ParsedElement::Dash {
+                    degree: None, // Will be inherited from previous note
+                    octave: None, // Will be inherited from previous note
+                    position: Position {
                         row: line_num,
                         col,
                     },
-                )
+                    duration: None, // Will be set by FSM
+                });
             },
-            // Sargam notation: S R G M P D N (both cases)
-            'S' | 's' | 'R' | 'r' | 'M' | 'm' | 'P' | 'p' | 'N' | 'n' => {
-                let pitch_code = PitchCode::from_source_with_context(&ch.to_string(), notation_system);
-                let degree = convert_pitchcode_to_degree(pitch_code);
-                
-                ParsedElement::new_note(
-                    degree,
-                    0,
-                    ch.to_string(),
-                    Position {
+            ' ' => {
+                // Flush any pending unknown characters first
+                if !unknown_buffer.is_empty() {
+                    elements.push(ParsedElement::Unknown {
+                        value: unknown_buffer.clone(),
+                        position: Position { row: line_num, col: unknown_start_col },
+                    });
+                    unknown_buffer.clear();
+                }
+                elements.push(ParsedElement::Whitespace {
+                    value: " ".to_string(),
+                    position: Position {
                         row: line_num,
                         col,
                     },
-                )
-            },
-            // Handle lowercase sargam 'g' and 'd' separately (they're komal variants)
-            'g' | 'd' => {
-                let pitch_code = PitchCode::from_source_with_context(&ch.to_string(), notation_system);
-                let degree = convert_pitchcode_to_degree(pitch_code);
-                
-                ParsedElement::new_note(
-                    degree,
-                    0,
-                    ch.to_string(),
-                    Position {
-                        row: line_num,
-                        col,
-                    },
-                )
-            },
-            '-' => ParsedElement::Dash {
-                degree: None, // Will be inherited from previous note
-                octave: None, // Will be inherited from previous note
-                position: Position {
-                    row: line_num,
-                    col,
-                },
-                duration: None, // Will be set by FSM
-            },
-            ' ' => ParsedElement::Whitespace {
-                value: " ".to_string(),
-                position: Position {
-                    row: line_num,
-                    col,
-                },
+                });
             },
             _ => {
-                // Skip unrecognized characters for now
-                col += 1;
-                continue;
+                // Try to parse as pitch for the detected system
+                if is_valid_pitch_for_system(ch, notation_system) {
+                    // Flush any pending unknown characters first
+                    if !unknown_buffer.is_empty() {
+                        elements.push(ParsedElement::Unknown {
+                            value: unknown_buffer.clone(),
+                            position: Position { row: line_num, col: unknown_start_col },
+                        });
+                        unknown_buffer.clear();
+                    }
+                    
+                    // Parse as pitch
+                    let pitch_code = PitchCode::from_source_with_context(&ch.to_string(), notation_system);
+                    let degree = convert_pitchcode_to_degree(pitch_code);
+                    
+                    elements.push(ParsedElement::new_note(
+                        degree,
+                        0,
+                        ch.to_string(),
+                        Position {
+                            row: line_num,
+                            col,
+                        },
+                    ));
+                } else {
+                    // Not valid for this system - collect as unknown
+                    if unknown_buffer.is_empty() {
+                        unknown_start_col = col;
+                    }
+                    unknown_buffer.push(ch);
+                }
             }
-        };
+        }
         
-        elements.push(element);
         col += 1;
+    }
+    
+    // Flush any remaining unknown characters
+    if !unknown_buffer.is_empty() {
+        elements.push(ParsedElement::Unknown {
+            value: unknown_buffer,
+            position: Position { row: line_num, col: unknown_start_col },
+        });
     }
     
     Ok(elements)

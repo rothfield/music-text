@@ -316,8 +316,12 @@ pub enum UpperElement {
         marker: String,  // "." or ":"
         source: Source,
     },
-    Slur {
-        underscores: String,  // "_____" 
+    UpperUnderscores {
+        value: String,  // "_____" for slurs
+        source: Source,
+    },
+    UpperHashes {
+        value: String,  // "###" for multi-stave markers
         source: Source,
     },
     Ornament {
@@ -332,6 +336,10 @@ pub enum UpperElement {
         count: usize,
         source: Source,
     },
+    Unknown {
+        value: String,
+        source: Source,
+    },
 }
 
 // LowerLine elements from specification
@@ -341,8 +349,8 @@ pub enum LowerElement {
         marker: String,  // "." or ":"
         source: Source,
     },
-    BeatGroup {
-        underscores: String,  // "_____ beat grouping underscores (🚧 planned)
+    LowerUnderscores {
+        value: String,  // "___" for beat grouping
         source: Source,
     },
     FlatMarker {
@@ -351,6 +359,10 @@ pub enum LowerElement {
     },
     Space {
         count: usize,
+        source: Source,
+    },
+    Unknown {
+        value: String,
         source: Source,
     },
 }
