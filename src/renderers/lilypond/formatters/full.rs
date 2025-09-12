@@ -1,6 +1,6 @@
 use serde::Serialize;
 use crate::rhythm::{Item, Event, BeatElement};
-use crate::rhythm::types::Degree;
+use crate::rhythm::types::{Degree, SlurRole};
 
 #[derive(Serialize, Clone)]
 struct Header {
@@ -362,12 +362,16 @@ impl FullFormatter {
     /// Convert a beat element to LilyPond notation and extract syllable for lyrics
     fn convert_beat_element_to_lilypond_with_lyrics(&self, beat_element: &BeatElement) -> (String, Option<String>) {
         match &beat_element.event {
-            Event::Note { degree, octave, .. } => {
+            Event::Note { degree, octave, slur, .. } => {
                 let lily_pitch = degree_to_lilypond_with_octave(*degree, *octave);
                 // Use the sophisticated FSM-calculated tuplet_duration instead of simple subdivision mapping
                 let duration = fraction_to_lilypond_duration(beat_element.tuplet_duration);
                 
-                let note = format!("{}{} ", lily_pitch, duration);
+                // Add slur markings in LilyPond notation
+                let slur_start = if matches!(slur, Some(SlurRole::Start)) { "( " } else { "" };
+                let slur_end = if matches!(slur, Some(SlurRole::End)) { " )" } else { "" };
+                
+                let note = format!("{}{}{}{} ", lily_pitch, duration, slur_start, slur_end);
                 
                 // Extract syllable for lyrics - pass through directly from parser
                 let syllable = beat_element.syl();

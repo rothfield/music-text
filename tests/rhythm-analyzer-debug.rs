@@ -28,6 +28,9 @@ mod rhythm_analyzer_debug {
                                 },
                                 music_text::rhythm::Event::Rest => {
                                     println!("    Element {}: Rest - subdivisions: {}", k, element.subdivisions);
+                                },
+                                music_text::rhythm::Event::Unknown { text } => {
+                                    println!("    Element {}: Unknown - text: '{}', subdivisions: {}", k, text, element.subdivisions);
                                 }
                             }
                         }
@@ -83,6 +86,9 @@ mod rhythm_analyzer_debug {
                                 },
                                 music_text::rhythm::Event::Rest => {
                                     println!("    Element {}: Rest - subdivisions: {}", k, element.subdivisions);
+                                },
+                                music_text::rhythm::Event::Unknown { text } => {
+                                    println!("    Element {}: Unknown - text: '{}', subdivisions: {}", k, text, element.subdivisions);
                                 }
                             }
                         }
