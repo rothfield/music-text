@@ -154,14 +154,11 @@ export class VexFlowIntegration {
             hasAdvancedFeatures: vexflowData.staves?.some(s => s.notes?.some(n => n.type === 'Tuplet' || n.type === 'SlurStart'))
         });
         
-        // Create container for VexFlow rendering
+        // Create container for VexFlow rendering - notation at the very top
         vexflowOutput.innerHTML = `
-            <div class="vexflow-professional">
-                <div class="text-muted mb-2">Professional VexFlow Rendering with Advanced Features</div>
-                <div id="vexflow-notation" style="width: 100%; min-height: 200px; border: 1px solid #ddd; background: #fafafa;"></div>
-                <div class="mt-2">
-                    <button id="toggle-vexflow-data" class="btn btn-sm btn-outline-secondary">Show JSON Data</button>
-                </div>
+            <div id="vexflow-notation" style="width: 100%; min-height: 200px; border: 1px solid #ddd; background: #fafafa; margin: -1rem -1rem 1rem -1rem;"></div>
+            <div class="px-3">
+                <button id="toggle-vexflow-data" class="btn btn-sm btn-outline-secondary">Show JSON Data</button>
                 <div id="vexflow-data" class="json-output mt-2" style="display: none; max-height: 300px; overflow-y: auto;"></div>
             </div>
         `;

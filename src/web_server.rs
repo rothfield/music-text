@@ -1,6 +1,7 @@
 use axum::{
     extract::Query,
-    response::Json,
+    response::{IntoResponse, Json, Response},
+    http::{HeaderMap, HeaderValue},
     routing::{get, post},
     Router,
 };
@@ -68,13 +69,28 @@ struct ValidPitchesResponse {
     sharp_patterns: Vec<String>,
 }
 
+// Helper function to add cache control headers to JSON responses
+fn json_with_no_cache<T>(data: T) -> Response 
+where
+    T: serde::Serialize,
+{
+    let mut headers = HeaderMap::new();
+    headers.insert("Cache-Control", HeaderValue::from_static("no-cache, no-store, must-revalidate"));
+    headers.insert("Pragma", HeaderValue::from_static("no-cache"));
+    headers.insert("Expires", HeaderValue::from_static("0"));
+    
+    let json_response = Json(data);
+    let mut response = json_response.into_response();
+    response.headers_mut().extend(headers);
+    response
+}
 
-async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<ParseResponse> {
+async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
     let input = params.get("input").cloned().unwrap_or_default();
     
     // Check for Unicode characters first
     if let Err(unicode_error) = check_for_unicode_chars(&input) {
-        return Json(ParseResponse {
+        return json_with_no_cache(ParseResponse {
             success: false,
             parsed_document: None,
             processed_staves: None,
@@ -88,7 +104,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
     }
     
     if input.trim().is_empty() {
-        return Json(ParseResponse {
+        return json_with_no_cache(ParseResponse {
             success: true,
             parsed_document: None,
             processed_staves: None,
@@ -107,7 +123,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
             Some(serde_json::to_value(&document).unwrap())
         }
         Err(e) => {
-            return Json(ParseResponse {
+            return json_with_no_cache(ParseResponse {
                 success: false,
                     parsed_document: None,
                 processed_staves: None,
@@ -142,7 +158,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
     
     let lilypond_svg = None;
     
-    Json(ParseResponse {
+    json_with_no_cache(ParseResponse {
         success: true,
         parsed_document: parsed_doc,
         processed_staves,
@@ -155,10 +171,10 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Json<Parse
     })
 }
 
-async fn generate_lilypond_svg(Json(request): Json<SvgGenerateRequest>) -> Json<SvgGenerateResponse> {
+async fn generate_lilypond_svg(Json(request): Json<SvgGenerateRequest>) -> Response {
     // Check for Unicode characters first
     if let Err(unicode_error) = check_for_unicode_chars(&request.notation) {
-        return Json(SvgGenerateResponse {
+        return json_with_no_cache(SvgGenerateResponse {
             success: false,
             svg_content: None,
             error: Some(format!("FRONTEND CONVERSION FAILURE: {}", unicode_error)),
@@ -166,7 +182,7 @@ async fn generate_lilypond_svg(Json(request): Json<SvgGenerateRequest>) -> Json<
     }
     
     if request.notation.trim().is_empty() {
-        return Json(SvgGenerateResponse {
+        return json_with_no_cache(SvgGenerateResponse {
             success: false,
             svg_content: None,
             error: Some("Empty notation provided".to_string()),
@@ -179,7 +195,7 @@ async fn generate_lilypond_svg(Json(request): Json<SvgGenerateRequest>) -> Json<
             render_lilypond(&result.processed_staves)
         },
         Err(e) => {
-            return Json(SvgGenerateResponse {
+            return json_with_no_cache(SvgGenerateResponse {
                 success: false,
                 svg_content: None,
                 error: Some(format!("Parse error: {}", e)),
@@ -193,14 +209,14 @@ async fn generate_lilypond_svg(Json(request): Json<SvgGenerateRequest>) -> Json<
     
     let result = generator.generate_svg(&lilypond_source).await;
     
-    Json(SvgGenerateResponse {
+    json_with_no_cache(SvgGenerateResponse {
         success: result.success,
         svg_content: result.svg_content,
         error: result.error,
     })
 }
 
-async fn get_valid_pitches() -> Json<ValidPitchesResponse> {
+async fn get_valid_pitches() -> Response {
     // Generate all valid pitch patterns that can have flats/sharps
     let flat_patterns = vec![
         // Number notation
@@ -262,7 +278,7 @@ async fn get_valid_pitches() -> Json<ValidPitchesResponse> {
         "N#".to_string(), "N##".to_string(),
     ];
     
-    Json(ValidPitchesResponse {
+    json_with_no_cache(ValidPitchesResponse {
         flat_patterns,
         sharp_patterns,
     })

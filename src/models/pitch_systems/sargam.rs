@@ -25,8 +25,7 @@ pub fn get_all_symbols() -> Vec<String> {
         "Dbb".to_string(), "Nbb".to_string(), "mbb".to_string(),
         "S#".to_string(), "R#".to_string(), "G#".to_string(), "P#".to_string(),
         "D#".to_string(), "N#".to_string(),
-        "Sb".to_string(), "S-".to_string(), "R-".to_string(), "G-".to_string(),
-        "Pb".to_string(), "mb".to_string(),
+        "Sb".to_string(), "Pb".to_string(), "mb".to_string(),
     ];
     // Sort by length (longest first) to ensure proper regex matching
     symbols.sort_by(|a, b| b.len().cmp(&a.len()));
@@ -56,15 +55,12 @@ pub fn lookup(symbol: &str) -> Option<Degree> {
         "S#" => Some(Degree::N1s),
         "S##" => Some(Degree::N1ss),
         "Sb" => Some(Degree::N1b),
-        "S-" => Some(Degree::N1b),   // Alternative flat notation
         "Sbb" => Some(Degree::N1bb),
         "R#" => Some(Degree::N2s),
         "R##" => Some(Degree::N2ss),
-        "R-" => Some(Degree::N2b),   // Alternative flat notation
         "Rbb" => Some(Degree::N2bb),
         "G#" => Some(Degree::N3s),
         "G##" => Some(Degree::N3ss),
-        "G-" => Some(Degree::N3b),   // Alternative flat notation
         "Gbb" => Some(Degree::N3bb),
         "mb" => Some(Degree::N4b),
         "mbb" => Some(Degree::N4bb),
@@ -127,7 +123,6 @@ mod tests {
     #[test]
     fn test_sargam_extended_accidentals() {
         assert_eq!(lookup("S#"), Some(Degree::N1s));
-        assert_eq!(lookup("R-"), Some(Degree::N2b));   // Alternative flat notation
         assert_eq!(lookup("G##"), Some(Degree::N3ss));
         assert_eq!(lookup("M#"), Some(Degree::N4ss));  // M# is 4##
     }

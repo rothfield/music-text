@@ -178,12 +178,22 @@ fn convert_stave_to_vexflow(stave: &ProcessedStave) -> VexFlowStave {
     }
 }
 
-/// Convert a beat to VexFlow elements with slur handling, beaming, and lyrics
+/// Convert a beat to VexFlow elements with slur handling and beaming
 fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>, next_beat_is_tied: bool) -> Vec<VexFlowElement> {
     let mut elements = Vec::new();
     
-    // Apply old code's beaming logic: beam consecutive beamable notes within beat boundaries
-    let beaming_info = analyze_beat_for_beaming(beat);
+    // Find all notes in the beat (regardless of duration)
+    let note_indices: Vec<usize> = beat.elements.iter().enumerate()
+        .filter_map(|(index, element)| {
+            match &element.event {
+                Event::Note { .. } => Some(index),
+                _ => None,
+            }
+        })
+        .collect();
+    
+    // Beam all notes in a beat if there are 2 or more notes
+    let should_beam = note_indices.len() >= 2;
     
     for (element_index, beat_element) in beat.elements.iter().enumerate() {
         match &beat_element.event {
@@ -229,12 +239,12 @@ fn convert_beat_to_vexflow_elements(beat: &Beat, slur_stack: &mut Vec<bool>, nex
                 let is_first_element = element_index == 0;
                 let is_tied = is_first_element && beat.tied_to_previous;
                 
-                // Determine beaming for this note using old logic
-                let is_beamable_note = beaming_info.beamable_notes.contains(&element_index);
-                let beam_start = beaming_info.should_beam && is_beamable_note && 
-                                Some(element_index) == beaming_info.beamable_notes.first().copied();
-                let beam_end = beaming_info.should_beam && is_beamable_note && 
-                              Some(element_index) == beaming_info.beamable_notes.last().copied();
+                // Determine beaming for this note
+                let is_note = note_indices.contains(&element_index);
+                let beam_start = should_beam && is_note && 
+                                Some(element_index) == note_indices.first().copied();
+                let beam_end = should_beam && is_note && 
+                              Some(element_index) == note_indices.last().copied();
                 
                 elements.push(VexFlowElement::Note {
                     keys: vec![keys],
@@ -380,43 +390,4 @@ fn next_power_of_2(n: usize) -> usize {
         power *= 2;
     }
     if power == n { power } else { power / 2 }
-}
-
-
-/// Beaming information for notes within a beat
-#[derive(Debug)]
-struct BeamingInfo {
-    beamable_notes: Vec<usize>, // indices of beamable notes in this beat
-    should_beam: bool,          // whether these notes should form a beam
-}
-
-/// Analyze beat for beaming using old code's logic: consecutive beamable notes within beat
-fn analyze_beat_for_beaming(beat: &Beat) -> BeamingInfo {
-    let mut beamable_notes = Vec::new();
-    
-    // Find consecutive beamable notes (like the old code's logic)
-    for (index, element) in beat.elements.iter().enumerate() {
-        match &element.event {
-            Event::Note { .. } => {
-                let (duration_str, _) = convert_tuplet_duration_to_vexflow(element.tuplet_duration);
-                // Old code beamed 8th, 16th, 32nd notes
-                let is_beamable = matches!(duration_str.as_str(), "8" | "16" | "32");
-                if is_beamable {
-                    beamable_notes.push(index);
-                }
-            },
-            _ => {
-                // Non-notes break consecutive beaming in old logic
-                // But we'll keep going since we're within the same beat
-            }
-        }
-    }
-    
-    // Old code required at least 2 consecutive beamable notes for a beam
-    let should_beam = beamable_notes.len() >= 2;
-    
-    BeamingInfo {
-        beamable_notes,
-        should_beam,
-    }
 }

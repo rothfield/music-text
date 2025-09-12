@@ -21,9 +21,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Launch GUI editor
-    #[cfg(feature = "gui")]
-    Gui,
     /// Start interactive REPL
     Repl,
     /// Run performance benchmarks
@@ -67,11 +64,6 @@ fn main() {
     }
     
     match cli.command {
-        #[cfg(feature = "gui")]
-        Some(Commands::Gui) => {
-            println!("Launching GUI editor...");
-            run_gui();
-        },
         Some(Commands::Repl) => {
             if let Err(err) = run_repl() {
                 eprintln!("REPL error: {:?}", err);
@@ -307,78 +299,6 @@ fn generate_lilypond_svg_files(input: Option<String>, output_prefix: String) {
     }
 }
 
-#[cfg(feature = "gui")]
-fn run_gui() {
-    use eframe::egui;
-    
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([800.0, 600.0])
-            .with_title("Music-Text GUI"),
-        ..Default::default()
-    };
-    
-    let _ = eframe::run_native(
-        "Music-Text",
-        options,
-        Box::new(|_cc| Ok(Box::new(MusicTextApp::default()))),
-    );
-}
-
-#[cfg(feature = "gui")]
-struct MusicTextApp {
-    input_text: String,
-    output_text: String,
-}
-
-#[cfg(feature = "gui")]
-impl Default for MusicTextApp {
-    fn default() -> Self {
-        Self {
-            input_text: "|1 2 3".to_owned(),
-            output_text: String::new(),
-        }
-    }
-}
-
-#[cfg(feature = "gui")]
-impl eframe::App for MusicTextApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Music-Text GUI");
-            
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label("Input:");
-                    ui.text_edit_multiline(&mut self.input_text);
-                });
-                
-                ui.vertical(|ui| {
-                    ui.label("Output:");
-                    ui.text_edit_multiline(&mut self.output_text);
-                });
-            });
-            
-            if ui.button("Parse").clicked() {
-                self.parse_input();
-            }
-        });
-    }
-}
-
-#[cfg(feature = "gui")]
-impl MusicTextApp {
-    fn parse_input(&mut self) {
-        match process_notation(&self.input_text) {
-            Ok(result) => {
-                self.output_text = result.lilypond;
-            }
-            Err(e) => {
-                self.output_text = format!("Error: {}", e);
-            }
-        }
-    }
-}
 
 fn run_repl() -> Result<()> {
 

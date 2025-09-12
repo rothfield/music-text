@@ -120,19 +120,13 @@
             </div>
             
             <div class="tab-pane fade" id="svg-tab" role="tabpanel">
-                <div class="p-3">
-                    <div class="mb-3">
-                        <h5>LilyPond SVG</h5>
-                        <button id="generate-svg-btn" class="btn btn-primary" onclick="generateSvgFromLilypond()">Generate SVG</button>
-                    </div>
-                    <div id="svg-content">
-                        LilyPond SVG rendering will appear here...
-                    </div>
+                <div id="svg-content" style="width: 100%; min-height: 200px;">
+                    LilyPond SVG rendering will appear here...
                 </div>
             </div>
             
             <div class="tab-pane fade" id="vexflow-tab" role="tabpanel">
-                <div id="vexflow-output" class="p-3">
+                <div id="vexflow-output">
                     <canvas id="vexflow-canvas" width="600" height="200" class="border" style="background: #fafafa;">
                         VexFlow canvas will render here...
                     </canvas>

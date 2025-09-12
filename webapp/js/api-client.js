@@ -5,6 +5,11 @@ import { API_ENDPOINTS } from './config.js';
 import { convertUnicodeToStandard } from './unicode-processor.js';
 
 export class ApiClient {
+    // Generate cache busting parameter
+    static getCacheBuster() {
+        return Date.now();
+    }
+    
     static async parseInput(input) {
         console.log('🚀 parseInput() called:', {
             inputLength: input.length,
@@ -27,11 +32,13 @@ export class ApiClient {
                 hasUnicode: input !== standardInput
             });
             
-            // Fetch all outputs from unified endpoint
-            const apiUrl = `${API_ENDPOINTS.PARSE}?input=${encodeURIComponent(standardInput)}`;
+            // Fetch all outputs from unified endpoint with cache busting
+            const cacheBuster = ApiClient.getCacheBuster();
+            const apiUrl = `${API_ENDPOINTS.PARSE}?input=${encodeURIComponent(standardInput)}&_cb=${cacheBuster}`;
             console.log('🔄 Making API request:', { 
                 input: standardInput.slice(0, 100) + (standardInput.length > 100 ? '...' : ''),
                 url: apiUrl,
+                cacheBuster: cacheBuster,
                 timestamp: new Date().toISOString()
             });
             
@@ -92,7 +99,8 @@ export class ApiClient {
         });
         
         try {
-            const response = await fetch(API_ENDPOINTS.LILYPOND_SVG, {
+            const cacheBuster = ApiClient.getCacheBuster();
+            const response = await fetch(`${API_ENDPOINTS.LILYPOND_SVG}?_cb=${cacheBuster}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -127,7 +135,8 @@ export class ApiClient {
     static async loadValidPitches() {
         console.log('🔄 Loading valid pitch patterns from server...');
         try {
-            const response = await fetch(API_ENDPOINTS.VALID_PITCHES);
+            const cacheBuster = ApiClient.getCacheBuster();
+            const response = await fetch(`${API_ENDPOINTS.VALID_PITCHES}?_cb=${cacheBuster}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
