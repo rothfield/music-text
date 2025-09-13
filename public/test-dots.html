@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VexFlow Dots Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4/build/cjs/vexflow.js"></script>
+    <script src="vexflow-renderer.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { margin: 20px 0; border: 1px solid #ccc; padding: 10px; }
+        h3 { margin-top: 0; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>VexFlow Dots Test</h1>
+    
+    <div class="test">
+        <h3>Test Data (from music-text "1--2--3-")</h3>
+        <pre id="json-data"></pre>
+        <div id="output"></div>
+    </div>
+    
+    <script>
+        // Test data from music-text output
+        const testData = {
+            "staves": [
+                {
+                    "key_signature": "C",
+                    "notes": [
+                        {
+                            "accidentals": [],
+                            "beam_end": false,
+                            "beam_start": true,
+                            "dots": 1,
+                            "duration": "16",
+                            "keys": ["c/4"],
+                            "tied": false,
+                            "type": "Note"
+                        },
+                        {
+                            "accidentals": [],
+                            "beam_end": false,
+                            "beam_start": false,
+                            "dots": 1,
+                            "duration": "16",
+                            "keys": ["d/4"],
+                            "tied": false,
+                            "type": "Note"
+                        },
+                        {
+                            "accidentals": [],
+                            "beam_end": true,
+                            "beam_start": false,
+                            "dots": 0,
+                            "duration": "16",
+                            "keys": ["e/4"],
+                            "tied": false,
+                            "type": "Note"
+                        }
+                    ]
+                }
+            ],
+            "time_signature": "4/4",
+            "clef": "treble"
+        };
+        
+        // Display JSON
+        document.getElementById('json-data').textContent = JSON.stringify(testData, null, 2);
+        
+        // Render with VexFlow
+        console.log('Rendering test data:', testData);
+        renderVexFlowFromData(testData, 'output');
+    </script>
+</body>
+</html>

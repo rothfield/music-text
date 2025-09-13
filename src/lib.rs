@@ -13,10 +13,8 @@ pub mod renderers;            // CONSOLIDATED with converters/ - Multi-format ou
 
 // Foundation: Core domain models and orchestration
 pub mod models;               // Core domain types and pitch systems
-pub mod ast;                  // Abstract Syntax Tree structures (raw and classified)
 pub mod pipeline;             // Top-level processing orchestration
 pub mod tokenizer;            // Smart tokenization and notation system classification
-pub mod classifier;           // Classification logic for converting raw parse results to final AST
 
 // Testing and utilities
 pub mod smoke_test;
@@ -27,9 +25,9 @@ pub use parse::{
     Document, Stave, ContentLine, ContentElement, Position, TextLine
 };
 
-// Re-export stave parsing functionality
+// Re-export rhythm analysis functionality
 pub use stave::{
-    parse_document_staves, ProcessedStave
+    analyze_rhythm
 };
 
 // Re-export pipeline functionality

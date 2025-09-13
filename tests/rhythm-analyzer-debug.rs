@@ -11,10 +11,10 @@ mod rhythm_analyzer_debug {
         
         // Check processed staves
         println!("\n=== Processed Staves ===");
-        for (i, stave) in result.processed_staves.iter().enumerate() {
-            println!("Stave {}: {} rhythm items", i, stave.rhythm_items.len());
+        for (i, stave) in result.rhythm_analyzed_document.staves.iter().enumerate() {
+            println!("Stave {}: {} rhythm items", i, stave.rhythm_items.as_ref().map_or(0, |items| items.len()));
             
-            for (j, item) in stave.rhythm_items.iter().enumerate() {
+            for (j, item) in stave.rhythm_items.as_ref().unwrap_or(&vec![]).iter().enumerate() {
                 match item {
                     music_text::rhythm::Item::Beat(beat) => {
                         println!("  Item {}: Beat - divisions: {}, elements: {}, tied_to_previous: {}, is_tuplet: {}", 
@@ -69,10 +69,10 @@ mod rhythm_analyzer_debug {
         
         // Check processed staves
         println!("\n=== Processed Staves ===");
-        for (i, stave) in result.processed_staves.iter().enumerate() {
-            println!("Stave {}: {} rhythm items", i, stave.rhythm_items.len());
+        for (i, stave) in result.rhythm_analyzed_document.staves.iter().enumerate() {
+            println!("Stave {}: {} rhythm items", i, stave.rhythm_items.as_ref().map_or(0, |items| items.len()));
             
-            for (j, item) in stave.rhythm_items.iter().enumerate() {
+            for (j, item) in stave.rhythm_items.as_ref().unwrap_or(&vec![]).iter().enumerate() {
                 match item {
                     music_text::rhythm::Item::Beat(beat) => {
                         println!("  Item {}: Beat - divisions: {}, elements: {}, tied_to_previous: {}, is_tuplet: {}", 

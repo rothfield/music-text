@@ -156,7 +156,7 @@ fn show_document(input: &str) {
 fn show_processed(input: &str) {
     match process_notation(input) {
         Ok(result) => {
-            println!("{}", serde_json::to_string_pretty(&result.processed_staves).unwrap());
+            println!("{}", serde_json::to_string_pretty(&result.rhythm_analyzed_document.staves).unwrap());
         }
         Err(e) => {
             eprintln!("Processing error: {}", e);
@@ -214,7 +214,7 @@ fn show_all_stages(input: &str) {
             println!("{}\n", serde_json::to_string_pretty(&result.parsed_document).unwrap());
             
             println!("=== PROCESSED STAVES ===");
-            println!("{}\n", serde_json::to_string_pretty(&result.processed_staves).unwrap());
+            println!("{}\n", serde_json::to_string_pretty(&result.rhythm_analyzed_document.staves).unwrap());
             
             println!("=== LILYPOND ===");
             println!("{}\n", result.lilypond);
@@ -261,7 +261,7 @@ fn generate_lilypond_svg_files(input: Option<String>, output_prefix: String) {
     
     // Generate LilyPond source
     let lilypond_source = result.lilypond;
-    let processed_staves = result.processed_staves;
+    let rhythm_staves = &result.rhythm_analyzed_document.staves;
     
     // Write .ly file to disk
     let ly_filename = format!("{}.ly", output_prefix);

@@ -10,6 +10,7 @@ pub mod lilypond_generator;
 pub mod converters_lilypond;
 
 // Re-export main rendering functions
-pub use lilypond::render_lilypond;
-pub use vexflow::{render_vexflow_svg, render_vexflow_data};
+pub use lilypond::{render_lilypond, render_lilypond_with_directives, render_lilypond_from_document};
+pub use vexflow::{render_vexflow_svg, render_vexflow_svg_with_directives, render_vexflow_svg_from_document,
+                  render_vexflow_data, render_vexflow_data_with_directives, render_vexflow_data_from_document};
 pub use lilypond_generator::LilyPondGenerator;

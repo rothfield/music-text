@@ -14,8 +14,14 @@ use music_text::renderers::render_lilypond;
 use music_text::smoke_test;
 use music_text::renderers::LilyPondGenerator;
 
-/// Check for Unicode characters that should have been converted to standard ASCII
-fn check_for_unicode_chars(input: &str) -> Result<(), String> {
+/// Check for Unicode characters and convert musical symbols to ASCII
+fn check_for_unicode_chars(input: &str) -> Result<String, String> {
+    let mut converted = input.to_string();
+    
+    // Convert fancy musical symbols to ASCII
+    converted = converted.replace('♯', "#");
+    converted = converted.replace('♭', "b");
+    
     let problematic_chars = [
         ('▬', '-'), // Black rectangle for dashes
         ('•', '.'), // Bullet for dots  
@@ -23,8 +29,8 @@ fn check_for_unicode_chars(input: &str) -> Result<(), String> {
     ];
     
     for (unicode_char, standard_char) in &problematic_chars {
-        if input.contains(*unicode_char) {
-            let char_positions: Vec<usize> = input.char_indices()
+        if converted.contains(*unicode_char) {
+            let char_positions: Vec<usize> = converted.char_indices()
                 .filter(|(_, c)| *c == *unicode_char)
                 .map(|(i, _)| i)
                 .collect();
@@ -35,14 +41,14 @@ fn check_for_unicode_chars(input: &str) -> Result<(), String> {
             ));
         }
     }
-    Ok(())
+    Ok(converted)
 }
 
 #[derive(Serialize)]
 struct ParseResponse {
     success: bool,
     parsed_document: Option<serde_json::Value>,
-    processed_staves: Option<serde_json::Value>,
+    rhythm_analyzed_document: Option<serde_json::Value>,
     detected_notation_systems: Option<Vec<NotationSystem>>,
     lilypond: Option<String>,
     lilypond_svg: Option<String>,
@@ -51,17 +57,6 @@ struct ParseResponse {
     error: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct SvgGenerateRequest {
-    notation: String,
-}
-
-#[derive(Serialize)]
-struct SvgGenerateResponse {
-    success: bool,
-    svg_content: Option<String>,
-    error: Option<String>,
-}
 
 #[derive(Serialize)]
 struct ValidPitchesResponse {
@@ -87,27 +82,31 @@ where
 
 async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
     let input = params.get("input").cloned().unwrap_or_default();
+    let generate_svg = params.get("generate_svg").map(|s| s == "true").unwrap_or(false);
     
-    // Check for Unicode characters first
-    if let Err(unicode_error) = check_for_unicode_chars(&input) {
-        return json_with_no_cache(ParseResponse {
-            success: false,
-            parsed_document: None,
-            processed_staves: None,
-            detected_notation_systems: None,
-            lilypond: None,
-            lilypond_svg: None,
-            vexflow: None,
-            vexflow_svg: None,
-            error: Some(format!("FRONTEND CONVERSION FAILURE: {}", unicode_error)),
-        });
-    }
+    // Check for Unicode characters and convert musical symbols
+    let converted_input = match check_for_unicode_chars(&input) {
+        Ok(converted) => converted,
+        Err(unicode_error) => {
+            return json_with_no_cache(ParseResponse {
+                success: false,
+                parsed_document: None,
+                rhythm_analyzed_document: None,
+                detected_notation_systems: None,
+                lilypond: None,
+                lilypond_svg: None,
+                vexflow: None,
+                vexflow_svg: None,
+                error: Some(format!("FRONTEND CONVERSION FAILURE: {}", unicode_error)),
+            });
+        }
+    };
     
-    if input.trim().is_empty() {
+    if converted_input.trim().is_empty() {
         return json_with_no_cache(ParseResponse {
             success: true,
             parsed_document: None,
-            processed_staves: None,
+            rhythm_analyzed_document: None,
             detected_notation_systems: None,
             lilypond: None,
             lilypond_svg: None,
@@ -118,7 +117,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
     }
     
     // Get parse output
-    let _parse_result = match parse_document(&input) {
+    let _parse_result = match parse_document(&converted_input) {
         Ok(document) => {
             Some(serde_json::to_value(&document).unwrap())
         }
@@ -126,7 +125,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
             return json_with_no_cache(ParseResponse {
                 success: false,
                     parsed_document: None,
-                processed_staves: None,
+                rhythm_analyzed_document: None,
                 detected_notation_systems: None,
                 lilypond: None,
                 lilypond_svg: None,
@@ -138,30 +137,49 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
     };
     
     // Get pipeline processing result
-    let (parsed_doc, processed_staves, detected_systems, lilypond, vexflow_data, vexflow_svg) = 
-        match process_notation(&input) {
+    let (parsed_doc, rhythm_analyzed_doc, detected_systems, lilypond, vexflow_data, vexflow_svg, lilypond_svg) = 
+        match process_notation(&converted_input) {
             Ok(result) => {
                 let detected_systems = result.parsed_document.get_detected_notation_systems();
+                
+                // Generate SVG if requested
+                let lilypond_svg = if generate_svg {
+                    let temp_dir = std::env::temp_dir().join("music-text-svg");
+                    let generator = LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
+                    
+                    match generator.generate_svg(&result.lilypond).await {
+                        svg_result if svg_result.success => {
+                            eprintln!("✅ SVG generation successful");
+                            svg_result.svg_content
+                        },
+                        svg_result => {
+                            eprintln!("❌ SVG generation failed: {:?}", svg_result.error);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+                
                 (
                     Some(serde_json::to_value(&result.parsed_document).unwrap()),
-                    Some(serde_json::to_value(&result.processed_staves).unwrap()),
+                    Some(serde_json::to_value(&result.rhythm_analyzed_document).unwrap()),
                     Some(detected_systems),
                     Some(result.lilypond),
                     Some(result.vexflow_data),
                     Some(result.vexflow_svg),
+                    lilypond_svg,
                 )
             },
             Err(_e) => {
-                (None, None, None, None, None, None)
+                (None, None, None, None, None, None, None)
             },
         };
-    
-    let lilypond_svg = None;
     
     json_with_no_cache(ParseResponse {
         success: true,
         parsed_document: parsed_doc,
-        processed_staves,
+        rhythm_analyzed_document: rhythm_analyzed_doc,
         detected_notation_systems: detected_systems,
         lilypond,
         lilypond_svg,
@@ -171,50 +189,6 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
     })
 }
 
-async fn generate_lilypond_svg(Json(request): Json<SvgGenerateRequest>) -> Response {
-    // Check for Unicode characters first
-    if let Err(unicode_error) = check_for_unicode_chars(&request.notation) {
-        return json_with_no_cache(SvgGenerateResponse {
-            success: false,
-            svg_content: None,
-            error: Some(format!("FRONTEND CONVERSION FAILURE: {}", unicode_error)),
-        });
-    }
-    
-    if request.notation.trim().is_empty() {
-        return json_with_no_cache(SvgGenerateResponse {
-            success: false,
-            svg_content: None,
-            error: Some("Empty notation provided".to_string()),
-        });
-    }
-    
-    // Parse notation and generate full LilyPond source with all staves
-    let lilypond_source = match process_notation(&request.notation) {
-        Ok(result) => {
-            render_lilypond(&result.processed_staves)
-        },
-        Err(e) => {
-            return json_with_no_cache(SvgGenerateResponse {
-                success: false,
-                svg_content: None,
-                error: Some(format!("Parse error: {}", e)),
-            });
-        }
-    };
-    
-    // Generate SVG using optimized LilyPond source
-    let temp_dir = std::env::temp_dir().join("music-text-svg");
-    let generator = LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
-    
-    let result = generator.generate_svg(&lilypond_source).await;
-    
-    json_with_no_cache(SvgGenerateResponse {
-        success: result.success,
-        svg_content: result.svg_content,
-        error: result.error,
-    })
-}
 
 async fn get_valid_pitches() -> Response {
     // Generate all valid pitch patterns that can have flats/sharps
@@ -296,9 +270,8 @@ pub fn start() {
     
     let app = Router::new()
         .route("/api/parse", get(parse_text))
-        .route("/api/lilypond-svg", post(generate_lilypond_svg))
         .route("/api/valid-pitches", get(get_valid_pitches))
-        .nest_service("/", ServeDir::new("webapp"))
+        .nest_service("/", ServeDir::new("public"))
         .layer(CorsLayer::permissive());
 
     let listener = match tokio::net::TcpListener::bind("127.0.0.1:3000").await {

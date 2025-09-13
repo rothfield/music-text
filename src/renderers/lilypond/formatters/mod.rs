@@ -1,3 +1,1 @@
-pub mod full;
-
-pub use full::FullFormatter;
+// Formatters module (full.rs removed as it was unused)

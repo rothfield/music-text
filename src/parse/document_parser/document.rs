@@ -38,7 +38,13 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
 
     for (para_index, paragraph) in paragraphs.iter().enumerate() {
         if !paragraph.trim().is_empty() {
-            match parse_paragraph(paragraph, para_index + 1) {
+            // Calculate actual line number in document
+            let line_offset: usize = paragraphs.iter().take(para_index)
+                .map(|p| p.lines().count() + 1)  // +1 for blank line between paragraphs
+                .sum();
+            let paragraph_start_line = line_offset + 1;
+            
+            match parse_paragraph(paragraph, paragraph_start_line, para_index == 0) {
                 Ok(ParagraphContent::Directives(mut paragraph_directives)) => {
                     directives.append(&mut paragraph_directives);
                 }
@@ -108,19 +114,27 @@ fn split_into_paragraphs(input: &str) -> Vec<String> {
 }
 
 /// Parse a paragraph using functional parser chain
-fn parse_paragraph(paragraph: &str, line_number: usize) -> Result<ParagraphContent, ParseError> {
-    try_parse_directives(paragraph, line_number)
+fn parse_paragraph(paragraph: &str, line_number: usize, is_first_paragraph: bool) -> Result<ParagraphContent, ParseError> {
+    try_parse_directives(paragraph, line_number, is_first_paragraph)
         .or_else(|_| try_parse_stave(paragraph, line_number))
 }
 
 /// Try to parse paragraph as directives (single or multi-line)
-fn try_parse_directives(paragraph: &str, line_number: usize) -> Result<ParagraphContent, ParseError> {
+fn try_parse_directives(paragraph: &str, line_number: usize, is_first_paragraph: bool) -> Result<ParagraphContent, ParseError> {
     let lines: Vec<&str> = paragraph.lines().collect();
     let mut directives = Vec::new();
     
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
         if !trimmed.is_empty() {
+            // Try title/author parsing first for first line of first paragraph
+            if is_first_paragraph && i == 0 {
+                if let Ok(mut title_author_directives) = try_parse_title_author(trimmed, line_number + i) {
+                    directives.append(&mut title_author_directives);
+                    continue;
+                }
+            }
+            
             match parse_single_directive(trimmed, line_number + i) {
                 Ok(directive) => directives.push(directive),
                 Err(_) => {
@@ -192,6 +206,106 @@ fn parse_single_directive(line: &str, line_number: usize) -> Result<Directive, P
             column: 1,
         })
     }
+}
+
+/// Try to parse first line as title or "Title    Author" format
+fn try_parse_title_author(line: &str, line_number: usize) -> Result<Vec<Directive>, ParseError> {
+    // First trim the line to work with content only
+    let trimmed = line.trim();
+    
+    // Don't parse empty lines
+    if trimmed.is_empty() {
+        return Err(ParseError {
+            message: "Empty line".to_string(),
+            line: line_number,
+            column: 1,
+        });
+    }
+    
+    // Don't parse lines that look like musical content
+    if is_likely_musical_content(trimmed) {
+        return Err(ParseError {
+            message: "Line appears to be musical content".to_string(),
+            line: line_number,
+            column: 1,
+        });
+    }
+    
+    let mut directives = Vec::new();
+    
+    // Check for tab separator first (title + author)
+    if let Some(tab_pos) = trimmed.find('\t') {
+        let title = trimmed[..tab_pos].trim();
+        let author = trimmed[tab_pos + 1..].trim();
+        
+        if !title.is_empty() {
+            directives.push(Directive {
+                key: "title".to_string(),
+                value: title.to_string(),
+                source: Source {
+                    value: line.to_string(),
+                    position: Position { line: line_number, column: 1 },
+                },
+            });
+            
+            if !author.is_empty() && !is_likely_musical_content(author) {
+                directives.push(Directive {
+                    key: "author".to_string(),
+                    value: author.to_string(),
+                    source: Source {
+                        value: line.to_string(),
+                        position: Position { line: line_number, column: 1 },
+                    },
+                });
+            }
+            
+            return Ok(directives);
+        }
+    }
+    
+    // Look for multiple spaces (2 or more) as separator (title + author)
+    if let Some(space_pos) = trimmed.find("  ") {
+        let title = trimmed[..space_pos].trim();
+        // Skip all consecutive spaces to get to author
+        let author_start = trimmed[space_pos..].trim_start();
+        let author = author_start.trim();
+        
+        if !title.is_empty() {
+            directives.push(Directive {
+                key: "title".to_string(),
+                value: title.to_string(),
+                source: Source {
+                    value: line.to_string(),
+                    position: Position { line: line_number, column: 1 },
+                },
+            });
+            
+            if !author.is_empty() && !is_likely_musical_content(author) {
+                directives.push(Directive {
+                    key: "author".to_string(),
+                    value: author.to_string(),
+                    source: Source {
+                        value: line.to_string(),
+                        position: Position { line: line_number, column: 1 },
+                    },
+                });
+            }
+            
+            return Ok(directives);
+        }
+    }
+    
+    // If no separator found, treat the whole line as a title
+    directives.push(Directive {
+        key: "title".to_string(),
+        value: trimmed.to_string(),
+        source: Source {
+            value: line.to_string(),
+            position: Position { line: line_number, column: 1 },
+        },
+    });
+    
+    Ok(directives)
 }
 
 /// Check if a string looks like musical content
@@ -542,6 +656,7 @@ fn try_parse_single_line_document(input: &str) -> Result<Option<Document>, Parse
     // Create a simple stave with the parsed content
     let stave = Stave {
         content_line: elements,
+        rhythm_items: None, // Will be populated by rhythm analysis
         upper_lines: Vec::new(),
         lower_lines: Vec::new(),
         lyrics_lines: Vec::new(),

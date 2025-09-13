@@ -1,47 +1,32 @@
 use crate::parse::Document;
 use crate::rhythm::process_rhythm_batch;
 
-/// Pipeline step: Parse document staves into processed staves with batch rhythm processing
+/// Pipeline step: Enhance document staves with rhythm analysis
 /// 
-/// This function takes the Document from document_parser and processes ALL staves
-/// through batch rhythm FSM processing after spatial analysis is complete.
-pub fn parse_document_staves(document: Document) -> Result<Vec<ProcessedStave>, String> {
-    // Step 1: All staves are already spatially complete from parse_document
-    // Step 2: Batch rhythm processing - collect all content lines  
+/// This function takes the Document from document_parser and enhances the ParsedElements
+/// in-place with rhythm analysis data, maintaining the same Document structure.
+pub fn analyze_rhythm(mut document: Document) -> Result<Document, String> {
+    // Collect all content lines for batch processing
     let all_content_lines: Vec<&Vec<crate::rhythm::types::ParsedElement>> = document.staves
         .iter()
         .map(|stave| &stave.content_line)
         .collect();
     
-    // Step 3: Process rhythm for all staves in batch
+    // Process rhythm for all staves in batch
     let all_rhythm_items = process_rhythm_batch(&all_content_lines);
     
-    // Step 4: Build ProcessedStave objects with rhythm results
-    let mut processed_staves = Vec::new();
-    
-    for (i, stave) in document.staves.into_iter().enumerate() {
-        let rhythm_items = all_rhythm_items.get(i)
-            .cloned()
-            .unwrap_or_else(Vec::new);
-            
-        let processed_stave = ProcessedStave {
-            text_lines_before: stave.text_lines_before,
-            rhythm_items,
-            text_lines_after: stave.text_lines_after,
-            upper_lines: stave.upper_lines,
-            lower_lines: stave.lower_lines,
-            lyrics_lines: stave.lyrics_lines,
-            notation_system: stave.notation_system,
-            source: stave.source,
-            begin_multi_stave: stave.begin_multi_stave,
-            end_multi_stave: stave.end_multi_stave,
-        };
-        
-        processed_staves.push(processed_stave);
+    // Preserve Beat structures for renderers (don't mutate content_line)  
+    for (stave_idx, stave) in document.staves.iter_mut().enumerate() {
+        if let Some(rhythm_items) = all_rhythm_items.get(stave_idx) {
+            // Store Beat structures for renderers to use directly
+            stave.rhythm_items = Some(rhythm_items.clone());
+        }
     }
     
-    Ok(processed_staves)
+    Ok(document)
 }
+
+// Old flattening function removed - renderers now use rhythm_items directly
 
 /// A stave that has been processed through the rhythm FSM
 /// Contains beat-grouped elements instead of flat element lists
@@ -65,23 +50,23 @@ mod tests {
     use crate::parse::parse_document;
 
     #[test]
-    fn test_parse_document_staves() {
+    fn test_analyze_rhythm_single_stave() {
         let input = "|1 2 3";
         let document = parse_document(input).unwrap();
-        let staves = parse_document_staves(document).unwrap();
+        let analyzed = analyze_rhythm(document).unwrap();
         
-        // Should return the same staves as input
-        assert_eq!(staves.len(), 1);
-        assert!(!staves[0].rhythm_items.is_empty()); // Should have rhythm items
+        // Should return the same staves as input with rhythm analysis
+        assert_eq!(analyzed.staves.len(), 1);
+        assert!(analyzed.staves[0].rhythm_items.is_some()); // Should have rhythm items
     }
 
     #[test]
-    fn test_parse_multi_stave() {
+    fn test_analyze_rhythm_multi_stave() {
         let input = "|1 2\n\n|3 4";
         let document = parse_document(input).unwrap();
-        let staves = parse_document_staves(document).unwrap();
+        let analyzed = analyze_rhythm(document).unwrap();
         
         // Should return both staves
-        assert_eq!(staves.len(), 2);
+        assert_eq!(analyzed.staves.len(), 2);
     }
 }

@@ -121,9 +121,10 @@ function showTab(tabName) {
         contentEl.classList.add('active');
     }
     
-    // Handle LilyPond PNG/SVG tab - generate SVG with debounce
+    // Handle LilyPond PNG/SVG tab - show placeholder
     if (tabName === 'lilypond-png') {
-        debouncedSvgGeneration();
+        document.getElementById('lilypond-png-output').innerHTML = 
+            '<div style="color: #666; text-align: center; padding: 40px;">LilyPond SVG generation not yet implemented</div>';
     }
 }
 
@@ -366,8 +367,9 @@ async function parse() {
                     'LilyPond converter not yet implemented', 'warning');
             }
             
-            // LilyPond PNG tab - handled by tab switching with debounce
-            // SVG generation only occurs when tab is selected
+            // LilyPond PNG tab - show placeholder
+            updateOutput('lilypond-png-output', 
+                'LilyPond SVG generation not yet implemented', 'info');
             
             // Update VexFlow tab
             if (result.vexflow) {

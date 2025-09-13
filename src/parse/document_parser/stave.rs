@@ -159,6 +159,7 @@ pub fn parse_stave_from_paragraph(paragraph: &str, start_line: usize) -> Result<
     Ok(Stave {
         text_lines_before,
         content_line,
+        rhythm_items: None, // Will be populated by rhythm analysis
         upper_lines,   // ✅ Parsed spatial annotations above content
         lower_lines,   // ✅ Parsed spatial annotations below content  
         lyrics_lines,  // ✅ Parsed syllables for note assignment

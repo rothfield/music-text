@@ -1,8 +1,12 @@
 use crate::stave::ProcessedStave;
+use crate::parse::model::{Directive, Document};
 use crate::rhythm::{Item, Event, Beat};
 use crate::rhythm::types::{Degree, SlurRole, ParsedChild, OrnamentType};
 use crate::rhythm::converters::BarlineType;
 use serde::{Serialize, Deserialize};
+
+pub mod renderer;
+use renderer::VexFlowRenderer;
 
 /// VexFlow output structures for sophisticated rendering
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,8 +54,24 @@ pub struct VexFlowAccidental {
 
 /// Convert staves to VexFlow SVG - enhanced with sophisticated rendering
 pub fn render_vexflow_svg(staves: &[ProcessedStave]) -> String {
+    render_vexflow_svg_with_directives(staves, &[])
+}
+
+/// Convert staves to VexFlow SVG with title/author from directives
+pub fn render_vexflow_svg_with_directives(staves: &[ProcessedStave], directives: &[Directive]) -> String {
     // Generate VexFlow JSON first
-    let _vexflow_data = render_vexflow_data(staves);
+    let _vexflow_data = render_vexflow_data_with_directives(staves, directives);
+    
+    // Extract title and author from directives
+    let mut title = None;
+    let mut author = None;
+    for directive in directives {
+        match directive.key.as_str() {
+            "title" => title = Some(directive.value.clone()),
+            "author" => author = Some(directive.value.clone()),
+            _ => {}
+        }
+    }
     
     // Use the VexFlow JSON to render SVG
     let mut svg = String::new();
@@ -62,9 +82,17 @@ pub fn render_vexflow_svg(staves: &[ProcessedStave]) -> String {
     svg.push_str("  <rect width=\"800\" height=\"300\" fill=\"#fafafa\" stroke=\"#333\" stroke-width=\"1\"/>");
     svg.push_str("\n");
     
-    // Title
-    svg.push_str("  <text x=\"20\" y=\"25\" font-family=\"serif\" font-size=\"16\" font-weight=\"bold\" fill=\"#333\">VexFlow Professional Notation</text>");
-    svg.push_str("\n");
+    // Title and Author
+    if let Some(title_text) = title {
+        svg.push_str(&format!("  <text x=\"400\" y=\"25\" font-family=\"serif\" font-size=\"18\" font-weight=\"bold\" fill=\"#333\" text-anchor=\"middle\">{}</text>", 
+            html_escape(&title_text)));
+        svg.push_str("\n");
+    }
+    if let Some(author_text) = author {
+        svg.push_str(&format!("  <text x=\"400\" y=\"45\" font-family=\"serif\" font-size=\"14\" fill=\"#666\" text-anchor=\"middle\">{}</text>", 
+            html_escape(&author_text)));
+        svg.push_str("\n");
+    }
     
     // Staff lines
     let staff_y = 80;
@@ -105,6 +133,11 @@ pub fn render_vexflow_svg(staves: &[ProcessedStave]) -> String {
 
 /// Convert staves to sophisticated VexFlow JSON data with advanced features
 pub fn render_vexflow_data(staves: &[ProcessedStave]) -> serde_json::Value {
+    render_vexflow_data_with_directives(staves, &[])
+}
+
+/// Convert staves to sophisticated VexFlow JSON data with title/author
+pub fn render_vexflow_data_with_directives(staves: &[ProcessedStave], directives: &[Directive]) -> serde_json::Value {
     let mut staves_data = Vec::new();
     
     for stave in staves {
@@ -112,12 +145,37 @@ pub fn render_vexflow_data(staves: &[ProcessedStave]) -> serde_json::Value {
         staves_data.push(vexflow_stave);
     }
     
+    // Extract title and author from directives
+    let mut title = None;
+    let mut author = None;
+    for directive in directives {
+        match directive.key.as_str() {
+            "title" => title = Some(directive.value.clone()),
+            "author" => author = Some(directive.value.clone()),
+            _ => {}
+        }
+    }
+    
     serde_json::json!({
+        "title": title,
+        "author": author,
         "staves": staves_data,
         "time_signature": "4/4",
         "clef": "treble",
         "key_signature": "C"
     })
+}
+
+/// Escape HTML special characters
+fn html_escape(s: &str) -> String {
+    s.chars().map(|c| match c {
+        '&' => "&amp;".to_string(),
+        '<' => "&lt;".to_string(),
+        '>' => "&gt;".to_string(),
+        '"' => "&quot;".to_string(),
+        '\'' => "&#39;".to_string(),
+        _ => c.to_string(),
+    }).collect()
 }
 
 /// Convert a single stave to VexFlow format with advanced features
@@ -420,3 +478,15 @@ fn analyze_beat_for_beaming(beat: &Beat) -> BeamingInfo {
         should_beam,
     }
 }
+
+// Document-based rendering functions
+pub fn render_vexflow_svg_from_document(document: &Document) -> String {
+    let renderer = VexFlowRenderer::new();
+    renderer.render_svg_from_document(document)
+}
+
+pub fn render_vexflow_data_from_document(document: &Document) -> serde_json::Value {
+    let renderer = VexFlowRenderer::new();
+    renderer.render_data_from_document(document)
+}
+

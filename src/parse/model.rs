@@ -267,6 +267,7 @@ impl Document {
 pub struct Stave {
     pub text_lines_before: Vec<TextLine>,
     pub content_line: Vec<crate::rhythm::types::ParsedElement>, // Direct ParsedElement from parseMainLine
+    pub rhythm_items: Option<Vec<crate::rhythm::Item>>, // Beat structures from rhythm FSM (preserved for renderers)
     pub upper_lines: Vec<UpperLine>,   // Spatial annotations above content
     pub lower_lines: Vec<LowerLine>,   // Spatial annotations below content
     pub lyrics_lines: Vec<LyricsLine>, // Syllables for assignment to notes

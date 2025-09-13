@@ -482,12 +482,12 @@ fn test_parse_and_render(test_name: &str, input: &str) -> Result<String, String>
         .map_err(|e| format!("Process notation failed for {}: {}", test_name, e))?;
     
     // Step 3: Check that we got staves
-    if result.processed_staves.is_empty() {
+    if result.rhythm_analyzed_document.staves.is_empty() {
         return Err(format!("{}: No staves produced", test_name));
     }
     
-    // Step 4: Render to LilyPond
-    let lilypond = render_lilypond(&result.processed_staves);
+    // Step 4: LilyPond is already rendered by pipeline
+    let lilypond = &result.lilypond;
     if lilypond.is_empty() {
         return Err(format!("{}: Empty LilyPond output", test_name));
     }
@@ -496,7 +496,7 @@ fn test_parse_and_render(test_name: &str, input: &str) -> Result<String, String>
     validate_lilypond_output(test_name, &lilypond)?;
     
     Ok(format!("{} test passed - {} staves, {} chars LilyPond", 
-        test_name, result.processed_staves.len(), lilypond.len()))
+        test_name, result.rhythm_analyzed_document.staves.len(), lilypond.len()))
 }
 
 /// Test that separate notes are not tied in LilyPond output
@@ -510,12 +510,12 @@ fn test_no_ties(test_name: &str, input: &str) -> Result<String, String> {
         .map_err(|e| format!("Process notation failed for {}: {}", test_name, e))?;
     
     // Step 3: Check that we got staves
-    if result.processed_staves.is_empty() {
+    if result.rhythm_analyzed_document.staves.is_empty() {
         return Err(format!("{}: No staves produced", test_name));
     }
     
     // Step 4: Render to LilyPond
-    let lilypond = render_lilypond(&result.processed_staves);
+    let lilypond = result.lilypond.as_str();
     if lilypond.is_empty() {
         return Err(format!("{}: Empty LilyPond output", test_name));
     }
@@ -543,12 +543,12 @@ fn test_multi_stave_structure(test_name: &str, input: &str) -> Result<String, St
         .map_err(|e| format!("Process notation failed for {}: {}", test_name, e))?;
     
     // Step 3: Check that we got staves
-    if result.processed_staves.is_empty() {
+    if result.rhythm_analyzed_document.staves.is_empty() {
         return Err(format!("{}: No staves produced", test_name));
     }
     
     // Step 4: Render to LilyPond
-    let lilypond = render_lilypond(&result.processed_staves);
+    let lilypond = result.lilypond.as_str();
     if lilypond.is_empty() {
         return Err(format!("{}: Empty LilyPond output", test_name));
     }
@@ -557,7 +557,7 @@ fn test_multi_stave_structure(test_name: &str, input: &str) -> Result<String, St
     validate_multi_stave_lilypond_output(test_name, &lilypond)?;
     
     Ok(format!("{} test passed - {} staves, {} chars LilyPond with correct structure", 
-        test_name, result.processed_staves.len(), lilypond.len()))
+        test_name, result.rhythm_analyzed_document.staves.len(), lilypond.len()))
 }
 
 /// Test specific feature detection

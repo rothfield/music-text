@@ -1,4 +1,4 @@
-.PHONY: help build clean run web restart test test-cli test-web logs dev mtx zellij-clean
+.PHONY: help build clean run web web-watch kill kill-watch kill-all restart test test-cli test-web logs dev mtx zellij-clean
 
 # PERMANENT DEVELOPMENT MODE: Always use fastest debug build with warnings suppressed
 # Philosophy: We are ALWAYS in dev mode for fastest iteration
@@ -26,6 +26,48 @@ run: build ## Start web server on port 3000
 web: build ## Start web server on port 3000 (alias for run)
 	./target/debug/music-text --web
 
+web-watch: ## Watch for changes and auto-restart web server
+	@echo "🔄 Starting web-watch mode (robust, never dies)..."
+	@echo "Watching src/ and public/ for changes"
+	@echo "Uses same build flags as 'make build': RUSTFLAGS=\"-A warnings\""
+	@echo "Press Ctrl+C to stop"
+	@echo "🔧 Initial build and server start..."
+	@if $(RUST_BUILD_FLAGS) cargo build 2>/dev/null; then \
+		echo "✅ Initial build successful, starting server..."; \
+		lsof -ti:3000 | xargs -r kill 2>/dev/null || true; \
+		sleep 1; \
+		./target/debug/music-text --web > .web-server.log 2>&1 & \
+		echo $$! > .web-server.pid; \
+		echo "🚀 Server started on http://localhost:3000 (PID: $$!)"; \
+	else \
+		echo "❌ Initial build failed, will retry on changes..."; \
+	fi
+	@touch .last-build
+	@echo $$$$ > .web-watch.pid; \
+	trap 'echo "🛑 Shutting down web-watch..."; lsof -ti:3000 | xargs -r kill 2>/dev/null || true; rm -f .web-watch.pid .web-server.pid .web-server.log; exit 0' INT TERM; \
+	while true; do \
+		{ \
+			if find src public -type f \( -name "*.rs" -o -name "*.html" -o -name "*.js" \) -newer .last-build 2>/dev/null | grep -q .; then \
+				echo "📝 Changes detected at $$(date '+%H:%M:%S'), rebuilding..."; \
+				if $(RUST_BUILD_FLAGS) cargo build 2>/dev/null; then \
+					echo "✅ Build successful, restarting server..."; \
+					touch .last-build; \
+					lsof -ti:3000 | xargs -r kill 2>/dev/null || true; \
+					sleep 1; \
+					./target/debug/music-text --web > .web-server.log 2>&1 & \
+					echo $$! > .web-server.pid; \
+					echo "🚀 Server restarted on http://localhost:3000 (PID: $$!)"; \
+				else \
+					echo "❌ Build failed at $$(date '+%H:%M:%S'), retrying in 5 seconds..."; \
+					sleep 3; \
+				fi; \
+			fi; \
+		} 2>/dev/null || { \
+			echo "⚠️ Error occurred, continuing watch..."; \
+		}; \
+		sleep 2; \
+	done
+
 
 repl: ## Start interactive REPL for musical notation
 	@./target/debug/music-text repl
@@ -38,6 +80,31 @@ cli-test: build ## Test CLI with example input
 
 kill: ## Stop the web server
 	@pkill -f "music-text --web" && echo "✓ Web server stopped" || echo "✗ No web server running"
+
+kill-watch: ## Stop the web-watch process
+	@if [ -f .web-watch.pid ]; then \
+		WATCH_PID=$$(cat .web-watch.pid 2>/dev/null); \
+		if [ -n "$$WATCH_PID" ] && kill -0 $$WATCH_PID 2>/dev/null; then \
+			echo "🛑 Stopping web-watch process (PID: $$WATCH_PID)..."; \
+			kill -TERM $$WATCH_PID 2>/dev/null || true; \
+			sleep 1; \
+			kill -KILL $$WATCH_PID 2>/dev/null || true; \
+			rm -f .web-watch.pid .web-server.pid .web-server.log; \
+			pkill -f "\\./target/debug/music-text --web" 2>/dev/null || true; \
+			echo "✅ Web-watch stopped and cleaned up"; \
+		else \
+			echo "❌ Web-watch process not found or already dead"; \
+			rm -f .web-watch.pid .web-server.pid .web-server.log; \
+		fi; \
+	else \
+		echo "❌ No web-watch PID file found"; \
+		pkill -f "make.*web-watch" 2>/dev/null && echo "🧹 Killed any remaining web-watch processes" || true; \
+		pkill -f "\\./target/debug/music-text --web" 2>/dev/null && echo "🧹 Killed any remaining web servers" || true; \
+	fi
+
+kill-all: ## Stop both web server and web-watch
+	@$(MAKE) kill-watch
+	@$(MAKE) kill
 
 restart: ## Restart the web server
 	@$(MAKE) kill || true
@@ -88,7 +155,10 @@ install-completions: build ## Install shell completions for fish
 b: build
 c: clean
 w: web
+ww: web-watch
 k: kill
+kw: kill-watch
+ka: kill-all
 r: restart
 t: test
 l: logs

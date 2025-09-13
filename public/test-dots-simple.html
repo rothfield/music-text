@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple VexFlow Dots Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/vexflow@4/build/cjs/vexflow.js"></script>
+</head>
+<body>
+    <h1>Simple VexFlow Dots Test</h1>
+    <div id="output"></div>
+    
+    <script>
+        const { Renderer, Stave, StaveNote, Voice, Formatter, Dot } = Vex.Flow;
+        
+        // Create an SVG renderer and attach it to the DIV element with id="output"
+        const div = document.getElementById('output');
+        const renderer = new Renderer(div, Renderer.Backends.SVG);
+        renderer.resize(500, 200);
+        const context = renderer.getContext();
+        
+        // Create a stave
+        const stave = new Stave(10, 40, 400);
+        stave.addClef('treble').addTimeSignature('4/4');
+        stave.setContext(context).draw();
+        
+        // Create notes - testing dotted sixteenth notes
+        const notes = [
+            new StaveNote({ keys: ['c/4'], duration: '16' }),
+            new StaveNote({ keys: ['d/4'], duration: '16' }),
+            new StaveNote({ keys: ['e/4'], duration: '16' }),
+        ];
+        
+        // Add dots to first two notes
+        notes[0].addModifier(new Dot(), 0);
+        notes[1].addModifier(new Dot(), 0);
+        
+        console.log('Notes created:', notes);
+        
+        // Create a voice and add notes
+        const voice = new Voice({ num_beats: 4, beat_value: 4 });
+        voice.addTickables(notes);
+        
+        // Format and draw
+        new Formatter().joinVoices([voice]).format([voice], 350);
+        voice.draw(context, stave);
+    </script>
+</body>
+</html>
