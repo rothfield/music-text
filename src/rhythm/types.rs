@@ -131,6 +131,17 @@ pub enum ParsedElement {
         value: String,      // The consecutive unrecognized characters
         position: Position, // Start position in source
     },
+    
+    /// Newline token - explicit line terminator
+    Newline {
+        value: String,      // The newline character(s)
+        position: Position,
+    },
+    
+    /// End of input token - explicit EOF terminator
+    EndOfInput {
+        position: Position,
+    },
 }
 
 impl ParsedElement {

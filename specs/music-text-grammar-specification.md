@@ -9,19 +9,13 @@ This specification defines the formal grammar for the music-text notation langua
 ### Document Structure
 
 ```ebnf
-document = metadata_line? directives_section? stave+
+document = blank_lines* (stave (blank_lines stave)*)? blank_lines?
 
-metadata_line = title_author_line | title_line
-title_author_line = "Title:" title_value "|" "Author:" author_value newline
-title_value = (letter | digit | punctuation | space)+
-author_value = (letter | digit | punctuation | space)+
-title_line = text_line newline
-text_line = (letter | digit | punctuation | space)+
+stave = upper_line* content_line (lower_line | lyrics_line)* (blank_lines | (whitespace* newline)* EOI)
 
-directives_section = directive+
-directive = identifier ":" value newline
-
-stave = annotation_line* content_line annotation_line*
+blank_lines = newline (whitespace* newline)+
+newline = "\n"
+whitespace = " "
 ```
 
 ### Content Lines
@@ -45,17 +39,38 @@ space = " "
 ### Annotation Lines
 
 ```ebnf
-annotation_line = !content_line annotation_item+ newline
+annotation_line = upper_line | lower_line | lyrics_line
 
-annotation_item = octave_marker | slur | ornament | chord | tala | syllable | whitespace
+upper_line = upper_line_element+ (newline | EOI)
+lower_line = lower_line_element+ (newline | EOI)
+lyrics_line = syllable+ (newline | EOI)
+```
 
-octave_marker = "." | "*" | ":"
+### Upper Line Elements
+
+```ebnf
+upper_line_element = upper_octave_marker | slur | ornament | chord | mordent | tala | space | unknown_upper
+
+upper_octave_marker = "." | "*" | ":"
 slur = "_"+
 ornament = "<" pitch+ ">" | pitch+
 chord = "[" chord_symbol "]"
+mordent = "~"
 tala = "+" | "0" | digit
-syllable = letter+ ("-" | whitespace)*
-whitespace = " "+
+space = " "+
+unknown_upper = !upper_octave_marker !("_") !space !ornament !chord !mordent !tala ANY+
+```
+
+### Lower Line Elements
+
+```ebnf
+lower_line_element = lower_octave_marker | lower_line_underscores | syllable | space | unknown_lower
+
+lower_octave_marker = "." | ":"
+lower_line_underscores = "_" "_"+   // two or more consecutive underscores (tokenization level)
+syllable = letter+ (letter | digit | "'" | "-")*   // alphanumeric with apostrophes and hyphens
+space = " "+
+unknown_lower = !lower_octave_marker !("_" "_") !space !syllable ANY+
 ```
 
 ### Notation Systems
@@ -92,14 +107,20 @@ line_number = digit+ "."
 - **Symbols**: `.` (single octave), `:` (double octave), `*` (alternative)
 
 ### Slurs vs Beat Groups
-- **Slurs**: `_____` in pre-content = musical phrasing
-- **Beat Groups**: `_____` in post-content = rhythmic grouping  
+- **Slurs**: `_____` in upper_line = musical phrasing
+- **Beat Groups**: `_____` in lower_line = rhythmic grouping (lower_line_underscores)
 - **Same symbol, different semantic meaning based on spatial context**
 
-### Lyrics Assignment
-- **Syllables**: Text broken into syllables with hyphens
-- **Alignment**: Spatial alignment with notes or auto-assignment
-- **Format**: `he-llo world sing-ing`
+### Lower Line Elements
+- **Lower octave markers**: `.` (single octave down), `:` (double octave down)
+- **Lower line underscores**: `__` or more consecutive underscores (tokenization level)
+- **Syllables**: Text elements for spatial alignment (lyrics, tabla bols)
+- **Spaces**: For alignment with content above
+
+### Syllable Assignment
+- **In lower_line**: Syllables can appear for spatial alignment below notes
+- **In lyrics_line**: Traditional lyric lines with syllable-to-note assignment
+- **Format**: `he-llo world sing-ing` with hyphens and apostrophes supported
 
 ## Test Cases
 
@@ -143,6 +164,23 @@ Input:
 |1 2 3 4|
     •
 Expected: Notes 1,3 raised octave, note 4 lowered octave
+```
+
+### Mordents and Ornaments
+```
+Input:
+~   ~   ~
+|1 2 3 4|
+Expected: Mordents aligned above notes 1, 2, 3
+Rendering: Use musical mordent symbol 𝆝 (&#x1D19D;) for GUI display
+```
+
+### Lower Line Elements
+```
+Input:
+|1 2 3 4|
+.   ___  dha
+Expected: Lower octave marker on note 1, beat grouping on notes 3-4, syllable "dha" aligned with note 4
 ```
 
 ### Multiple Staves
@@ -196,9 +234,11 @@ fn classify_annotation_line(line: &AnnotationLine, position: Position) -> LineTy
 - ✅ **Basic grammar**: Document, stave, content line parsing
 - ✅ **Notation systems**: Number, sargam, ABC, doremi support
 - ✅ **Barlines**: All barline types implemented
+- ✅ **Mordents**: "~" symbol implemented as upper line element
 - 🚧 **Spatial annotations**: Architecture defined, implementation in progress
 - 🚧 **Lyrics**: Grammar defined, assignment logic pending
-- 🚧 **Ornaments**: Syntax specified, rendering pending
+- ⚠️ **Ornaments**: Syntax specified, sequences of pitches not yet implemented
+- ⚠️ **Chords**: Grammar defined, implementation not yet started
 
 ## Acceptance Criteria
 

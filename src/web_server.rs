@@ -14,6 +14,9 @@ use music_text::renderers::render_lilypond;
 use music_text::smoke_test;
 use music_text::renderers::LilyPondGenerator;
 
+/// CodeMirror empty line span structure
+const NEWLINE_SPAN: &str = "<span role=\"presentation\" style=\"padding-right: 0.1px;\"><span cm-text=\"\">&ZeroWidthSpace;</span></span>";
+
 /// Check for Unicode characters and convert musical symbols to ASCII
 fn check_for_unicode_chars(input: &str) -> Result<String, String> {
     let mut converted = input.to_string();
@@ -112,39 +115,46 @@ fn test_roundtrip(original_text: &str, document: &serde_json::Value) -> Roundtri
     }
 }
 
-/// Reconstruct from unprocessed original lines using line-based approach
+/// Reconstruct original text from parsed document - simplified implementation
 fn reconstruct_text_from_document(document: &serde_json::Value) -> String {
-    // Use the lines field with include_in_roundtrip flags
-    if let Some(lines) = document.get("lines").and_then(|l| l.as_array()) {
-        lines.iter()
-            .filter_map(|line| {
-                // Only include lines that are marked as include_in_roundtrip = true
-                if line.get("include_in_roundtrip").and_then(|flag| flag.as_bool()).unwrap_or(false) {
-                    line.get("content").and_then(|content| content.as_str())
-                } else {
-                    None
+    let mut result = String::new();
+
+    // Simple approach: extract content from staves
+    if let Some(staves) = document.get("staves").and_then(|s| s.as_array()) {
+        for stave in staves {
+            if let Some(content_line) = stave.get("content_line").and_then(|cl| cl.as_array()) {
+                for element in content_line {
+                    // Handle each token type and extract its text value
+                    if let Some(note) = element.get("Note") {
+                        if let Some(value) = note.get("value").and_then(|v| v.as_str()) {
+                            result.push_str(value);
+                        }
+                    } else if let Some(barline) = element.get("Barline") {
+                        if let Some(style) = barline.get("style").and_then(|s| s.as_str()) {
+                            result.push_str(style);
+                        }
+                    } else if let Some(whitespace) = element.get("Whitespace") {
+                        if let Some(value) = whitespace.get("value").and_then(|v| v.as_str()) {
+                            result.push_str(value);
+                        }
+                    } else if let Some(unknown) = element.get("Unknown") {
+                        if let Some(value) = unknown.get("value").and_then(|v| v.as_str()) {
+                            result.push_str(value);
+                        }
+                    } else if let Some(newline) = element.get("Newline") {
+                        if let Some(value) = newline.get("value").and_then(|v| v.as_str()) {
+                            result.push_str(value);
+                        }
+                    } else if let Some(_dash) = element.get("Dash") {
+                        result.push_str("-");
+                    }
+                    // EndOfInput tokens represent EOF, not actual characters - skip them
                 }
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    } else {
-        // Fallback to old source-based approach
-        let mut unconsumed_segments = Vec::new();
-        collect_all_sources(document, &mut unconsumed_segments);
-        
-        unconsumed_segments.sort_by(|a, b| {
-            let a_line = a.get("position").and_then(|p| p.get("line")).and_then(|l| l.as_u64()).unwrap_or(0);
-            let a_col = a.get("position").and_then(|p| p.get("column")).and_then(|c| c.as_u64()).unwrap_or(0);
-            let b_line = b.get("position").and_then(|p| p.get("line")).and_then(|l| l.as_u64()).unwrap_or(0);
-            let b_col = b.get("position").and_then(|p| p.get("column")).and_then(|c| c.as_u64()).unwrap_or(0);
-            (a_line, a_col).cmp(&(b_line, b_col))
-        });
-        
-        unconsumed_segments.iter()
-            .filter_map(|source| source.get("value").and_then(|v| v.as_str()))
-            .collect::<Vec<_>>()
-            .join("")
+            }
+        }
     }
+
+    result
 }
 
 /// Recursively collect all Source fields from document JSON that still have content
@@ -194,6 +204,16 @@ fn reconstruct_content_line(elements: &serde_json::Value) -> String {
                 result.push('\'');
             } else if let Some(dash) = element.get("Dash") {
                 result.push('-');
+            } else if let Some(newline) = element.get("Newline") {
+                if let Some(value) = newline.get("value").and_then(|v| v.as_str()) {
+                    result.push_str(value);
+                }
+            } else if let Some(unknown) = element.get("Unknown") {
+                if let Some(value) = unknown.get("value").and_then(|v| v.as_str()) {
+                    result.push_str(value);
+                }
+            } else if let Some(_end_of_input) = element.get("EndOfInput") {
+                // EndOfInput represents EOF, not actual text content - ignore during reconstruction
             }
             // Add more element types as needed
         }
@@ -220,71 +240,47 @@ fn find_first_difference(original: &str, reconstructed: &str) -> String {
     "No differences found".to_string()
 }
 
-/// Generate XML representation from parsed document that preserves exact input structure
+/// Generate XML representation from parsed document - simplified implementation
 fn generate_xml_representation(document: &serde_json::Value) -> String {
-    let mut xml = String::from("<music>\n");
-    
-    // Process staves
+    let mut xml = String::new();
+
+    // Simple approach: generate XML from staves
     if let Some(staves) = document.get("staves").and_then(|s| s.as_array()) {
         for stave in staves {
-            xml.push_str("  <stave>\n");
-            
-            // Process content line elements
+            xml.push_str("<pre class=\"CodeMirror-line\" role=\"presentation\">");
+
             if let Some(content_line) = stave.get("content_line").and_then(|cl| cl.as_array()) {
-                xml.push_str("    ");
                 for element in content_line {
+                    // Handle each token type and generate appropriate XML
                     if let Some(note) = element.get("Note") {
                         if let Some(value) = note.get("value").and_then(|v| v.as_str()) {
                             xml.push_str(&format!("<note>{}</note>", escape_xml(value)));
-                        }
-                    } else if let Some(whitespace) = element.get("Whitespace") {
-                        if let Some(value) = whitespace.get("value").and_then(|v| v.as_str()) {
-                            xml.push_str(&format!("<whitespace>{}</whitespace>", escape_xml(value)));
                         }
                     } else if let Some(barline) = element.get("Barline") {
                         if let Some(style) = barline.get("style").and_then(|s| s.as_str()) {
                             xml.push_str(&format!("<barline>{}</barline>", escape_xml(style)));
                         }
-                    } else if let Some(_dash) = element.get("Dash") {
-                        xml.push_str("<dash>-</dash>");
-                    } else if let Some(_rest) = element.get("Rest") {
-                        if let Some(value) = element.get("Rest").and_then(|r| r.get("value")).and_then(|v| v.as_str()) {
-                            xml.push_str(&format!("<rest>{}</rest>", escape_xml(value)));
+                    } else if let Some(whitespace) = element.get("Whitespace") {
+                        if let Some(value) = whitespace.get("value").and_then(|v| v.as_str()) {
+                            xml.push_str(&format!("<whitespace>{}</whitespace>", escape_xml(value)));
                         }
-                    } else if let Some(_breath) = element.get("Breath") {
-                        xml.push_str("<breath>'</breath>");
                     } else if let Some(unknown) = element.get("Unknown") {
                         if let Some(value) = unknown.get("value").and_then(|v| v.as_str()) {
                             xml.push_str(&format!("<unknown>{}</unknown>", escape_xml(value)));
                         }
+                    } else if let Some(newline) = element.get("Newline") {
+                        xml.push_str("<newline>\\n</newline>");
+                    } else if let Some(_dash) = element.get("Dash") {
+                        xml.push_str("<dash>-</dash>");
                     }
-                }
-                xml.push('\n');
-            }
-            
-            // Process lyrics lines
-            if let Some(lyrics_lines) = stave.get("lyrics_lines").and_then(|ll| ll.as_array()) {
-                for lyrics_line in lyrics_lines {
-                    xml.push_str("    <lyrics>");
-                    if let Some(syllables) = lyrics_line.get("syllables").and_then(|s| s.as_array()) {
-                        for (i, syllable) in syllables.iter().enumerate() {
-                            if i > 0 {
-                                xml.push_str("<whitespace> </whitespace>");
-                            }
-                            if let Some(content) = syllable.get("content").and_then(|c| c.as_str()) {
-                                xml.push_str(&format!("<syllable>{}</syllable>", escape_xml(content)));
-                            }
-                        }
-                    }
-                    xml.push_str("</lyrics>\n");
+                    // EndOfInput tokens are skipped in XML representation
                 }
             }
-            
-            xml.push_str("  </stave>\n");
+
+            xml.push_str("</pre>");
         }
     }
-    
-    xml.push_str("</music>");
+
     xml
 }
 

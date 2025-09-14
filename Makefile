@@ -76,7 +76,7 @@ perf: build ## Run parser performance benchmarks
 	./target/debug/music-text perf
 
 cli-test: build ## Test CLI with example input
-	./target/debug/music-text pest "|1 2 3"
+	./target/debug/music-text --input "|1 2 3"
 
 kill: ## Stop the web server
 	@pkill -f "music-text --web" && echo "✓ Web server stopped" || echo "✗ No web server running"
@@ -118,8 +118,8 @@ test: ## Run all tests
 	cargo test
 
 test-cli: build ## Test CLI with various inputs
-	@echo "Testing pest output..."
-	@./target/debug/music-text pest "|1 2 3" > /dev/null && echo "✓ pest works"
+	@echo "Testing parser output..."
+	@./target/debug/music-text --input "|1 2 3" > /dev/null && echo "✓ parser works"
 	@echo "Testing document output..."
 	@./target/debug/music-text document "|S R G M|" > /dev/null && echo "✓ document works"
 	@echo "Testing lilypond output..."

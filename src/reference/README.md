@@ -10,12 +10,16 @@ This directory contains reference files from the original doremi-script project 
 
 ## Purpose:
 
-The current music-text hand-written parser has been migrated from PEST grammar.
+The current music-text Pest grammar has parsing bugs, particularly:
+- Slur parsing with underscores (`1_2_3` fails)
+- FSM state transition errors
+- Complex rhythm patterns
 
 Use these files to:
 1. Compare working vs broken patterns
-2. Validate test coverage
-3. Debug parsing issues
+2. Fix Pest grammar rules
+3. Validate test coverage
+4. Debug parsing issues
 
 ## Usage:
 

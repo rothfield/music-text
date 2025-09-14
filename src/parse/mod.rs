@@ -3,9 +3,17 @@
 // RENAMED from document/ during incremental refactoring
 // Clean, maintainable, and debuggable music notation parsing
 
-pub mod document_parser;
+pub mod recursive_descent;
 pub mod model;
+pub mod lower_line_parser;
+pub mod upper_line_parser;
+pub mod content_line_parser;
+pub mod stave_parser;
 
 // Re-export key types and functions for convenience
-pub use model::{Document, Directive, Stave, ContentLine, ContentElement, TextLine, Position, PitchCode, NotationSystem, Source};
-pub use document_parser::{parse_document, ParseError};
+pub use model::{Document, Directive, Stave, ContentLine, ContentElement, TextLine, Position, PitchCode, NotationSystem, Source, LowerLine, LowerElement, UpperLine, UpperElement};
+pub use recursive_descent::{parse_document, ParseError};
+pub use lower_line_parser::parse_lower_line;
+pub use upper_line_parser::parse_upper_line;
+pub use content_line_parser::parse_content_line;
+pub use stave_parser::parse_stave;

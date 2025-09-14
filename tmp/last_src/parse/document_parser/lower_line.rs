@@ -17,7 +17,7 @@ pub fn parse_lower_line(line: &str, line_num: usize) -> Result<LowerLine, ParseE
                 let marker_element = LowerElement::LowerOctaveMarker {
                     marker: ch.to_string(),
                     source: Source {
-                        value: Some(ch.to_string()),
+                        value: ch.to_string(),
                         position: Position { line: line_num, column: col },
                     },
                 };
@@ -28,7 +28,7 @@ pub fn parse_lower_line(line: &str, line_num: usize) -> Result<LowerLine, ParseE
                 let marker_element = LowerElement::LowerOctaveMarker {
                     marker: ch.to_string(),
                     source: Source {
-                        value: Some(ch.to_string()),
+                        value: ch.to_string(),
                         position: Position { line: line_num, column: col },
                     },
                 };
@@ -56,7 +56,7 @@ pub fn parse_lower_line(line: &str, line_num: usize) -> Result<LowerLine, ParseE
                     LowerElement::LowerUnderscores {
                         value: chars_collected.clone(),
                         source: Source {
-                            value: Some(chars_collected),
+                            value: chars_collected,
                             position: Position { line: line_num, column: start_col },
                         },
                     }
@@ -65,7 +65,7 @@ pub fn parse_lower_line(line: &str, line_num: usize) -> Result<LowerLine, ParseE
                     LowerElement::Unknown {
                         value: chars_collected.clone(),
                         source: Source {
-                            value: Some(chars_collected),
+                            value: chars_collected,
                             position: Position { line: line_num, column: start_col },
                         },
                     }
@@ -89,7 +89,7 @@ pub fn parse_lower_line(line: &str, line_num: usize) -> Result<LowerLine, ParseE
                 LowerElement::Space {
                     count,
                     source: Source {
-                        value: Some(" ".repeat(count)),
+                        value: " ".repeat(count),
                         position: Position { line: line_num, column: start_col },
                     },
                 }
@@ -118,7 +118,7 @@ pub fn parse_lower_line(line: &str, line_num: usize) -> Result<LowerLine, ParseE
                 LowerElement::Unknown {
                     value: chars_collected.clone(),
                     source: Source {
-                        value: Some(chars_collected),
+                        value: chars_collected,
                         position: Position { line: line_num, column: start_col },
                     },
                 }
@@ -132,7 +132,7 @@ pub fn parse_lower_line(line: &str, line_num: usize) -> Result<LowerLine, ParseE
     Ok(LowerLine {
         elements,
         source: Source {
-            value: Some(line.to_string()),
+            value: line.to_string(),
             position: Position { line: line_num, column: 1 },
         },
     })

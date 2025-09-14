@@ -1,4 +1,4 @@
-use crate::parse::model::{Document, Directive, Stave, Source, Position, UpperElement, LowerElement, UpperLine, LowerLine, OriginalLine};
+use crate::parse::model::{Document, Directive, Stave, Source, Position, UpperElement, LowerElement, UpperLine, LowerLine};
 use crate::rhythm::types::{ParsedElement, ParsedChild, SlurRole, BeatGroupRole};
 use super::error::ParseError;
 use super::stave::parse_stave_from_paragraph;
@@ -17,9 +17,8 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
         return Ok(Document {
             directives: Vec::new(),
             staves: Vec::new(),
-            lines: Vec::new(), // Empty document has no lines
             source: Source {
-                value: Some(input.to_string()),
+                value: input.to_string(),
                 position: Position { line: 1, column: 1 },
             },
         });
@@ -57,23 +56,12 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
         }
     }
 
-    // Initialize original lines for round-trip validation
-    let input_lines: Vec<OriginalLine> = input.lines()
-        .enumerate()
-        .map(|(index, line)| OriginalLine {
-            content: line.to_string(),
-            line_number: index + 1, // 1-based line numbers
-            include_in_roundtrip: true, // Initially all lines included, will be marked false as processed
-        })
-        .collect();
-
     // Allow documents with only directives (no staves required)
     let mut document = Document {
         directives,
         staves,
-        lines: input_lines,
         source: Source {
-            value: Some(input.to_string()),
+            value: input.to_string(),
             position: Position { line: 1, column: 1 },
         },
     };
@@ -92,9 +80,6 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
     
     // Apply spatial analysis - splice unknown tokens into content lines
     splice_unknown_tokens_to_document(&mut document);
-    
-    // Mark processed lines as consumed for roundtrip validation
-    mark_processed_lines(&mut document);
 
     Ok(document)
 }
@@ -210,7 +195,7 @@ fn parse_single_directive(line: &str, line_number: usize) -> Result<Directive, P
             key,
             value,
             source: Source {
-                value: Some(line.to_string()),
+                value: line.to_string(),
                 position: Position { line: line_number, column: 1 },
             },
         })
@@ -258,7 +243,7 @@ fn try_parse_title_author(line: &str, line_number: usize) -> Result<Vec<Directiv
                 key: "title".to_string(),
                 value: title.to_string(),
                 source: Source {
-                    value: Some(line.to_string()),
+                    value: line.to_string(),
                     position: Position { line: line_number, column: 1 },
                 },
             });
@@ -268,7 +253,7 @@ fn try_parse_title_author(line: &str, line_number: usize) -> Result<Vec<Directiv
                     key: "author".to_string(),
                     value: author.to_string(),
                     source: Source {
-                        value: Some(line.to_string()),
+                        value: line.to_string(),
                         position: Position { line: line_number, column: 1 },
                     },
                 });
@@ -290,7 +275,7 @@ fn try_parse_title_author(line: &str, line_number: usize) -> Result<Vec<Directiv
                 key: "title".to_string(),
                 value: title.to_string(),
                 source: Source {
-                    value: Some(line.to_string()),
+                    value: line.to_string(),
                     position: Position { line: line_number, column: 1 },
                 },
             });
@@ -300,7 +285,7 @@ fn try_parse_title_author(line: &str, line_number: usize) -> Result<Vec<Directiv
                     key: "author".to_string(),
                     value: author.to_string(),
                     source: Source {
-                        value: Some(line.to_string()),
+                        value: line.to_string(),
                         position: Position { line: line_number, column: 1 },
                     },
                 });
@@ -315,7 +300,7 @@ fn try_parse_title_author(line: &str, line_number: usize) -> Result<Vec<Directiv
         key: "title".to_string(),
         value: trimmed.to_string(),
         source: Source {
-            value: Some(line.to_string()),
+            value: line.to_string(),
             position: Position { line: line_number, column: 1 },
         },
     });
@@ -363,54 +348,50 @@ fn splice_unknown_tokens_to_document(document: &mut Document) {
     }
 }
 
-/// Assign octave markers to notes in a single stave using move semantics
+/// Assign octave markers to notes in a single stave
 fn assign_octave_markers_to_stave(stave: &mut Stave) {
-    // Process upper lines - consume octave markers
-    for upper_line in &mut stave.upper_lines {
-        for element in &mut upper_line.elements {
+    // Collect octave markers from upper lines with their column positions
+    let mut upper_markers: Vec<(usize, i8)> = Vec::new();
+    
+    for upper_line in &stave.upper_lines {
+        for element in &upper_line.elements {
             if let UpperElement::UpperOctaveMarker { marker, source } = element {
-                if let Some(marker_text) = source.value.as_ref() {
-                    let octave_value = octave_marker_to_value(marker_text, true);
-                    let marker_col = source.position.column;
-                    
-                    // Find notes in content line that match this column position
-                    for content_element in &mut stave.content_line {
-                        if let ParsedElement::Note { octave, position, .. } = content_element {
-                            if position.col == marker_col {
-                                // Move the octave marker value to the note
-                                *octave = octave_value;
-                                // Consume the source segment by taking its value
-                                source.value.take();
-                                break;
-                            }
-                        }
-                    }
-                }
+                let octave_value = octave_marker_to_value(marker, true);
+                // Use actual source column position (1-based)
+                upper_markers.push((source.position.column, octave_value));
             }
         }
     }
     
-    // Process lower lines - consume octave markers
-    for lower_line in &mut stave.lower_lines {
-        for element in &mut lower_line.elements {
+    // Collect octave markers from lower lines with their column positions
+    let mut lower_markers: Vec<(usize, i8)> = Vec::new();
+    
+    for lower_line in &stave.lower_lines {
+        for element in &lower_line.elements {
             if let LowerElement::LowerOctaveMarker { marker, source } = element {
-                if let Some(marker_text) = source.value.as_ref() {
-                    let octave_value = octave_marker_to_value(marker_text, false);
-                    let marker_col = source.position.column;
-                    
-                    // Find notes in content line that match this column position  
-                    for content_element in &mut stave.content_line {
-                        if let ParsedElement::Note { octave, position, .. } = content_element {
-                            if position.col == marker_col {
-                                // Move the octave marker value to the note
-                                *octave = octave_value;
-                                // Consume the source segment by taking its value
-                                source.value.take();
-                                break;
-                            }
-                        }
-                    }
-                }
+                let octave_value = octave_marker_to_value(marker, false);
+                // Use actual source column position (1-based)
+                lower_markers.push((source.position.column, octave_value));
+            }
+        }
+    }
+    
+    // Combine all octave markers
+    let mut all_markers = upper_markers;
+    all_markers.extend(lower_markers);
+    
+    if all_markers.is_empty() {
+        return;
+    }
+    
+    // Assign markers to notes in content line based on column positions
+    for element in &mut stave.content_line {
+        if let ParsedElement::Note { octave, position, .. } = element {
+            let note_col = position.col;
+            
+            // Find octave marker at the same column position (both use 1-based indexing)
+            if let Some(&(_, marker_octave)) = all_markers.iter().find(|(marker_col, _)| *marker_col == note_col) {
+                *octave = marker_octave;
             }
         }
     }
@@ -656,21 +637,11 @@ fn try_parse_single_line_document(input: &str) -> Result<Option<Document>, Parse
     // Check if line meets musical content threshold (25%)
     if calculate_musical_percentage(line) < 25.0 {
         // Return empty document for non-musical single-line input
-        let input_lines: Vec<OriginalLine> = input.lines()
-            .enumerate()
-            .map(|(index, line)| OriginalLine {
-                content: line.to_string(),
-                line_number: index + 1,
-                include_in_roundtrip: true,
-            })
-            .collect();
-        
         return Ok(Some(Document {
             directives: Vec::new(),
             staves: Vec::new(),
-            lines: input_lines,
             source: Source {
-                value: Some(input.to_string()),
+                value: input.to_string(),
                 position: Position { line: 1, column: 1 },
             },
         }));
@@ -693,30 +664,19 @@ fn try_parse_single_line_document(input: &str) -> Result<Option<Document>, Parse
         text_lines_after: Vec::new(),
         notation_system,
         source: Source {
-            value: Some(line.to_string()),
+            value: line.to_string(),
             position: Position { line: 1, column: 1 },
         },
         begin_multi_stave: false,
         end_multi_stave: false,
     };
     
-    // Initialize original lines for round-trip validation
-    let input_lines: Vec<OriginalLine> = input.lines()
-        .enumerate()
-        .map(|(index, line)| OriginalLine {
-            content: line.to_string(),
-            line_number: index + 1,
-            include_in_roundtrip: true, // Will be marked false after processing
-        })
-        .collect();
-
     // Create document with the single stave
     let document = Document {
         directives: Vec::new(),
         staves: vec![stave],
-        lines: input_lines,
         source: Source {
-            value: Some(input.to_string()),
+            value: input.to_string(),
             position: Position { line: 1, column: 1 },
         },
     };
@@ -845,35 +805,6 @@ fn assign_lyrics_to_stave(stave: &mut Stave) {
                         distance: 0, // Lyrics are typically at the same level as notes
                     });
                 }
-            }
-        }
-    }
-}
-
-/// Mark lines that have been successfully processed as excluded from roundtrip
-fn mark_processed_lines(document: &mut Document) {
-    // For each directive, mark its source line as processed
-    for directive in &document.directives {
-        let directive_line = directive.source.position.line;
-        for line in &mut document.lines {
-            if line.line_number == directive_line {
-                line.include_in_roundtrip = false;
-                break;
-            }
-        }
-    }
-    
-    // For each stave, mark all its source lines as processed
-    for stave in &document.staves {
-        let stave_line = stave.source.position.line;
-        
-        // Mark the content line and any additional lines used by this stave
-        // For single-line parsing, this is just the one line
-        // For multi-line staves, we'd need to mark all contributing lines
-        for line in &mut document.lines {
-            if line.line_number == stave_line {
-                line.include_in_roundtrip = false;
-                break;
             }
         }
     }

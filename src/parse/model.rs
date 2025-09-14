@@ -187,6 +187,16 @@ pub struct Dash {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Newline {
+    pub source: Source,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EndOfInput {
+    pub source: Source,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SlurBegin {
     pub source: Source,
     pub in_slur: bool,
@@ -233,20 +243,26 @@ pub struct Directive {
     pub source: Source,
 }
 
-// Original line information for round-trip validation
+
+// Document element - either blank lines or stave
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OriginalLine {
-    pub content: String,
-    pub line_number: usize,
-    pub include_in_roundtrip: bool, // False when line becomes part of parsed directive/stave
+pub enum DocumentElement {
+    BlankLines(BlankLines),
+    Stave(Stave),
+}
+
+// Blank lines structure (newline (whitespace* newline)+)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlankLines {
+    pub content: String, // The complete blank lines content
+    pub source: Source,
 }
 
 // Document structure types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub directives: Vec<Directive>,
-    pub staves: Vec<Stave>,
-    pub lines: Vec<OriginalLine>, // Original input lines for round-trip validation
+    pub elements: Vec<DocumentElement>, // Document as sequence of elements
     pub source: Source,
 }
 
@@ -254,12 +270,14 @@ impl Document {
     /// Get unique notation systems detected across all staves
     pub fn get_detected_notation_systems(&self) -> Vec<NotationSystem> {
         use std::collections::HashSet;
-        
+
         let mut systems = HashSet::new();
-        for stave in &self.staves {
-            systems.insert(stave.notation_system);
+        for element in &self.elements {
+            if let DocumentElement::Stave(stave) = element {
+                systems.insert(stave.notation_system);
+            }
         }
-        
+
         let mut result: Vec<NotationSystem> = systems.into_iter().collect();
         result.sort_by_key(|system| match system {
             NotationSystem::Number => 0,
@@ -272,19 +290,22 @@ impl Document {
     }
 }
 
+// Enum for different types of lines in a stave
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum StaveLine {
+    Text(TextLine),
+    Upper(UpperLine),
+    Content(Vec<crate::rhythm::types::ParsedElement>),
+    Lower(LowerLine),
+    Lyrics(LyricsLine),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stave {
-    pub text_lines_before: Vec<TextLine>,
-    pub content_line: Vec<crate::rhythm::types::ParsedElement>, // Direct ParsedElement from parseMainLine
-    pub rhythm_items: Option<Vec<crate::rhythm::Item>>, // Beat structures from rhythm FSM (preserved for renderers)
-    pub upper_lines: Vec<UpperLine>,   // Spatial annotations above content
-    pub lower_lines: Vec<LowerLine>,   // Spatial annotations below content
-    pub lyrics_lines: Vec<LyricsLine>, // Syllables for assignment to notes
-    pub text_lines_after: Vec<TextLine>,
+    pub lines: Vec<StaveLine>,  // All lines in order
+    pub rhythm_items: Option<Vec<crate::rhythm::Item>>, // Beat structures from rhythm FSM
     pub notation_system: NotationSystem,
     pub source: Source,
-    pub begin_multi_stave: bool,  // True if this stave begins a multi-stave group
-    pub end_multi_stave: bool,    // True if this stave ends a multi-stave group
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -342,11 +363,19 @@ pub enum UpperElement {
         chord: String,  // [Am] chord symbols (🚧 planned)
         source: Source,
     },
+    Mordent {
+        source: Source,
+    },
     Space {
         count: usize,
         source: Source,
     },
     Unknown {
+        value: String,
+        source: Source,
+    },
+    /// Newline token - explicit line terminator (upper lines cannot have EOI)
+    Newline {
         value: String,
         source: Source,
     },
@@ -363,8 +392,8 @@ pub enum LowerElement {
         value: String,  // "___" for beat grouping
         source: Source,
     },
-    FlatMarker {
-        marker: String,  // "_" flat marker, Bhatkande notation only (🚧 planned)
+    Syllable {
+        content: String,  // syllables like "dha", "he-llo"
         source: Source,
     },
     Space {
@@ -373,6 +402,15 @@ pub enum LowerElement {
     },
     Unknown {
         value: String,
+        source: Source,
+    },
+    /// Newline token - explicit line terminator
+    Newline {
+        value: String,
+        source: Source,
+    },
+    /// End of input token - explicit EOF terminator
+    EndOfInput {
         source: Source,
     },
 }
@@ -394,4 +432,6 @@ pub enum ContentElement {
     SlurEnd(SlurEnd),
     BeatGroupBegin(BeatGroupBegin),
     BeatGroupEnd(BeatGroupEnd),
+    Newline(Newline),
+    EndOfInput(EndOfInput),
 }

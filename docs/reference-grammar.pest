@@ -1,0 +1,108 @@
+// Music Notation Grammar - Complete Version
+
+// Document structure 
+document = { SOI ~ mixed_content? ~ trailing_whitespace? ~ EOI }
+
+mixed_content = { (mixed_line | staff_group | blank_line) ~ (stave_separator ~ (mixed_line | staff_group | blank_line))* ~ stave_separator? }
+stave_separator = { NEWLINE+ }
+trailing_whitespace = { (NEWLINE | " ")+ }
+
+// Blank line - spaces only
+blank_line = { " "* }
+
+// Mixed line can be either a traditional stave or a simple content line
+mixed_line = { stave | simple_content_line }
+
+// Stave is a content line with optional text lines (requires barline)
+stave = { 
+    text_lines* ~ 
+    content_line ~ 
+    text_lines*
+}
+
+text_lines = { text_line ~ NEWLINE }
+
+// Content line contains musical elements and must have at least one barline
+content_line = { 
+    (!barline ~ musical_element_no_barline)* ~ barline ~ musical_element*
+}
+
+musical_element = {
+    pitch | dash | space | barline
+}
+
+musical_element_no_barline = {
+    pitch | dash | space
+}
+
+space = { " "+ } // One or more spaces as a single element
+dash = { "-" } // Dash element
+
+// Pitch: atomic patterns with explicit accidental limits (most specific first)
+pitch = { tabla_pitch | number_pitch | western_pitch | sargam_pitch | bhatkhande_pitch }
+
+// Number notation - all 35 combinations
+number_pitch = { 
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "##" |  // double sharp
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "bb" |  // double flat
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "#" |   // sharp
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7") ~ "b" |   // flat
+    ("1"|"2"|"3"|"4"|"5"|"6"|"7")           // natural
+}
+
+// Western notation - all 35 combinations  
+western_pitch = {
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "##" |  // double sharp
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "bb" |  // double flat
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "#" |   // sharp
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B") ~ "b" |   // flat
+    ("C"|"D"|"E"|"F"|"G"|"A"|"B")           // natural
+}
+
+// Sargam notation - including extended accidentals
+sargam_pitch = {
+    // Extended accidentals (most specific first) - include all sargam letters
+    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "##" |
+    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "bb" |
+    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "b" |
+    ("S"|"s"|"R"|"r"|"G"|"g"|"m"|"M"|"P"|"p"|"D"|"d"|"N"|"n") ~ "#" |
+    // Natural sargam notes
+    "s" | "S" | "r" | "R" | "g" | "G" | "m" | "M" | "p" | "P" | "d" | "D" | "n" | "N"
+}
+
+// Bhatkhande Devanagari notation - basic support
+bhatkhande_pitch = { 
+    "स" | "रे" | "र" | "ग" | "म" | "प" | "ध" | "द" | "नि" | "न" 
+}
+
+// Tabla notation - tabla bols (syllables)
+// All tabla bols map to N1 for now
+tabla_pitch = {
+    "dhin" | "dha" | "trkt" | "taka" | "ka" | "ta" | "ge" |
+    "Dhin" | "Dha" | "Trkt" | "Taka" | "Ka" | "Ta" | "Ge" |
+    "DHIN" | "DHA" | "TRKT" | "TAKA" | "KA" | "TA" | "GE"
+}
+
+barline = { "|" }
+
+// Simple content line - musical elements without requiring barlines
+simple_content_line = { musical_element_no_barline+ }
+
+// Text line - any line that is not a content line, not blank, and contains no barlines
+text_line = { !content_line ~ !blank_line ~ (!NEWLINE ~ !"|" ~ ANY)* }
+
+// Staff group support for multi-stave music (piano, orchestral, etc.)
+staff_group = { 
+    staff_group_start ~ 
+    staff_group_content ~ 
+    staff_group_end 
+}
+
+staff_group_start = { "{" ~ group_type ~ NEWLINE }
+group_type = { "piano" | "grand" | "group" | "choir" }
+
+staff_group_content = { named_stave+ }
+named_stave = { staff_name ~ ":" ~ stave ~ NEWLINE? }
+staff_name = { (ASCII_ALPHANUMERIC | "_")+ }
+
+staff_group_end = { "}" ~ NEWLINE? }

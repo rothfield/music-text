@@ -487,6 +487,8 @@ impl ParsedElement {
             ParsedElement::Whitespace { position, .. } => position,
             ParsedElement::Symbol { position, .. } => position,
             ParsedElement::Unknown { position, .. } => position,
+            ParsedElement::Newline { position, .. } => position,
+            ParsedElement::EndOfInput { position, .. } => position,
         }
     }
 }

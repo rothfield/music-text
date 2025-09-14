@@ -3,7 +3,7 @@
 // for the flat AST level (before FSM processing)
 
 use serde::{Deserialize, Serialize};
-// Removed legacy compatibility imports - using greenfield approach
+use crate::models::{Document, Node, Metadata}; // Keep using existing for compatibility
 use crate::models::Degree;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -21,57 +21,18 @@ pub struct Position {
     pub col: usize,
 }
 
-/// Types of musical ornaments that can be attached to notes
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum OrnamentType {
-    Mordent,
-    Trill,
-    Turn,
-    Grace,
-}
-
-impl std::fmt::Display for OrnamentType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            OrnamentType::Mordent => write!(f, "mordent"),
-            OrnamentType::Trill => write!(f, "trill"),
-            OrnamentType::Turn => write!(f, "turn"),
-            OrnamentType::Grace => write!(f, "grace"),
-        }
-    }
-}
-
-/// Child elements that can be attached to notes (vertical spatial relationships)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum ParsedChild {
-    /// Octave markers like dots, colons, apostrophes
-    OctaveMarker { 
-        symbol: String,
-        distance: i8, // Vertical distance from parent note (-1 = above, +1 = below)
-    },
-    /// Musical ornaments like mordents, trills
-    Ornament { 
-        kind: OrnamentType,
-        distance: i8,
-    },
-    /// Syllable/lyric text
-    Syllable { 
-        text: String,
-        distance: i8,
-    },
-}
 
 /// Parsed elements - what the parser extracts from raw text (flat structure)
 /// This represents the notation as it appears spatially, without musical interpretation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ParsedElement {
     /// Musical note with pitch
-    Note { 
+    Note {
         degree: Degree,
         octave: i8, // Calculated from octave markers
         value: String, // Original text value (e.g. "G", "S", "1")
         position: Position,
-        children: Vec<ParsedChild>, // Attached ornaments, octave markers, lyrics
+        syllable: Option<String>, // Syllable/lyric text
         duration: Option<(usize, usize)>, // Duration fraction (numerator, denominator) from FSM
         slur: Option<SlurRole>, // Assigned by vertical_parser
     },
@@ -149,6 +110,7 @@ pub enum ParsedElement {
 /// Complete document structure using ParsedElement (replacement for Document)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParsedDocument {
+    pub metadata: Metadata, // Reuse existing metadata structure
     pub elements: Vec<ParsedElement>, // Final processed elements after FSM
     pub notation_system: Option<String>,
 }
@@ -211,5 +173,114 @@ impl ParsedElement {
 impl Position {
     pub fn new(row: usize, col: usize) -> Self {
         Self { row, col }
+    }
+}
+
+/// Convert ParsedElement back to legacy Node for compatibility with FSM and converters
+/// This allows incremental refactoring without breaking existing code
+impl From<ParsedElement> for Node {
+    fn from(element: ParsedElement) -> Self {
+        match element {
+            ParsedElement::Note { degree, octave, value, position, syllable, duration, slur: _ } => {
+                let mut node = Node::new(
+                    "PITCH".to_string(),
+                    value,
+                    position.row,
+                    position.col,
+                );
+                node.degree = Some(degree);
+                node.octave = Some(octave);
+
+                // Store duration if present
+                if let Some((num, denom)) = duration {
+                    node.duration_fraction = Some(format!("{}/{}", num, denom));
+                }
+
+                // Add syllable as child node if present
+                if let Some(syl_text) = syllable {
+                    let syllable_node = Node::new("SYL".to_string(), syl_text, position.row, position.col);
+                    node.nodes.push(syllable_node);
+                }
+
+                node
+            },
+            
+            ParsedElement::Rest { value, position, duration } => {
+                let mut node = Node::new("REST".to_string(), value, position.row, position.col);
+                if let Some((num, denom)) = duration {
+                    node.duration_fraction = Some(format!("{}/{}", num, denom));
+                }
+                node
+            },
+            
+            ParsedElement::Dash { degree, octave, position, duration } => {
+                let mut node = Node::new("DASH".to_string(), "-".to_string(), position.row, position.col);
+                node.degree = degree;
+                node.octave = octave;
+                if let Some((num, denom)) = duration {
+                    node.duration_fraction = Some(format!("{}/{}", num, denom));
+                }
+                node
+            },
+            
+            ParsedElement::Barline { style, position, tala } => {
+                let mut node = Node::new("BARLINE".to_string(), style.clone(), position.row, position.col);
+                // Store tala as an attribute in the legacy Node
+                if let Some(tala_num) = tala {
+                    // We'll need to extend the Node structure or use the unused fields
+                    // For now, we can store it in the value field with a prefix
+                    node.value = format!("{}|tala:{}", style, tala_num);
+                }
+                node
+            },
+            
+            ParsedElement::SlurStart { position } => {
+                Node::new("SLUR_START".to_string(), "(".to_string(), position.row, position.col)
+            },
+            
+            ParsedElement::SlurEnd { position } => {
+                Node::new("SLUR_END".to_string(), ")".to_string(), position.row, position.col)
+            },
+            
+            ParsedElement::Whitespace { width, position } => {
+                Node::new("WHITESPACE".to_string(), " ".repeat(width), position.row, position.col)
+            },
+            
+            ParsedElement::Newline { position } => {
+                Node::new("NEWLINE".to_string(), "\n".to_string(), position.row, position.col)
+            },
+            
+            ParsedElement::Word { text, position } => {
+                Node::new("WORD".to_string(), text, position.row, position.col)
+            },
+            
+            ParsedElement::Tala { number, position } => {
+                Node::new("TALA".to_string(), number.to_string(), position.row, position.col)
+            },
+            
+            ParsedElement::Symbol { value, position } => {
+                Node::new("SYMBOLS".to_string(), value, position.row, position.col)
+            },
+            
+            ParsedElement::Unknown { value, position } => {
+                Node::new("UNKNOWN".to_string(), value, position.row, position.col)
+            },
+        }
+    }
+}
+
+/// Convert a vector of ParsedElements to Nodes for compatibility
+pub fn parsed_elements_to_nodes(elements: Vec<ParsedElement>) -> Vec<Node> {
+    elements.into_iter().map(|e| e.into()).collect()
+}
+
+/// Convert ParsedDocument to legacy Document for backward compatibility
+impl From<ParsedDocument> for Document {
+    fn from(doc_v2: ParsedDocument) -> Self {
+        Document {
+            metadata: doc_v2.metadata,
+            nodes: parsed_elements_to_nodes(doc_v2.elements),
+            notation_system: doc_v2.notation_system,
+        }
     }
 }
