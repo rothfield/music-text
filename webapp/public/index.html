@@ -6,6 +6,7 @@
     <title>Music Text</title>
     <script src="vexflow-renderer.js"></script>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="assets/codemirror.min.css">
 </head>
 <body>
     <div class="app">
@@ -28,7 +29,7 @@
             <div id="status" class="status"></div>
         </div>
         
-        <textarea id="musicInput" placeholder="Enter music notation like: |S R G M|"></textarea>
+        <div id="musicInput"></div>
         
         <div class="tabs">
             <div class="tab active" onclick="switchTab('vexflow', this)">VexFlow Draft</div>
@@ -39,6 +40,7 @@
             <div class="tab" onclick="switchTab('rhythm', this)">Rhythm</div>
             <div class="tab" onclick="switchTab('spatial', this)">Spatial</div>
             <div class="tab" onclick="switchTab('analyzer', this)">Analyzer</div>
+            <div class="tab" onclick="switchTab('roundtrip', this)">Roundtrip</div>
         </div>
         
         <div id="vexflow-tab" class="tab-content active">
@@ -72,8 +74,13 @@
         <div id="analyzer-tab" class="tab-content">
             <div id="analyzer-output" class="pipeline-section">Enter music notation to see analyzer output</div>
         </div>
+
+        <div id="roundtrip-tab" class="tab-content">
+            <div id="roundtrip-output" class="pipeline-section">Enter music notation to test round-trip reconstruction</div>
+        </div>
     </div></body>
 
+    <script src="assets/codemirror.min.js"></script>
     <script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -7,11 +7,13 @@ import { LocalStorage } from './localStorage.js';
 import { UI } from './ui.js';
 import { API } from './api.js';
 import { FontManager } from './fontManager.js';
+import { CodeMirrorManager } from './codeMirrorManager.js';
 
 class MusicTextApp {
     constructor() {
         this.currentParseResult = null;
         this.inputTimer = null;
+        this.codeMirrorManager = new CodeMirrorManager();
     }
 
     // Initialize the application
@@ -29,6 +31,9 @@ class MusicTextApp {
 
     // Setup UI components
     async setupUI() {
+        // Initialize CodeMirror editor
+        this.codeMirrorManager.init('musicInput');
+        
         // Initialize font manager
         FontManager.init();
         
@@ -51,7 +56,7 @@ class MusicTextApp {
     setupEventListeners() {
         const musicInput = document.getElementById('musicInput');
         if (!musicInput) {
-            throw new Error('Music input textarea not found');
+            throw new Error('Music input element not found');
         }
 
         // Input event listener for real-time updates
@@ -142,7 +147,11 @@ class MusicTextApp {
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
+            UI.updateRoundtripOutput(result);
             await UI.updateVexFlowOutput(result);
+            
+            // Update CodeMirror highlighting based on parse results
+            this.codeMirrorManager.highlightFromParseResult(result);
             
         } catch (error) {
             console.warn('Parse error during preview:', error.message);

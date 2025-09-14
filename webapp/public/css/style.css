@@ -80,7 +80,7 @@ button.secondary:hover {
     color: #656d76; 
 }
 
-/* Textarea */
+/* Textarea and CodeMirror */
 textarea {
     width: 100%;
     height: 80px;
@@ -95,6 +95,113 @@ textarea {
 
 textarea:focus {
     border-bottom-color: #0969da;
+}
+
+/* CodeMirror Editor Styles */
+.CodeMirror {
+    width: 100%;
+    min-height: 80px;
+    padding: 8px;
+    border: none;
+    border-bottom: 1px solid #e1e5e9;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    resize: vertical;
+    outline: none;
+    background: white;
+}
+
+.CodeMirror-focused {
+    border-bottom-color: #0969da;
+}
+
+.CodeMirror-scroll {
+    min-height: 80px;
+}
+
+/* Content line highlighting with doremi font */
+.CodeMirror-linebackground.content-line {
+    background: #e3f2fd !important;
+    padding-left: 0.5em;
+}
+
+.CodeMirror-line.content-line {
+    font-family: sans-serif !important;
+    font-size: 1.6em !important;
+    line-height: 1.8em !important;
+}
+
+.text-line {
+    background: #fafafa !important;
+}
+
+/* Doremi-inspired styling for music notation */
+.sargam-note, .note {
+    font-family: sans-serif;
+    font-size: 1.6em;
+    position: relative;
+    margin-right: 0.0em;
+    margin-left: 0.0em;
+    display: inline-block;
+}
+
+/* Lyrics styling from doremi */
+.CodeMirror-linebackground.lyrics-line {
+    background: #fffef5 !important;
+    padding-left: 0.5em;
+}
+
+.CodeMirror-line.lyrics-line {
+    font-family: serif !important;
+    font-size: 1.4em !important;
+    font-style: italic;
+    color: #666;
+    line-height: 1.6em !important;
+}
+
+/* Directive lines (Title, Composer, etc) */
+.CodeMirror-linebackground.directive-line {
+    background: #f1f8e9 !important;
+    padding-left: 0.5em;
+}
+
+.CodeMirror-line.directive-line {
+    font-family: sans-serif !important;
+    font-weight: bold;
+    font-size: 1.2em !important;
+    line-height: 1.6em !important;
+}
+
+/* Barline styling */
+.barline {
+    letter-spacing: -0.2em;
+    margin-right: .2em;
+    margin-left: .2em;
+    padding: .2em;
+}
+
+/* Line spacing for proper music notation */
+.CodeMirror-line.content-line {
+    line-height: 2em;
+    padding-left: 1em;
+}
+
+/* Octave indicators (dots above/below) */
+.upper-octave::before {
+    content: '•';
+    position: absolute;
+    top: -0.5em;
+    left: 0.2em;
+    font-size: 0.5em;
+}
+
+.lower-octave::after {
+    content: '•';
+    position: absolute;
+    bottom: -0.5em;
+    left: 0.2em;
+    font-size: 0.5em;
 }
 
 /* Font classes for textarea */
@@ -221,4 +328,74 @@ textarea:focus {
     border: 1px solid #e1e5e9;
     border-radius: 6px;
     margin-bottom: 16px;
+}
+
+/* Color-coded parsing visualization styles */
+.parsed-element {
+    display: inline;
+    font-weight: bold;
+    border-radius: 2px;
+    padding: 1px 2px;
+}
+
+/* Notes: green background */
+.parsed-note {
+    background-color: #d4ff87;
+    color: #1a5a1a;
+}
+
+/* Dashes: red background */
+.parsed-dash {
+    background-color: #ffb3ba;
+    color: #8b0000;
+}
+
+/* Lyrics: yellow background */
+.parsed-lyrics {
+    background-color: #fff87d;
+    color: #b8860b;
+}
+
+/* Barlines: bold purple */
+.parsed-barline {
+    background-color: #e6ccff;
+    color: #4b0082;
+    font-weight: bold;
+}
+
+/* Unparsed/unconsumed: blinking red */
+.unparsed {
+    background-color: #ff6b6b;
+    color: white;
+    animation: blink 1.5s linear infinite;
+    font-weight: bold;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.3; }
+}
+
+/* Rests: gray background */
+.parsed-rest {
+    background-color: #e0e0e0;
+    color: #666;
+}
+
+/* Whitespace: subtle blue background */
+.parsed-whitespace {
+    background-color: #f0f8ff;
+    color: #4682b4;
+}
+
+/* Breath marks: light cyan */
+.parsed-breath {
+    background-color: #e0ffff;
+    color: #008b8b;
+}
+
+/* Unknown elements: orange background */
+.parsed-unknown {
+    background-color: #ffcc99;
+    color: #cc4400;
 }

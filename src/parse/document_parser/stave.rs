@@ -32,7 +32,7 @@ fn parse_upper_lines(lines: &[&str], start_line: usize) -> Result<(Vec<UpperLine
                 text_lines_before.push(TextLine {
                     content: line.to_string(),
                     source: Source {
-                        value: line.to_string(),
+                        value: Some(line.to_string()),
                         position: Position { line: line_num, column: 1 },
                     },
                 });
@@ -42,7 +42,7 @@ fn parse_upper_lines(lines: &[&str], start_line: usize) -> Result<(Vec<UpperLine
             text_lines_before.push(TextLine {
                 content: line.to_string(),
                 source: Source {
-                    value: line.to_string(),
+                    value: Some(line.to_string()),
                     position: Position { line: line_num, column: 1 },
                 },
             });
@@ -75,7 +75,7 @@ fn parse_lower_lines(lines: &[&str], start_line: usize, content_index: usize) ->
             text_lines_after.push(TextLine {
                 content: line.to_string(),
                 source: Source {
-                    value: line.to_string(),
+                    value: Some(line.to_string()),
                     position: Position { line: line_num, column: 1 },
                 },
             });
@@ -156,7 +156,8 @@ pub fn parse_stave_from_paragraph(paragraph: &str, start_line: usize) -> Result<
         .iter()
         .any(|line| is_hash_line(&line.content));
 
-    Ok(Stave {
+    // Create stave with consumed source (content has been moved to ParsedElements)  
+    let mut stave = Stave {
         text_lines_before,
         content_line,
         rhythm_items: None, // Will be populated by rhythm analysis
@@ -166,7 +167,7 @@ pub fn parse_stave_from_paragraph(paragraph: &str, start_line: usize) -> Result<
         text_lines_after,
         notation_system,
         source: Source {
-            value: paragraph.to_string(),
+            value: Some(paragraph.to_string()), // Initially has content
             position: Position {
                 line: start_line,
                 column: 1,
@@ -174,7 +175,12 @@ pub fn parse_stave_from_paragraph(paragraph: &str, start_line: usize) -> Result<
         },
         begin_multi_stave,
         end_multi_stave,
-    })
+    };
+    
+    // Consume the stave source since its content has been parsed into elements
+    stave.source.value.take();
+    
+    Ok(stave)
 }
 
 // Line type detection functions per MUSIC_TEXT_SPECIFICATION.md
@@ -290,7 +296,7 @@ fn parse_lyrics_line(line: &str, line_num: usize) -> Result<LyricsLine, ParseErr
         syllables.push(Syllable {
             content: word.to_string(),
             source: Source {
-                value: word.to_string(),
+                value: Some(word.to_string()),
                 position: Position { 
                     line: line_num, 
                     column: 1 + i * (word.len() + 1) // Approximate column position
@@ -302,7 +308,7 @@ fn parse_lyrics_line(line: &str, line_num: usize) -> Result<LyricsLine, ParseErr
     Ok(LyricsLine {
         syllables,
         source: Source {
-            value: line.to_string(),
+            value: Some(line.to_string()),
             position: Position { line: line_num, column: 1 },
         },
     })

@@ -54,7 +54,17 @@ struct ParseResponse {
     lilypond_svg: Option<String>,
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
+    roundtrip: Option<RoundtripResult>,
     error: Option<String>,
+}
+
+#[derive(Serialize)]
+struct RoundtripResult {
+    works: bool,
+    reconstructed_text: String,
+    where_it_failed: Option<String>,
+    original_length: usize,
+    reconstructed_length: usize,
 }
 
 
@@ -62,6 +72,136 @@ struct ParseResponse {
 struct ValidPitchesResponse {
     flat_patterns: Vec<String>,
     sharp_patterns: Vec<String>,
+}
+
+/// Test if we can reconstruct the original text from the parsed document
+fn test_roundtrip(original_text: &str, document: &serde_json::Value) -> RoundtripResult {
+    let reconstructed = reconstruct_text_from_document(document);
+    let works = reconstructed == original_text;
+    
+    let where_it_failed = if !works {
+        Some(find_first_difference(original_text, &reconstructed))
+    } else {
+        None
+    };
+    
+    let reconstructed_length = reconstructed.len();
+    
+    RoundtripResult {
+        works,
+        reconstructed_text: reconstructed,
+        where_it_failed,
+        original_length: original_text.len(),
+        reconstructed_length,
+    }
+}
+
+/// Reconstruct from unprocessed original lines using line-based approach
+fn reconstruct_text_from_document(document: &serde_json::Value) -> String {
+    // Use the lines field with include_in_roundtrip flags
+    if let Some(lines) = document.get("lines").and_then(|l| l.as_array()) {
+        lines.iter()
+            .filter_map(|line| {
+                // Only include lines that are marked as include_in_roundtrip = true
+                if line.get("include_in_roundtrip").and_then(|flag| flag.as_bool()).unwrap_or(false) {
+                    line.get("content").and_then(|content| content.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        // Fallback to old source-based approach
+        let mut unconsumed_segments = Vec::new();
+        collect_all_sources(document, &mut unconsumed_segments);
+        
+        unconsumed_segments.sort_by(|a, b| {
+            let a_line = a.get("position").and_then(|p| p.get("line")).and_then(|l| l.as_u64()).unwrap_or(0);
+            let a_col = a.get("position").and_then(|p| p.get("column")).and_then(|c| c.as_u64()).unwrap_or(0);
+            let b_line = b.get("position").and_then(|p| p.get("line")).and_then(|l| l.as_u64()).unwrap_or(0);
+            let b_col = b.get("position").and_then(|p| p.get("column")).and_then(|c| c.as_u64()).unwrap_or(0);
+            (a_line, a_col).cmp(&(b_line, b_col))
+        });
+        
+        unconsumed_segments.iter()
+            .filter_map(|source| source.get("value").and_then(|v| v.as_str()))
+            .collect::<Vec<_>>()
+            .join("")
+    }
+}
+
+/// Recursively collect all Source fields from document JSON that still have content
+fn collect_all_sources<'a>(value: &'a serde_json::Value, result: &mut Vec<&'a serde_json::Value>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            // Check if this is a Source object with unconsumed content
+            if let (Some(_pos), Some(val)) = (map.get("position"), map.get("value")) {
+                if !val.is_null() {
+                    result.push(value);
+                }
+            }
+            // Recurse into all object values
+            for v in map.values() {
+                collect_all_sources(v, result);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            // Recurse into all array elements
+            for item in arr {
+                collect_all_sources(item, result);
+            }
+        }
+        _ => {} // Primitive values don't contain sources
+    }
+}
+
+/// Reconstruct content line from parsed elements
+fn reconstruct_content_line(elements: &serde_json::Value) -> String {
+    let mut result = String::new();
+    
+    if let Some(element_array) = elements.as_array() {
+        for element in element_array {
+            if let Some(note) = element.get("Note") {
+                if let Some(value) = note.get("value").and_then(|v| v.as_str()) {
+                    result.push_str(value);
+                }
+            } else if let Some(barline) = element.get("Barline") {
+                if let Some(style) = barline.get("style").and_then(|s| s.as_str()) {
+                    result.push_str(style);
+                }
+            } else if let Some(whitespace) = element.get("Whitespace") {
+                if let Some(value) = whitespace.get("value").and_then(|v| v.as_str()) {
+                    result.push_str(value);
+                }
+            } else if let Some(breath) = element.get("Breath") {
+                result.push('\'');
+            } else if let Some(dash) = element.get("Dash") {
+                result.push('-');
+            }
+            // Add more element types as needed
+        }
+    }
+    
+    result
+}
+
+/// Find the first character position where two strings differ
+fn find_first_difference(original: &str, reconstructed: &str) -> String {
+    let orig_chars: Vec<char> = original.chars().collect();
+    let recon_chars: Vec<char> = reconstructed.chars().collect();
+    
+    for (i, (orig_char, recon_char)) in orig_chars.iter().zip(recon_chars.iter()).enumerate() {
+        if orig_char != recon_char {
+            return format!("Difference at position {}: original='{}' reconstructed='{}'", i, orig_char, recon_char);
+        }
+    }
+    
+    if orig_chars.len() != recon_chars.len() {
+        return format!("Length difference: original={} chars, reconstructed={} chars", orig_chars.len(), recon_chars.len());
+    }
+    
+    "No differences found".to_string()
 }
 
 // Helper function to add cache control headers to JSON responses
@@ -97,6 +237,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
                 lilypond_svg: None,
                 vexflow: None,
                 vexflow_svg: None,
+                roundtrip: None,
                 error: Some(format!("FRONTEND CONVERSION FAILURE: {}", unicode_error)),
             });
         }
@@ -112,6 +253,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
+            roundtrip: None,
             error: None,
         });
     }
@@ -124,13 +266,14 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
         Err(e) => {
             return json_with_no_cache(ParseResponse {
                 success: false,
-                    parsed_document: None,
+                parsed_document: None,
                 rhythm_analyzed_document: None,
                 detected_notation_systems: None,
                 lilypond: None,
                 lilypond_svg: None,
                 vexflow: None,
                 vexflow_svg: None,
+                roundtrip: None,
                 error: Some(format!("{}", e)),
             });
         }
@@ -176,6 +319,13 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
             },
         };
     
+    // Test roundtrip if we have parsed data
+    let roundtrip = if let Some(ref parsed_doc) = parsed_doc {
+        Some(test_roundtrip(&converted_input, parsed_doc))
+    } else {
+        None
+    };
+
     json_with_no_cache(ParseResponse {
         success: true,
         parsed_document: parsed_doc,
@@ -185,6 +335,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
         lilypond_svg,
         vexflow: vexflow_data,
         vexflow_svg,
+        roundtrip,
         error: None,
     })
 }

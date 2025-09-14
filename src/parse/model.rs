@@ -50,11 +50,11 @@ pub struct Position {
     pub column: usize,
 }
 
-// Source information tracking
+// Source information tracking with move semantics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Source {
-    pub value: String,    // Original source text
-    pub position: Position, // Line/column position
+    pub value: Option<String>,  // Original source text (None when moved/consumed)
+    pub position: Position,     // Line/column position
 }
 
 // Normalized pitch codes - matches old Degree enum with complete pitch coverage
@@ -233,11 +233,20 @@ pub struct Directive {
     pub source: Source,
 }
 
+// Original line information for round-trip validation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OriginalLine {
+    pub content: String,
+    pub line_number: usize,
+    pub include_in_roundtrip: bool, // False when line becomes part of parsed directive/stave
+}
+
 // Document structure types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub directives: Vec<Directive>,
     pub staves: Vec<Stave>,
+    pub lines: Vec<OriginalLine>, // Original input lines for round-trip validation
     pub source: Source,
 }
 

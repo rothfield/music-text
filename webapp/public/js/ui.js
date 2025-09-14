@@ -206,6 +206,39 @@ export const UI = {
         }
     },
 
+    // Update roundtrip output
+    updateRoundtripOutput(result) {
+        const roundtripOutput = document.getElementById('roundtrip-output');
+        
+        if (result.success && result.roundtrip) {
+            const roundtrip = result.roundtrip;
+            
+            if (roundtrip.works) {
+                roundtripOutput.innerHTML = `
+                    <div style="color: green; font-weight: bold;">✅ ROUNDTRIP SUCCESS</div>
+                    <div>Original length: ${roundtrip.original_length} characters</div>
+                    <div>Reconstructed length: ${roundtrip.reconstructed_length} characters</div>
+                    <div style="margin-top: 1em;"><strong>Reconstructed text:</strong></div>
+                    <pre style="background: #f0f0f0; padding: 8px; border-radius: 4px;">${roundtrip.reconstructed_text}</pre>
+                `;
+            } else {
+                roundtripOutput.innerHTML = `
+                    <div style="color: red; font-weight: bold;">❌ ROUNDTRIP FAILURE</div>
+                    <div>Original length: ${roundtrip.original_length} characters</div>
+                    <div>Reconstructed length: ${roundtrip.reconstructed_length} characters</div>
+                    <div style="margin-top: 1em;"><strong>Where it failed:</strong></div>
+                    <div style="color: red;">${roundtrip.where_it_failed || 'Unknown failure'}</div>
+                    <div style="margin-top: 1em;"><strong>Reconstructed text:</strong></div>
+                    <pre style="background: #ffe6e6; padding: 8px; border-radius: 4px;">${roundtrip.reconstructed_text}</pre>
+                `;
+            }
+        } else if (result.success) {
+            roundtripOutput.textContent = 'Parse successful but no roundtrip data available';
+        } else {
+            roundtripOutput.textContent = `Parse error: ${result.error}`;
+        }
+    },
+
     // Clear empty inputs
     clearEmptyInputs() {
         document.getElementById('vexflow-output').innerHTML = '';
@@ -215,6 +248,7 @@ export const UI = {
         document.getElementById('rhythm-output').textContent = 'Enter music notation to see rhythm analyzer output';
         document.getElementById('spatial-output').textContent = 'Enter music notation to see spatial analysis output';
         document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
+        document.getElementById('roundtrip-output').textContent = 'Enter music notation to test round-trip reconstruction';
     },
 
     // Music notation symbol conversion
