@@ -7,7 +7,7 @@ This specification defines the requirements for VexFlow-based music notation ren
 ## Rendering Architecture
 
 ### VexFlow Integration
-- **Library Version**: VexFlow 4.x served from `/public/assets/vexflow4.js`
+- **Library Version**: VexFlow 4.x served from `/webapp/public/assets/vexflow4.js`
 - **Dynamic Loading**: Asynchronous library loading with fallback handling
 - **Scaling Factor**: Consistent 0.8 scaling for optimal visual density
 - **Canvas/SVG**: Support both canvas and SVG output modes

@@ -271,7 +271,7 @@ pub fn start() {
     let app = Router::new()
         .route("/api/parse", get(parse_text))
         .route("/api/valid-pitches", get(get_valid_pitches))
-        .nest_service("/", ServeDir::new("public"))
+        .nest_service("/", ServeDir::new("webapp/public"))
         .layer(CorsLayer::permissive());
 
     let listener = match tokio::net::TcpListener::bind("127.0.0.1:3000").await {

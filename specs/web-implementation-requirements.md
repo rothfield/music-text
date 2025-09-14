@@ -11,7 +11,7 @@ This specification defines the technical implementation requirements for the Mus
 - **Size**: 32x32 pixels minimum, multi-size ICO format preferred
 - **Design**: Simple musical note or music text logo
 - **Format**: .ico format for broad compatibility
-- **Location**: `/public/favicon.ico`
+- **Location**: `/webapp/public/favicon.ico`
 
 ### CSS Assets
 - **Framework**: No external CSS frameworks (vanilla CSS)
@@ -20,7 +20,7 @@ This specification defines the technical implementation requirements for the Mus
 - **Performance**: Minimized CSS, no unused rules
 
 ### JavaScript Assets
-- **VexFlow**: Local copy in `/public/assets/vexflow4.js`
+- **VexFlow**: Local copy in `/webapp/public/assets/vexflow4.js`
 - **Application**: Vanilla JavaScript, no framework dependencies
 - **Performance**: Minimized for production
 - **Compatibility**: ES6+ features acceptable for modern browsers

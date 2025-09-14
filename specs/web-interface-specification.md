@@ -187,15 +187,16 @@ Response:
 ### Server Dependencies
 - **LilyPond Binary**: Must be installed and accessible in PATH
 - **Temp Directory**: Writable `/tmp/music-text-svg/` for SVG generation
-- **Static Assets**: VexFlow library served from `public/assets/`
+- **Static Assets**: VexFlow library served from `webapp/public/assets/`
 
 ### File Structure  
 ```
-public/
-├── index.html              # Redesigned main interface (single file)
-├── vexflow-renderer.js     # Enhanced VexFlow renderer with dotted note fixes
-└── assets/
-    └── vexflow4.js         # VexFlow library
+webapp/
+└── public/
+    ├── index.html              # Redesigned main interface (single file)
+    ├── vexflow-renderer.js     # Enhanced VexFlow renderer with dotted note fixes
+    └── assets/
+        └── vexflow4.js         # VexFlow library
 ```
 
 ### Current Implementation Highlights
@@ -207,7 +208,7 @@ public/
 ### Environment Configuration
 - **Server Port**: 3000 (configurable)
 - **CORS**: Permissive for development
-- **Static Serving**: Root serves from `public/` directory
+- **Static Serving**: Root serves from `webapp/public/` directory
 
 ## Future Enhancements
 
