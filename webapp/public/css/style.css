@@ -1,0 +1,224 @@
+/* Music Text Web Interface Styles */
+
+* { 
+    box-sizing: border-box; 
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 0;
+    padding: 8px;
+    background: #fafafa;
+}
+
+.app {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+/* Control Bar */
+.control-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #f6f8fa;
+    border-bottom: 1px solid #e1e5e9;
+    font-size: 13px;
+}
+
+.controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+/* Buttons */
+button {
+    background: #0969da;
+    color: white;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+button:hover { 
+    background: #0550ae; 
+}
+
+button.secondary {
+    background: #6f7681;
+    color: white;
+}
+
+button.secondary:hover { 
+    background: #656d76; 
+}
+
+/* Status */
+.status {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status.success { 
+    color: #1a7f37; 
+}
+
+.status.error { 
+    color: #cf222e; 
+}
+
+.status.loading { 
+    color: #656d76; 
+}
+
+/* Textarea */
+textarea {
+    width: 100%;
+    height: 80px;
+    padding: 8px;
+    border: none;
+    border-bottom: 1px solid #e1e5e9;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 14px;
+    resize: vertical;
+    outline: none;
+}
+
+textarea:focus {
+    border-bottom-color: #0969da;
+}
+
+/* Font classes for textarea */
+.font-default { 
+    font-family: 'SF Mono', Monaco, Consolas, monospace; 
+}
+
+.font-courier { 
+    font-family: 'Courier New', Courier, monospace; 
+}
+
+.font-source-code { 
+    font-family: 'Source Code Pro', 'SF Mono', Monaco, Consolas, monospace; 
+}
+
+.font-fira-code { 
+    font-family: 'Fira Code', 'SF Mono', Monaco, Consolas, monospace; 
+}
+
+.font-menlo { 
+    font-family: 'Menlo', Monaco, Consolas, monospace; 
+}
+
+/* Font selector styles */
+.font-selector {
+    position: relative;
+}
+
+.font-selector select {
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #24292f;
+    cursor: pointer;
+    outline: none;
+}
+
+.font-selector select:focus {
+    border-color: #0969da;
+    box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.2);
+}
+
+.font-selector label {
+    font-size: 12px;
+    color: #656d76;
+    margin-right: 4px;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    background: #f6f8fa;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.tab {
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    color: #656d76;
+}
+
+.tab.active {
+    color: #24292f;
+    border-bottom-color: #fd8c73;
+}
+
+.tab-content {
+    display: none;
+    padding: 12px;
+    min-height: 300px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Output Sections */
+#vexflow-output {
+    min-height: 200px;
+    background: white;
+}
+
+#json-output {
+    white-space: pre-wrap;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: #24292f;
+    overflow-x: auto;
+    line-height: 1.4;
+}
+
+#lilypond-output {
+    white-space: pre-wrap;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: #24292f;
+    overflow-x: auto;
+    line-height: 1.4;
+    background: #f6f8fa;
+    padding: 12px;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+}
+
+#svg-output {
+    text-align: center;
+}
+
+.pipeline-section {
+    white-space: pre-wrap;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: #24292f;
+    overflow-x: auto;
+    line-height: 1.4;
+    background: #f6f8fa;
+    padding: 12px;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    margin-bottom: 16px;
+}
