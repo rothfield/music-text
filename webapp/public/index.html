@@ -6,6 +6,7 @@
     <title>Music Text</title>
     <script src="vexflow-renderer.js"></script>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/music-text.css">
     <link rel="stylesheet" href="assets/codemirror.min.css">
 </head>
 <body>
@@ -35,6 +36,7 @@
             <div class="tab active" onclick="switchTab('vexflow', this)">VexFlow Draft</div>
             <div class="tab" onclick="switchTab('svg', this)">LilyPond SVG</div>
             <div class="tab" onclick="switchTab('lilypond', this)">LilyPond Src</div>
+            <div class="tab" onclick="switchTab('xml', this)">XML</div>
             <div class="tab" onclick="switchTab('document', this)">Document</div>
             <div class="tab" onclick="switchTab('parser', this)">Parser</div>
             <div class="tab" onclick="switchTab('rhythm', this)">Rhythm</div>
@@ -53,6 +55,10 @@
         
         <div id="lilypond-tab" class="tab-content">
             <div id="lilypond-output">Enter music notation above to see LilyPond source</div>
+        </div>
+        
+        <div id="xml-tab" class="tab-content">
+            <div id="xml-output" class="pipeline-section">Enter music notation to see XML representation</div>
         </div>
         
         <div id="document-tab" class="tab-content">
@@ -81,6 +87,7 @@
     </div></body>
 
     <script src="assets/codemirror.min.js"></script>
+    <script src="assets/xml-mode.js"></script>
     <script type="module" src="js/app.js"></script>
 </body>
 </html>

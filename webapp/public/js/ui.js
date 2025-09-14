@@ -239,10 +239,84 @@ export const UI = {
         }
     },
 
+    updateXMLOutput(result) {
+        const xmlOutput = document.getElementById('xml-output');
+        
+        if (result.success && result.xml_representation) {
+            // Escape the XML for display
+            const escapedXML = this.escapeHTML(result.xml_representation);
+            
+            // Display clean XML with button to apply to CodeMirror
+            xmlOutput.innerHTML = `
+                <div style="margin-bottom: 12px;">
+                    <button onclick="displayXMLInEditor('${btoa(result.xml_representation)}')" style="background: #0969da; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Apply to Editor</button>
+                    <span style="font-size: 12px; color: #666; margin-left: 8px;">Show XML in CodeMirror with syntax highlighting</span>
+                </div>
+                <pre style="background: #f6f8fa; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: 'SF Mono', Monaco, Consolas, monospace; line-height: 1.4;">${escapedXML}</pre>
+            `;
+        } else if (result.success) {
+            xmlOutput.textContent = 'Parse successful but no XML representation available';
+        } else {
+            xmlOutput.textContent = `Parse error: ${result.error}`;
+        }
+    },
+
+    // Apply syntax highlighting to escaped XML using CSS classes
+    highlightXML(escapedXML) {
+        return escapedXML
+            // Highlight note tags and content (working with escaped XML)
+            .replace(/(&lt;note&gt;)([^&]+)(&lt;\/note&gt;)/g, '<span class="xml-note">$1</span><span class="xml-note-content">$2</span><span class="xml-note">$3</span>')
+            
+            // Highlight barline tags and content
+            .replace(/(&lt;barline&gt;)([^&]+)(&lt;\/barline&gt;)/g, '<span class="xml-barline">$1</span><span class="xml-barline-content">$2</span><span class="xml-barline">$3</span>')
+            
+            // Highlight dash tags and content
+            .replace(/(&lt;dash&gt;)([^&]+)(&lt;\/dash&gt;)/g, '<span class="xml-dash">$1</span><span class="xml-dash-content">$2</span><span class="xml-dash">$3</span>')
+            
+            // Highlight syllable tags and content
+            .replace(/(&lt;syllable&gt;)([^&]+)(&lt;\/syllable&gt;)/g, '<span class="xml-syllable">$1</span><span class="xml-syllable-content">$2</span><span class="xml-syllable">$3</span>')
+            
+            // Highlight whitespace tags and content
+            .replace(/(&lt;whitespace&gt;)([^&]+)(&lt;\/whitespace&gt;)/g, '<span class="xml-whitespace">$1</span><span class="xml-whitespace-content">$2</span><span class="xml-whitespace">$3</span>')
+            
+            // Highlight rest tags and content
+            .replace(/(&lt;rest&gt;)([^&]+)(&lt;\/rest&gt;)/g, '<span class="xml-rest">$1</span><span class="xml-rest-content">$2</span><span class="xml-rest">$3</span>')
+            
+            // Highlight breath tags and content
+            .replace(/(&lt;breath&gt;)([^&]+)(&lt;\/breath&gt;)/g, '<span class="xml-breath">$1</span><span class="xml-breath-content">$2</span><span class="xml-breath">$3</span>')
+            
+            // Highlight unknown tags and content
+            .replace(/(&lt;unknown&gt;)([^&]+)(&lt;\/unknown&gt;)/g, '<span class="xml-unknown">$1</span><span class="xml-unknown-content">$2</span><span class="xml-unknown">$3</span>')
+            
+            // Highlight structural tags (music, stave, lyrics)
+            .replace(/(&lt;\/?(?:music|stave|lyrics)&gt;)/g, '<span class="xml-structure">$1</span>');
+    },
+
+    // Helper function to escape HTML for safe display
+    escapeHTML(str) {
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
+    displayXMLInEditor(base64XML) {
+        const xmlContent = atob(base64XML);
+        const originalContent = document.getElementById('musicInput').value;
+        
+        // Get the CodeMirror manager from the app instance
+        if (window.MusicTextApp && window.MusicTextApp.codeMirrorManager) {
+            window.MusicTextApp.codeMirrorManager.displayXML(xmlContent, originalContent);
+        }
+    },
+
     // Clear empty inputs
     clearEmptyInputs() {
         document.getElementById('vexflow-output').innerHTML = '';
         document.getElementById('lilypond-output').textContent = 'Enter music notation above to see LilyPond source';
+        document.getElementById('xml-output').textContent = 'Enter music notation to see XML representation';
         document.getElementById('document-output').textContent = 'Enter music notation to see document structure';
         document.getElementById('parser-output').textContent = 'Enter music notation to see parser output';
         document.getElementById('rhythm-output').textContent = 'Enter music notation to see rhythm analyzer output';

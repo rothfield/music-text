@@ -1,5 +1,5 @@
 use axum::{
-    extract::Query,
+    extract::{Query, Json as ExtractJson},
     response::{IntoResponse, Json, Response},
     http::{HeaderMap, HeaderValue},
     routing::{get, post},
@@ -44,6 +44,12 @@ fn check_for_unicode_chars(input: &str) -> Result<String, String> {
     Ok(converted)
 }
 
+#[derive(Deserialize)]
+struct ParseRequest {
+    input: String,
+    generate_svg: Option<bool>,
+}
+
 #[derive(Serialize)]
 struct ParseResponse {
     success: bool,
@@ -55,7 +61,17 @@ struct ParseResponse {
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
     roundtrip: Option<RoundtripResult>,
+    xml_representation: Option<String>,
+    syntax_tokens: Option<Vec<SyntaxToken>>,
     error: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+struct SyntaxToken {
+    token_type: String,
+    start: usize,
+    end: usize,
+    content: String,
 }
 
 #[derive(Serialize)]
@@ -204,6 +220,170 @@ fn find_first_difference(original: &str, reconstructed: &str) -> String {
     "No differences found".to_string()
 }
 
+/// Generate XML representation from parsed document that preserves exact input structure
+fn generate_xml_representation(document: &serde_json::Value) -> String {
+    let mut xml = String::from("<music>\n");
+    
+    // Process staves
+    if let Some(staves) = document.get("staves").and_then(|s| s.as_array()) {
+        for stave in staves {
+            xml.push_str("  <stave>\n");
+            
+            // Process content line elements
+            if let Some(content_line) = stave.get("content_line").and_then(|cl| cl.as_array()) {
+                xml.push_str("    ");
+                for element in content_line {
+                    if let Some(note) = element.get("Note") {
+                        if let Some(value) = note.get("value").and_then(|v| v.as_str()) {
+                            xml.push_str(&format!("<note>{}</note>", escape_xml(value)));
+                        }
+                    } else if let Some(whitespace) = element.get("Whitespace") {
+                        if let Some(value) = whitespace.get("value").and_then(|v| v.as_str()) {
+                            xml.push_str(&format!("<whitespace>{}</whitespace>", escape_xml(value)));
+                        }
+                    } else if let Some(barline) = element.get("Barline") {
+                        if let Some(style) = barline.get("style").and_then(|s| s.as_str()) {
+                            xml.push_str(&format!("<barline>{}</barline>", escape_xml(style)));
+                        }
+                    } else if let Some(_dash) = element.get("Dash") {
+                        xml.push_str("<dash>-</dash>");
+                    } else if let Some(_rest) = element.get("Rest") {
+                        if let Some(value) = element.get("Rest").and_then(|r| r.get("value")).and_then(|v| v.as_str()) {
+                            xml.push_str(&format!("<rest>{}</rest>", escape_xml(value)));
+                        }
+                    } else if let Some(_breath) = element.get("Breath") {
+                        xml.push_str("<breath>'</breath>");
+                    } else if let Some(unknown) = element.get("Unknown") {
+                        if let Some(value) = unknown.get("value").and_then(|v| v.as_str()) {
+                            xml.push_str(&format!("<unknown>{}</unknown>", escape_xml(value)));
+                        }
+                    }
+                }
+                xml.push('\n');
+            }
+            
+            // Process lyrics lines
+            if let Some(lyrics_lines) = stave.get("lyrics_lines").and_then(|ll| ll.as_array()) {
+                for lyrics_line in lyrics_lines {
+                    xml.push_str("    <lyrics>");
+                    if let Some(syllables) = lyrics_line.get("syllables").and_then(|s| s.as_array()) {
+                        for (i, syllable) in syllables.iter().enumerate() {
+                            if i > 0 {
+                                xml.push_str("<whitespace> </whitespace>");
+                            }
+                            if let Some(content) = syllable.get("content").and_then(|c| c.as_str()) {
+                                xml.push_str(&format!("<syllable>{}</syllable>", escape_xml(content)));
+                            }
+                        }
+                    }
+                    xml.push_str("</lyrics>\n");
+                }
+            }
+            
+            xml.push_str("  </stave>\n");
+        }
+    }
+    
+    xml.push_str("</music>");
+    xml
+}
+
+/// Generate syntax tokens from parsed document for CodeMirror highlighting
+fn generate_syntax_tokens(document: &serde_json::Value) -> Vec<SyntaxToken> {
+    let mut tokens = Vec::new();
+    let mut position = 0usize;
+    
+    // Process staves to extract tokens in order
+    if let Some(staves) = document.get("staves").and_then(|s| s.as_array()) {
+        for stave in staves {
+            // Process content line elements
+            if let Some(content_line) = stave.get("content_line").and_then(|cl| cl.as_array()) {
+                for element in content_line {
+                    if let Some(note) = element.get("Note") {
+                        if let Some(value) = note.get("value").and_then(|v| v.as_str()) {
+                            tokens.push(SyntaxToken {
+                                token_type: "note".to_string(),
+                                start: position,
+                                end: position + value.len(),
+                                content: value.to_string(),
+                            });
+                            position += value.len();
+                        }
+                    } else if let Some(whitespace) = element.get("Whitespace") {
+                        if let Some(value) = whitespace.get("value").and_then(|v| v.as_str()) {
+                            tokens.push(SyntaxToken {
+                                token_type: "whitespace".to_string(),
+                                start: position,
+                                end: position + value.len(),
+                                content: value.to_string(),
+                            });
+                            position += value.len();
+                        }
+                    } else if let Some(barline) = element.get("Barline") {
+                        if let Some(style) = barline.get("style").and_then(|s| s.as_str()) {
+                            tokens.push(SyntaxToken {
+                                token_type: "barline".to_string(),
+                                start: position,
+                                end: position + style.len(),
+                                content: style.to_string(),
+                            });
+                            position += style.len();
+                        }
+                    } else if let Some(_dash) = element.get("Dash") {
+                        tokens.push(SyntaxToken {
+                            token_type: "dash".to_string(),
+                            start: position,
+                            end: position + 1,
+                            content: "-".to_string(),
+                        });
+                        position += 1;
+                    } else if let Some(rest) = element.get("Rest") {
+                        if let Some(value) = rest.get("value").and_then(|v| v.as_str()) {
+                            tokens.push(SyntaxToken {
+                                token_type: "rest".to_string(),
+                                start: position,
+                                end: position + value.len(),
+                                content: value.to_string(),
+                            });
+                            position += value.len();
+                        }
+                    } else if let Some(_breath) = element.get("Breath") {
+                        tokens.push(SyntaxToken {
+                            token_type: "breath".to_string(),
+                            start: position,
+                            end: position + 1,
+                            content: "'".to_string(),
+                        });
+                        position += 1;
+                    } else if let Some(unknown) = element.get("Unknown") {
+                        if let Some(value) = unknown.get("value").and_then(|v| v.as_str()) {
+                            tokens.push(SyntaxToken {
+                                token_type: "unknown".to_string(),
+                                start: position,
+                                end: position + value.len(),
+                                content: value.to_string(),
+                            });
+                            position += value.len();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    tokens
+}
+
+/// Escape XML special characters
+fn escape_xml(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
 // Helper function to add cache control headers to JSON responses
 fn json_with_no_cache<T>(data: T) -> Response 
 where
@@ -220,9 +400,8 @@ where
     response
 }
 
-async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
-    let input = params.get("input").cloned().unwrap_or_default();
-    let generate_svg = params.get("generate_svg").map(|s| s == "true").unwrap_or(false);
+// Core parsing logic extracted to shared function
+async fn handle_parse_request(input: String, generate_svg: bool) -> Response {
     
     // Check for Unicode characters and convert musical symbols
     let converted_input = match check_for_unicode_chars(&input) {
@@ -238,6 +417,8 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
                 vexflow: None,
                 vexflow_svg: None,
                 roundtrip: None,
+                xml_representation: None,
+                syntax_tokens: None,
                 error: Some(format!("FRONTEND CONVERSION FAILURE: {}", unicode_error)),
             });
         }
@@ -254,6 +435,8 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
             vexflow: None,
             vexflow_svg: None,
             roundtrip: None,
+            xml_representation: None,
+            syntax_tokens: None,
             error: None,
         });
     }
@@ -274,6 +457,8 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
                 vexflow: None,
                 vexflow_svg: None,
                 roundtrip: None,
+                xml_representation: None,
+                syntax_tokens: None,
                 error: Some(format!("{}", e)),
             });
         }
@@ -326,6 +511,20 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
         None
     };
 
+    // Generate XML representation if we have parsed data
+    let xml_representation = if let Some(ref parsed_doc) = parsed_doc {
+        Some(generate_xml_representation(parsed_doc))
+    } else {
+        None
+    };
+
+    // Generate syntax tokens if we have parsed data
+    let syntax_tokens = if let Some(ref parsed_doc) = parsed_doc {
+        Some(generate_syntax_tokens(parsed_doc))
+    } else {
+        None
+    };
+
     json_with_no_cache(ParseResponse {
         success: true,
         parsed_document: parsed_doc,
@@ -336,6 +535,8 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
         vexflow: vexflow_data,
         vexflow_svg,
         roundtrip,
+        xml_representation,
+        syntax_tokens,
         error: None,
     })
 }
@@ -441,4 +642,11 @@ pub fn start() {
     
     axum::serve(listener, app).await.unwrap();
         });
+}
+
+// GET handler for query parameters
+async fn parse_text(Query(params): Query<HashMap<String, String>>) -> Response {
+    let input = params.get("input").cloned().unwrap_or_default();
+    let generate_svg = params.get("generate_svg").map(|s| s == "true").unwrap_or(false);
+    handle_parse_request(input, generate_svg).await
 }

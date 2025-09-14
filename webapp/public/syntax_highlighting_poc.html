@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Syntax Highlighting Proof of Concept</title>
+    <link rel="stylesheet" href="assets/codemirror.min.css">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .example { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        
+        /* Custom highlighting styles */
+        .CodeMirror .cm-music-note { 
+            color: #22863a; 
+            font-weight: bold; 
+            background: #f0fff4;
+        }
+        .CodeMirror .cm-music-barline { 
+            color: #d73a49; 
+            font-weight: bold; 
+            background: #fff5f5;
+        }
+        .CodeMirror .cm-music-whitespace { 
+            background: #f6f8ff; 
+        }
+        
+        #output { 
+            background: #f8f9fa; 
+            padding: 10px; 
+            margin: 10px 0; 
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Syntax Highlighting Proof of Concept</h1>
+    
+    <div class="example">
+        <h2>Original Text</h2>
+        <textarea id="musicInput">|S R G M|</textarea>
+    </div>
+
+    <button onclick="demonstrateHighlighting()">Apply XML-Based Highlighting</button>
+    <button onclick="resetHighlighting()">Reset to Plain</button>
+    
+    <div id="output">Click button to see token mapping...</div>
+
+    <script src="assets/codemirror.min.js"></script>
+    <script>
+        let editor;
+        
+        // Mock XML parse data (this would come from server)
+        const mockXMLParseData = {
+            input: "|S R G M|",
+            tokens: [
+                { type: "barline", start: 0, end: 1, content: "|" },
+                { type: "note", start: 1, end: 2, content: "S" },
+                { type: "whitespace", start: 2, end: 3, content: " " },
+                { type: "note", start: 3, end: 4, content: "R" },
+                { type: "whitespace", start: 4, end: 5, content: " " },
+                { type: "note", start: 5, end: 6, content: "G" },
+                { type: "whitespace", start: 6, end: 7, content: " " },
+                { type: "note", start: 7, end: 8, content: "M" },
+                { type: "barline", start: 8, end: 9, content: "|" }
+            ]
+        };
+
+        window.onload = function() {
+            editor = CodeMirror.fromTextArea(document.getElementById("musicInput"), {
+                mode: "text/plain",
+                lineNumbers: true,
+                theme: "default"
+            });
+            
+            // Show the mock data
+            document.getElementById('output').textContent = 
+                "Mock XML Token Data:\n" + JSON.stringify(mockXMLParseData, null, 2);
+        };
+
+        // Custom mode that uses XML parse data for highlighting
+        function createMusicMode(tokens) {
+            return {
+                token: function(stream, state) {
+                    // Find the token at current position
+                    const pos = stream.pos;
+                    const token = tokens.find(t => pos >= t.start && pos < t.end);
+                    
+                    if (token) {
+                        // Consume the character(s) for this token
+                        const remaining = token.end - pos;
+                        for (let i = 0; i < remaining; i++) {
+                            stream.next();
+                        }
+                        return `music-${token.type}`;
+                    }
+                    
+                    // Fallback
+                    stream.next();
+                    return null;
+                },
+                startState: function() {
+                    return {};
+                }
+            };
+        }
+
+        function demonstrateHighlighting() {
+            // Define our custom mode
+            CodeMirror.defineMode("music-xml", function() {
+                return createMusicMode(mockXMLParseData.tokens);
+            });
+            
+            // Apply the mode
+            editor.setOption('mode', 'music-xml');
+            
+            document.getElementById('output').textContent = 
+                "✅ Applied XML-based highlighting!\n" +
+                "- Notes (S,R,G,M) should be GREEN with light background\n" +
+                "- Barlines (|) should be RED with light background\n" +
+                "- Spaces should have light blue background\n" +
+                "- Original text |S R G M| is preserved!";
+        }
+
+        function resetHighlighting() {
+            editor.setOption('mode', 'text/plain');
+            document.getElementById('output').textContent = 
+                "Reset to plain text mode. No highlighting applied.";
+        }
+    </script>
+</body>
+</html>

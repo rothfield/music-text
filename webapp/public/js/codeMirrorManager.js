@@ -228,4 +228,99 @@ export class CodeMirrorManager {
             end: this.editor.indexFromPos(to)
         };
     }
+
+    // Display XML content in the editor
+    displayXML(xmlContent, originalContent = null) {
+        if (!this.editor) return;
+        
+        // Store original content if provided
+        if (originalContent !== null) {
+            this._originalContent = originalContent;
+        }
+        
+        // Try to switch to XML mode if available, otherwise stay in text mode
+        try {
+            this.editor.setOption('mode', 'xml');
+        } catch (e) {
+            console.warn('XML mode not available, using text mode');
+        }
+        
+        // Set XML content
+        this.editor.setValue(xmlContent);
+        
+        // Add a visual indicator that we're in XML mode
+        this.container.style.border = '2px solid #4CAF50';
+        this.container.style.backgroundColor = '#f8f9fa';
+        this.container.title = 'Displaying XML representation - click to return to original input';
+        
+        // Make it clickable to return to original
+        this.container.style.cursor = 'pointer';
+        this.container.onclick = () => this.returnToOriginal();
+    }
+
+    // Return to original input content
+    returnToOriginal() {
+        if (!this.editor || !this._originalContent) return;
+        
+        // Switch back to plain text mode
+        this.editor.setOption('mode', 'text/plain');
+        
+        // Restore original content
+        this.editor.setValue(this._originalContent);
+        
+        // Remove visual indicators
+        this.container.style.border = '';
+        this.container.style.backgroundColor = '';
+        this.container.title = '';
+        this.container.style.cursor = '';
+        this.container.onclick = null;
+        
+        // Clear stored content
+        this._originalContent = null;
+    }
+
+    // Apply syntax highlighting using tokens from server
+    applySyntaxTokens(tokens) {
+        if (!this.editor || !tokens) return;
+
+        // Create custom mode based on the tokens
+        const customMode = this.createTokenBasedMode(tokens);
+        
+        // Define the mode with CodeMirror
+        window.CodeMirror.defineMode("music-syntax", function() {
+            return customMode;
+        });
+        
+        // Apply the custom mode
+        this.editor.setOption('mode', 'music-syntax');
+        
+        console.log('✅ Applied syntax highlighting with', tokens.length, 'tokens');
+    }
+
+    // Create a CodeMirror mode based on syntax tokens
+    createTokenBasedMode(tokens) {
+        return {
+            token: function(stream, state) {
+                // Find the token at current position
+                const pos = stream.pos;
+                const token = tokens.find(t => pos >= t.start && pos < t.end);
+                
+                if (token) {
+                    // Consume the characters for this token
+                    const remaining = token.end - pos;
+                    for (let i = 0; i < remaining; i++) {
+                        stream.next();
+                    }
+                    return `music-${token.token_type}`;
+                }
+                
+                // Fallback - consume one character
+                stream.next();
+                return null;
+            },
+            startState: function() {
+                return {};
+            }
+        };
+    }
 }

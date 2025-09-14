@@ -7,17 +7,17 @@ export const LocalStorage = {
     // Input text management
     saveInputText(text) {
         try {
-            localStorage.setItem('music-text-input', text);
-        } catch (error) {
-            console.warn('Failed to save input to localStorage:', error);
+            localStorage.setItem('musictext_input', text);
+        } catch (e) {
+            console.warn('Failed to save input text to localStorage:', e);
         }
     },
 
     loadInputText() {
         try {
-            return localStorage.getItem('music-text-input') || '';
-        } catch (error) {
-            console.warn('Failed to load input from localStorage:', error);
+            return localStorage.getItem('musictext_input') || '';
+        } catch (e) {
+            console.warn('Failed to load input text from localStorage:', e);
             return '';
         }
     },
@@ -25,20 +25,18 @@ export const LocalStorage = {
     // Cursor position management
     saveCursorPosition(start, end) {
         try {
-            localStorage.setItem('music-text-cursor', JSON.stringify({start, end}));
-        } catch (error) {
-            console.warn('Failed to save cursor position to localStorage:', error);
+            localStorage.setItem('musictext_cursor', JSON.stringify({start, end}));
+        } catch (e) {
+            console.warn('Failed to save cursor position to localStorage:', e);
         }
     },
 
     loadCursorPosition() {
         try {
-            const saved = localStorage.getItem('music-text-cursor');
-            const result = saved ? JSON.parse(saved) : {start: 0, end: 0};
-            console.log('📁 Loaded cursor position from storage:', result);
-            return result;
-        } catch (error) {
-            console.warn('Failed to load cursor position from localStorage:', error);
+            const stored = localStorage.getItem('musictext_cursor');
+            return stored ? JSON.parse(stored) : {start: 0, end: 0};
+        } catch (e) {
+            console.warn('Failed to load cursor position from localStorage:', e);
             return {start: 0, end: 0};
         }
     },
@@ -46,17 +44,17 @@ export const LocalStorage = {
     // Active tab management
     saveActiveTab(tabName) {
         try {
-            localStorage.setItem('music-text-active-tab', tabName);
-        } catch (error) {
-            console.warn('Failed to save active tab to localStorage:', error);
+            localStorage.setItem('musictext_active_tab', tabName);
+        } catch (e) {
+            console.warn('Failed to save active tab to localStorage:', e);
         }
     },
 
     loadActiveTab() {
         try {
-            return localStorage.getItem('music-text-active-tab') || 'vexflow';
-        } catch (error) {
-            console.warn('Failed to load active tab from localStorage:', error);
+            return localStorage.getItem('musictext_active_tab') || 'vexflow';
+        } catch (e) {
+            console.warn('Failed to load active tab from localStorage:', e);
             return 'vexflow';
         }
     },
@@ -64,17 +62,17 @@ export const LocalStorage = {
     // Font preference management
     saveFontPreference(fontClass) {
         try {
-            localStorage.setItem('music-text-font-preference', fontClass);
-        } catch (error) {
-            console.warn('Failed to save font preference to localStorage:', error);
+            localStorage.setItem('musictext_font', fontClass);
+        } catch (e) {
+            console.warn('Failed to save font preference to localStorage:', e);
         }
     },
 
     loadFontPreference() {
         try {
-            return localStorage.getItem('music-text-font-preference') || 'font-default';
-        } catch (error) {
-            console.warn('Failed to load font preference from localStorage:', error);
+            return localStorage.getItem('musictext_font') || 'font-default';
+        } catch (e) {
+            console.warn('Failed to load font preference from localStorage:', e);
             return 'font-default';
         }
     },
@@ -82,12 +80,12 @@ export const LocalStorage = {
     // Clear all data
     clearAll() {
         try {
-            localStorage.removeItem('music-text-input');
-            localStorage.removeItem('music-text-cursor');
-            localStorage.removeItem('music-text-active-tab');
-            localStorage.removeItem('music-text-font-preference');
-        } catch (error) {
-            console.warn('Failed to clear localStorage:', error);
+            localStorage.removeItem('musictext_input');
+            localStorage.removeItem('musictext_cursor');
+            localStorage.removeItem('musictext_active_tab');
+            localStorage.removeItem('musictext_font');
+        } catch (e) {
+            console.warn('Failed to clear localStorage:', e);
         }
     }
 };

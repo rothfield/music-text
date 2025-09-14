@@ -399,3 +399,65 @@ textarea:focus {
     background-color: #ffcc99;
     color: #cc4400;
 }
+
+/* CodeMirror XML Syntax Highlighting */
+.CodeMirror .cm-tag { 
+    color: #22863a !important; 
+    font-weight: bold; 
+}
+.CodeMirror .cm-attribute { 
+    color: #6f42c1 !important; 
+}
+.CodeMirror .cm-string { 
+    color: #032f62 !important; 
+}
+.CodeMirror .cm-atom { 
+    color: #e36209 !important; 
+}
+.CodeMirror .cm-bracket { 
+    color: #d73a49 !important; 
+    font-weight: bold; 
+}
+
+/* CodeMirror Music Token Syntax Highlighting */
+.CodeMirror .cm-music-note { 
+    color: #d63384 !important; 
+    font-weight: bold; 
+    background: #ffff00 !important;
+}
+.CodeMirror .cm-music-barline { 
+    color: #4b0082 !important; 
+    font-weight: bold; 
+    background: #e6ccff !important;
+}
+.CodeMirror .cm-music-dash { 
+    color: #8b0000 !important; 
+    background: #ffb3ba !important;
+}
+.CodeMirror .cm-music-lyrics { 
+    color: #b8860b !important; 
+    background: #fff87d !important;
+}
+.CodeMirror .cm-music-whitespace { 
+    background: #f0f8ff !important;
+}
+.CodeMirror .cm-music-rest { 
+    color: #666 !important; 
+    background: #e0e0e0 !important;
+}
+.CodeMirror .cm-music-breath { 
+    color: #008b8b !important; 
+    background: #e0ffff !important;
+}
+.CodeMirror .cm-music-unparsed { 
+    background: #ff6b6b !important;
+    color: white !important;
+    animation: blink 1.5s linear infinite;
+    font-weight: bold;
+}
+.CodeMirror .cm-music-unknown { 
+    background: #ff8c00 !important;
+    color: white !important;
+    font-weight: bold;
+    border: 2px solid #ff4500 !important;
+}

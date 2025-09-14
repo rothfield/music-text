@@ -1,0 +1,116 @@
+/* Music Text - Syntax Highlighting Styles */
+/* Dedicated CSS for music-text parser visualization */
+
+/* XML Syntax Highlighting Classes */
+
+/* Notes - Green */
+.xml-note {
+    color: #22863a;
+    font-weight: bold;
+}
+
+.xml-note-content {
+    color: #22863a;
+    background: #f0fff4;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Barlines - Purple */
+.xml-barline {
+    color: #6f42c1;
+    font-weight: bold;
+}
+
+.xml-barline-content {
+    color: #6f42c1;
+    background: #f8f4ff;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Dashes - Red */
+.xml-dash {
+    color: #d73a49;
+    font-weight: bold;
+}
+
+.xml-dash-content {
+    color: #d73a49;
+    background: #fff5f5;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Syllables/Lyrics - Orange/Yellow */
+.xml-syllable {
+    color: #e36209;
+    font-weight: bold;
+}
+
+.xml-syllable-content {
+    color: #e36209;
+    background: #fff8f0;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Whitespace - Blue */
+.xml-whitespace {
+    color: #0366d6;
+    font-weight: bold;
+}
+
+.xml-whitespace-content {
+    color: #0366d6;
+    background: #f6f8ff;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Rests - Gray */
+.xml-rest {
+    color: #586069;
+    font-weight: bold;
+}
+
+.xml-rest-content {
+    color: #586069;
+    background: #fafbfc;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Breath marks - Cyan */
+.xml-breath {
+    color: #0598bc;
+    font-weight: bold;
+}
+
+.xml-breath-content {
+    color: #0598bc;
+    background: #f0fdff;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Unknown elements - Warning Orange */
+.xml-unknown {
+    color: #f66a0a;
+    font-weight: bold;
+}
+
+.xml-unknown-content {
+    color: #f66a0a;
+    background: #fff5f0;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Structural elements (music, stave, lyrics) - Dark Blue */
+.xml-structure {
+    color: #032f62;
+    font-weight: bold;
+}
+
+/* Future music-text specific styles can go here */

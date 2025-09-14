@@ -14,6 +14,7 @@ class MusicTextApp {
         this.currentParseResult = null;
         this.inputTimer = null;
         this.codeMirrorManager = new CodeMirrorManager();
+        this.isSettingXML = false;
     }
 
     // Initialize the application
@@ -41,15 +42,15 @@ class MusicTextApp {
         this.setupInitialTabState();
     }
 
-    // Setup initial tab state without triggering switchTab
+    // Setup initial tab state - always default to vexflow
     setupInitialTabState() {
-        const savedTab = LocalStorage.loadActiveTab();
+        const defaultTab = 'vexflow';
         
         // Set the active tab without calling switchTab
         document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-        document.querySelector(`[onclick*="${savedTab}"]`)?.classList.add('active');
-        document.getElementById(`${savedTab}-tab`)?.classList.add('active');
+        document.querySelector(`[onclick*="${defaultTab}"]`)?.classList.add('active');
+        document.getElementById(`${defaultTab}-tab`)?.classList.add('active');
     }
 
     // Setup event listeners
@@ -71,6 +72,9 @@ class MusicTextApp {
 
     // Handle input events
     handleInput(event) {
+        // Skip if we're setting XML to avoid infinite loop
+        if (this.isSettingXML) return;
+        
         const textarea = event.target;
         const originalValue = textarea.value;
         
@@ -118,18 +122,31 @@ class MusicTextApp {
     restoreState() {
         const musicInput = document.getElementById('musicInput');
         
-        // Load saved input text
+        // Restore saved input text
         const savedText = LocalStorage.loadInputText();
         if (savedText) {
             musicInput.value = savedText;
-            // Parse and render the saved text after a brief delay
-            setTimeout(() => this.parseAndUpdatePreview(), 100);
+            // Trigger parsing for restored content
+            if (savedText.trim()) {
+                this.parseAndUpdatePreview();
+            }
         }
         
-        // Set focus and restore cursor position after text is loaded
-        setTimeout(() => {
-            UI.restoreFocusAndCursor();
-        }, 150);
+        // Restore cursor position
+        const cursorPos = LocalStorage.loadCursorPosition();
+        if (cursorPos.start >= 0 && cursorPos.end >= 0) {
+            setTimeout(() => {
+                musicInput.setSelectionRange(cursorPos.start, cursorPos.end);
+            }, 100);
+        }
+        
+        // Restore active tab
+        const activeTab = LocalStorage.loadActiveTab();
+        if (activeTab !== 'vexflow') {
+            UI.switchTab(activeTab);
+        }
+        
+        musicInput.focus();
     }
 
     // Parse and update preview (real-time, no status messages)
@@ -148,10 +165,16 @@ class MusicTextApp {
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateRoundtripOutput(result);
+            UI.updateXMLOutput(result);
             await UI.updateVexFlowOutput(result);
             
             // Update CodeMirror highlighting based on parse results
             this.codeMirrorManager.highlightFromParseResult(result);
+            
+            // Apply syntax highlighting using server-generated tokens
+            if (result.success && result.syntax_tokens) {
+                this.codeMirrorManager.applySyntaxTokens(result.syntax_tokens);
+            }
             
         } catch (error) {
             console.warn('Parse error during preview:', error.message);
@@ -183,6 +206,7 @@ class MusicTextApp {
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
+            UI.updateXMLOutput(result);
             
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);
@@ -229,6 +253,7 @@ class MusicTextApp {
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
+            UI.updateXMLOutput(result);
             
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);
@@ -250,6 +275,22 @@ class MusicTextApp {
         }
     }
 
+    // Extract text content from XML (without tags)
+    extractXMLTextContent(xmlString) {
+        try {
+            // Create a temporary DOM element to parse the XML
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+            
+            // Extract all text content (this will concatenate all leaf text nodes)
+            return xmlDoc.textContent || xmlDoc.innerText || '';
+        } catch (error) {
+            console.warn('Error extracting XML text content:', error);
+            // Fallback: use regex to strip tags (less reliable but works)
+            return xmlString.replace(/<[^>]*>/g, '');
+        }
+    }
+
     // Clear all content and localStorage
     clearAll() {
         UI.clearAllContent();
@@ -266,6 +307,7 @@ class MusicTextApp {
 
 // Create global app instance
 const app = new MusicTextApp();
+window.MusicTextApp = app;
 
 // Global functions for onclick handlers (to maintain compatibility with existing HTML)
 window.parseMusic = () => app.parseMusic();
@@ -273,6 +315,8 @@ window.generateSVG = () => app.generateSVG();
 window.clearAll = () => app.clearAll();
 window.switchTab = (tabName, clickedTab) => UI.switchTab(tabName, clickedTab);
 window.changeFontFamily = (fontClass) => FontManager.changeFont(fontClass);
+window.displayXMLInEditor = (base64XML) => UI.displayXMLInEditor(base64XML);
+window.UI = UI;
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {

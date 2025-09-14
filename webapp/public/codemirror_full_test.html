@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeMirror Full Version Test</title>
+    <link rel="stylesheet" href="assets/codemirror-full.css">
+    <style>
+        /* Make XML highlighting more obvious */
+        .cm-tag { color: #22863a !important; font-weight: bold; }
+        .cm-attribute { color: #6f42c1 !important; }
+        .cm-string { color: #032f62 !important; }
+        .cm-atom { color: #e36209 !important; }
+        .cm-bracket { color: #d73a49 !important; font-weight: bold; }
+        .cm-comment { color: #6a737d !important; font-style: italic; }
+        
+        /* Debugging - highlight any XML-related classes */
+        .CodeMirror .cm-xml-tag,
+        .CodeMirror .cm-xml-attribute,
+        .CodeMirror .cm-xml-string,
+        .CodeMirror .cm-xml-bracket {
+            background: yellow !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>CodeMirror Full Version XML Test</h1>
+    
+    <h2>XML Content</h2>
+    <textarea id="xml-content">
+<music>
+  <stave>
+    <barline>|</barline>
+    <note>S</note>
+    <whitespace> </whitespace>
+    <note>R</note>
+    <whitespace> </whitespace>
+    <note>G</note>
+    <whitespace> </whitespace>
+    <note>M</note>
+    <barline>|</barline>
+  </stave>
+</music>
+    </textarea>
+
+    <button onclick="setXML()">Set XML Mode</button>
+    <button onclick="testModes()">Show Available Modes</button>
+
+    <div id="output"></div>
+
+    <script src="assets/codemirror-full.js"></script>
+    <script src="assets/xml-mode.js"></script>
+    <script>
+        let editor;
+
+        window.onload = function() {
+            editor = CodeMirror.fromTextArea(document.getElementById("xml-content"), {
+                mode: "text/plain",
+                lineNumbers: true,
+                theme: "default"
+            });
+
+            // Show available modes immediately
+            testModes();
+        };
+
+        function setXML() {
+            try {
+                editor.setOption('mode', 'xml');
+                document.getElementById('output').innerHTML += '<p>✅ Successfully set XML mode</p>';
+            } catch (e) {
+                document.getElementById('output').innerHTML += '<p>❌ Error setting XML mode: ' + e.message + '</p>';
+            }
+        }
+
+        function testModes() {
+            const modes = Object.keys(CodeMirror.modes);
+            const mimes = Object.keys(CodeMirror.mimeModes);
+            
+            document.getElementById('output').innerHTML = 
+                '<h3>Available Modes:</h3><p>' + modes.join(', ') + '</p>' +
+                '<h3>Available MIME Types:</h3><p>' + mimes.join(', ') + '</p>' +
+                '<p>Total modes: ' + modes.length + '</p>' +
+                '<p>Total MIME types: ' + mimes.length + '</p>';
+        }
+    </script>
+</body>
+</html>

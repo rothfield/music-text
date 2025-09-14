@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeMirror XML Demo</title>
+    <link rel="stylesheet" href="assets/codemirror.min.css">
+</head>
+<body>
+    <h1>CodeMirror XML Mode Test</h1>
+    
+    <h2>Test 1: Basic XML</h2>
+    <textarea id="xml1">
+<music>
+  <stave>
+    <barline>|</barline>
+    <note>S</note>
+    <whitespace> </whitespace>
+    <note>R</note>
+    <whitespace> </whitespace>
+    <note>G</note>
+    <whitespace> </whitespace>
+    <note>M</note>
+    <barline>|</barline>
+  </stave>
+</music>
+    </textarea>
+
+    <h2>Test 2: Different XML</h2>
+    <textarea id="xml2">
+<person>
+    <name>John</name>
+    <age>30</age>
+    <city>San Francisco</city>
+</person>
+    </textarea>
+
+    <button onclick="setXMLMode()">Set XML Mode</button>
+    <button onclick="setTextMode()">Set Text Mode</button>
+    <button onclick="testModes()">Test All Modes</button>
+
+    <div id="output"></div>
+
+    <script src="assets/codemirror.min.js"></script>
+    <script src="assets/xml-mode.js"></script>
+    <script>
+        let editor1, editor2;
+
+        // Initialize editors
+        window.onload = function() {
+            editor1 = CodeMirror.fromTextArea(document.getElementById("xml1"), {
+                mode: "text/plain",
+                lineNumbers: true,
+                theme: "default"
+            });
+
+            editor2 = CodeMirror.fromTextArea(document.getElementById("xml2"), {
+                mode: "text/plain", 
+                lineNumbers: true,
+                theme: "default"
+            });
+
+            // Test available modes
+            console.log('Available modes:', Object.keys(CodeMirror.modes));
+            console.log('Available MIME types:', Object.keys(CodeMirror.mimeModes));
+            
+            // Show on page too
+            document.getElementById('output').innerHTML = 
+                '<p>Available modes: ' + Object.keys(CodeMirror.modes).join(', ') + '</p>' +
+                '<p>Available MIME types: ' + Object.keys(CodeMirror.mimeModes).join(', ') + '</p>';
+        };
+
+        function setXMLMode() {
+            try {
+                editor1.setOption('mode', 'application/xml');
+                editor2.setOption('mode', 'application/xml');
+                document.getElementById('output').innerHTML = '<p>Set mode to: application/xml</p>';
+            } catch (e) {
+                document.getElementById('output').innerHTML = '<p>Error setting XML mode: ' + e.message + '</p>';
+            }
+        }
+
+        function setTextMode() {
+            editor1.setOption('mode', 'text/plain');
+            editor2.setOption('mode', 'text/plain');
+            document.getElementById('output').innerHTML = '<p>Set mode to: text/plain</p>';
+        }
+
+        function testModes() {
+            const modes = ['xml', 'text/xml', 'application/xml', 'text/html'];
+            let results = '<h3>Testing modes:</h3>';
+            
+            modes.forEach(mode => {
+                try {
+                    editor1.setOption('mode', mode);
+                    results += `<p>✅ ${mode} - Success</p>`;
+                } catch (e) {
+                    results += `<p>❌ ${mode} - Error: ${e.message}</p>`;
+                }
+            });
+
+            results += '<p>Available modes: ' + Object.keys(CodeMirror.modes).join(', ') + '</p>';
+            results += '<p>Available MIME types: ' + Object.keys(CodeMirror.mimeModes).join(', ') + '</p>';
+            
+            document.getElementById('output').innerHTML = results;
+        }
+    </script>
+</body>
+</html>

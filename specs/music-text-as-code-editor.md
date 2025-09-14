@@ -697,6 +697,89 @@ function replaceLineWithHTML(lineNum, html) {
 - Compressed JSON transfer
 - Lazy styling for off-screen content
 
+## Implementation Details: CodeMirror Token Position Mapping
+
+### How CodeMirror Knows Character Positions
+
+The position mapping between server tokens and CodeMirror highlighting works through a precise coordination:
+
+#### 1. Server Token Generation
+```rust
+// Server maintains linear position counter
+let mut position = 0usize;
+
+tokens.push(SyntaxToken {
+    token_type: "note".to_string(),
+    start: position,           // e.g., 0
+    end: position + value.len(), // e.g., 1  
+    content: value.to_string(),
+});
+position += value.len(); // Increment for next token
+```
+
+#### 2. Token Array Sent to Frontend
+```json
+{
+  "syntax_tokens": [
+    {"token_type": "unknown", "start": 0, "end": 1, "content": "~"},
+    {"token_type": "note", "start": 1, "end": 2, "content": "1"},
+    {"token_type": "barline", "start": 2, "end": 3, "content": "|"}
+  ]
+}
+```
+
+#### 3. CodeMirror Mode Creation
+```javascript
+createTokenBasedMode(tokens) {
+    return {
+        token: function(stream, state) {
+            // stream.pos is current character position in line
+            const pos = stream.pos;
+            
+            // Find token covering this position
+            const token = tokens.find(t => pos >= t.start && pos < t.end);
+            
+            if (token) {
+                // Consume characters for this token
+                const remaining = token.end - pos;
+                for (let i = 0; i < remaining; i++) {
+                    stream.next(); // Advances stream.pos
+                }
+                return `music-${token.token_type}`;
+            }
+            
+            stream.next();
+            return null;
+        }
+    };
+}
+```
+
+#### Key Concepts:
+- **`stream.pos`**: CodeMirror's current character position (0-based)
+- **Token lookup**: For each position, find which token covers it
+- **Character consumption**: Advance stream by token's length
+- **CSS class generation**: `music-note` → CodeMirror adds `cm-` prefix → `cm-music-note`
+
+#### Example Walkthrough for `"~1|"`:
+
+1. **Position 0**: `stream.pos = 0`
+   - Find token: `{start: 0, end: 1, type: "unknown"}` ✓
+   - Consume 1 character (`~`)
+   - Return `"music-unknown"`
+
+2. **Position 1**: `stream.pos = 1`
+   - Find token: `{start: 1, end: 2, type: "note"}` ✓
+   - Consume 1 character (`1`)
+   - Return `"music-note"`
+
+3. **Position 2**: `stream.pos = 2`
+   - Find token: `{start: 2, end: 3, type: "barline"}` ✓
+   - Consume 1 character (`|`)
+   - Return `"music-barline"`
+
+The positions work because we maintain a **linear character count** on the server that matches CodeMirror's character indexing. This creates a perfect mapping between parser output and visual highlighting.
+
 ## Conclusion
 
 This specification provides a comprehensive approach to implementing music-text as a code editor with perfect columnar alignment and rich syntax highlighting. The key innovations are:
@@ -705,5 +788,6 @@ This specification provides a comprehensive approach to implementing music-text 
 2. **Fixed-width character spans** for columnar alignment
 3. **Race condition handling** for async styling updates
 4. **Fallback strategies** for robustness
+5. **Precise token position mapping** for syntax highlighting
 
 The system maintains the plain-text data model essential for parsing while providing the rich visual experience users expect from modern editors.
