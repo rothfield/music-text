@@ -92,6 +92,7 @@ export const UI = {
         document.getElementById('rhythm-output').textContent = 'Enter music notation to see rhythm analyzer output';
         document.getElementById('spatial-output').textContent = 'Enter music notation to see spatial analysis output';
         document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
+        document.getElementById('tokens-output').textContent = 'Enter music notation to see syntax tokens';
         document.getElementById('status').textContent = '';
     },
 
@@ -249,12 +250,8 @@ export const UI = {
             // Escape the XML for display
             const escapedXML = this.escapeHTML(result.xml_representation);
             
-            // Display clean XML with button to apply to CodeMirror
+            // Display clean XML
             xmlOutput.innerHTML = `
-                <div style="margin-bottom: 12px;">
-                    <button onclick="displayXMLInEditor('${btoa(result.xml_representation)}')" style="background: #0969da; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Apply to Editor</button>
-                    <span style="font-size: 12px; color: #666; margin-left: 8px;">Show XML in CodeMirror with syntax highlighting</span>
-                </div>
                 <pre style="background: #f6f8fa; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: 'SF Mono', Monaco, Consolas, monospace; line-height: 1.4;">${escapedXML}</pre>
             `;
         } else if (result.success) {
@@ -295,6 +292,19 @@ export const UI = {
             .replace(/(&lt;\/?(?:music|stave|lyrics)&gt;)/g, '<span class="xml-structure">$1</span>');
     },
 
+    // Update syntax tokens output
+    updateTokensOutput(result) {
+        const tokensOutput = document.getElementById('tokens-output');
+
+        if (result.success && result.syntax_tokens) {
+            tokensOutput.textContent = JSON.stringify(result.syntax_tokens, null, 2);
+        } else if (result.success) {
+            tokensOutput.textContent = 'Parse successful but no syntax tokens available';
+        } else {
+            tokensOutput.textContent = `Parse error: ${result.error}`;
+        }
+    },
+
     // Helper function to escape HTML for safe display
     escapeHTML(str) {
         return str
@@ -325,6 +335,7 @@ export const UI = {
         document.getElementById('rhythm-output').textContent = 'Enter music notation to see rhythm analyzer output';
         document.getElementById('spatial-output').textContent = 'Enter music notation to see spatial analysis output';
         document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
+        document.getElementById('tokens-output').textContent = 'Enter music notation to see syntax tokens';
         document.getElementById('roundtrip-output').textContent = 'Enter music notation to test round-trip reconstruction';
     },
 

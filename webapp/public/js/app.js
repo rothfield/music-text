@@ -166,13 +166,18 @@ class MusicTextApp {
             UI.updateLilyPondOutput(result);
             UI.updateRoundtripOutput(result);
             UI.updateXMLOutput(result);
+            UI.updateTokensOutput(result);
             await UI.updateVexFlowOutput(result);
             
             // Update CodeMirror highlighting based on parse results
             this.codeMirrorManager.highlightFromParseResult(result);
-            
-            // Apply syntax highlighting using server-generated tokens
-            if (result.success && result.syntax_tokens) {
+
+            // Apply character styles using server-generated character styles (preferred)
+            if (result.success && result.character_styles) {
+                this.codeMirrorManager.applyCharacterStyles(result.character_styles);
+            }
+            // Fallback to token-based highlighting if character styles not available
+            else if (result.success && result.syntax_tokens) {
                 this.codeMirrorManager.applySyntaxTokens(result.syntax_tokens);
             }
             
@@ -202,11 +207,12 @@ class MusicTextApp {
         try {
             const result = await API.parse(input);
             this.currentParseResult = result;
-            
+
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateXMLOutput(result);
+            UI.updateTokensOutput(result);
             
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);
@@ -249,11 +255,12 @@ class MusicTextApp {
         try {
             const result = await API.parseWithSVG(input);
             this.currentParseResult = result;
-            
+
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateXMLOutput(result);
+            UI.updateTokensOutput(result);
             
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);

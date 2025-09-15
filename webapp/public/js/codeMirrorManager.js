@@ -279,41 +279,93 @@ export class CodeMirrorManager {
         this._originalContent = null;
     }
 
-    // Apply syntax highlighting using tokens from server
+    // Apply syntax highlighting using character styles from server
+    applyCharacterStyles(characterStyles) {
+        if (!this.editor || !characterStyles) return;
+
+        // Clear existing marks
+        this.clearAllMarks();
+
+        // Apply each character style using CodeMirror marks
+        characterStyles.forEach(style => {
+            const pos = this.editor.posFromIndex(style.pos);
+            const endPos = this.editor.posFromIndex(style.pos + 1);
+
+            this.editor.markText(pos, endPos, {
+                className: style.classes.join(' ')
+            });
+        });
+
+        console.log('✅ Applied character styling for', characterStyles.length, 'positions');
+    }
+
+    // Clear all existing marks
+    clearAllMarks() {
+        if (!this.editor) return;
+
+        const marks = this.editor.getAllMarks();
+        marks.forEach(mark => mark.clear());
+    }
+
+    // Apply syntax highlighting using tokens from server (legacy method)
     applySyntaxTokens(tokens) {
         if (!this.editor || !tokens) return;
 
         // Create custom mode based on the tokens
         const customMode = this.createTokenBasedMode(tokens);
-        
+
         // Define the mode with CodeMirror
         window.CodeMirror.defineMode("music-syntax", function() {
             return customMode;
         });
-        
+
         // Apply the custom mode
         this.editor.setOption('mode', 'music-syntax');
-        
+
         console.log('✅ Applied syntax highlighting with', tokens.length, 'tokens');
     }
 
     // Create a CodeMirror mode based on syntax tokens
     createTokenBasedMode(tokens) {
+        // Pre-calculate line offsets from editor content
+        const editorContent = this.editor.getValue();
+        const lines = editorContent.split('\n');
+        const lineOffsets = [0];
+        let offset = 0;
+        for (let i = 0; i < lines.length - 1; i++) {
+            offset += lines[i].length + 1; // +1 for newline character
+            lineOffsets.push(offset);
+        }
+
         return {
             token: function(stream, state) {
-                // Find the token at current position
-                const pos = stream.pos;
-                const token = tokens.find(t => pos >= t.start && pos < t.end);
-                
-                if (token) {
-                    // Consume the characters for this token
-                    const remaining = token.end - pos;
-                    for (let i = 0; i < remaining; i++) {
-                        stream.next();
+                // Initialize line tracking in state
+                if (state.lineNumber === undefined) {
+                    state.lineNumber = 0;
+                }
+
+                // Check if we're at the start of a new line
+                if (stream.pos === 0 && stream.sol()) {
+                    // Update line number only when we're at start of line
+                    if (state.hasSeenLine) {
+                        state.lineNumber++;
                     }
+                    state.hasSeenLine = true;
+                }
+
+                // Calculate absolute position: line offset + stream position
+                const lineOffset = lineOffsets[state.lineNumber] || 0;
+                const absolutePos = lineOffset + stream.pos;
+                const token = tokens.find(t => absolutePos >= t.start && absolutePos < t.end);
+
+                // Removed console logging for cleaner output
+
+                if (token) {
+                    // Consume one character
+                    stream.next();
                     return `music-${token.token_type}`;
                 }
-                
+
                 // Fallback - consume one character
                 stream.next();
                 return null;
