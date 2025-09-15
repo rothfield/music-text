@@ -49,16 +49,16 @@ lyrics_line = syllable+ (newline | EOI)
 ### Upper Line Elements
 
 ```ebnf
-upper_line_element = upper_octave_marker | slur | ornament | chord | mordent | tala | space | unknown_upper
+upper_line_element = upper_octave_marker | slur_indicator | ornament | chord | mordent | tala | space | unknown_upper
 
 upper_octave_marker = "." | "*" | ":"
-slur = "_"+
+slur_indicator = "_" "_"+   // exactly two or more consecutive underscores for slur marking (minimum length: 2)
 ornament = "<" pitch+ ">" | pitch+
 chord = "[" chord_symbol "]"
 mordent = "~"
 tala = "+" | "0" | digit
 space = " "+
-unknown_upper = !upper_octave_marker !("_") !space !ornament !chord !mordent !tala ANY+
+unknown_upper = !upper_octave_marker !("_" "_") !space !ornament !chord !mordent !tala ANY+
 ```
 
 ### Lower Line Elements
@@ -106,9 +106,9 @@ line_number = digit+ "."
 - **Alignment**: Markers align spatially with content notes
 - **Symbols**: `.` (single octave), `:` (double octave), `*` (alternative)
 
-### Slurs vs Beat Groups
-- **Slurs**: `_____` in upper_line = musical phrasing
-- **Beat Groups**: `_____` in lower_line = rhythmic grouping (beat_group_indicator)
+### Slur Indicators vs Beat Group Indicators
+- **Slur Indicators**: `_____` in upper_line = musical phrasing (slur_indicator)
+- **Beat Group Indicators**: `_____` in lower_line = rhythmic grouping (beat_group_indicator)
 - **Same symbol, different semantic meaning based on spatial context**
 
 ### Lower Line Elements

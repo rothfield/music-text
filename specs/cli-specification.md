@@ -105,44 +105,155 @@ echo "S R G M" | music-text document --rhythm
 
 ## TUI REPL Features
 
-The `music-text repl` command launches a modern terminal user interface with:
+The `music-text repl` command launches a modern terminal user interface with complete CLI command parity:
 
-### **Interface Layout**
+### **Enhanced Interface Layout**
 ```
-┌─ Input (ESC to quit, Tab to switch format) ──┬─ Output - LilyPond ─────────┐
-│ S R G M                                      │ \version "2.24.0"           │
-│ P D N S'                                     │ \score {                    │
-│                                              │   \new Staff {              │
-│                                              │     c'4 d'4 e'4 f'4         │
-│                                              │   }                         │
-│                                              │ }                           │
+┌─ Input (ESC to quit, Tab to switch) ─────────┬─ Output - YAML Outline ────┐
+│ SS                                           │ stave:                      │
+│ ___                                          │   content:                  │
+│                                              │   - note: S (beat_group: ↘) │
+│                                              │   - note: S (beat_group: ↙) │
+│                                              │   rhythm:                   │
+│                                              │   - beat: quarter×2         │
+│                                              │   spatial:                  │
+│                                              │   - beat_group: [0,1] ✓     │
 ├──────────────────────────────────────────────┼─────────────────────────────┤
-│ [LilyPond] [JSON] [Debug] [Tree] [Tokens]                                  │
+│ [Outline] [Compact] [Tokens] [XML] [Rhythm] [VexFlow] [Validate] [Debug]  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### **Controls**
-- **Type**: Enter musical notation (updates live on every keystroke)
-- **Tab**: Switch output formats (LilyPond, JSON, Debug, Tree, Tokens)
-- **Shift+Tab**: Previous format
-- **Enter**: New line
-- **Backspace**: Delete character
-- **Arrow keys**: Move cursor left/right
+### **Output Formats (CLI Parity)**
+
+#### **Compact Formats** (Optimized for TUI)
+- **YAML Outline** (`Outline`): Hierarchical view with structure indicators
+- **Compact JSON** (`Compact`): Minified JSON with syntax highlighting
+- **Status Summary** (`Status`): Validation, warnings, and processing stats
+- **Tree View** (`Tree`): ASCII tree with spatial relationship indicators
+
+#### **Standard Formats** (Matching CLI Commands)
+- **Syntax Tokens** (`Tokens`): Editor integration tokens with positions
+- **XML Representation** (`XML`): Structured XML with highlighting
+- **Rhythm Analysis** (`Rhythm`): Beat structure and timing analysis
+- **VexFlow Data** (`VexFlow`): Web rendering JSON data
+- **Validation** (`Validate`): Error checking with detailed feedback
+- **LilyPond** (`LilyPond`): Professional notation source
+- **Debug** (`Debug`): Full document structure inspection
+
+### **Enhanced Controls**
+- **Type**: Enter musical notation (live updates every keystroke)
+- **Tab/Shift+Tab**: Cycle through output formats
+- **Ctrl+T**: Quick toggle to Tokens view (for debugging)
+- **Ctrl+V**: Quick toggle to Validate view (for errors)
+- **Ctrl+O**: Quick toggle to Outline view (for structure)
+- **Ctrl+R**: Force refresh/reparse
+- **Enter**: New line in input
+- **Arrow keys**: Navigate cursor in input
 - **ESC**: Exit TUI
 
+### **YAML Outline Format Specification**
+
+The Outline format provides a terse, structured view optimized for quick comprehension:
+
+```yaml
+stave:
+  notation: Sargam
+  content:
+    - note: S (octave: 0, beat_group: ↘start)
+    - note: S (octave: 0, beat_group: ↙end)
+    - newline: \\n
+  spatial:
+    - beat_group: [0,1] → notes[0,1] ✓
+    - consumed: __ → ∅
+  rhythm:
+    - beat: quarter×2 (4/4)
+    - duration: 0.5s
+  validation: ✓ clean
+  warnings: none
+```
+
+**Symbols Used:**
+- `↘start`, `↙end`: Beat group roles
+- `✓`: Successful processing
+- `∅`: Consumed/empty
+- `→`: Assignment relationship
+- `×N`: Count/repetition
+
+### **Compact JSON Format**
+
+```json
+{"s":{"c":[{"n":"S","bg":"↘"},{"n":"S","bg":"↙"}],"r":[{"b":"q×2"}],"sp":[{"bg":"[0,1]✓"}]}}
+```
+
+With syntax highlighting and expandable sections for details.
+
+### **Status Summary Format**
+
+```
+✓ Valid notation (2 notes, 1 beat group)
+⚡ Parsed in 3ms
+🎵 Sargam notation detected
+📊 Beat group: 2 notes assigned
+🔍 No warnings or issues
+```
+
 ### **Features**
+- **CLI Command Parity**: All CLI commands available as TUI output formats
 - **Live updates**: Output refreshes automatically as you type
-- **Multiple formats**: Switch between LilyPond, JSON, Debug, and syntax tokens
-- **Error display**: Red error messages with clear formatting
-- **Web API integration**: Uses same parsing pipeline as web interface
-- **Consistent behavior**: Results match web UI exactly
+- **Compact formatting**: Optimized for terminal viewing with minimal scrolling
+- **Quick navigation**: Hotkeys for common debugging tasks
+- **Error highlighting**: Immediate visual feedback for syntax errors
+- **Performance indicators**: Real-time parsing speed and statistics
+- **Spatial visualization**: ASCII art for beat groups, slurs, octave relationships
 
 ### **Architecture**
-The TUI REPL connects to the web server API for parsing, providing:
-- ✅ Consistent results between web UI and TUI
-- ✅ Hot reload capability (restart web server, not TUI)
-- ✅ All output formats available
-- ✅ ~7ms response time (imperceptible latency)
+The enhanced TUI integrates directly with the CLI pipeline:
+- ✅ **Direct CLI integration**: Uses same command handlers as CLI
+- ✅ **Format consistency**: Output matches CLI commands exactly
+- ✅ **Hot reload capability**: Restart processing without TUI restart
+- ✅ **Performance optimized**: <5ms response time for compact formats
+- ✅ **Memory efficient**: Streaming updates for large documents
+
+### **TUI Implementation Roadmap**
+
+#### **Phase 1: Format Integration** 🔄 **PLANNED**
+- Integrate all CLI commands (`tokens`, `xml`, `vexflow`, `rhythm`, `validate`, `roundtrip`)
+- Add YAML outline format generator
+- Implement compact JSON formatter
+- Add status summary formatter
+
+#### **Phase 2: Enhanced Controls** 🔄 **PLANNED**
+- Add hotkey shortcuts (Ctrl+T, Ctrl+V, Ctrl+O)
+- Implement quick format switching
+- Add force refresh capability
+- Enhanced error highlighting
+
+#### **Phase 3: Visual Enhancements** 🔄 **PLANNED**
+- ASCII art for spatial relationships
+- Beat group visualization with arcs
+- Slur indication with curved lines
+- Octave marker positioning indicators
+
+#### **Phase 4: Advanced Features** 🔄 **PLANNED**
+- Multi-document tabs
+- History navigation
+- Export functionality
+- Configuration persistence
+
+### **TUI vs CLI Feature Matrix**
+
+| Feature | CLI | Current TUI | Enhanced TUI |
+|---------|-----|-------------|--------------|
+| Document output | ✅ `document` | ✅ JSON | ✅ + YAML Outline |
+| Rhythm analysis | ✅ `rhythm` | ❌ | ✅ Compact format |
+| Syntax tokens | ✅ `tokens` | ✅ Tokens | ✅ + Position highlighting |
+| Validation | ✅ `validate` | ❌ | ✅ + Status summary |
+| XML representation | ✅ `xml` | ❌ | ✅ + Syntax highlighting |
+| VexFlow data | ✅ `vexflow` | ❌ | ✅ + Compact view |
+| Roundtrip testing | ✅ `roundtrip` | ❌ | ✅ + Live validation |
+| LilyPond output | ✅ `full-lily` | ✅ LilyPond | ✅ Same |
+| Error handling | ✅ Exit codes | ✅ Visual | ✅ Enhanced feedback |
+| Batch processing | ✅ Via shell | ❌ | ❌ Single document only |
 
 ## Overview
 

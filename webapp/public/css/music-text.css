@@ -162,4 +162,170 @@
     background-color: #ffe6cc;
 }
 
+/* Beat group indicators - make underscore characters visually disappear */
+.cm-music-beat-group, .cm-music-beat_group {
+    color: transparent;
+    user-select: none;
+}
+
+/* Slur indicators - make underscore characters visually disappear */
+.cm-music-slur-indicator {
+    color: transparent;
+    user-select: none;
+}
+
+/* Collision prevention for descenders (g, j, p, q, y) */
+.cm-music-note.has-descender {
+    padding-bottom: 0.3em;
+}
+
+/* Enhanced line height for notation lines to prevent collisions */
+.cm-editor .cm-line {
+    line-height: 2.5em;
+}
+
+/* Additional clearance for beat group arcs when descenders are present */
+.cm-music-note.beat-group-start.has-descender::after {
+    bottom: -0.8em;
+}
+
+/* Beat group notes - notes that are part of a beat group */
+.cm-music-note.beat-group-start {
+    position: relative;
+}
+
+/* Slur notes - notes that are part of a slur */
+.cm-music-note.slur-start {
+    position: relative;
+}
+
+/* Create spanning arc from start note across the entire beat group */
+/* Based on DoReMiScript's span.beat.looped pattern */
+.cm-music-note.beat-group-start::after {
+    content: '';
+    position: absolute;
+    bottom: -0.2em;
+    left: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-top: none;
+    border-left: 1px solid white;
+    border-right: 1px solid white;
+    border-bottom-left-radius: 0.8em;
+    border-bottom-right-radius: 0.8em;
+    padding-bottom: 0.75em;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Create spanning arc from start note across the entire slur (upper arc) */
+/* Mirror of beat group pattern but for upper arcs */
+.cm-music-note.slur-start::after {
+    content: '';
+    position: absolute;
+    top: -0.2em;
+    left: 0;
+    border-top: 0.1em solid #d73a49;
+    border-bottom: none;
+    border-left: 1px solid white;
+    border-right: 1px solid white;
+    border-top-left-radius: 0.8em;
+    border-top-right-radius: 0.8em;
+    padding-top: 0.75em;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* 2-note beat group */
+.cm-music-note.beat-group-start.beat-group-2::after {
+    width: 1.5em;
+}
+
+/* 3-note beat group */
+.cm-music-note.beat-group-start.beat-group-3::after {
+    width: 2.5em;
+}
+
+/* 4-note beat group */
+.cm-music-note.beat-group-start.beat-group-4::after {
+    width: 3.5em;
+}
+
+/* 5-note beat group */
+.cm-music-note.beat-group-start.beat-group-5::after {
+    width: 4.5em;
+}
+
+/* 6+ note beat group */
+.cm-music-note.beat-group-start.beat-group-6::after {
+    width: 5.5em;
+}
+
+/* Slur width variants - mirroring beat group patterns */
+/* 2-note slur */
+.cm-music-note.slur-start.slur-2::after {
+    width: 1.5em;
+}
+
+/* 3-note slur */
+.cm-music-note.slur-start.slur-3::after {
+    width: 2.5em;
+}
+
+/* 4-note slur */
+.cm-music-note.slur-start.slur-4::after {
+    width: 3.5em;
+}
+
+/* 5-note slur */
+.cm-music-note.slur-start.slur-5::after {
+    width: 4.5em;
+}
+
+/* 6+ note slur */
+.cm-music-note.slur-start.slur-6::after {
+    width: 5.5em;
+}
+
+/* Highlight notes in beat groups with subtle background */
+.cm-music-note.in-beat-group {
+    background-color: rgba(3, 102, 214, 0.1);
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Start note gets slightly stronger highlight */
+.cm-music-note.beat-group-start {
+    background-color: rgba(3, 102, 214, 0.15);
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* End note styling */
+.cm-music-note.beat-group-end {
+    background-color: rgba(3, 102, 214, 0.12);
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Highlight notes in slurs with subtle background */
+.cm-music-note.in-slur {
+    background-color: rgba(215, 58, 73, 0.1);
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Start note gets slightly stronger highlight */
+.cm-music-note.slur-start {
+    background-color: rgba(215, 58, 73, 0.15);
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* End note styling */
+.cm-music-note.slur-end {
+    background-color: rgba(215, 58, 73, 0.12);
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
 /* Future music-text specific styles can go here */

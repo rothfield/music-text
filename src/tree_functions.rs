@@ -107,6 +107,179 @@ pub fn generate_character_styles(tokens: &[SyntaxToken]) -> Vec<CharacterStyle> 
     }
 }
 
+/// Enhanced character styles generation with beat group information
+/// Uses rhythm-analyzed document to identify both explicit beat groups (marked with ___)
+/// and implicit beat groups (consecutive musical elements with same beat)
+pub fn generate_character_styles_with_beat_groups(tokens: &[SyntaxToken], document: &crate::parse::Document) -> Vec<CharacterStyle> {
+    use crate::parse::model::{DocumentElement, StaveLine};
+    use crate::rhythm::types::{ParsedElement, BeatGroupRole};
+
+    let mut styles = generate_character_styles(tokens);
+
+    // Add beat group classes to notes
+    for element in &document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            for line in &stave.lines {
+                if let StaveLine::Content(content_elements) = line {
+                    // Process explicit beat groups (marked with ___)
+                    process_explicit_beat_groups(&mut styles, content_elements, document);
+
+                    // Process implicit beat groups (consecutive elements with same beat timing)
+                    process_implicit_beat_groups(&mut styles, content_elements, document);
+                }
+            }
+        }
+    }
+
+    styles
+}
+
+/// Process explicit beat groups marked with ___
+fn process_explicit_beat_groups(
+    styles: &mut Vec<CharacterStyle>,
+    content_elements: &[ParsedElement],
+    document: &crate::parse::Document
+) {
+    use crate::rhythm::types::{ParsedElement, BeatGroupRole};
+
+    let mut beat_group_notes = Vec::new();
+
+    // Collect all notes with explicit beat group information
+    for element in content_elements {
+        if let ParsedElement::Note {
+            position, beat_group, in_beat_group, ..
+        } = element {
+            if *in_beat_group {
+                if let Some(absolute_pos) = position_to_absolute_offset(&position, &document.source.value.clone().unwrap_or_default()) {
+                    beat_group_notes.push((absolute_pos, beat_group.clone()));
+                }
+            }
+        }
+    }
+
+    // Group consecutive beat group notes and add spanning classes
+    let mut current_group = Vec::new();
+    let mut current_group_positions = Vec::new();
+
+    for (pos, role) in beat_group_notes {
+        match role {
+            Some(BeatGroupRole::Start) => {
+                // Process previous group if any
+                if !current_group.is_empty() {
+                    add_beat_group_classes(styles, &current_group_positions, current_group.len(), "beat-group");
+                }
+                // Start new group
+                current_group = vec![role.clone().unwrap()];
+                current_group_positions = vec![pos];
+            }
+            Some(BeatGroupRole::Middle) => {
+                current_group.push(role.clone().unwrap());
+                current_group_positions.push(pos);
+            }
+            Some(BeatGroupRole::End) => {
+                current_group.push(role.clone().unwrap());
+                current_group_positions.push(pos);
+                // Complete the group
+                add_beat_group_classes(styles, &current_group_positions, current_group.len(), "beat-group");
+                current_group.clear();
+                current_group_positions.clear();
+            }
+            _ => {}
+        }
+    }
+
+    // Handle case where group doesn't end with End role
+    if !current_group.is_empty() {
+        add_beat_group_classes(styles, &current_group_positions, current_group.len(), "beat-group");
+    }
+}
+
+/// Process implicit beat groups (consecutive musical elements with same beat timing)
+fn process_implicit_beat_groups(
+    styles: &mut Vec<CharacterStyle>,
+    content_elements: &[ParsedElement],
+    document: &crate::parse::Document
+) {
+    use crate::rhythm::types::ParsedElement;
+
+    let mut musical_elements = Vec::new();
+
+    // Collect all musical elements (notes, rests, dashes) with their positions and durations
+    for element in content_elements {
+        match element {
+            ParsedElement::Note { position, duration, in_beat_group, .. } => {
+                // Skip notes already in explicit beat groups
+                if !*in_beat_group {
+                    if let Some(absolute_pos) = position_to_absolute_offset(&position, &document.source.value.clone().unwrap_or_default()) {
+                        musical_elements.push((absolute_pos, duration.clone()));
+                    }
+                }
+            }
+            ParsedElement::Rest { position, duration, .. } => {
+                if let Some(absolute_pos) = position_to_absolute_offset(&position, &document.source.value.clone().unwrap_or_default()) {
+                    musical_elements.push((absolute_pos, duration.clone()));
+                }
+            }
+            ParsedElement::Dash { position, duration, .. } => {
+                if let Some(absolute_pos) = position_to_absolute_offset(&position, &document.source.value.clone().unwrap_or_default()) {
+                    musical_elements.push((absolute_pos, duration.clone()));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Group consecutive elements with same duration (implicit beat grouping)
+    let mut current_implicit_group = Vec::new();
+    let mut last_duration: Option<(usize, usize)> = None;
+
+    for (pos, duration) in musical_elements {
+        let should_group = match (&last_duration, &duration) {
+            (Some(last), Some(current)) => last == current && last.1 >= 4, // Same duration and at least quarter notes
+            _ => false,
+        };
+
+        if should_group {
+            current_implicit_group.push(pos);
+        } else {
+            // Process previous implicit group if it has 2+ elements
+            if current_implicit_group.len() >= 2 {
+                add_beat_group_classes(styles, &current_implicit_group, current_implicit_group.len(), "implicit-beat-group");
+            }
+            // Start new group
+            current_implicit_group = vec![pos];
+        }
+
+        last_duration = duration;
+    }
+
+    // Process final implicit group
+    if current_implicit_group.len() >= 2 {
+        add_beat_group_classes(styles, &current_implicit_group, current_implicit_group.len(), "implicit-beat-group");
+    }
+}
+
+fn add_beat_group_classes(styles: &mut Vec<CharacterStyle>, positions: &[usize], count: usize) {
+    for (i, &pos) in positions.iter().enumerate() {
+        // Find the style at this position and add beat group classes
+        if let Some(style) = styles.iter_mut().find(|s| s.pos == pos) {
+            // Add base in-beat-group class
+            style.classes.push("in-beat-group".to_string());
+
+            // Add role-specific class based on position in group
+            if i == 0 {
+                style.classes.push("beat-group-start".to_string());
+                // Add count class for arc sizing
+                style.classes.push(format!("beat-group-{}", count));
+            } else if i == positions.len() - 1 {
+                style.classes.push("beat-group-end".to_string());
+            } else {
+                style.classes.push("beat-group-middle".to_string());
+            }
+        }
+    }
+}
+
 /// Generate XML representation from parsed document
 pub fn generate_xml_representation(document: &serde_json::Value) -> String {
     let mut xml = String::new();
@@ -364,7 +537,7 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                             // Even though they're consumed, we need tokens for editor highlighting
                             for element in &upper_line.elements {
                                 match element {
-                                    UpperElement::UpperUnderscores { value, source } => {
+                                    UpperElement::SlurIndicator { value, source } => {
                                         // Generate token for slur indicator
                                         if let Some(start_pos) = source_position_to_absolute_offset(
                                             source.position.line,
@@ -583,12 +756,12 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             });
             *position += marker_len;
         }
-        UpperElement::UpperUnderscores { value, source } => {
+        UpperElement::SlurIndicator { value, source } => {
             let value_len = value.len();
             // Use the actual source column position (1-based) converted to 0-based indexing
             let start_pos = source.position.column - 1;
             tokens.push(SyntaxToken {
-                token_type: "slur".to_string(),
+                token_type: "slur-indicator".to_string(),
                 start: start_pos,
                 end: start_pos + value_len,
                 content: value.clone(),

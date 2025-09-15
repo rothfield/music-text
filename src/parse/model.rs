@@ -355,7 +355,7 @@ pub enum UpperElement {
         marker: String,  // "." or ":"
         source: Source,
     },
-    UpperUnderscores {
+    SlurIndicator {
         value: String,  // "_____" for slurs
         source: Source,
     },

@@ -66,7 +66,7 @@ impl PositionTracker {
                     self.consumed_positions.push(old_pos);
                 }
             }
-            UpperElement::UpperUnderscores { value, source } => {
+            UpperElement::SlurIndicator { value, source } => {
                 if source.value.is_some() {
                     self.current_pos += value.len();
                 } else {
@@ -283,7 +283,7 @@ pub fn consume_and_assign_slurs(
     for element in &mut upper_line.elements {
         let pos = tracker.advance_for_upper_element(element);
 
-        if let UpperElement::UpperUnderscores { value, source } = element {
+        if let UpperElement::SlurIndicator { value, source } = element {
             if value.len() >= 2 { // Minimum 2 underscores for slur
                 if let Some(underscore_value) = source.value.take() {
                     let consumed = ConsumedSlur {
@@ -377,7 +377,7 @@ pub fn validate_consumption(upper_line: &UpperLine, lower_line: &LowerLine) -> R
                     ));
                 }
             }
-            UpperElement::UpperUnderscores { source, .. } => {
+            UpperElement::SlurIndicator { source, .. } => {
                 if source.value.is_some() {
                     return Err(format!(
                         "Unconsumed slur at position {:?}",
@@ -949,7 +949,7 @@ mod tests {
                         position: Position { line: 0, column: 0 },
                     },
                 },
-                UpperElement::UpperUnderscores {
+                UpperElement::SlurIndicator {
                     value: "___".to_string(),
                     source: Source {
                         value: Some("___".to_string()),
@@ -975,7 +975,7 @@ mod tests {
 
         // Slur should be consumed
         for element in &updated_upper.elements {
-            if let UpperElement::UpperUnderscores { source, .. } = element {
+            if let UpperElement::SlurIndicator { source, .. } = element {
                 assert!(source.value.is_none(), "Slur source should be consumed");
             }
         }

@@ -44,7 +44,7 @@ pub fn parse_upper_line(input: &str, line_num: usize) -> Result<UpperLine, Parse
                     column += 1;
                 }
 
-                UpperElement::UpperUnderscores {
+                UpperElement::SlurIndicator {
                     value: value.clone(),
                     source: Source {
                         value: Some(value),
@@ -228,8 +228,8 @@ mod tests {
         assert_eq!(result.elements.len(), 1);
 
         match &result.elements[0] {
-            UpperElement::UpperUnderscores { value, .. } => assert_eq!(value, "___"),
-            _ => panic!("Expected UpperUnderscores"),
+            UpperElement::SlurIndicator { value, .. } => assert_eq!(value, "___"),
+            _ => panic!("Expected SlurIndicator"),
         }
     }
 
@@ -277,7 +277,7 @@ mod tests {
 
         match (&result.elements[0], &result.elements[2], &result.elements[4], &result.elements[6]) {
             (UpperElement::UpperOctaveMarker { marker, .. },
-             UpperElement::UpperUnderscores { value, .. },
+             UpperElement::SlurIndicator { value, .. },
              UpperElement::Ornament { pitches, .. },
              UpperElement::Mordent { .. }) => {
                 assert_eq!(marker, ".");
