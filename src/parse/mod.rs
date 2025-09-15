@@ -14,4 +14,4 @@ pub use model::{Document, Directive, Stave, ContentLine, ContentElement, TextLin
 pub use recursive_descent::{parse_document, ParseError};
 pub use lower_line_parser::parse_lower_line;
 pub use upper_line_parser::parse_upper_line;
-pub use content_line_parser::parse_content_line;
+pub use content_line_parser::{parse_content_line, parse_content_line_with_row};

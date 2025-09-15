@@ -104,7 +104,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             let xml_representation = crate::tree_functions::generate_xml_representation(&parsed_doc_json);
 
             // Generate syntax tokens directly from Document struct (more efficient)
-            let syntax_tokens = crate::tree_functions::generate_syntax_tokens(&result.parsed_document);
+            let syntax_tokens = crate::tree_functions::generate_syntax_tokens(&result.parsed_document, &input);
 
             // Generate character styles from tokens for simpler client-side application
             let character_styles = crate::tree_functions::generate_character_styles(&syntax_tokens);

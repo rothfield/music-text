@@ -701,29 +701,99 @@ function replaceLineWithHTML(lineNum, html) {
 
 ### How CodeMirror Knows Character Positions
 
-The position mapping between server tokens and CodeMirror highlighting works through a precise coordination:
+The position mapping between server tokens and CodeMirror highlighting works through a precise coordination based on **content elements only**:
 
-#### 1. Server Token Generation
+#### 1. Server Token Generation Strategy
 ```rust
-// Server maintains linear position counter
-let mut position = 0usize;
+pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<SyntaxToken> {
+    let mut tokens = Vec::new();
 
-tokens.push(SyntaxToken {
-    token_type: "note".to_string(),
-    start: position,           // e.g., 0
-    end: position + value.len(), // e.g., 1  
-    content: value.to_string(),
-});
-position += value.len(); // Increment for next token
+    // ONLY process content elements with position: {row, col}
+    // Skip upper/lower line elements - they don't have row/col positions
+    for element in document.elements {
+        match element {
+            DocumentElement::Stave(stave) => {
+                for line in &stave.lines {
+                    match line {
+                        StaveLine::Content(parsed_elements) => {
+                            // Process content line elements
+                            for element in parsed_elements {
+                                process_parsed_element(element, &mut tokens, original_input);
+                            }
+                        }
+                        StaveLine::Upper(_) => {
+                            // Skip - no row/col positions
+                        }
+                        StaveLine::Lower(_) => {
+                            // Skip - no row/col positions
+                        }
+                        // ... other line types
+                    }
+                }
+            }
+        }
+    }
+
+    tokens
+}
+
+fn process_parsed_element(element: &ParsedElement, tokens: &mut Vec<SyntaxToken>, original_input: &str) {
+    match element {
+        ParsedElement::Note { value, position: pos, .. } => {
+            // Convert (row, col) to absolute position in document
+            if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
+                tokens.push(SyntaxToken {
+                    token_type: "note".to_string(),
+                    start: start_pos,
+                    end: start_pos + value.len(),
+                    content: value.clone(),
+                });
+            }
+        }
+        ParsedElement::Barline { style, position: pos, .. } => {
+            if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
+                tokens.push(SyntaxToken {
+                    token_type: "barline".to_string(),
+                    start: start_pos,
+                    end: start_pos + style.len(),
+                    content: style.clone(),
+                });
+            }
+        }
+        // ... other content elements with position: {row, col}
+    }
+}
+
+fn position_to_absolute_offset(position: &Position, original_input: &str) -> Option<usize> {
+    let lines: Vec<&str> = original_input.split('\n').collect();
+
+    if position.row == 0 || position.row > lines.len() {
+        return None;
+    }
+
+    let mut offset = 0;
+    // Add lengths of all previous lines (including newlines)
+    for i in 0..(position.row - 1) {
+        offset += lines[i].len() + 1; // +1 for newline
+    }
+
+    // Add column offset within the current line
+    if position.col > 0 && position.col <= lines[position.row - 1].len() + 1 {
+        offset += position.col - 1; // Convert 1-based to 0-based
+    }
+
+    Some(offset)
+}
 ```
 
 #### 2. Token Array Sent to Frontend
 ```json
 {
   "syntax_tokens": [
-    {"token_type": "unknown", "start": 0, "end": 1, "content": "~"},
-    {"token_type": "note", "start": 1, "end": 2, "content": "1"},
-    {"token_type": "barline", "start": 2, "end": 3, "content": "|"}
+    {"token_type": "note", "start": 0, "end": 1, "content": "S"},
+    {"token_type": "whitespace", "start": 1, "end": 2, "content": " "},
+    {"token_type": "note", "start": 2, "end": 3, "content": "R"},
+    {"token_type": "barline", "start": 8, "end": 9, "content": "|"}
   ]
 }
 ```
@@ -756,29 +826,34 @@ createTokenBasedMode(tokens) {
 ```
 
 #### Key Concepts:
+- **Content elements only**: Only elements with `position: {row, col}` generate tokens
+- **Absolute positioning**: Convert (row, col) to absolute character offsets
+- **Spatial semantics**: Beat groups come from `in_beat_group` flags, not separate tokens
 - **`stream.pos`**: CodeMirror's current character position (0-based)
 - **Token lookup**: For each position, find which token covers it
-- **Character consumption**: Advance stream by token's length
 - **CSS class generation**: `music-note` → CodeMirror adds `cm-` prefix → `cm-music-note`
 
-#### Example Walkthrough for `"~1|"`:
+#### Example Walkthrough for `"SSSS-\n____"`:
 
-1. **Position 0**: `stream.pos = 0`
-   - Find token: `{start: 0, end: 1, type: "unknown"}` ✓
-   - Consume 1 character (`~`)
-   - Return `"music-unknown"`
+**Input Analysis:**
+```
+SSSS-     <- Content line (generates tokens)
+____      <- Lower line (skipped - no row/col positions)
+```
 
-2. **Position 1**: `stream.pos = 1`
-   - Find token: `{start: 1, end: 2, type: "note"}` ✓
-   - Consume 1 character (`1`)
-   - Return `"music-note"`
+**Generated Tokens:**
+1. **Position 0**: Note `S` at row=1, col=1 → absolute pos 0
+   - Token: `{start: 0, end: 1, type: "note", content: "S"}`
+2. **Position 1**: Note `S` at row=1, col=2 → absolute pos 1
+   - Token: `{start: 1, end: 2, type: "note", content: "S"}`
+3. **Position 4**: Dash `-` at row=1, col=5 → absolute pos 4
+   - Token: `{start: 4, end: 5, type: "dash", content: "-"}`
 
-3. **Position 2**: `stream.pos = 2`
-   - Find token: `{start: 2, end: 3, type: "barline"}` ✓
-   - Consume 1 character (`|`)
-   - Return `"music-barline"`
+**Beat Group Information:**
+- Notes with `in_beat_group: true` get beat group styling via other mechanisms
+- No separate `beat_group` tokens are generated for `____` in lower line
 
-The positions work because we maintain a **linear character count** on the server that matches CodeMirror's character indexing. This creates a perfect mapping between parser output and visual highlighting.
+The positions work because we **convert (row, col) to absolute offsets** that match CodeMirror's linear character indexing, but only for content elements that have semantic meaning for syntax highlighting.
 
 ## Conclusion
 

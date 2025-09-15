@@ -28,6 +28,15 @@ pub struct ConsumedSyllable {
     pub original_source: Source,  // Source.value is now None
 }
 
+/// Consumed beat group with move semantics - original source is consumed
+#[derive(Debug, Clone)]
+pub struct ConsumedBeatGroup {
+    pub start_pos: usize,
+    pub end_pos: usize,
+    pub original_source: Source,  // Source.value is now None
+    pub underscore_count: usize,  // Number of underscores in the group
+}
+
 /// Position tracker for spatial assignment
 #[derive(Debug)]
 pub struct PositionTracker {
@@ -84,7 +93,7 @@ impl PositionTracker {
                     self.consumed_positions.push(old_pos);
                 }
             }
-            LowerElement::LowerUnderscores { value, source } => {
+            LowerElement::BeatGroupIndicator { value, source } => {
                 if source.value.is_some() {
                     self.current_pos += value.len();
                 } else {
@@ -174,12 +183,12 @@ pub fn assign_markers_direct(
 ) -> (Vec<ParsedElement>, Vec<(usize, ConsumedMarker)>) {
     let mut remaining_markers = Vec::new();
 
-    // Extract note positions (convert from col to column for matching)
+    // Extract note positions (convert from 1-based col to 0-based position for matching)
     let note_positions: Vec<(usize, usize)> = content_elements.iter()
         .enumerate()
         .filter_map(|(idx, element)| {
             match element {
-                ParsedElement::Note { position, .. } => Some((position.col, idx)),
+                ParsedElement::Note { position, .. } => Some((position.col - 1, idx)),
                 _ => None,
             }
         })
@@ -297,7 +306,7 @@ pub fn consume_and_assign_slurs(
             .enumerate()
             .filter_map(|(idx, element)| {
                 match element {
-                    ParsedElement::Note { position, .. } => Some((position.col, idx)),
+                    ParsedElement::Note { position, .. } => Some((position.col - 1, idx)),
                     _ => None,
                 }
             })
@@ -391,7 +400,7 @@ pub fn validate_consumption(upper_line: &UpperLine, lower_line: &LowerLine) -> R
                     ));
                 }
             }
-            LowerElement::LowerUnderscores { source, .. } => {
+            LowerElement::BeatGroupIndicator { source, .. } => {
                 if source.value.is_some() {
                     return Err(format!(
                         "Unconsumed beat grouping at position {:?}",
@@ -404,6 +413,212 @@ pub fn validate_consumption(upper_line: &UpperLine, lower_line: &LowerLine) -> R
     }
 
     Ok(())
+}
+
+/// Validate that all beat groups were properly processed
+pub fn validate_beat_group_processing(remaining_beat_groups: &[(usize, ConsumedBeatGroup)]) -> Vec<String> {
+    let mut warnings = Vec::new();
+
+    for (pos, beat_group) in remaining_beat_groups {
+        warnings.push(format!(
+            "Unprocessed beat group indicator at position {} (span: {}-{}): {} underscores could not be assigned to notes",
+            pos,
+            beat_group.start_pos,
+            beat_group.end_pos,
+            beat_group.underscore_count
+        ));
+    }
+
+    warnings
+}
+
+/// Consume beat groups from lower lines using move semantics with position tracking
+fn consume_beat_groups(mut lower_lines: Vec<LowerLine>) -> (Vec<(usize, ConsumedBeatGroup)>, Vec<LowerLine>) {
+    let mut consumed_groups = Vec::new();
+
+    for lower_line in &mut lower_lines {
+        let mut tracker = PositionTracker::new();
+
+        for element in &mut lower_line.elements {
+            let pos = tracker.advance_for_lower_element(element);
+
+            if let LowerElement::BeatGroupIndicator { value, source } = element {
+                if let Some(underscore_value) = source.value.take() {
+                    let consumed = ConsumedBeatGroup {
+                        start_pos: pos,
+                        end_pos: pos + underscore_value.len() - 1,
+                        underscore_count: underscore_value.len(),
+                        original_source: Source {
+                            value: Some(underscore_value),
+                            position: source.position.clone(),
+                        },
+                    };
+                    consumed_groups.push((pos, consumed));
+                }
+            }
+        }
+    }
+
+    (consumed_groups, lower_lines)
+}
+
+/// Assign beat groups to content elements at exact positions
+pub fn assign_beat_groups_direct(
+    mut content_elements: Vec<ParsedElement>,
+    consumed_beat_groups: Vec<(usize, ConsumedBeatGroup)>
+) -> (Vec<ParsedElement>, Vec<(usize, ConsumedBeatGroup)>) {
+    use crate::rhythm::types::BeatGroupRole;
+    let mut remaining_beat_groups = Vec::new();
+
+    // Extract note positions (convert from 1-based col to 0-based position for matching)
+    let note_positions: Vec<(usize, usize)> = content_elements.iter()
+        .enumerate()
+        .filter_map(|(idx, element)| {
+            match element {
+                ParsedElement::Note { position, .. } => Some((position.col - 1, idx)),
+                ParsedElement::Rest { position, .. } => Some((position.col - 1, idx)),
+                ParsedElement::Dash { position, .. } => Some((position.col - 1, idx)),
+                _ => None,
+            }
+        })
+        .collect();
+
+    // Direct assignment pass
+    for (beat_group_pos, consumed_beat_group) in consumed_beat_groups {
+        // Find notes within beat group span
+        let mut notes_in_group = Vec::new();
+
+        for (note_pos, note_idx) in &note_positions {
+            if *note_pos >= consumed_beat_group.start_pos && *note_pos <= consumed_beat_group.end_pos {
+                notes_in_group.push(*note_idx);
+            }
+        }
+
+        // Only assign if we have 2+ musical elements (minimum for a group)
+        if notes_in_group.len() >= 2 {
+            let mut assigned = false;
+
+            // Assign beat group roles
+            for (i, &element_index) in notes_in_group.iter().enumerate() {
+                match &mut content_elements[element_index] {
+                    ParsedElement::Note { beat_group, in_beat_group, children, position, .. } => {
+                        // Check for overlap conflict with enhanced reporting
+                        if beat_group.is_some() {
+                            eprintln!("Warning: Beat group overlap detected at position {}:{} - existing assignment preserved", position.row, position.col);
+                            // Don't overwrite existing assignment - add to remaining for fallback
+                            continue;
+                        }
+
+                        let role = if i == 0 {
+                            BeatGroupRole::Start
+                        } else if i == notes_in_group.len() - 1 {
+                            BeatGroupRole::End
+                        } else {
+                            BeatGroupRole::Middle
+                        };
+
+                        *beat_group = Some(role.clone());
+                        *in_beat_group = true;
+
+                        // Add beat group indicator to Start note's children
+                        if matches!(role, BeatGroupRole::Start) {
+                            use crate::rhythm::types::ParsedChild;
+                            let beat_group_child = ParsedChild::BeatGroupIndicator {
+                                symbol: consumed_beat_group.original_source.value.clone().unwrap_or_default(),
+                                span: consumed_beat_group.underscore_count,
+                            };
+                            children.push(beat_group_child);
+                        }
+
+                        assigned = true;
+                    },
+                    ParsedElement::Rest { position, .. } | ParsedElement::Dash { position, .. } => {
+                        // Rests and dashes don't have beat_group fields but are counted in grouping
+                        assigned = true;
+                    },
+                    _ => {}
+                }
+            }
+
+            if !assigned {
+                remaining_beat_groups.push((beat_group_pos, consumed_beat_group));
+            }
+        } else {
+            // Not enough elements for a group - add to remaining
+            remaining_beat_groups.push((beat_group_pos, consumed_beat_group));
+        }
+    }
+
+    (content_elements, remaining_beat_groups)
+}
+
+/// Assign remaining beat groups to closest available notes
+pub fn assign_beat_groups_nearest(
+    mut content_elements: Vec<ParsedElement>,
+    remaining_beat_groups: Vec<(usize, ConsumedBeatGroup)>
+) -> (Vec<ParsedElement>, Vec<(usize, ConsumedBeatGroup)>) {
+    use crate::rhythm::types::BeatGroupRole;
+    let mut still_remaining = Vec::new();
+
+    for (beat_group_pos, consumed_beat_group) in remaining_beat_groups {
+        // Find available notes (not already in beat groups) within a reasonable range
+        let mut candidate_notes = Vec::new();
+
+        for (idx, element) in content_elements.iter().enumerate() {
+            if let ParsedElement::Note { beat_group, position, .. } = element {
+                // Only consider notes without existing beat group assignments
+                if beat_group.is_none() {
+                    let note_pos = position.col - 1;  // Convert to 0-based
+                    let distance = if beat_group_pos > note_pos {
+                        beat_group_pos - note_pos
+                    } else {
+                        note_pos - beat_group_pos
+                    };
+
+                    // Only consider notes within reasonable distance (e.g., 5 columns)
+                    if distance <= 5 {
+                        candidate_notes.push((distance, note_pos, idx));
+                    }
+                }
+            }
+        }
+
+        // Sort by distance, then by position
+        candidate_notes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+        // Try to find at least 2 notes for a meaningful beat group
+        if candidate_notes.len() >= 2 {
+            // Take the closest available notes
+            let selected_notes: Vec<usize> = candidate_notes.iter()
+                .take(std::cmp::min(candidate_notes.len(), consumed_beat_group.underscore_count))
+                .map(|(_, _, idx)| *idx)
+                .collect();
+
+            if selected_notes.len() >= 2 {
+                // Assign beat group roles to selected notes
+                for (i, &element_index) in selected_notes.iter().enumerate() {
+                    if let ParsedElement::Note { beat_group, in_beat_group, .. } = &mut content_elements[element_index] {
+                        *beat_group = Some(if i == 0 {
+                            BeatGroupRole::Start
+                        } else if i == selected_notes.len() - 1 {
+                            BeatGroupRole::End
+                        } else {
+                            BeatGroupRole::Middle
+                        });
+                        *in_beat_group = true;
+                    }
+                }
+            } else {
+                // Not enough notes selected, add to remaining
+                still_remaining.push((beat_group_pos, consumed_beat_group));
+            }
+        } else {
+            // No suitable notes found, add to remaining
+            still_remaining.push((beat_group_pos, consumed_beat_group));
+        }
+    }
+
+    (content_elements, still_remaining)
 }
 
 /// Main spatial assignment processor
@@ -474,18 +689,53 @@ fn process_stave_spatial(stave: &mut Stave) -> Result<(Stave, Vec<String>), Stri
             let lower_line = lower_lines[0].clone();
 
             // 1. Consume octave markers
-            let (consumed_markers, _updated_upper, _updated_lower) =
+            let (consumed_markers, updated_upper, updated_lower) =
                 consume_octave_markers(upper_line, lower_line);
+
 
             // 2. Assign markers to content elements
             let (content_with_octaves, remaining_markers) =
                 assign_markers_direct(content_elements.clone(), consumed_markers);
 
             // 3. Assign remaining markers to nearest notes
-            let final_content = assign_markers_nearest(content_with_octaves, remaining_markers);
+            let content_with_octaves_and_markers = assign_markers_nearest(content_with_octaves, remaining_markers);
+
+            // 4. Consume beat groups from lower lines (use already updated lower line)
+            let (consumed_beat_groups, final_updated_lower_lines) = consume_beat_groups(vec![updated_lower]);
+
+            // 5. Assign beat groups to content elements with two-phase approach
+            let (content_with_beat_groups, remaining_beat_groups) =
+                assign_beat_groups_direct(content_with_octaves_and_markers, consumed_beat_groups);
+
+            // 6. Assign remaining beat groups to nearest notes
+            let (final_content, still_remaining_beat_groups) = assign_beat_groups_nearest(content_with_beat_groups, remaining_beat_groups);
+
+            // 7. Validate beat group processing and collect warnings
+            let beat_group_warnings = validate_beat_group_processing(&still_remaining_beat_groups);
+            warnings.extend(beat_group_warnings);
 
             // Update the content line with processed elements
             *content_elements = final_content;
+
+            // Update the stave with consumed upper and lower lines
+            // Find and update upper line
+            for line in &mut stave.lines {
+                if let StaveLine::Upper(_) = line {
+                    *line = StaveLine::Upper(updated_upper);
+                    break;
+                }
+            }
+
+            // Find and update lower line(s)
+            let mut lower_line_idx = 0;
+            for line in &mut stave.lines {
+                if let StaveLine::Lower(_) = line {
+                    if lower_line_idx < final_updated_lower_lines.len() {
+                        *line = StaveLine::Lower(final_updated_lower_lines[lower_line_idx].clone());
+                        lower_line_idx += 1;
+                    }
+                }
+            }
         }
     }
 

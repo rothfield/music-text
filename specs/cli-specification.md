@@ -10,14 +10,21 @@
 - ✅ `--help` documentation
 - ✅ Stdin input support
 - ✅ **TUI REPL**: `music-text repl` (dual-pane terminal UI with live updates)
-- ✅ **Document command**: `music-text document` (JSON output)
+- ✅ **Document command**: `music-text document` (JSON output, with --rhythm flag)
 - ✅ **LilyPond command**: `music-text full-lily` (LilyPond output)
+- ✅ **Tokens command**: `music-text tokens` (syntax tokens for editor integration)
+- ✅ **XML command**: `music-text xml` (XML representation)
+- ✅ **VexFlow command**: `music-text vexflow` (VexFlow JSON data)
+- ✅ **Rhythm command**: `music-text rhythm` (rhythm analysis results)
+- ✅ **Parse command**: `music-text parse` (with --validate, --roundtrip, --show-warnings)
+- ✅ **Validate command**: `music-text validate` (with --strict)
+- ✅ **Roundtrip command**: `music-text roundtrip` (parsing consistency test)
 - ✅ **Performance stub**: `music-text perf` (placeholder)
 
 **Not Yet Implemented:** Advanced CLI features marked with `[NOT YET IMPLEMENTED]` throughout this spec
-- ❌ Subcommands (parse, render, debug, batch, completions)
-- ❌ Additional output formats (svg - tokens available in TUI)
-- ❌ Error handling and exit codes
+- ❌ Subcommands (render, debug, batch, completions)
+- ❌ Additional output formats (svg, pdf, midi)
+- ❌ Full error handling and exit codes
 - ❌ Configuration files
 
 **Note**: The Makefile now works correctly with restored subcommands:
@@ -25,6 +32,76 @@
 - ✅ `make perf` → `music-text perf` (Performance benchmarks stub)
 - ✅ `make test-cli` → `music-text document` and `music-text full-lily` (Document/LilyPond commands) - **RESTORED**
 - ❌ Shell completions support expected
+
+## Newly Implemented Commands (December 2024)
+
+### Testing & Debugging Commands
+
+These commands provide feature parity with the web API and enable comprehensive testing:
+
+#### `music-text tokens`
+Generate syntax tokens for editor integration:
+```bash
+echo "S R G M" | music-text tokens
+# Output: JSON array of syntax tokens with positions
+```
+
+#### `music-text xml`
+Generate XML representation of parsed document:
+```bash
+echo "S R G M" | music-text xml
+# Output: XML tree structure
+```
+
+#### `music-text vexflow`
+Generate VexFlow JSON data for web rendering:
+```bash
+echo "S R G M" | music-text vexflow
+# Output: VexFlow-compatible JSON
+```
+
+#### `music-text rhythm`
+Show rhythm-analyzed document:
+```bash
+echo "S R G M" | music-text rhythm
+# Output: Document with rhythm analysis applied
+```
+
+#### `music-text parse`
+Parse with advanced options:
+```bash
+# With validation
+music-text parse --validate --input "S R G M"
+
+# With roundtrip test
+music-text parse --roundtrip --input "S R G M"
+
+# Show warnings
+music-text parse --show-warnings --input "S R G M"
+```
+
+#### `music-text validate`
+Validate notation:
+```bash
+# Basic validation
+echo "S R G M" | music-text validate
+
+# Strict mode (warnings as errors)
+echo "S R G M" | music-text validate --strict
+```
+
+#### `music-text roundtrip`
+Test parsing consistency:
+```bash
+echo "S R G M" | music-text roundtrip
+# Output: JSON with parsing statistics
+```
+
+#### `music-text document --rhythm`
+Show rhythm-analyzed document instead of parsed:
+```bash
+echo "S R G M" | music-text document --rhythm
+```
 
 ## TUI REPL Features
 

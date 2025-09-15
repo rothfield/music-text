@@ -52,9 +52,14 @@ pub enum ParsedChild {
         distance: i8,
     },
     /// Syllable/lyric text
-    Syllable { 
+    Syllable {
         text: String,
         distance: i8,
+    },
+    /// Beat group indicator consumed by start note
+    BeatGroupIndicator {
+        symbol: String,  // Original underscore pattern ("__", "___", etc.)
+        span: usize,     // Length of the underscore sequence
     },
 }
 

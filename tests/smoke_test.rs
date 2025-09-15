@@ -108,6 +108,9 @@ const SMOKE_TEST_ROW_TXT: &str = r#"###
 /// Test separate notes should not be tied
 const SMOKE_TEST_NO_TIES: &str = r#"|1 1"#;
 
+/// Test multiple staves separated by blank lines
+const SMOKE_TEST_MULTI_STAVE_SIMPLE: &str = "1|\n\n2|";
+
 /// Run comprehensive smoke tests on server startup
 pub fn run_smoke_tests() -> Result<(), String> {
     info!("🔥 SMOKE TEST: Starting comprehensive music-text feature validation...");
@@ -434,6 +437,18 @@ pub fn run_smoke_tests() -> Result<(), String> {
         Err(e) => {
             error!("❌ NO TIES TEST FAILED: {}", e);
             test_results.push(("❌ No ties for separate notes", e.clone()));
+            all_passed = false;
+        }
+    }
+
+    // Test multiple staves separated by blank lines
+    match test_parse_and_render("Multi-stave simple", SMOKE_TEST_MULTI_STAVE_SIMPLE) {
+        Ok(result) => {
+            test_results.push(("✅ Multi-stave simple", result));
+        },
+        Err(e) => {
+            error!("❌ MULTI-STAVE SIMPLE TEST FAILED: {}", e);
+            test_results.push(("❌ Multi-stave simple", e.clone()));
             all_passed = false;
         }
     }
@@ -872,6 +887,14 @@ mod tests {
         match test_parse_and_render("Comprehensive", SMOKE_TEST_COMPREHENSIVE) {
             Ok(_) => {},
             Err(e) => panic!("Comprehensive test failed: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_multi_stave_simple() {
+        match test_parse_and_render("Multi-stave simple", SMOKE_TEST_MULTI_STAVE_SIMPLE) {
+            Ok(_) => {},
+            Err(e) => panic!("Multi-stave simple test failed: {}", e),
         }
     }
 }

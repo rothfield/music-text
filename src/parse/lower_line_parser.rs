@@ -45,7 +45,7 @@ pub fn parse_lower_line(input: &str, line_num: usize) -> Result<LowerLine, Parse
                 }
 
                 if value.len() >= 2 {
-                    LowerElement::LowerUnderscores {
+                    LowerElement::BeatGroupIndicator {
                         value: value.clone(),
                         source: Source {
                             value: Some(value),
@@ -178,8 +178,8 @@ mod tests {
         assert_eq!(result.elements.len(), 1);
 
         match &result.elements[0] {
-            LowerElement::LowerUnderscores { value, .. } => assert_eq!(value, "___"),
-            _ => panic!("Expected LowerUnderscores"),
+            LowerElement::BeatGroupIndicator { value, .. } => assert_eq!(value, "___"),
+            _ => panic!("Expected BeatGroupIndicator"),
         }
     }
 
@@ -208,7 +208,7 @@ mod tests {
 
         match (&result.elements[0], &result.elements[2]) {
             (LowerElement::LowerOctaveMarker { marker, .. },
-             LowerElement::LowerUnderscores { value, .. }) => {
+             LowerElement::BeatGroupIndicator { value, .. }) => {
                 assert_eq!(marker, ".");
                 assert_eq!(value, "___");
             },

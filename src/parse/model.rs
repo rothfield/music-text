@@ -396,7 +396,7 @@ pub enum LowerElement {
         marker: String,  // "." or ":"
         source: Source,
     },
-    LowerUnderscores {
+    BeatGroupIndicator {
         value: String,  // "___" for beat grouping
         source: Source,
     },

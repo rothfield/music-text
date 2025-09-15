@@ -183,7 +183,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
             }
         } else if is_content_line(&current_line.trim_end_matches('\n')) {
             // Parse the content line using dedicated parser
-            let content_line_elements = crate::parse::content_line_parser::parse_content_line(&current_line)?;
+            let content_line_elements = crate::parse::content_line_parser::parse_content_line_with_row(&current_line, *line)?;
             lines.push(crate::parse::model::StaveLine::Content(content_line_elements));
             break; // Exit after finding content_line
         } else {
@@ -240,13 +240,13 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 if ch.is_whitespace() {
                     elements.push(ParsedElement::Whitespace {
                         value: ch.to_string(),
-                        position: Position { row: *line - 1, col: col_position },
+                        position: Position { row: *line, col: col_position },
                     });
                 } else {
                     // Non-whitespace in what we thought was a whitespace line - treat as unknown
                     elements.push(ParsedElement::Unknown {
                         value: ch.to_string(),
-                        position: Position { row: *line - 1, col: col_position },
+                        position: Position { row: *line, col: col_position },
                     });
                 }
                 col_position += 1;
@@ -256,7 +256,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
             if current_line.ends_with('\n') {
                 elements.push(ParsedElement::Newline {
                     value: "\n".to_string(),
-                    position: Position { row: *line - 1, col: col_position },
+                    position: Position { row: *line, col: col_position },
                 });
             }
 
@@ -264,7 +264,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 elements,
                 source: Source {
                     value: Some(current_line.clone()),
-                    position: ModelPosition { line: *line - 1, column: 1 },
+                    position: ModelPosition { line: *line, column: 1 },
                 },
             };
             lines.push(crate::parse::model::StaveLine::Whitespace(whitespace_line));
@@ -296,65 +296,6 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
         }
     }
 
-    // Handle trailing whitespace at EOI without newline (e.g., "1 " with no \n at end)
-    // According to grammar: stave = ... (blank_lines | (whitespace* newline)* EOI)
-    // The (whitespace* newline)* EOI part means we can have trailing whitespace
-    if chars.peek().is_some() {
-        // There's still content that hasn't been consumed - could be trailing whitespace
-        let mut trailing = String::new();
-        let trailing_start_line = *line;
-        let trailing_start_column = *column;
-
-        while let Some(ch) = chars.next() {
-            trailing.push(ch);
-            stave_content.push(ch);
-            if ch == '\n' {
-                *line += 1;
-                *column = 1;
-            } else {
-                *column += 1;
-            }
-        }
-
-        // Only add as whitespace line if it's not empty
-        if !trailing.is_empty() {
-            // Parse trailing content into ParsedElements like Content lines do
-            let mut elements = Vec::new();
-            let mut col_position = trailing_start_column;
-
-            for ch in trailing.chars() {
-                if ch == '\n' {
-                    elements.push(ParsedElement::Newline {
-                        value: ch.to_string(),
-                        position: Position { row: trailing_start_line, col: col_position },
-                    });
-                    col_position = 1; // Reset column after newline
-                } else if ch.is_whitespace() {
-                    elements.push(ParsedElement::Whitespace {
-                        value: ch.to_string(),
-                        position: Position { row: trailing_start_line, col: col_position },
-                    });
-                    col_position += 1;
-                } else {
-                    // Non-whitespace trailing content - treat as unknown
-                    elements.push(ParsedElement::Unknown {
-                        value: ch.to_string(),
-                        position: Position { row: trailing_start_line, col: col_position },
-                    });
-                    col_position += 1;
-                }
-            }
-
-            let whitespace_line = WhitespaceLine {
-                elements,
-                source: Source {
-                    value: Some(trailing),
-                    position: ModelPosition { line: trailing_start_line, column: trailing_start_column },
-                },
-            };
-            lines.push(crate::parse::model::StaveLine::Whitespace(whitespace_line));
-        }
-    }
 
     if lines.is_empty() {
         return Err(ParseError {

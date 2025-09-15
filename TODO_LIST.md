@@ -83,3 +83,14 @@
    - **Tokenizer responsibility**: `classify_notation_system()` detects notation systems (Western, Sargam, etc.)
    - **Consider renaming**: `AnnotationClassifier` or `LineTypeClassifier` for clarity
    - **Document**: Add clear module-level documentation explaining its limited scope
+
+13. **Convert codebase to consistent zero-based positioning** - Eliminate 1-based/0-based confusion that causes bugs:
+   - **Parser updates**: Change recursive descent parser to use 0-based row/col positions internally
+   - **ParsedElement positions**: Convert all `position.row` and `position.col` to 0-based
+   - **Source positions**: Convert line/column in Source struct to 0-based
+   - **Display helpers**: Add `to_display_position()` helper to convert to 1-based for user-facing output only
+   - **Error messages**: Update error formatting to add 1 when displaying positions to users
+   - **Tests**: Update all position-based tests to expect 0-based values
+   - **Spatial processing**: Remove all `col - 1` conversions as positions will already be 0-based
+   - **Benefits**: Eliminate constant conversions, prevent off-by-one bugs, consistent with array/string indexing
+   - **Migration strategy**: Update parser first, then propagate changes through pipeline

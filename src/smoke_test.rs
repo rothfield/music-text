@@ -534,7 +534,7 @@ fn test_feature_detection() -> Result<String, String> {
     // Check for beat group element
     let has_beat_group = stave.lower_lines.iter().any(|line| {
         line.elements.iter().any(|elem| {
-            matches!(elem, crate::parse::model::LowerElement::LowerUnderscores { .. })
+            matches!(elem, crate::parse::model::LowerElement::BeatGroupIndicator { .. })
         })
     });
     

@@ -3,9 +3,15 @@ use crate::parse::recursive_descent::ParseError;
 
 /// Parse content line according to grammar: content_line ends in newline or EOI
 pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError> {
+    parse_content_line_with_row(input, 1)
+}
+
+/// Parse content line with correct row number
+pub fn parse_content_line_with_row(input: &str, row: usize) -> Result<Vec<ParsedElement>, ParseError> {
     let mut elements = Vec::new();
     let mut chars = input.chars().peekable();
     let mut position = 1;
+    let actual_row = row - 1;  // Adjust for post-increment line numbering
 
     while let Some(ch) = chars.next() {
         match ch {
@@ -13,7 +19,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                 // content_line ends in newline - include the newline as part of content_line
                 elements.push(ParsedElement::Newline {
                     value: "\n".to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                 });
                 position += 1;
                 break;
@@ -21,7 +27,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
             '|' => {
                 elements.push(ParsedElement::Barline {
                     style: "|".to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     tala: None,
                 });
                 position += 1;
@@ -29,7 +35,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
             ' ' => {
                 elements.push(ParsedElement::Whitespace {
                     value: " ".to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                 });
                 position += 1;
             }
@@ -37,7 +43,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                 elements.push(ParsedElement::Dash {
                     degree: None,
                     octave: None,
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     duration: None,
                 });
                 position += 1;
@@ -57,7 +63,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                     degree,
                     octave: 0,
                     value: ch.to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     children: Vec::new(),  // Will be populated by analyzer with octave markers, ornaments
                     duration: None,
                     slur: None,
@@ -72,7 +78,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                     degree: Degree::N1,
                     octave: 0,
                     value: ch.to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     children: Vec::new(),
                     duration: None,
                     slur: None,
@@ -87,7 +93,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                     degree: Degree::N2,
                     octave: 0,
                     value: ch.to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     children: Vec::new(),
                     duration: None,
                     slur: None,
@@ -102,7 +108,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                     degree: Degree::N3,
                     octave: 0,
                     value: ch.to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     children: Vec::new(),
                     duration: None,
                     slur: None,
@@ -117,7 +123,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                     degree: Degree::N4,
                     octave: 0,
                     value: ch.to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     children: Vec::new(),
                     duration: None,
                     slur: None,
@@ -132,7 +138,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                     degree: Degree::N5,
                     octave: 0,
                     value: ch.to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     children: Vec::new(),
                     duration: None,
                     slur: None,
@@ -147,7 +153,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                     degree: Degree::N6,
                     octave: 0,
                     value: ch.to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     children: Vec::new(),
                     duration: None,
                     slur: None,
@@ -162,7 +168,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
                     degree: Degree::N7,
                     octave: 0,
                     value: ch.to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                     children: Vec::new(),
                     duration: None,
                     slur: None,
@@ -175,7 +181,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
             _ => {
                 elements.push(ParsedElement::Unknown {
                     value: ch.to_string(),
-                    position: Position { row: 1, col: position },
+                    position: Position { row: actual_row, col: position },
                 });
                 position += 1;
             }

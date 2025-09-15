@@ -64,10 +64,10 @@ unknown_upper = !upper_octave_marker !("_") !space !ornament !chord !mordent !ta
 ### Lower Line Elements
 
 ```ebnf
-lower_line_element = lower_octave_marker | lower_line_underscores | syllable | space | unknown_lower
+lower_line_element = lower_octave_marker | beat_group_indicator | syllable | space | unknown_lower
 
 lower_octave_marker = "." | ":"
-lower_line_underscores = "_" "_"+   // two or more consecutive underscores (tokenization level)
+beat_group_indicator = "_" "_"+   // exactly two or more consecutive underscores (minimum length: 2)
 syllable = letter+ (letter | digit | "'" | "-")*   // alphanumeric with apostrophes and hyphens
 space = " "+
 unknown_lower = !lower_octave_marker !("_" "_") !space !syllable ANY+
@@ -108,12 +108,12 @@ line_number = digit+ "."
 
 ### Slurs vs Beat Groups
 - **Slurs**: `_____` in upper_line = musical phrasing
-- **Beat Groups**: `_____` in lower_line = rhythmic grouping (lower_line_underscores)
+- **Beat Groups**: `_____` in lower_line = rhythmic grouping (beat_group_indicator)
 - **Same symbol, different semantic meaning based on spatial context**
 
 ### Lower Line Elements
 - **Lower octave markers**: `.` (single octave down), `:` (double octave down)
-- **Lower line underscores**: `__` or more consecutive underscores (tokenization level)
+- **Beat group indicators**: `__` (minimum 2) or more consecutive underscores for rhythmic grouping
 - **Syllables**: Text elements for spatial alignment (lyrics, tabla bols)
 - **Spaces**: For alignment with content above
 
