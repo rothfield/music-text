@@ -87,7 +87,7 @@ export const UI = {
         document.getElementById('lilypond-output').textContent = 'Enter music notation above to see LilyPond source';
         document.getElementById('vexflow-output').innerHTML = '';
         document.getElementById('svg-output').innerHTML = 'Click "LilyPond" to generate SVG';
-        document.getElementById('document-output').textContent = 'Enter music notation to see document structure';
+        document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('parser-output').textContent = 'Enter music notation to see parser output';
         document.getElementById('rhythm-output').textContent = 'Enter music notation to see rhythm analyzer output';
         document.getElementById('spatial-output').textContent = 'Enter music notation to see spatial analysis output';
@@ -98,19 +98,22 @@ export const UI = {
     // Update pipeline data outputs
     updatePipelineData(result) {
         if (result.success) {
-            // Document Output - text-lines, paragraphs, and content lines structure
+            // Document Output - structured document representation
             const documentStructure = {
                 source: result.parsed_document?.source || null,
                 directives: result.parsed_document?.directives || [],
-                staves: result.parsed_document?.staves?.map(stave => ({
-                    text_lines_before: stave.text_lines_before || [],
-                    content_line: stave.content_line || [],
-                    text_lines_after: stave.text_lines_after || [],
-                    upper_lines: stave.upper_lines || [],
-                    lower_lines: stave.lower_lines || [],
-                    lyrics_lines: stave.lyrics_lines || [],
-                    source: stave.source
-                })) || []
+                elements: result.parsed_document?.elements?.map(element => {
+                    if (element.Stave) {
+                        return {
+                            type: "Stave",
+                            lines: element.Stave.lines || [],
+                            rhythm_items: element.Stave.rhythm_items || [],
+                            notation_system: element.Stave.notation_system || null,
+                            source: element.Stave.source || null
+                        };
+                    }
+                    return element;
+                }) || []
             };
             document.getElementById('document-output').textContent = 
                 JSON.stringify(documentStructure, null, 2);
@@ -317,7 +320,7 @@ export const UI = {
         document.getElementById('vexflow-output').innerHTML = '';
         document.getElementById('lilypond-output').textContent = 'Enter music notation above to see LilyPond source';
         document.getElementById('xml-output').textContent = 'Enter music notation to see XML representation';
-        document.getElementById('document-output').textContent = 'Enter music notation to see document structure';
+        document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('parser-output').textContent = 'Enter music notation to see parser output';
         document.getElementById('rhythm-output').textContent = 'Enter music notation to see rhythm analyzer output';
         document.getElementById('spatial-output').textContent = 'Enter music notation to see spatial analysis output';
