@@ -4,6 +4,9 @@ pub mod rhythm;
 pub mod renderers;
 pub mod pipeline;
 pub mod models;
+pub mod stave_analyzer;
+pub mod spatial;
+pub mod tree_functions;
 
 pub fn parse(input: &str, _system: Option<&str>) -> Result<parse::Document, parse::ParseError> {
     parse::parse_document(input)

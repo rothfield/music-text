@@ -151,6 +151,15 @@ install-completions: build ## Install shell completions for fish
 	./target/debug/music-text completions fish > ~/.config/fish/completions/music-text.fish
 	@echo "✓ Fish completions installed"
 
+cli-spec: ## View CLI specification document
+	@if command -v bat > /dev/null 2>&1; then \
+		bat specs/cli-specification.md --language markdown; \
+	elif command -v less > /dev/null 2>&1; then \
+		less specs/cli-specification.md; \
+	else \
+		cat specs/cli-specification.md; \
+	fi
+
 # Quick development shortcuts
 b: build
 c: clean

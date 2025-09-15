@@ -1,286 +1,245 @@
-use crate::ast::{Document, Beat, BeatElement, NotationSystem, Barline};
+use crate::parse::model::{Document, DocumentElement};
+use crate::rhythm::types::Degree;
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VexFlowOutput {
-    pub staves: Vec<VexFlowStave>,
-    pub key_signature: Option<String>,
+#[derive(Debug, Clone)]
+struct BeamingInfo {
+    should_beam: bool,
+    beamable_notes: Vec<usize>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VexFlowStave {
-    pub notes: Vec<VexFlowElement>,
-}
+/// VexFlow renderer that works directly with Documents using rhythm analysis
+pub struct VexFlowRenderer;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum VexFlowElement {
-    Note {
-        keys: Vec<String>,
-        duration: String,
-    },
-    Rest {
-        duration: String,
-    },
-    BarLine {
-        bar_type: String,
-    },
-}
+impl VexFlowRenderer {
+    pub fn new() -> Self {
+        Self
+    }
 
-pub fn convert_to_vexflow(document: &Document) -> Result<VexFlowOutput, String> {
-    eprintln!("DEBUG: Converting document with {} staves", document.staves.len());
-    let mut staves = Vec::new();
-    
-    for stave in &document.staves {
-        eprintln!("DEBUG: Processing stave with {} measures", stave.content_line.measures.len());
-        let mut vex_notes = Vec::new();
-        
-        for measure in &stave.content_line.measures {
-            // Add start barline if present
-            if let Some(barline) = &measure.start_barline {
-                vex_notes.push(VexFlowElement::BarLine {
-                    bar_type: barline_to_vexflow(barline),
-                });
+    /// Render VexFlow data directly from Document structure
+    pub fn render_data_from_document(&self, document: &Document) -> serde_json::Value {
+        let mut staves_data = Vec::new();
+
+        // Convert each stave using rhythm analysis results
+        for element in &document.elements {
+            if let DocumentElement::Stave(stave) = element {
+                let notes = if let Some(rhythm_items) = &stave.rhythm_items {
+                    process_items(rhythm_items)
+                } else {
+                    Vec::new() // No rhythm items available
+                };
+
+                staves_data.push(serde_json::json!({
+                    "notes": notes,
+                    "key_signature": "C"
+                }));
             }
-            
-            // Process beats
-            for beat in &measure.beats {
-                match beat {
-                    Beat::Delimited { elements, .. } | Beat::Undelimited { elements, .. } => {
-                        process_beat_elements(elements, &mut vex_notes, &document.notation_system)?;
-                    }
+        }
+
+        serde_json::json!({
+            "staves": staves_data,
+            "title": document.directives.iter().find_map(|d| {
+                if d.key == "title" { Some(&d.value) } else { None }
+            }),
+            "author": document.directives.iter().find_map(|d| {
+                if d.key == "author" { Some(&d.value) } else { None }
+            }),
+            "time_signature": "4/4",
+            "clef": "treble",
+            "key_signature": "C"
+        })
+    }
+}
+
+impl Default for VexFlowRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Process rhythm items to VexFlow JSON
+fn process_items(rhythm_items: &[crate::rhythm::analyzer::Item]) -> Vec<serde_json::Value> {
+    let mut notes = Vec::new();
+
+    for item in rhythm_items {
+        match item {
+            crate::rhythm::analyzer::Item::Beat(beat) => {
+                if beat.is_tuplet {
+                    // Handle tuplet as a group
+                    let tuplet_notes = convert_beat_to_vexflow_elements(beat);
+                    notes.push(serde_json::json!({
+                        "type": "Tuplet",
+                        "divisions": beat.divisions,
+                        "ratio": beat.tuplet_ratio,
+                        "notes": tuplet_notes
+                    }));
+                } else {
+                    // Regular beat - add elements directly
+                    let beat_elements = convert_beat_to_vexflow_elements(beat);
+                    notes.extend(beat_elements);
                 }
-            }
-            
-            // Add end barline if present
-            if let Some(barline) = &measure.end_barline {
-                vex_notes.push(VexFlowElement::BarLine {
-                    bar_type: barline_to_vexflow(barline),
-                });
-            }
-        }
-        
-        staves.push(VexFlowStave { notes: vex_notes });
-    }
-    
-    Ok(VexFlowOutput {
-        staves,
-        key_signature: document.attributes.get("key").cloned(),
-    })
-}
-
-fn process_beat_elements(
-    elements: &[BeatElement], 
-    vex_notes: &mut Vec<VexFlowElement>,
-    notation_system: &NotationSystem
-) -> Result<(), String> {
-    for element in elements {
-        match element {
-            BeatElement::Pitch { value, accidental, octave, .. } => {
-                let pitch_name = convert_pitch_to_vexflow(value, accidental, *octave, notation_system)?;
-                vex_notes.push(VexFlowElement::Note {
-                    keys: vec![pitch_name],
-                    duration: "q".to_string(), // Default to quarter note
-                });
             },
-            BeatElement::Dash => {
-                // For now, treat dashes as quarter rests
-                vex_notes.push(VexFlowElement::Rest {
-                    duration: "q".to_string(),
-                });
+            crate::rhythm::analyzer::Item::Barline(barline_type, _) => {
+                notes.push(serde_json::json!({
+                    "type": "BarLine",
+                    "bar_type": format!("{:?}", barline_type)
+                }));
             },
-            BeatElement::Space => {
-                // Spaces don't generate VexFlow elements
+            crate::rhythm::analyzer::Item::Breathmark => {
+                notes.push(serde_json::json!({
+                    "type": "Breathmark"
+                }));
             },
-            _ => {
-                // Handle other elements as needed
+            crate::rhythm::analyzer::Item::Tonic(_) => {
+                // Tonic doesn't generate visual elements
             }
         }
     }
-    Ok(())
+
+    notes
 }
 
-fn convert_pitch_to_vexflow(value: &str, accidental: &Option<String>, octave: i8, notation_system: &NotationSystem) -> Result<String, String> {
-    let base_note = match notation_system {
-        NotationSystem::Sargam => {
-            match value.trim().to_uppercase().as_str() {
-                "S" => "C",
-                "R" => "D", 
-                "G" => "E",
-                "M" => "F",
-                "P" => "G",
-                "D" => "A",
-                "N" => "B",
-                _ => return Err(format!("Unknown sargam note: {}", value)),
+/// Convert a beat to VexFlow elements with beaming
+fn convert_beat_to_vexflow_elements(beat: &crate::rhythm::analyzer::Beat) -> Vec<serde_json::Value> {
+    let mut elements = Vec::new();
+
+    // Apply beaming logic: beam consecutive beamable notes within beat
+    let beaming_info = analyze_beat_for_beaming(beat);
+
+    for (element_index, beat_element) in beat.elements.iter().enumerate() {
+        match &beat_element.event {
+            crate::rhythm::analyzer::Event::Note { degree, octave, .. } => {
+                let (key, accidentals) = degree_to_vexflow_key(*degree, *octave);
+                let (duration, dots) = convert_fraction_to_vexflow(beat_element.tuplet_duration);
+
+                // Determine beaming for this note
+                let is_beamable_note = beaming_info.beamable_notes.contains(&element_index);
+                let beam_start = beaming_info.should_beam && is_beamable_note &&
+                                Some(element_index) == beaming_info.beamable_notes.first().copied();
+                let beam_end = beaming_info.should_beam && is_beamable_note &&
+                              Some(element_index) == beaming_info.beamable_notes.last().copied();
+
+                elements.push(serde_json::json!({
+                    "type": "Note",
+                    "keys": [key],
+                    "duration": duration,
+                    "dots": dots,
+                    "accidentals": accidentals,
+                    "tied": false,
+                    "beam_start": beam_start,
+                    "beam_end": beam_end
+                }));
+            },
+            crate::rhythm::analyzer::Event::Rest => {
+                let (duration, dots) = convert_fraction_to_vexflow(beat_element.tuplet_duration);
+
+                elements.push(serde_json::json!({
+                    "type": "Rest",
+                    "duration": duration,
+                    "dots": dots
+                }));
+            },
+            crate::rhythm::analyzer::Event::Unknown { .. } => {
+                // Skip unknown elements
             }
-        },
-        NotationSystem::Number => {
-            match value.trim() {
-                "1" => "C",
-                "2" => "D",
-                "3" => "E", 
-                "4" => "F",
-                "5" => "G",
-                "6" => "A",
-                "7" => "B",
-                _ => return Err(format!("Unknown number note: {}", value)),
+        }
+    }
+
+    elements
+}
+
+/// Analyze beat for beaming decisions
+fn analyze_beat_for_beaming(beat: &crate::rhythm::analyzer::Beat) -> BeamingInfo {
+    let mut beamable_notes = Vec::new();
+
+    // Find consecutive beamable notes (eighth notes or smaller)
+    for (index, element) in beat.elements.iter().enumerate() {
+        if matches!(&element.event, crate::rhythm::analyzer::Event::Note { .. }) {
+            let (duration, _) = convert_fraction_to_vexflow(element.tuplet_duration);
+            if is_beamable_duration(&duration) {
+                beamable_notes.push(index);
             }
-        },
-        NotationSystem::Western => {
-            let upper = value.trim().to_uppercase();
-            match upper.as_str() {
-                "C" => "C", "D" => "D", "E" => "E", "F" => "F",
-                "G" => "G", "A" => "A", "B" => "B",
-                _ => return Err(format!("Unknown western note: {}", value)),
-            }
-        },
-        _ => {
-            let upper = value.trim().to_uppercase();
-            match upper.as_str() {
-                "C" => "C", "D" => "D", "E" => "E", "F" => "F",
-                "G" => "G", "A" => "A", "B" => "B",
-                _ => return Err(format!("Unknown note: {}", value)),
-            }
-        },
+        }
+    }
+
+    let should_beam = beamable_notes.len() >= 2;
+
+    BeamingInfo {
+        should_beam,
+        beamable_notes,
+    }
+}
+
+/// Check if a duration is beamable (eighth note or smaller)
+fn is_beamable_duration(duration: &str) -> bool {
+    matches!(duration, "8" | "16" | "32" | "64")
+}
+
+/// Convert degree to VexFlow key with octave
+fn degree_to_vexflow_key(degree: Degree, octave: i8) -> (String, Vec<serde_json::Value>) {
+    use crate::rhythm::types::Degree::*;
+
+    let (base_note, accidental) = match degree {
+        N1 => ("C", None),
+        N1s => ("C", Some("#")),
+        N1b => ("C", Some("b")),
+        N2 => ("D", None),
+        N2s => ("D", Some("#")),
+        N2b => ("D", Some("b")),
+        N3 => ("E", None),
+        N3s => ("E", Some("#")),
+        N3b => ("E", Some("b")),
+        N4 => ("F", None),
+        N4s => ("F", Some("#")),
+        N4b => ("F", Some("b")),
+        N5 => ("G", None),
+        N5s => ("G", Some("#")),
+        N5b => ("G", Some("b")),
+        N6 => ("A", None),
+        N6s => ("A", Some("#")),
+        N6b => ("A", Some("b")),
+        N7 => ("B", None),
+        N7s => ("B", Some("#")),
+        N7b => ("B", Some("b")),
+        _ => ("C", None), // Default for other variants
     };
-    
-    let vexflow_octave = 4 + octave; // Default to 4th octave, adjust by octave marker
-    let mut pitch = format!("{}/{}", base_note, vexflow_octave);
-    
-    if let Some(acc) = accidental {
-        match acc.as_str() {
-            "#" | "s" => pitch = format!("{}#/{}", base_note, vexflow_octave),
-            "b" => pitch = format!("{}b/{}", base_note, vexflow_octave),
-            _ => {}
-        }
-    }
-    
-    Ok(pitch)
+
+    let vexflow_octave = 4 + octave; // Default to 4th octave
+    let key = format!("{}/{}", base_note, vexflow_octave);
+
+    let accidentals = if let Some(acc) = accidental {
+        vec![serde_json::json!(acc)]
+    } else {
+        vec![]
+    };
+
+    (key, accidentals)
 }
 
-fn barline_to_vexflow(barline: &Barline) -> String {
-    match barline {
-        Barline::Single => "single".to_string(),
-        Barline::Double => "double".to_string(),
-        Barline::Final => "end".to_string(),
-        Barline::ReverseFinal => "start".to_string(),
-        Barline::LeftRepeat => "repeat-begin".to_string(),
-        Barline::RightRepeat => "repeat-end".to_string(),
-    }
-}
+/// Convert fraction to VexFlow duration
+fn convert_fraction_to_vexflow(duration: fraction::Fraction) -> (String, u8) {
+    let num = *duration.numer().unwrap() as usize;
+    let den = *duration.denom().unwrap() as usize;
 
-pub fn generate_vexflow_html(vexflow_output: &VexFlowOutput) -> String {
-    let json_data = serde_json::to_string_pretty(vexflow_output).unwrap_or_else(|_| "{}".to_string());
-    
-    format!(r#"
-<!DOCTYPE html>
-<html>
-<head>
-    <title>VexFlow Notation</title>
-    <script src="https://unpkg.com/vexflow@4/build/cjs/vexflow.js"></script>
-    <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; }}
-        #notation {{ margin: 20px 0; }}
-        .controls {{ margin-bottom: 20px; }}
-        textarea {{ width: 100%; height: 100px; font-family: monospace; }}
-    </style>
-</head>
-<body>
-    <div id="notation"></div>
-    <div class="controls">
-        <textarea id="input" placeholder="Type notation here..."></textarea>
-        <button onclick="updateNotation()">Update</button>
-    </div>
-    
-    <script>
-        const VF = Vex.Flow;
-        let renderer, context, stave;
-        
-        const vexflowData = {json_data};
-        
-        function initVexFlow() {{
-            const div = document.getElementById('notation');
-            div.innerHTML = '';
-            
-            renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
-            renderer.resize(800, 200);
-            context = renderer.getContext();
-            
-            renderNotation(vexflowData);
-        }}
-        
-        function renderNotation(data) {{
-            context.clear();
-            
-            stave = new VF.Stave(10, 40, 700);
-            stave.addClef('treble');
-            
-            if (data.key_signature) {{
-                stave.addKeySignature(data.key_signature);
-            }}
-            
-            stave.setContext(context).draw();
-            
-            if (data.staves && data.staves[0] && data.staves[0].notes) {{
-                const notes = [];
-                
-                for (const element of data.staves[0].notes) {{
-                    if (element.type === 'Note') {{
-                        const note = new VF.StaveNote({{
-                            clef: 'treble',
-                            keys: element.keys,
-                            duration: element.duration
-                        }});
-                        notes.push(note);
-                    }} else if (element.type === 'Rest') {{
-                        const rest = new VF.StaveNote({{
-                            clef: 'treble',
-                            keys: ['d/5'],
-                            duration: element.duration + 'r'
-                        }});
-                        notes.push(rest);
-                    }}
-                }}
-                
-                if (notes.length > 0) {{
-                    const voice = new VF.Voice({{num_beats: 4, beat_value: 4}});
-                    voice.addTickables(notes);
-                    
-                    const formatter = new VF.Formatter().joinVoices([voice]).format([voice], 600);
-                    voice.draw(context, stave);
-                }}
-            }}
-        }}
-        
-        function updateNotation() {{
-            const input = document.getElementById('input').value;
-            
-            fetch('/api/parse', {{
-                method: 'POST',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ input: input }})
-            }})
-            .then(response => response.json())
-            .then(data => {{
-                if (data.success && data.vexflow) {{
-                    renderNotation(data.vexflow);
-                }} else {{
-                    console.error('Parse error:', data.error);
-                }}
-            }})
-            .catch(error => console.error('Error:', error));
-        }}
-        
-        // Auto-update on input change
-        document.getElementById('input').addEventListener('input', function() {{
-            clearTimeout(this.updateTimeout);
-            this.updateTimeout = setTimeout(updateNotation, 300);
-        }});
-        
-        // Initialize on page load
-        window.onload = initVexFlow;
-    </script>
-</body>
-</html>
-    "#, json_data = json_data)
+    match (num, den) {
+        (1, 1) => ("w".to_string(), 0),        // whole note
+        (1, 2) => ("h".to_string(), 0),        // half note
+        (1, 4) => ("q".to_string(), 0),        // quarter note
+        (1, 8) => ("8".to_string(), 0),        // eighth note
+        (1, 16) => ("16".to_string(), 0),      // sixteenth note
+        (1, 32) => ("32".to_string(), 0),      // thirty-second note
+        // Single-dotted durations
+        (3, 2) => ("w".to_string(), 1),        // dotted whole
+        (3, 4) => ("h".to_string(), 1),        // dotted half
+        (3, 8) => ("q".to_string(), 1),        // dotted quarter
+        (3, 16) => ("8".to_string(), 1),       // dotted eighth
+        (3, 32) => ("16".to_string(), 1),      // dotted sixteenth
+        // Double-dotted durations
+        (7, 4) => ("w".to_string(), 2),        // double-dotted whole
+        (7, 8) => ("h".to_string(), 2),        // double-dotted half
+        (7, 16) => ("q".to_string(), 2),       // double-dotted quarter
+        (7, 32) => ("8".to_string(), 2),       // double-dotted eighth
+        (7, 64) => ("16".to_string(), 2),      // double-dotted sixteenth
+        _ => ("q".to_string(), 0),             // default to quarter note
+    }
 }

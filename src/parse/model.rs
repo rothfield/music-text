@@ -298,6 +298,8 @@ pub enum StaveLine {
     Content(Vec<crate::rhythm::types::ParsedElement>),
     Lower(LowerLine),
     Lyrics(LyricsLine),
+    Whitespace(WhitespaceLine),
+    BlankLines(BlankLines),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -337,6 +339,12 @@ pub struct LowerLine {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LyricsLine {
     pub syllables: Vec<Syllable>,
+    pub source: Source,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhitespaceLine {
+    pub elements: Vec<crate::rhythm::types::ParsedElement>, // Whitespace elements and optional newline
     pub source: Source,
 }
 

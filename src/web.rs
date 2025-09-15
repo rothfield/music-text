@@ -36,6 +36,8 @@ pub struct ParseResponse {
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
     xml_representation: Option<String>,
+    syntax_tokens: Option<Vec<crate::tree_functions::SyntaxToken>>,
+    character_styles: Option<Vec<crate::tree_functions::CharacterStyle>>,
     roundtrip: Option<RoundtripData>,
     error: Option<String>,
 }
@@ -78,6 +80,8 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             vexflow: None,
             vexflow_svg: None,
             xml_representation: None,
+            syntax_tokens: None,
+            character_styles: None,
             roundtrip: None,
             error: None,
         });
@@ -95,14 +99,15 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
                 differences: None,
             };
 
-            // Generate simple XML representation
-            let xml_representation = format!(
-                "<document>\n  <input>{}</input>\n  <staves_count>{}</staves_count>\n</document>",
-                input.replace("<", "&lt;").replace(">", "&gt;"),
-                result.parsed_document.elements.iter()
-                    .filter(|e| matches!(e, crate::parse::model::DocumentElement::Stave(_)))
-                    .count()
-            );
+            // Generate XML representation using proper tree walker
+            let parsed_doc_json = serde_json::to_value(&result.parsed_document).unwrap();
+            let xml_representation = crate::tree_functions::generate_xml_representation(&parsed_doc_json);
+
+            // Generate syntax tokens directly from Document struct (more efficient)
+            let syntax_tokens = crate::tree_functions::generate_syntax_tokens(&result.parsed_document);
+
+            // Generate character styles from tokens for simpler client-side application
+            let character_styles = crate::tree_functions::generate_character_styles(&syntax_tokens);
 
             // Generate SVG if requested
             let lilypond_svg = if generate_svg && !result.lilypond.is_empty() {
@@ -133,6 +138,8 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
                 vexflow: Some(result.vexflow_data),
                 vexflow_svg: Some(result.vexflow_svg),
                 xml_representation: Some(xml_representation),
+                syntax_tokens: Some(syntax_tokens),
+                character_styles: Some(character_styles),
                 roundtrip: Some(roundtrip),
                 error: None,
             })
@@ -147,6 +154,8 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             vexflow: None,
             vexflow_svg: None,
             xml_representation: None,
+            syntax_tokens: None,
+            character_styles: None,
             roundtrip: None,
             error: Some(e.to_string()),
         }),

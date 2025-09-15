@@ -1,2 +1,2 @@
-// pub mod vexflow; // Temporarily disabled - has compilation errors
+pub mod vexflow;
 pub mod lilypond;

@@ -1,5 +1,4 @@
 pub mod renderer;
-pub mod fsm_renderer;
+// pub mod fsm_renderer; // Disabled - has old dependencies
 
 pub use renderer::*;
-pub use fsm_renderer::*;

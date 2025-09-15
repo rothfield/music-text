@@ -1,4 +1,4 @@
-use crate::parse::model::{Document, Stave, TextLine, Source, NotationSystem, Position as ModelPosition};
+use crate::parse::model::{Document, Stave, TextLine, WhitespaceLine, Source, NotationSystem, Position as ModelPosition};
 use crate::rhythm::types::{ParsedElement, Degree, Position};
 
 /// Parse error for recursive descent parser
@@ -201,7 +201,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
 
     // Parse (lower_line | lyrics_line)* after content_line
     while let Some(&ch) = chars.peek() {
-        // Stop if we hit blank_lines or EOI
+        // Stop if we hit blank_lines or EOI - but we'll consume blank_lines as stave termination
         if is_blank_lines_start(&mut chars.clone()) {
             break;
         }
@@ -229,6 +229,45 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
             if is_blank_lines_start(&mut chars.clone()) {
                 break;
             }
+            // Otherwise, it's a whitespace line that should be captured as part of the stave
+            // Create ParsedElements like Content lines do (consistent with Pattern #1)
+            let line_without_newline = current_line.trim_end_matches('\n');
+            let mut elements = Vec::new();
+            let mut col_position = 1;
+
+            // Parse whitespace characters into ParsedElements
+            for ch in line_without_newline.chars() {
+                if ch.is_whitespace() {
+                    elements.push(ParsedElement::Whitespace {
+                        value: ch.to_string(),
+                        position: Position { row: *line - 1, col: col_position },
+                    });
+                } else {
+                    // Non-whitespace in what we thought was a whitespace line - treat as unknown
+                    elements.push(ParsedElement::Unknown {
+                        value: ch.to_string(),
+                        position: Position { row: *line - 1, col: col_position },
+                    });
+                }
+                col_position += 1;
+            }
+
+            // Add newline element if the original line had one
+            if current_line.ends_with('\n') {
+                elements.push(ParsedElement::Newline {
+                    value: "\n".to_string(),
+                    position: Position { row: *line - 1, col: col_position },
+                });
+            }
+
+            let whitespace_line = WhitespaceLine {
+                elements,
+                source: Source {
+                    value: Some(current_line.clone()),
+                    position: ModelPosition { line: *line - 1, column: 1 },
+                },
+            };
+            lines.push(crate::parse::model::StaveLine::Whitespace(whitespace_line));
         } else if is_lower_line(&current_line.trim_end_matches('\n')) {
             // Parse as lower line using our lower_line parser (include newline)
             if let Ok(parsed_lower) = crate::parse::lower_line_parser::parse_lower_line(&current_line, *line - 1) {
@@ -254,6 +293,66 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 },
             };
             lines.push(crate::parse::model::StaveLine::Text(text_line));
+        }
+    }
+
+    // Handle trailing whitespace at EOI without newline (e.g., "1 " with no \n at end)
+    // According to grammar: stave = ... (blank_lines | (whitespace* newline)* EOI)
+    // The (whitespace* newline)* EOI part means we can have trailing whitespace
+    if chars.peek().is_some() {
+        // There's still content that hasn't been consumed - could be trailing whitespace
+        let mut trailing = String::new();
+        let trailing_start_line = *line;
+        let trailing_start_column = *column;
+
+        while let Some(ch) = chars.next() {
+            trailing.push(ch);
+            stave_content.push(ch);
+            if ch == '\n' {
+                *line += 1;
+                *column = 1;
+            } else {
+                *column += 1;
+            }
+        }
+
+        // Only add as whitespace line if it's not empty
+        if !trailing.is_empty() {
+            // Parse trailing content into ParsedElements like Content lines do
+            let mut elements = Vec::new();
+            let mut col_position = trailing_start_column;
+
+            for ch in trailing.chars() {
+                if ch == '\n' {
+                    elements.push(ParsedElement::Newline {
+                        value: ch.to_string(),
+                        position: Position { row: trailing_start_line, col: col_position },
+                    });
+                    col_position = 1; // Reset column after newline
+                } else if ch.is_whitespace() {
+                    elements.push(ParsedElement::Whitespace {
+                        value: ch.to_string(),
+                        position: Position { row: trailing_start_line, col: col_position },
+                    });
+                    col_position += 1;
+                } else {
+                    // Non-whitespace trailing content - treat as unknown
+                    elements.push(ParsedElement::Unknown {
+                        value: ch.to_string(),
+                        position: Position { row: trailing_start_line, col: col_position },
+                    });
+                    col_position += 1;
+                }
+            }
+
+            let whitespace_line = WhitespaceLine {
+                elements,
+                source: Source {
+                    value: Some(trailing),
+                    position: ModelPosition { line: trailing_start_line, column: trailing_start_column },
+                },
+            };
+            lines.push(crate::parse::model::StaveLine::Whitespace(whitespace_line));
         }
     }
 
