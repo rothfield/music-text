@@ -119,10 +119,10 @@ pub fn generate_normalized_elements(rhythm_doc: &crate::parse::Document, origina
                             }
 
                             // Determine tag based on element type
-                            let tag = match element.event {
+                            let tag = match &element.event {
                                 crate::rhythm::Event::Note { .. } => "note",
                                 crate::rhythm::Event::Rest => "rest",
-                                crate::rhythm::Event::Dash => "dash",
+                                crate::rhythm::Event::Unknown { .. } => "unknown",
                             }.to_string();
 
                             // Get absolute position from source mapping
@@ -148,13 +148,13 @@ pub fn generate_normalized_elements(rhythm_doc: &crate::parse::Document, origina
 }
 
 /// Generate tokens and styles from normalized elements
-pub fn generate_tokens_and_styles(elements: &[NormalizedElement]) -> (Vec<TokenInfo>, Vec<CharacterStyle>) {
+pub fn generate_tokens_and_styles(elements: &[NormalizedElement]) -> (Vec<SyntaxToken>, Vec<CharacterStyle>) {
     let tokens = elements.iter()
         .filter(|e| e.tag != "whitespace")  // Skip whitespace in tokens
-        .map(|e| TokenInfo {
-            pos: e.pos,
-            length: e.length,
+        .map(|e| SyntaxToken {
             token_type: e.tag.clone(),
+            start: e.pos,
+            end: e.pos + e.length,
             content: e.content.clone(),
         })
         .collect();

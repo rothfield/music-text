@@ -138,10 +138,33 @@
 .cm-music-note {
     color: #22863a;
     font-weight: bold;
+    position: relative;
 }
 
+/* Beat Loop Arc Styling - Semantic Markup Rendering */
+/* Specific width classes for common beat sizes */
+.cm-music-note.beat-loop-2::after { width: 2ch; }
+.cm-music-note.beat-loop-3::after { width: 3ch; }
+.cm-music-note.beat-loop-4::after { width: 4ch; }
+.cm-music-note.beat-loop-5::after { width: 5ch; }
+.cm-music-note.beat-loop-6::after { width: 6ch; }
+.cm-music-note.beat-loop-7::after { width: 7ch; }
+.cm-music-note.beat-loop-8::after { width: 8ch; }
 
-
+/* Common arc styling for all beat loops */
+.cm-music-note[class*="beat-loop-"]::after {
+    content: '';
+    position: absolute;
+    bottom: -0.8em;
+    left: 0;
+    height: 0.6em;
+    border: 2px solid #ff9800;
+    border-top: none;
+    border-bottom-left-radius: 50%;
+    border-bottom-right-radius: 50%;
+    z-index: 1;
+    pointer-events: none;
+}
 
 .cm-music-barline {
     color: #6f42c1;

@@ -263,7 +263,7 @@ export class EditorManager {
         // Apply each character style using editor marks
         characterStyles.forEach((style, index) => {
             const pos = this.editor.posFromIndex(style.pos);
-            const endPos = this.editor.posFromIndex(style.pos + 1);
+            const endPos = this.editor.posFromIndex(style.pos + style.length);
 
             const mark = this.editor.markText(pos, endPos, {
                 className: style.classes.join(' ')

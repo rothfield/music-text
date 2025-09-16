@@ -102,11 +102,11 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             };
 
 
-            // Generate syntax tokens from spatial-processed document (contains beat groups, octave markers, etc.)
-            let syntax_tokens = crate::tree_functions::generate_syntax_tokens(&result.parsed_document, &input);
+            // Generate normalized elements using the new architecture
+            let normalized_elements = crate::tree_functions::generate_normalized_elements(&result.rhythm_analyzed_document, &input);
 
-            // Generate character styles with beat group information for enhanced styling
-            let character_styles = crate::tree_functions::generate_character_styles_with_beat_groups(&syntax_tokens, &result.rhythm_analyzed_document);
+            // Generate both tokens and character styles from normalized array
+            let (syntax_tokens, character_styles) = crate::tree_functions::generate_tokens_and_styles(&normalized_elements);
 
             // Extract rhythm_items from all staves in the rhythm analyzed document
             let rhythm_items = {

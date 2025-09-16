@@ -135,8 +135,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         Some(Commands::CharacterStyles { input }) => {
             let notation = get_input_from_option_or_stdin(input)?;
             let result = pipeline::process_notation(&notation)?;
-            let tokens = music_text::tree_functions::generate_syntax_tokens(&result.parsed_document, &notation);
-            let styles = music_text::tree_functions::generate_character_styles_with_beat_groups(&tokens, &result.rhythm_analyzed_document);
+            let normalized_elements = music_text::tree_functions::generate_normalized_elements(&result.rhythm_analyzed_document, &notation);
+            let (_tokens, styles) = music_text::tree_functions::generate_tokens_and_styles(&normalized_elements);
             println!("{}", serde_json::to_string_pretty(&styles)?);
             return Ok(());
         }
