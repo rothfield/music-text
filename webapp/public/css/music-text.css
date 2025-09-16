@@ -239,6 +239,12 @@
     user-select: none;
 }
 
+/* Slur notes - notes that are within slur spans */
+.cm-music-note-slur {
+    color: #2196F3;
+    font-weight: 500;
+}
+
 /* Collision prevention for descenders (g, j, p, q, y) */
 .cm-music-note.has-descender {
     padding-bottom: 0.3em;

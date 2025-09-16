@@ -36,11 +36,7 @@
             <div class="tab active" onclick="switchTab('vexflow', this)">VexFlow Draft</div>
             <div class="tab" onclick="switchTab('svg', this)">LilyPond SVG</div>
             <div class="tab" onclick="switchTab('lilypond', this)">LilyPond Src</div>
-            <div class="tab" onclick="switchTab('xml', this)">XML</div>
             <div class="tab" onclick="switchTab('document', this)">Document</div>
-            <div class="tab" onclick="switchTab('parser', this)">Parser</div>
-            <div class="tab" onclick="switchTab('rhythm', this)">Rhythm</div>
-            <div class="tab" onclick="switchTab('spatial', this)">Spatial</div>
             <div class="tab" onclick="switchTab('analyzer', this)">Analyzer</div>
             <div class="tab" onclick="switchTab('tokens', this)">Syntax Tokens</div>
             <div class="tab" onclick="switchTab('roundtrip', this)">Roundtrip</div>
@@ -58,24 +54,8 @@
             <div id="lilypond-output">Enter music notation above to see LilyPond source</div>
         </div>
         
-        <div id="xml-tab" class="tab-content">
-            <div id="xml-output" class="pipeline-section">Enter music notation to see XML representation</div>
-        </div>
-        
         <div id="document-tab" class="tab-content">
             <div id="document-output" class="pipeline-section">Enter music notation to see parsed document output</div>
-        </div>
-        
-        <div id="parser-tab" class="tab-content">
-            <div id="parser-output" class="pipeline-section">Enter music notation to see parser output</div>
-        </div>
-        
-        <div id="rhythm-tab" class="tab-content">
-            <div id="rhythm-output" class="pipeline-section">Enter music notation to see rhythm analyzer output</div>
-        </div>
-        
-        <div id="spatial-tab" class="tab-content">
-            <div id="spatial-output" class="pipeline-section">Enter music notation to see spatial analysis output</div>
         </div>
         
         <div id="analyzer-tab" class="tab-content">

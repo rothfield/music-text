@@ -229,34 +229,6 @@ export class CodeMirrorManager {
         };
     }
 
-    // Display XML content in the editor
-    displayXML(xmlContent, originalContent = null) {
-        if (!this.editor) return;
-        
-        // Store original content if provided
-        if (originalContent !== null) {
-            this._originalContent = originalContent;
-        }
-        
-        // Try to switch to XML mode if available, otherwise stay in text mode
-        try {
-            this.editor.setOption('mode', 'xml');
-        } catch (e) {
-            console.warn('XML mode not available, using text mode');
-        }
-        
-        // Set XML content
-        this.editor.setValue(xmlContent);
-        
-        // Add a visual indicator that we're in XML mode
-        this.container.style.border = '2px solid #4CAF50';
-        this.container.style.backgroundColor = '#f8f9fa';
-        this.container.title = 'Displaying XML representation - click to return to original input';
-        
-        // Make it clickable to return to original
-        this.container.style.cursor = 'pointer';
-        this.container.onclick = () => this.returnToOriginal();
-    }
 
     // Return to original input content
     returnToOriginal() {

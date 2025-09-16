@@ -7,21 +7,26 @@ use crate::rhythm::types::{ParsedElement, ParsedChild, Position};
 fn position_to_absolute_offset(position: &crate::rhythm::types::Position, original_input: &str) -> Option<usize> {
     let lines: Vec<&str> = original_input.split('\n').collect();
 
-    // Convert 1-based row to 0-based for array indexing
-    let zero_based_row = if position.row > 0 { position.row - 1 } else { 0 };
+    // Handle the case where position.row is 0-based vs 1-based
+    // Based on the parsing behavior, row appears to be 1-based in most cases
+    let target_row = position.row;
 
-    if zero_based_row >= lines.len() {
+    if target_row >= lines.len() {
         return None;
     }
 
     let mut offset = 0;
     // Add lengths of all previous lines (including newlines)
-    for i in 0..zero_based_row {
-        offset += lines[i].len() + 1; // +1 for newline
+    for i in 0..target_row {
+        offset += lines[i].len();
+        // Add newline character unless it's the last line
+        if i < lines.len() - 1 {
+            offset += 1;
+        }
     }
 
     // Add column offset within the current line (col is already 0-based)
-    if position.col <= lines[zero_based_row].len() {
+    if position.col <= lines[target_row].len() {
         offset += position.col;
     }
 
@@ -63,15 +68,6 @@ pub struct CharacterStyle {
     pub classes: Vec<String>,
 }
 
-/// Escape XML special characters
-pub fn escape_xml(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
-}
 
 /// Convert syntax tokens to character styles for client-side application
 pub fn generate_character_styles(tokens: &[SyntaxToken]) -> Vec<CharacterStyle> {
@@ -366,74 +362,6 @@ fn add_beat_group_classes(styles: &mut Vec<CharacterStyle>, positions: &[usize],
     }
 }
 
-/// Generate XML representation from parsed document
-pub fn generate_xml_representation(document: &serde_json::Value) -> String {
-    let mut xml = String::new();
-
-    // Process elements array (actual document format)
-    if let Some(elements) = document.get("elements").and_then(|e| e.as_array()) {
-        for element in elements {
-            // Handle BlankLines elements
-            if let Some(blank_lines) = element.get("BlankLines") {
-                if let Some(content) = blank_lines.get("content").and_then(|c| c.as_str()) {
-                    xml.push_str(&format!("<blank_lines>{}</blank_lines>", escape_xml(content)));
-                }
-            }
-            // Handle Stave elements
-            else if let Some(stave) = element.get("Stave") {
-                if let Some(lines) = stave.get("lines").and_then(|l| l.as_array()) {
-                    for line in lines {
-                        // Process BlankLines within stave
-                        if let Some(blank_lines) = line.get("BlankLines") {
-                            if let Some(content) = blank_lines.get("content").and_then(|c| c.as_str()) {
-                                xml.push_str(&format!("<stave_blank_lines>{}</stave_blank_lines>", escape_xml(content)));
-                            }
-                        }
-                        // Process Content lines
-                        else if let Some(content) = line.get("Content").and_then(|c| c.as_array()) {
-                            xml.push_str("<pre class=\"CodeMirror-line\" role=\"presentation\">");
-                            for el in content {
-                                if let Some(note) = el.get("Note") {
-                                    if let Some(value) = note.get("value").and_then(|v| v.as_str()) {
-                                        xml.push_str(&format!("<note>{}</note>", escape_xml(value)));
-                                    }
-                                } else if let Some(barline) = el.get("Barline") {
-                                    if let Some(style) = barline.get("style").and_then(|s| s.as_str()) {
-                                        xml.push_str(&format!("<barline>{}</barline>", escape_xml(style)));
-                                    }
-                                } else if let Some(whitespace) = el.get("Whitespace") {
-                                    if let Some(value) = whitespace.get("value").and_then(|v| v.as_str()) {
-                                        xml.push_str(&format!("<whitespace>{}</whitespace>", escape_xml(value)));
-                                    }
-                                } else if let Some(unknown) = el.get("Unknown") {
-                                    if let Some(value) = unknown.get("value").and_then(|v| v.as_str()) {
-                                        xml.push_str(&format!("<unknown>{}</unknown>", escape_xml(value)));
-                                    }
-                                } else if let Some(_dash) = el.get("Dash") {
-                                    xml.push_str("<dash>-</dash>");
-                                } else if let Some(_breath) = el.get("Breath") {
-                                    xml.push_str("<breath>'</breath>");
-                                } else if let Some(rest) = el.get("Rest") {
-                                    if let Some(value) = rest.get("value").and_then(|v| v.as_str()) {
-                                        xml.push_str(&format!("<rest>{}</rest>", escape_xml(value)));
-                                    }
-                                } else if let Some(newline) = el.get("Newline") {
-                                    if let Some(value) = newline.get("value").and_then(|v| v.as_str()) {
-                                        xml.push_str(&format!("<newline>{}</newline>", escape_xml(value)));
-                                    }
-                                }
-                            }
-                        }
-
-                        xml.push_str("</pre>");
-                    }
-                }
-            }
-        }
-    }
-
-    xml
-}
 
 /// Generate syntax tokens from parsed document for CodeMirror highlighting (JSON-based for backward compatibility)
 pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<SyntaxToken> {
@@ -631,7 +559,7 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                                             original_input
                                         ) {
                                             tokens.push(SyntaxToken {
-                                                token_type: "slur".to_string(),
+                                                token_type: "note-slur".to_string(),
                                                 start: start_pos,
                                                 end: start_pos + value.len(),
                                                 content: value.clone(),
@@ -672,9 +600,14 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                             }
                         }
                         StaveLine::Content(parsed_elements) => {
-                            // Process content line elements
-                            for element in parsed_elements {
-                                process_parsed_element(element, &mut tokens, &mut position, original_input, &stave.rhythm_items);
+                            // Process rhythm items first if available, otherwise fall back to individual elements
+                            if let Some(rhythm_items) = &stave.rhythm_items {
+                                process_rhythm_items_for_tokens(rhythm_items, &mut tokens, &mut position, original_input);
+                            } else {
+                                // Fallback: process content line elements individually
+                                for element in parsed_elements {
+                                    process_parsed_element(element, &mut tokens, &mut position, original_input, &None);
+                                }
                             }
                         }
                         StaveLine::Lower(lower_line) => {
@@ -763,6 +696,54 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
         .collect()
 }
 
+
+/// Process rhythm items to generate beat-aware tokens
+fn process_rhythm_items_for_tokens(
+    rhythm_items: &[crate::rhythm::Item],
+    tokens: &mut Vec<SyntaxToken>,
+    position: &mut usize,
+    original_input: &str
+) {
+    for item in rhythm_items {
+        match item {
+            crate::rhythm::Item::Beat(beat) => {
+                // Process each element in the beat individually, but use beat context for token type
+                let beat_size = beat.divisions;
+
+                for (index, element) in beat.elements.iter().enumerate() {
+                    if let Some(start_pos) = position_to_absolute_offset(&element.position, original_input) {
+                        // Only first element gets note-loop-N, rest get plain "note"
+                        let token_type = if beat_size > 1 && index == 0 {
+                            format!("note-loop-{}", beat_size)
+                        } else {
+                            "note".to_string()
+                        };
+
+                        tokens.push(SyntaxToken {
+                            token_type,
+                            start: start_pos,
+                            end: start_pos + element.value.len(),
+                            content: element.value.clone(),
+                        });
+                        *position = start_pos + element.value.len();
+                    }
+                }
+            }
+            crate::rhythm::Item::Barline(barline_type, tala) => {
+                // Handle barlines
+                // For now, skip barlines in tokenization
+            }
+            crate::rhythm::Item::Breathmark => {
+                // Handle breathmarks
+                // For now, skip breathmarks in tokenization
+            }
+            crate::rhythm::Item::Tonic(_) => {
+                // Handle tonic declarations
+                // For now, skip tonic in tokenization
+            }
+        }
+    }
+}
 
 fn fill_token_gaps(mut tokens: Vec<SyntaxToken>, input_length: usize, original_input: &str) -> Vec<SyntaxToken> {
     // Step 1: Filter out whitespace and newline tokens (already done by caller)
@@ -1077,7 +1058,7 @@ fn process_parsed_element(
     rhythm_items: &Option<Vec<crate::rhythm::Item>>
 ) {
     match element {
-        ParsedElement::Note { value, position: pos, in_slur, in_beat_group, beat_group, children, .. } => {
+        ParsedElement::Note { value, position: pos, in_beat_group, beat_group, .. } => {
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let value_len = value.len();

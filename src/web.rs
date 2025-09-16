@@ -30,12 +30,12 @@ pub struct ParseResponse {
     success: bool,
     parsed_document: Option<crate::parse::Document>,
     rhythm_analyzed_document: Option<crate::parse::Document>,
+    rhythm_items: Option<Vec<crate::rhythm::Item>>,
     detected_notation_systems: Option<Vec<String>>,
     lilypond: Option<String>,
     lilypond_svg: Option<String>,
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
-    xml_representation: Option<String>,
     syntax_tokens: Option<Vec<crate::tree_functions::SyntaxToken>>,
     character_styles: Option<Vec<crate::tree_functions::CharacterStyle>>,
     roundtrip: Option<RoundtripData>,
@@ -74,12 +74,12 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             success: true,
             parsed_document: None,
             rhythm_analyzed_document: None,
+            rhythm_items: None,
             detected_notation_systems: None,
             lilypond: None,
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
-            xml_representation: None,
             syntax_tokens: None,
             character_styles: None,
             roundtrip: None,
@@ -99,15 +99,25 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
                 differences: None,
             };
 
-            // Generate XML representation using proper tree walker
-            let parsed_doc_json = serde_json::to_value(&result.parsed_document).unwrap();
-            let xml_representation = crate::tree_functions::generate_xml_representation(&parsed_doc_json);
 
-            // Generate syntax tokens from rhythm-analyzed document (contains analyzer tags)
-            let syntax_tokens = crate::tree_functions::generate_syntax_tokens(&result.rhythm_analyzed_document, &input);
+            // Generate syntax tokens from spatial-processed document (contains beat groups, octave markers, etc.)
+            let syntax_tokens = crate::tree_functions::generate_syntax_tokens(&result.parsed_document, &input);
 
             // Generate character styles with beat group information for enhanced styling
             let character_styles = crate::tree_functions::generate_character_styles_with_beat_groups(&syntax_tokens, &result.rhythm_analyzed_document);
+
+            // Extract rhythm_items from all staves in the rhythm analyzed document
+            let rhythm_items = {
+                let mut all_rhythm_items = Vec::new();
+                for element in &result.rhythm_analyzed_document.elements {
+                    if let crate::parse::model::DocumentElement::Stave(stave) = element {
+                        if let Some(rhythm_items) = &stave.rhythm_items {
+                            all_rhythm_items.extend(rhythm_items.iter().cloned());
+                        }
+                    }
+                }
+                if all_rhythm_items.is_empty() { None } else { Some(all_rhythm_items) }
+            };
 
             // Generate SVG if requested
             let lilypond_svg = if generate_svg && !result.lilypond.is_empty() {
@@ -132,12 +142,12 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
                 success: true,
                 parsed_document: Some(result.parsed_document),
                 rhythm_analyzed_document: Some(result.rhythm_analyzed_document),
+                rhythm_items,
                 detected_notation_systems: None,
                 lilypond: Some(result.lilypond),
                 lilypond_svg,
                 vexflow: Some(result.vexflow_data),
                 vexflow_svg: Some(result.vexflow_svg),
-                xml_representation: Some(xml_representation),
                 syntax_tokens: Some(syntax_tokens),
                 character_styles: Some(character_styles),
                 roundtrip: Some(roundtrip),
@@ -148,12 +158,12 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             success: false,
             parsed_document: None,
             rhythm_analyzed_document: None,
+            rhythm_items: None,
             detected_notation_systems: None,
             lilypond: None,
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
-            xml_representation: None,
             syntax_tokens: None,
             character_styles: None,
             roundtrip: None,

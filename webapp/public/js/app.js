@@ -14,7 +14,6 @@ class MusicTextApp {
         this.currentParseResult = null;
         this.inputTimer = null;
         this.codeMirrorManager = new CodeMirrorManager();
-        this.isSettingXML = false;
     }
 
     // Initialize the application
@@ -72,8 +71,6 @@ class MusicTextApp {
 
     // Handle input events
     handleInput(event) {
-        // Skip if we're setting XML to avoid infinite loop
-        if (this.isSettingXML) return;
         
         const textarea = event.target;
         const originalValue = textarea.value;
@@ -165,7 +162,6 @@ class MusicTextApp {
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateRoundtripOutput(result);
-            UI.updateXMLOutput(result);
             UI.updateTokensOutput(result);
             await UI.updateVexFlowOutput(result);
             
@@ -211,7 +207,6 @@ class MusicTextApp {
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
-            UI.updateXMLOutput(result);
             UI.updateTokensOutput(result);
             
             if (API.hasVexFlowData(result)) {
@@ -259,7 +254,6 @@ class MusicTextApp {
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
-            UI.updateXMLOutput(result);
             UI.updateTokensOutput(result);
             
             if (API.hasVexFlowData(result)) {
@@ -282,21 +276,6 @@ class MusicTextApp {
         }
     }
 
-    // Extract text content from XML (without tags)
-    extractXMLTextContent(xmlString) {
-        try {
-            // Create a temporary DOM element to parse the XML
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
-            
-            // Extract all text content (this will concatenate all leaf text nodes)
-            return xmlDoc.textContent || xmlDoc.innerText || '';
-        } catch (error) {
-            console.warn('Error extracting XML text content:', error);
-            // Fallback: use regex to strip tags (less reliable but works)
-            return xmlString.replace(/<[^>]*>/g, '');
-        }
-    }
 
     // Clear all content and localStorage
     clearAll() {
@@ -322,7 +301,6 @@ window.generateSVG = () => app.generateSVG();
 window.clearAll = () => app.clearAll();
 window.switchTab = (tabName, clickedTab) => UI.switchTab(tabName, clickedTab);
 window.changeFontFamily = (fontClass) => FontManager.changeFont(fontClass);
-window.displayXMLInEditor = (base64XML) => UI.displayXMLInEditor(base64XML);
 window.UI = UI;
 
 // Initialize when DOM is ready

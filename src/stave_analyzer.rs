@@ -1,43 +1,30 @@
 use crate::parse::model::{Document, DocumentElement, StaveLine};
-use crate::rhythm::process_rhythm_batch;
+use crate::rhythm::{Item, analyzer::process_rhythm_immutable};
+use crate::rhythm::types::ParsedElement;
 
 /// Pipeline step: Enhance document staves with rhythm analysis
 ///
-/// This function takes the Document and enhances staves with rhythm analysis data,
-/// adapted to work with the current Document structure (elements/StaveLine format).
+/// This function takes the spatially-processed Document and creates beat structures
+/// directly from the enhanced ParsedElements, preserving spatial assignments like octave markers.
 pub fn analyze_rhythm(mut document: Document) -> Result<Document, String> {
-    // Collect all content lines for batch processing with mutable references
-    let mut all_content_lines = Vec::new();
-
     for element in &mut document.elements {
         if let DocumentElement::Stave(stave) = element {
-            // Find the content line in this stave
-            for line in &mut stave.lines {
+            // Find the content line in this stave and convert it to rhythm items
+            for line in &stave.lines {
                 if let StaveLine::Content(content_elements) = line {
-                    all_content_lines.push(content_elements);
+                    // Process the spatially-enhanced elements directly, preserving spatial data
+                    let rhythm_items = process_rhythm_immutable(content_elements);
+                    stave.rhythm_items = Some(rhythm_items);
+
                     break; // Assume one content line per stave
                 }
             }
         }
     }
 
-    // Process rhythm for all staves in batch, modifying original elements
-    let all_rhythm_items = process_rhythm_batch(&mut all_content_lines);
-
-    // Store Beat structures for renderers
-    let mut rhythm_item_index = 0;
-    for element in &mut document.elements {
-        if let DocumentElement::Stave(stave) = element {
-            if let Some(rhythm_items) = all_rhythm_items.get(rhythm_item_index) {
-                // Store Beat structures for renderers to use directly
-                stave.rhythm_items = Some(rhythm_items.clone());
-                rhythm_item_index += 1;
-            }
-        }
-    }
-
     Ok(document)
 }
+
 
 #[cfg(test)]
 mod tests {

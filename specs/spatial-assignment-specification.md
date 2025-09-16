@@ -1,5 +1,16 @@
 # Spatial Assignment Specification
 
+## Note on Formal Grammar Approach
+
+A **2D array grammar** is the most precise name for a formal grammar that works with column/row alignment and rewriting sub-arrays into structured 2D outputs. This specification describes the implementation of such a 2D grammar for music-text notation, where spatial relationships between vertically aligned elements are formalized using production rules like:
+
+```
+[ content-line    ]
+[ annotation-line ] → [ enhanced-content ]
+```
+
+See the main grammar specification (specs/grammar-specification.md) for the formal 2D grammar production rules that govern this spatial assignment system.
+
 ## Overview
 
 This document specifies how musical annotations (octave markers, lyrics, slurs) are spatially assigned to notes in Music-Text notation using **move semantics**. The spatial assignment system processes multi-line input where annotations appear above and below the main musical content line, assigning them to notes based on their horizontal position with **explicit ownership transfer**.

@@ -59,8 +59,6 @@ enum Commands {
     FullLily { input: Option<String> },
     /// Generate syntax tokens for editor integration
     Tokens { input: Option<String> },
-    /// Generate XML representation of parsed document
-    Xml { input: Option<String> },
     /// Generate VexFlow JSON data
     Vexflow { input: Option<String> },
     /// Show rhythm analysis results
@@ -129,14 +127,6 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let result = pipeline::process_notation(&notation)?;
             let tokens = music_text::tree_functions::generate_syntax_tokens(&result.parsed_document, &notation);
             println!("{}", serde_json::to_string_pretty(&tokens)?);
-            return Ok(());
-        }
-        Some(Commands::Xml { input }) => {
-            let notation = get_input_from_option_or_stdin(input)?;
-            let result = pipeline::process_notation(&notation)?;
-            let doc_json = serde_json::to_value(&result.parsed_document)?;
-            let xml = music_text::tree_functions::generate_xml_representation(&doc_json);
-            println!("{}", xml);
             return Ok(());
         }
         Some(Commands::Vexflow { input }) => {

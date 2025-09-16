@@ -23,10 +23,13 @@ whitespace = " "
 ```ebnf
 content_line = line_number? barline? beat+ barline? newline
 
-beat = (pitch | dash) beat-element*
+beat = spatially-delimited-beat |
+      (pitch | dash) beat-element*
 beat-element = pitch | dash | breath-mark
 
-pitch = sargam_note | number_note | abc_note | doremi_note | hindi_note
+pitch = note_in_system
+
+note_in_system = sargam_note | number_note | western_note | tabla_note | hindi_note
 dash = "-"
 breath-mark = ","
 ```
@@ -82,16 +85,19 @@ unknown_lower = !lower_octave_marker !("_" "_") !space !syllable ANY+
 ### Notation Systems
 
 ```ebnf
-sargam_note = "S" | "R" | "G" | "M" | "P" | "D" | "N" | 
+// Note: Melodic pitch systems support accidentals (#, ##, b, bb) appended to base notes when it makes sense
+
+sargam_note = "S" | "R" | "G" | "M" | "P" | "D" | "N" |
               "s" | "r" | "g" | "m" | "p" | "d" | "n"
 
 number_note = "1" | "2" | "3" | "4" | "5" | "6" | "7"
 
-abc_note = "A" | "B" | "C" | "D" | "E" | "F" | "G" |
-           "a" | "b" | "c" | "d" | "e" | "f" | "g"
+western_note = "A" | "B" | "C" | "D" | "E" | "F" | "G" |
+               "a" | "b" | "c" | "d" | "e" | "f" | "g"
 
-doremi_note = "D" | "R" | "M" | "F" | "S" | "L" | "T" |
-              "d" | "r" | "m" | "f" | "s" | "l" | "t"
+tabla_note = "dha" | "dhin" | "ta" | "ka" | "taka" | "trkt" | "ge" |
+             "Dha" | "Dhin" | "Ta" | "Ka" | "Taka" | "Trkt" | "Ge" |
+             "DHA" | "DHIN" | "TA" | "KA" | "TAKA" | "TRKT" | "GE"
 
 hindi_note = "स" | "र" | "ग" | "म" | "प" | "ध" | "न"
 ```
@@ -102,6 +108,45 @@ hindi_note = "स" | "र" | "ग" | "म" | "प" | "ध" | "न"
 barline = "|" | "||" | "|:" | ":|" | "|]"
 line_number = digit+ "."
 ```
+
+## Spatial Production Rules
+
+### Beat Grouping
+```ebnf
+spatially-delimited-beat ::=
+    [ (pitch | dash) (space | beat-element)* ]
+    [ underscores                            ]
+```
+
+### Slur Grouping
+```ebnf
+spatially-delimited-slur ::=
+    [ overscores                             ]
+    [ (pitch | dash) (space | beat-element)* ]
+```
+
+### Other Spatial Relationships
+
+The grammar has not yet been fully updated to formalize all spatial relationships, but the following spatial aspects exist in the current implementation and should be formalized using similar production rules:
+
+- **Octave Markers**: Dots or colons above/below notes to indicate octave changes
+  ```
+  [ .  :     ]  (upper octave markers)
+  [ S  R  G  ]  →  spatially-marked-octaves
+  [    .     ]  (lower octave markers)
+  ```
+
+- **Ornaments**: Mordents, trills, and other decorations above notes
+  ```
+  [ ~  ~     ]  (ornament markers)
+  [ S  R  G  ]  →  spatially-ornamented-notes
+  ```
+
+- **Syllables**: Lyrics or tabla bols aligned below notes
+  ```
+  [ S  R  G  ]  (notes)
+  [ ta re ga ]  →  spatially-syllabled-notes
+  ```
 
 ## Spatial Relationship Rules
 

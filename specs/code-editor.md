@@ -987,6 +987,360 @@ ____      <- Lower line (skipped - no row/col positions)
 
 The positions work because we **convert (row, col) to absolute offsets** that match CodeMirror's linear character indexing, but only for content elements that have semantic meaning for syntax highlighting.
 
+## Visual Editing Features Using CSS Classes
+
+### Core Concept
+
+Modern music notation editors require interactive editing features beyond syntax highlighting. The music-text code editor implements these features using **CSS-based visual annotations** that preserve the plain-text data model while providing rich interactive capabilities.
+
+#### Key Principles
+1. **Data Model Purity**: Visual annotations never modify the underlying plain-text content
+2. **CSS-Only Rendering**: All visual effects achieved through CSS classes and pseudo-elements
+3. **Toggle-Based Interaction**: Features can be added/removed without changing source text
+4. **Layered Visualization**: Multiple annotation types can coexist (slurs + beat groups + character styling)
+
+### Implementation Strategy
+
+#### CodeMirror Text Markers
+```javascript
+// Add slur to selected range
+const slurMark = editor.markText(
+    {line: 0, ch: 2},
+    {line: 0, ch: 8},
+    {
+        className: "slur-span",
+        inclusiveLeft: true,
+        inclusiveRight: true
+    }
+);
+
+// Add CSS classes to first and last characters for arc endpoints
+const startMark = editor.markText(
+    {line: 0, ch: 2},
+    {line: 0, ch: 3},
+    {className: "slur-start"}
+);
+
+const endMark = editor.markText(
+    {line: 0, ch: 7},
+    {line: 0, ch: 8},
+    {className: "slur-end"}
+);
+```
+
+#### CSS Arc Generation
+```css
+/* Slur start - left bracket with upper arc */
+.slur-start {
+    position: relative;
+}
+
+.slur-start::before {
+    content: '';
+    position: absolute;
+    top: -0.3em;
+    left: 0;
+    border-top: 0.1em solid #d73a49;
+    border-left: 0.1em solid #d73a49;
+    border-top-left-radius: 0.5em;
+    width: 0.3em;
+    height: 0.3em;
+    z-index: 1;
+}
+
+/* Slur end - right bracket with upper arc */
+.slur-end {
+    position: relative;
+}
+
+.slur-end::after {
+    content: '';
+    position: absolute;
+    top: -0.3em;
+    right: 0;
+    border-top: 0.1em solid #d73a49;
+    border-right: 0.1em solid #d73a49;
+    border-top-right-radius: 0.5em;
+    width: 0.3em;
+    height: 0.3em;
+    z-index: 1;
+}
+
+/* Optional: Spanning arc for continuous slur line */
+.slur-span {
+    border-top: 0.05em solid rgba(215, 58, 73, 0.3);
+    border-radius: 20px 20px 0 0;
+    margin-top: -0.2em;
+    padding-top: 0.2em;
+}
+```
+
+#### Interactive Button Implementation
+```javascript
+// Global function for slur toggle button
+function toggleSlur() {
+    const editor = app.codeMirrorManager.getEditor();
+    const selection = editor.getSelection();
+
+    if (!selection) {
+        alert('Please select text to add a slur');
+        return;
+    }
+
+    const from = editor.getCursor('from');
+    const to = editor.getCursor('to');
+
+    // Check if selection already has slur marks
+    const existingMarks = editor.findMarksAt(from).concat(editor.findMarksAt(to));
+    const hasSlur = existingMarks.some(mark =>
+        mark.className && mark.className.includes('slur')
+    );
+
+    if (hasSlur) {
+        // Remove existing slur marks
+        existingMarks.forEach(mark => {
+            if (mark.className && mark.className.includes('slur')) {
+                mark.clear();
+            }
+        });
+    } else {
+        // Add new slur marks
+        const spanMark = editor.markText(from, to, {
+            className: "slur-span",
+            title: "Slur"
+        });
+
+        const startMark = editor.markText(from, {line: from.line, ch: from.ch + 1}, {
+            className: "slur-start",
+            title: "Slur start"
+        });
+
+        const endMark = editor.markText({line: to.line, ch: to.ch - 1}, to, {
+            className: "slur-end",
+            title: "Slur end"
+        });
+    }
+}
+```
+
+### Parsing Challenges Introduced
+
+#### 1. Data Model Purity vs. Visual State
+
+**Challenge**: Visual annotations exist only in the editor's DOM but not in the plain-text data model.
+
+**Problem Scenarios**:
+```javascript
+// User adds slur via button
+toggleSlur(); // Adds CSS marks to editor
+
+// User types new content
+editor.replaceSelection("R G M"); // Marks may become misaligned
+
+// Server re-parses and applies new styling
+applyCharacterStyles(serverStyles); // May clear or conflict with slur marks
+```
+
+**Solutions**:
+- **Mark Persistence**: Store mark positions in editor state
+- **Reapplication Logic**: Automatically restore marks after server updates
+- **Position Tracking**: Update mark positions when content changes
+
+#### 2. Roundtrip Validation Conflicts
+
+**Challenge**: Parser's roundtrip validation assumes perfect plain-text reconstruction, but visual marks don't affect the source text.
+
+**Potential Issues**:
+```rust
+// Server reconstructs from parse tree
+let reconstructed = reconstruct_unprocessed(document);
+// reconstructed == "S R G M P"
+
+// Client editor contains
+let editor_content = editor.getValue();
+// editor_content == "S R G M P" (same text)
+// BUT editor has visual slur marks that parser doesn't know about
+```
+
+**Solutions**:
+- **Orthogonal Systems**: Keep visual annotations completely separate from parsing
+- **Metadata Storage**: Store visual annotations in localStorage or separate data structure
+- **Server-Side Awareness**: Extend parser to optionally handle visual annotation metadata
+
+#### 3. Synchronization Issues
+
+**Challenge**: Server-generated character styling may conflict with client-side visual marks.
+
+**Race Condition Example**:
+```javascript
+// T+0: User adds slur marks
+toggleSlur(); // Marks positions 2-8
+
+// T+100: User types new content
+editor.replaceSelection("S R | G M |"); // Content changes
+
+// T+200: Server responds with new character styling
+applyCharacterStyles(characterStyles); // May clear slur marks
+
+// T+300: Slur marks are lost or mispositioned
+```
+
+**Solutions**:
+- **Mark Preservation**: Save marks before applying server styles, restore after
+- **Layered Styling**: Apply server styles to text, visual marks to overlay elements
+- **Smart Reapplication**: Use content diffing to update mark positions intelligently
+
+#### 4. Performance Implications
+
+**Challenge**: Large numbers of text markers can impact editor performance.
+
+**Performance Concerns**:
+- **DOM Overhead**: Each mark creates additional DOM elements
+- **Re-rendering Cost**: Frequent mark updates trigger layout recalculation
+- **Memory Usage**: Marks store references that prevent garbage collection
+
+**Solutions**:
+```javascript
+// Efficient mark management
+class MarkManager {
+    constructor(editor) {
+        this.editor = editor;
+        this.marksByType = new Map(); // Group marks by feature type
+        this.markPool = []; // Reuse cleared marks
+    }
+
+    addSlur(from, to) {
+        // Reuse existing marks when possible
+        const recycledMark = this.markPool.pop();
+        if (recycledMark) {
+            // Reposition existing mark
+            recycledMark.doc.markText(from, to, recycledMark.options);
+        } else {
+            // Create new mark
+            const mark = this.editor.markText(from, to, {className: "slur-span"});
+            this.marksByType.set('slur', mark);
+        }
+    }
+
+    clearMarks(type) {
+        const marks = this.marksByType.get(type) || [];
+        marks.forEach(mark => {
+            mark.clear();
+            this.markPool.push(mark); // Recycle for reuse
+        });
+        this.marksByType.delete(type);
+    }
+}
+```
+
+#### 5. Conflict Resolution
+
+**Challenge**: Multiple annotation types may overlap or conflict visually.
+
+**Overlap Scenarios**:
+- **Slur + Beat Group**: Both create visual arcs (upper vs lower)
+- **Slur + Character Styling**: Color/background conflicts
+- **Multiple Slurs**: Nested or overlapping slur ranges
+
+**Resolution Strategies**:
+```css
+/* Z-index layering for visual priority */
+.slur-start::before, .slur-end::after {
+    z-index: 3; /* Above beat groups */
+}
+
+.beat-group-start::after {
+    z-index: 2; /* Above character styling */
+}
+
+.cm-music-note {
+    z-index: 1; /* Base layer */
+}
+
+/* Color coordination to avoid conflicts */
+.slur-span.in-beat-group {
+    border-top-color: #8B4A9C; /* Blend slur + beat group colors */
+}
+
+/* Alternative positioning for nested slurs */
+.slur-start.nested::before {
+    top: -0.6em; /* Higher position for inner slur */
+}
+```
+
+### Integration with Existing Systems
+
+#### Character Styling Coordination
+```javascript
+// Apply server styles while preserving visual marks
+applyCharacterStylesWithMarks(characterStyles) {
+    // 1. Save current visual marks
+    const savedMarks = this.saveAllMarks();
+
+    // 2. Apply server character styling
+    this.applyCharacterStyles(characterStyles);
+
+    // 3. Restore visual marks with updated positions
+    this.restoreMarks(savedMarks);
+}
+
+saveAllMarks() {
+    const marks = this.editor.getAllMarks();
+    return marks.map(mark => ({
+        range: mark.find(),
+        className: mark.className,
+        options: mark.options
+    })).filter(mark => mark.range); // Only valid marks
+}
+
+restoreMarks(savedMarks) {
+    savedMarks.forEach(markData => {
+        if (this.isValidRange(markData.range)) {
+            this.editor.markText(
+                markData.range.from,
+                markData.range.to,
+                {className: markData.className, ...markData.options}
+            );
+        }
+    });
+}
+```
+
+#### Server Communication Enhancement
+```javascript
+// Optional: Send visual annotation metadata to server
+async parseWithAnnotations(input) {
+    const annotations = this.extractVisualAnnotations();
+
+    const result = await API.parse(input, {
+        annotations: annotations,
+        preserve_visual_state: true
+    });
+
+    // Server can optionally preserve annotation context
+    if (result.preserved_annotations) {
+        this.restoreAnnotations(result.preserved_annotations);
+    }
+
+    return result;
+}
+```
+
+### Future Extensions
+
+#### Planned Visual Features
+- **Dynamics**: Crescendo/diminuendo markings with CSS gradients
+- **Articulations**: Staccato dots, accents using pseudo-elements
+- **Ornaments**: Trills, mordents with symbol fonts
+- **Chord Symbols**: Above-staff text positioning
+- **Fingering**: Below-note number annotations
+
+#### Advanced Interaction Patterns
+- **Drag-and-Drop**: Moving slurs by dragging endpoints
+- **Context Menus**: Right-click to modify annotation properties
+- **Keyboard Shortcuts**: Quick annotation toggle (Ctrl+S for slur)
+- **Multi-Selection**: Apply annotations to multiple discontinuous ranges
+
 ## Implementation TODOs
 
 ### High Priority
