@@ -174,12 +174,11 @@
     background-color: #ffe6cc;
 }
 
-/* Beat group indicators - make underscore characters visually disappear */
-/* TEMPORARILY DISABLED */
-/*.cm-music-beat-group, .cm-music-beat_group {
-    color: transparent;
+/* Beat group indicators - make underscore characters transparent but still present */
+.cm-music-beat_group {
+    color: rgba(0, 0, 0, 0.2); /* 20% opacity - visible but faded */
     user-select: none;
-}*/
+}
 
 /* Beat group role-specific styling for notes */
 .cm-music-note-beat-group-start {
@@ -331,117 +330,235 @@
 /* 10-character beat groups */
 .cm-music-beat-group-10-chars::after { width: 6.0em; }
 
-/* Base styling for all beat group classes */
-.cm-music-beat-group-1, .cm-music-beat-group-2, .cm-music-beat-group-3, .cm-music-beat-group-4, .cm-music-beat-group-5,
-.cm-music-beat-group-6, .cm-music-beat-group-7, .cm-music-beat-group-8, .cm-music-beat-group-9, .cm-music-beat-group-10,
-.cm-music-beat-group-11, .cm-music-beat-group-12, .cm-music-beat-group-13, .cm-music-beat-group-14, .cm-music-beat-group-15,
-.cm-music-beat-group-16, .cm-music-beat-group-17, .cm-music-beat-group-18, .cm-music-beat-group-19, .cm-music-beat-group-20,
-.cm-music-beat-group-21, .cm-music-beat-group-22, .cm-music-beat-group-23, .cm-music-beat-group-24, .cm-music-beat-group-25,
-.cm-music-beat-group-26, .cm-music-beat-group-27, .cm-music-beat-group-28, .cm-music-beat-group-29, .cm-music-beat-group-30,
-.cm-music-beat-group-31, .cm-music-beat-group-32, .cm-music-beat-group-33, .cm-music-beat-group-34, .cm-music-beat-group-35,
-.cm-music-beat-group-36, .cm-music-beat-group-37, .cm-music-beat-group-38, .cm-music-beat-group-39, .cm-music-beat-group-40,
-.cm-music-beat-group-41, .cm-music-beat-group-42, .cm-music-beat-group-43, .cm-music-beat-group-44, .cm-music-beat-group-45,
-.cm-music-beat-group-46, .cm-music-beat-group-47, .cm-music-beat-group-48, .cm-music-beat-group-49, .cm-music-beat-group-50,
-.cm-music-beat-group-51, .cm-music-beat-group-52, .cm-music-beat-group-53, .cm-music-beat-group-54, .cm-music-beat-group-55,
-.cm-music-beat-group-56, .cm-music-beat-group-57, .cm-music-beat-group-58, .cm-music-beat-group-59, .cm-music-beat-group-60,
-.cm-music-beat-group-61, .cm-music-beat-group-62, .cm-music-beat-group-63 {
+/* Note in loop styling */
+.cm-music-note-in-loop {
+    color: #22863a;
+    font-weight: bold;
+}
+
+/* Base styling for all dash loop classes */
+.cm-music-dash-loop-2, .cm-music-dash-loop-3, .cm-music-dash-loop-4, .cm-music-dash-loop-5,
+.cm-music-dash-loop-6, .cm-music-dash-loop-7, .cm-music-dash-loop-8, .cm-music-dash-loop-9, .cm-music-dash-loop-10,
+.cm-music-dash-loop-11, .cm-music-dash-loop-12, .cm-music-dash-loop-13, .cm-music-dash-loop-14, .cm-music-dash-loop-15,
+.cm-music-dash-loop-16, .cm-music-dash-loop-17, .cm-music-dash-loop-18, .cm-music-dash-loop-19, .cm-music-dash-loop-20,
+.cm-music-dash-loop-21, .cm-music-dash-loop-22, .cm-music-dash-loop-23, .cm-music-dash-loop-24, .cm-music-dash-loop-25,
+.cm-music-dash-loop-26, .cm-music-dash-loop-27, .cm-music-dash-loop-28, .cm-music-dash-loop-29, .cm-music-dash-loop-30,
+.cm-music-dash-loop-31, .cm-music-dash-loop-32, .cm-music-dash-loop-33, .cm-music-dash-loop-34, .cm-music-dash-loop-35,
+.cm-music-dash-loop-36, .cm-music-dash-loop-37, .cm-music-dash-loop-38, .cm-music-dash-loop-39, .cm-music-dash-loop-40,
+.cm-music-dash-loop-41, .cm-music-dash-loop-42, .cm-music-dash-loop-43, .cm-music-dash-loop-44, .cm-music-dash-loop-45,
+.cm-music-dash-loop-46, .cm-music-dash-loop-47, .cm-music-dash-loop-48, .cm-music-dash-loop-49, .cm-music-dash-loop-50,
+.cm-music-dash-loop-51, .cm-music-dash-loop-52, .cm-music-dash-loop-53, .cm-music-dash-loop-54, .cm-music-dash-loop-55,
+.cm-music-dash-loop-56, .cm-music-dash-loop-57, .cm-music-dash-loop-58, .cm-music-dash-loop-59, .cm-music-dash-loop-60,
+.cm-music-dash-loop-61, .cm-music-dash-loop-62, .cm-music-dash-loop-63 {
     position: relative;
     color: #22863a;
     font-weight: bold;
 }
 
-.cm-music-beat-group-1::after, .cm-music-beat-group-2::after, .cm-music-beat-group-3::after, .cm-music-beat-group-4::after, .cm-music-beat-group-5::after,
-.cm-music-beat-group-6::after, .cm-music-beat-group-7::after, .cm-music-beat-group-8::after, .cm-music-beat-group-9::after, .cm-music-beat-group-10::after,
-.cm-music-beat-group-11::after, .cm-music-beat-group-12::after, .cm-music-beat-group-13::after, .cm-music-beat-group-14::after, .cm-music-beat-group-15::after,
-.cm-music-beat-group-16::after, .cm-music-beat-group-17::after, .cm-music-beat-group-18::after, .cm-music-beat-group-19::after, .cm-music-beat-group-20::after,
-.cm-music-beat-group-21::after, .cm-music-beat-group-22::after, .cm-music-beat-group-23::after, .cm-music-beat-group-24::after, .cm-music-beat-group-25::after,
-.cm-music-beat-group-26::after, .cm-music-beat-group-27::after, .cm-music-beat-group-28::after, .cm-music-beat-group-29::after, .cm-music-beat-group-30::after,
-.cm-music-beat-group-31::after, .cm-music-beat-group-32::after, .cm-music-beat-group-33::after, .cm-music-beat-group-34::after, .cm-music-beat-group-35::after,
-.cm-music-beat-group-36::after, .cm-music-beat-group-37::after, .cm-music-beat-group-38::after, .cm-music-beat-group-39::after, .cm-music-beat-group-40::after,
-.cm-music-beat-group-41::after, .cm-music-beat-group-42::after, .cm-music-beat-group-43::after, .cm-music-beat-group-44::after, .cm-music-beat-group-45::after,
-.cm-music-beat-group-46::after, .cm-music-beat-group-47::after, .cm-music-beat-group-48::after, .cm-music-beat-group-49::after, .cm-music-beat-group-50::after,
-.cm-music-beat-group-51::after, .cm-music-beat-group-52::after, .cm-music-beat-group-53::after, .cm-music-beat-group-54::after, .cm-music-beat-group-55::after,
-.cm-music-beat-group-56::after, .cm-music-beat-group-57::after, .cm-music-beat-group-58::after, .cm-music-beat-group-59::after, .cm-music-beat-group-60::after,
-.cm-music-beat-group-61::after, .cm-music-beat-group-62::after, .cm-music-beat-group-63::after {
+/* Dash loop arc pseudo-elements */
+.cm-music-dash-loop-2::after, .cm-music-dash-loop-3::after, .cm-music-dash-loop-4::after, .cm-music-dash-loop-5::after,
+.cm-music-dash-loop-6::after, .cm-music-dash-loop-7::after, .cm-music-dash-loop-8::after, .cm-music-dash-loop-9::after, .cm-music-dash-loop-10::after,
+.cm-music-dash-loop-11::after, .cm-music-dash-loop-12::after, .cm-music-dash-loop-13::after, .cm-music-dash-loop-14::after, .cm-music-dash-loop-15::after,
+.cm-music-dash-loop-16::after, .cm-music-dash-loop-17::after, .cm-music-dash-loop-18::after, .cm-music-dash-loop-19::after, .cm-music-dash-loop-20::after,
+.cm-music-dash-loop-21::after, .cm-music-dash-loop-22::after, .cm-music-dash-loop-23::after, .cm-music-dash-loop-24::after, .cm-music-dash-loop-25::after,
+.cm-music-dash-loop-26::after, .cm-music-dash-loop-27::after, .cm-music-dash-loop-28::after, .cm-music-dash-loop-29::after, .cm-music-dash-loop-30::after,
+.cm-music-dash-loop-31::after, .cm-music-dash-loop-32::after, .cm-music-dash-loop-33::after, .cm-music-dash-loop-34::after, .cm-music-dash-loop-35::after,
+.cm-music-dash-loop-36::after, .cm-music-dash-loop-37::after, .cm-music-dash-loop-38::after, .cm-music-dash-loop-39::after, .cm-music-dash-loop-40::after,
+.cm-music-dash-loop-41::after, .cm-music-dash-loop-42::after, .cm-music-dash-loop-43::after, .cm-music-dash-loop-44::after, .cm-music-dash-loop-45::after,
+.cm-music-dash-loop-46::after, .cm-music-dash-loop-47::after, .cm-music-dash-loop-48::after, .cm-music-dash-loop-49::after, .cm-music-dash-loop-50::after,
+.cm-music-dash-loop-51::after, .cm-music-dash-loop-52::after, .cm-music-dash-loop-53::after, .cm-music-dash-loop-54::after, .cm-music-dash-loop-55::after,
+.cm-music-dash-loop-56::after, .cm-music-dash-loop-57::after, .cm-music-dash-loop-58::after, .cm-music-dash-loop-59::after, .cm-music-dash-loop-60::after,
+.cm-music-dash-loop-61::after, .cm-music-dash-loop-62::after, .cm-music-dash-loop-63::after {
     content: '';
     position: absolute;
-    bottom: 1.05em;
+    top: 0.8em;
     left: 0;
     border-bottom: 0.1em solid #0366d6;
     border-top: none;
-    border-left: 1px solid white;
-    border-right: 1px solid white;
-    border-bottom-left-radius: 0.8em;
-    border-bottom-right-radius: 0.8em;
-    padding-bottom: 0.75em;
+    border-left: 0.1em solid #0366d6;
+    border-right: 0.1em solid #0366d6;
+    border-bottom-left-radius: 0.5em;
+    border-bottom-right-radius: 0.5em;
+    height: 0.25em;
     z-index: 1;
     pointer-events: none;
 }
 
-/* Beat group classes 1-63 for comprehensive coverage */
-.cm-music-beat-group-1::after { width: 0.6em; }
-.cm-music-beat-group-2::after { width: 1.2em; }
-.cm-music-beat-group-3::after { width: 1.8em; }
-.cm-music-beat-group-4::after { width: 2.4em; }
-.cm-music-beat-group-5::after { width: 3.0em; }
-.cm-music-beat-group-6::after { width: 3.6em; }
-.cm-music-beat-group-7::after { width: 4.2em; }
-.cm-music-beat-group-8::after { width: 4.8em; }
-.cm-music-beat-group-9::after { width: 5.4em; }
-.cm-music-beat-group-10::after { width: 6.0em; }
-.cm-music-beat-group-11::after { width: 6.6em; }
-.cm-music-beat-group-12::after { width: 7.2em; }
-.cm-music-beat-group-13::after { width: 7.8em; }
-.cm-music-beat-group-14::after { width: 8.4em; }
-.cm-music-beat-group-15::after { width: 9.0em; }
-.cm-music-beat-group-16::after { width: 9.6em; }
-.cm-music-beat-group-17::after { width: 10.2em; }
-.cm-music-beat-group-18::after { width: 10.8em; }
-.cm-music-beat-group-19::after { width: 11.4em; }
-.cm-music-beat-group-20::after { width: 12.0em; }
-.cm-music-beat-group-21::after { width: 12.6em; }
-.cm-music-beat-group-22::after { width: 13.2em; }
-.cm-music-beat-group-23::after { width: 13.8em; }
-.cm-music-beat-group-24::after { width: 14.4em; }
-.cm-music-beat-group-25::after { width: 15.0em; }
-.cm-music-beat-group-26::after { width: 15.6em; }
-.cm-music-beat-group-27::after { width: 16.2em; }
-.cm-music-beat-group-28::after { width: 16.8em; }
-.cm-music-beat-group-29::after { width: 17.4em; }
-.cm-music-beat-group-30::after { width: 18.0em; }
-.cm-music-beat-group-31::after { width: 18.6em; }
-.cm-music-beat-group-32::after { width: 19.2em; }
-.cm-music-beat-group-33::after { width: 19.8em; }
-.cm-music-beat-group-34::after { width: 20.4em; }
-.cm-music-beat-group-35::after { width: 21.0em; }
-.cm-music-beat-group-36::after { width: 21.6em; }
-.cm-music-beat-group-37::after { width: 22.2em; }
-.cm-music-beat-group-38::after { width: 22.8em; }
-.cm-music-beat-group-39::after { width: 23.4em; }
-.cm-music-beat-group-40::after { width: 24.0em; }
-.cm-music-beat-group-41::after { width: 24.6em; }
-.cm-music-beat-group-42::after { width: 25.2em; }
-.cm-music-beat-group-43::after { width: 25.8em; }
-.cm-music-beat-group-44::after { width: 26.4em; }
-.cm-music-beat-group-45::after { width: 27.0em; }
-.cm-music-beat-group-46::after { width: 27.6em; }
-.cm-music-beat-group-47::after { width: 28.2em; }
-.cm-music-beat-group-48::after { width: 28.8em; }
-.cm-music-beat-group-49::after { width: 29.4em; }
-.cm-music-beat-group-50::after { width: 30.0em; }
-.cm-music-beat-group-51::after { width: 30.6em; }
-.cm-music-beat-group-52::after { width: 31.2em; }
-.cm-music-beat-group-53::after { width: 31.8em; }
-.cm-music-beat-group-54::after { width: 32.4em; }
-.cm-music-beat-group-55::after { width: 33.0em; }
-.cm-music-beat-group-56::after { width: 33.6em; }
-.cm-music-beat-group-57::after { width: 34.2em; }
-.cm-music-beat-group-58::after { width: 34.8em; }
-.cm-music-beat-group-59::after { width: 35.4em; }
-.cm-music-beat-group-60::after { width: 36.0em; }
-.cm-music-beat-group-61::after { width: 36.6em; }
-.cm-music-beat-group-62::after { width: 37.2em; }
-.cm-music-beat-group-63::after { width: 37.8em; }
+/* Dash loop width classes - same as note loops */
+.cm-music-dash-loop-2::after { width: 1.2em; }
+.cm-music-dash-loop-3::after { width: 1.8em; }
+.cm-music-dash-loop-4::after { width: 2.4em; }
+.cm-music-dash-loop-5::after { width: 3.0em; }
+.cm-music-dash-loop-6::after { width: 3.6em; }
+.cm-music-dash-loop-7::after { width: 4.2em; }
+.cm-music-dash-loop-8::after { width: 4.8em; }
+.cm-music-dash-loop-9::after { width: 5.4em; }
+.cm-music-dash-loop-10::after { width: 6.0em; }
+.cm-music-dash-loop-11::after { width: 6.6em; }
+.cm-music-dash-loop-12::after { width: 7.2em; }
+.cm-music-dash-loop-13::after { width: 7.8em; }
+.cm-music-dash-loop-14::after { width: 8.4em; }
+.cm-music-dash-loop-15::after { width: 9.0em; }
+.cm-music-dash-loop-16::after { width: 9.6em; }
+.cm-music-dash-loop-17::after { width: 10.2em; }
+.cm-music-dash-loop-18::after { width: 10.8em; }
+.cm-music-dash-loop-19::after { width: 11.4em; }
+.cm-music-dash-loop-20::after { width: 12.0em; }
+.cm-music-dash-loop-21::after { width: 12.6em; }
+.cm-music-dash-loop-22::after { width: 13.2em; }
+.cm-music-dash-loop-23::after { width: 13.8em; }
+.cm-music-dash-loop-24::after { width: 14.4em; }
+.cm-music-dash-loop-25::after { width: 15.0em; }
+.cm-music-dash-loop-26::after { width: 15.6em; }
+.cm-music-dash-loop-27::after { width: 16.2em; }
+.cm-music-dash-loop-28::after { width: 16.8em; }
+.cm-music-dash-loop-29::after { width: 17.4em; }
+.cm-music-dash-loop-30::after { width: 18.0em; }
+.cm-music-dash-loop-31::after { width: 18.6em; }
+.cm-music-dash-loop-32::after { width: 19.2em; }
+.cm-music-dash-loop-33::after { width: 19.8em; }
+.cm-music-dash-loop-34::after { width: 20.4em; }
+.cm-music-dash-loop-35::after { width: 21.0em; }
+.cm-music-dash-loop-36::after { width: 21.6em; }
+.cm-music-dash-loop-37::after { width: 22.2em; }
+.cm-music-dash-loop-38::after { width: 22.8em; }
+.cm-music-dash-loop-39::after { width: 23.4em; }
+.cm-music-dash-loop-40::after { width: 24.0em; }
+.cm-music-dash-loop-41::after { width: 24.6em; }
+.cm-music-dash-loop-42::after { width: 25.2em; }
+.cm-music-dash-loop-43::after { width: 25.8em; }
+.cm-music-dash-loop-44::after { width: 26.4em; }
+.cm-music-dash-loop-45::after { width: 27.0em; }
+.cm-music-dash-loop-46::after { width: 27.6em; }
+.cm-music-dash-loop-47::after { width: 28.2em; }
+.cm-music-dash-loop-48::after { width: 28.8em; }
+.cm-music-dash-loop-49::after { width: 29.4em; }
+.cm-music-dash-loop-50::after { width: 30.0em; }
+.cm-music-dash-loop-51::after { width: 30.6em; }
+.cm-music-dash-loop-52::after { width: 31.2em; }
+.cm-music-dash-loop-53::after { width: 31.8em; }
+.cm-music-dash-loop-54::after { width: 32.4em; }
+.cm-music-dash-loop-55::after { width: 33.0em; }
+.cm-music-dash-loop-56::after { width: 33.6em; }
+.cm-music-dash-loop-57::after { width: 34.2em; }
+.cm-music-dash-loop-58::after { width: 34.8em; }
+.cm-music-dash-loop-59::after { width: 35.4em; }
+.cm-music-dash-loop-60::after { width: 36.0em; }
+.cm-music-dash-loop-61::after { width: 36.6em; }
+.cm-music-dash-loop-62::after { width: 37.2em; }
+.cm-music-dash-loop-63::after { width: 37.8em; }
+
+/* Base styling for all note loop classes */
+.cm-music-note-loop-1, .cm-music-note-loop-2, .cm-music-note-loop-3, .cm-music-note-loop-4, .cm-music-note-loop-5,
+.cm-music-note-loop-6, .cm-music-note-loop-7, .cm-music-note-loop-8, .cm-music-note-loop-9, .cm-music-note-loop-10,
+.cm-music-note-loop-11, .cm-music-note-loop-12, .cm-music-note-loop-13, .cm-music-note-loop-14, .cm-music-note-loop-15,
+.cm-music-note-loop-16, .cm-music-note-loop-17, .cm-music-note-loop-18, .cm-music-note-loop-19, .cm-music-note-loop-20,
+.cm-music-note-loop-21, .cm-music-note-loop-22, .cm-music-note-loop-23, .cm-music-note-loop-24, .cm-music-note-loop-25,
+.cm-music-note-loop-26, .cm-music-note-loop-27, .cm-music-note-loop-28, .cm-music-note-loop-29, .cm-music-note-loop-30,
+.cm-music-note-loop-31, .cm-music-note-loop-32, .cm-music-note-loop-33, .cm-music-note-loop-34, .cm-music-note-loop-35,
+.cm-music-note-loop-36, .cm-music-note-loop-37, .cm-music-note-loop-38, .cm-music-note-loop-39, .cm-music-note-loop-40,
+.cm-music-note-loop-41, .cm-music-note-loop-42, .cm-music-note-loop-43, .cm-music-note-loop-44, .cm-music-note-loop-45,
+.cm-music-note-loop-46, .cm-music-note-loop-47, .cm-music-note-loop-48, .cm-music-note-loop-49, .cm-music-note-loop-50,
+.cm-music-note-loop-51, .cm-music-note-loop-52, .cm-music-note-loop-53, .cm-music-note-loop-54, .cm-music-note-loop-55,
+.cm-music-note-loop-56, .cm-music-note-loop-57, .cm-music-note-loop-58, .cm-music-note-loop-59, .cm-music-note-loop-60,
+.cm-music-note-loop-61, .cm-music-note-loop-62, .cm-music-note-loop-63 {
+    position: relative;
+    color: #22863a;
+    font-weight: bold;
+}
+
+.cm-music-note-loop-1::after, .cm-music-note-loop-2::after, .cm-music-note-loop-3::after, .cm-music-note-loop-4::after, .cm-music-note-loop-5::after,
+.cm-music-note-loop-6::after, .cm-music-note-loop-7::after, .cm-music-note-loop-8::after, .cm-music-note-loop-9::after, .cm-music-note-loop-10::after,
+.cm-music-note-loop-11::after, .cm-music-note-loop-12::after, .cm-music-note-loop-13::after, .cm-music-note-loop-14::after, .cm-music-note-loop-15::after,
+.cm-music-note-loop-16::after, .cm-music-note-loop-17::after, .cm-music-note-loop-18::after, .cm-music-note-loop-19::after, .cm-music-note-loop-20::after,
+.cm-music-note-loop-21::after, .cm-music-note-loop-22::after, .cm-music-note-loop-23::after, .cm-music-note-loop-24::after, .cm-music-note-loop-25::after,
+.cm-music-note-loop-26::after, .cm-music-note-loop-27::after, .cm-music-note-loop-28::after, .cm-music-note-loop-29::after, .cm-music-note-loop-30::after,
+.cm-music-note-loop-31::after, .cm-music-note-loop-32::after, .cm-music-note-loop-33::after, .cm-music-note-loop-34::after, .cm-music-note-loop-35::after,
+.cm-music-note-loop-36::after, .cm-music-note-loop-37::after, .cm-music-note-loop-38::after, .cm-music-note-loop-39::after, .cm-music-note-loop-40::after,
+.cm-music-note-loop-41::after, .cm-music-note-loop-42::after, .cm-music-note-loop-43::after, .cm-music-note-loop-44::after, .cm-music-note-loop-45::after,
+.cm-music-note-loop-46::after, .cm-music-note-loop-47::after, .cm-music-note-loop-48::after, .cm-music-note-loop-49::after, .cm-music-note-loop-50::after,
+.cm-music-note-loop-51::after, .cm-music-note-loop-52::after, .cm-music-note-loop-53::after, .cm-music-note-loop-54::after, .cm-music-note-loop-55::after,
+.cm-music-note-loop-56::after, .cm-music-note-loop-57::after, .cm-music-note-loop-58::after, .cm-music-note-loop-59::after, .cm-music-note-loop-60::after,
+.cm-music-note-loop-61::after, .cm-music-note-loop-62::after, .cm-music-note-loop-63::after {
+    content: '';
+    position: absolute;
+    top: 0.8em;
+    left: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-top: none;
+    border-left: 0.1em solid #0366d6;
+    border-right: 0.1em solid #0366d6;
+    border-bottom-left-radius: 0.5em;
+    border-bottom-right-radius: 0.5em;
+    height: 0.25em;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Note loop classes 1-63 for comprehensive coverage */
+.cm-music-note-loop-1::after { width: 0.6em; }
+.cm-music-note-loop-2::after { width: 1.2em; }
+.cm-music-note-loop-3::after { width: 1.8em; }
+.cm-music-note-loop-4::after { width: 2.4em; }
+.cm-music-note-loop-5::after { width: 3.0em; }
+.cm-music-note-loop-6::after { width: 3.6em; }
+.cm-music-note-loop-7::after { width: 4.2em; }
+.cm-music-note-loop-8::after { width: 4.8em; }
+.cm-music-note-loop-9::after { width: 5.4em; }
+.cm-music-note-loop-10::after { width: 6.0em; }
+.cm-music-note-loop-11::after { width: 6.6em; }
+.cm-music-note-loop-12::after { width: 7.2em; }
+.cm-music-note-loop-13::after { width: 7.8em; }
+.cm-music-note-loop-14::after { width: 8.4em; }
+.cm-music-note-loop-15::after { width: 9.0em; }
+.cm-music-note-loop-16::after { width: 9.6em; }
+.cm-music-note-loop-17::after { width: 10.2em; }
+.cm-music-note-loop-18::after { width: 10.8em; }
+.cm-music-note-loop-19::after { width: 11.4em; }
+.cm-music-note-loop-20::after { width: 12.0em; }
+.cm-music-note-loop-21::after { width: 12.6em; }
+.cm-music-note-loop-22::after { width: 13.2em; }
+.cm-music-note-loop-23::after { width: 13.8em; }
+.cm-music-note-loop-24::after { width: 14.4em; }
+.cm-music-note-loop-25::after { width: 15.0em; }
+.cm-music-note-loop-26::after { width: 15.6em; }
+.cm-music-note-loop-27::after { width: 16.2em; }
+.cm-music-note-loop-28::after { width: 16.8em; }
+.cm-music-note-loop-29::after { width: 17.4em; }
+.cm-music-note-loop-30::after { width: 18.0em; }
+.cm-music-note-loop-31::after { width: 18.6em; }
+.cm-music-note-loop-32::after { width: 19.2em; }
+.cm-music-note-loop-33::after { width: 19.8em; }
+.cm-music-note-loop-34::after { width: 20.4em; }
+.cm-music-note-loop-35::after { width: 21.0em; }
+.cm-music-note-loop-36::after { width: 21.6em; }
+.cm-music-note-loop-37::after { width: 22.2em; }
+.cm-music-note-loop-38::after { width: 22.8em; }
+.cm-music-note-loop-39::after { width: 23.4em; }
+.cm-music-note-loop-40::after { width: 24.0em; }
+.cm-music-note-loop-41::after { width: 24.6em; }
+.cm-music-note-loop-42::after { width: 25.2em; }
+.cm-music-note-loop-43::after { width: 25.8em; }
+.cm-music-note-loop-44::after { width: 26.4em; }
+.cm-music-note-loop-45::after { width: 27.0em; }
+.cm-music-note-loop-46::after { width: 27.6em; }
+.cm-music-note-loop-47::after { width: 28.2em; }
+.cm-music-note-loop-48::after { width: 28.8em; }
+.cm-music-note-loop-49::after { width: 29.4em; }
+.cm-music-note-loop-50::after { width: 30.0em; }
+.cm-music-note-loop-51::after { width: 30.6em; }
+.cm-music-note-loop-52::after { width: 31.2em; }
+.cm-music-note-loop-53::after { width: 31.8em; }
+.cm-music-note-loop-54::after { width: 32.4em; }
+.cm-music-note-loop-55::after { width: 33.0em; }
+.cm-music-note-loop-56::after { width: 33.6em; }
+.cm-music-note-loop-57::after { width: 34.2em; }
+.cm-music-note-loop-58::after { width: 34.8em; }
+.cm-music-note-loop-59::after { width: 35.4em; }
+.cm-music-note-loop-60::after { width: 36.0em; }
+.cm-music-note-loop-61::after { width: 36.6em; }
+.cm-music-note-loop-62::after { width: 37.2em; }
+.cm-music-note-loop-63::after { width: 37.8em; }
 
 /* Slur width variants - mirroring beat group patterns */
 /* 2-note slur */

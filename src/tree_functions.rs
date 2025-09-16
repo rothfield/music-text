@@ -1,7 +1,7 @@
 use serde::Serialize;
 use crate::parse::{Document, UpperElement, LowerElement};
 use crate::parse::model::{DocumentElement, StaveLine};
-use crate::rhythm::types::{ParsedElement, ParsedChild};
+use crate::rhythm::types::{ParsedElement, ParsedChild, Position};
 
 /// Convert row/col position to absolute character position in original input
 fn position_to_absolute_offset(position: &crate::rhythm::types::Position, original_input: &str) -> Option<usize> {
@@ -674,7 +674,7 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                         StaveLine::Content(parsed_elements) => {
                             // Process content line elements
                             for element in parsed_elements {
-                                process_parsed_element(element, &mut tokens, &mut position, original_input);
+                                process_parsed_element(element, &mut tokens, &mut position, original_input, &stave.rhythm_items);
                             }
                         }
                         StaveLine::Lower(lower_line) => {
@@ -1036,16 +1036,66 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
     }
 }
 
+// Helper function to find the number of elements in the beat containing this position
+fn find_beat_element_count(rhythm_items: &[crate::rhythm::Item], target_position: &Position) -> usize {
+    use crate::rhythm::Item;
+
+    for item in rhythm_items {
+        if let Item::Beat(beat) = item {
+            // Check if any element in this beat matches the target position
+            for beat_element in &beat.elements {
+                if beat_element.position.row == target_position.row &&
+                   beat_element.position.col == target_position.col {
+                    // Found the beat containing this position
+                    // Calculate the character span from first to last element
+                    if beat.elements.is_empty() {
+                        return 1;
+                    }
+
+                    let first_element = &beat.elements[0];
+                    let last_element = &beat.elements[beat.elements.len() - 1];
+
+                    // Calculate span: from start of first element to end of last element
+                    let start_col = first_element.position.col;
+                    let end_col = last_element.position.col + last_element.value.len();
+
+                    return end_col - start_col;
+                }
+            }
+        }
+    }
+
+    1 // fallback if position not found in any beat
+}
+
 // Helper function to process parsed elements from content lines
-fn process_parsed_element(element: &ParsedElement, tokens: &mut Vec<SyntaxToken>, position: &mut usize, original_input: &str) {
+fn process_parsed_element(
+    element: &ParsedElement,
+    tokens: &mut Vec<SyntaxToken>,
+    position: &mut usize,
+    original_input: &str,
+    rhythm_items: &Option<Vec<crate::rhythm::Item>>
+) {
     match element {
-        ParsedElement::Note { value, position: pos, in_slur, in_beat_group, beat_group, .. } => {
+        ParsedElement::Note { value, position: pos, in_slur, in_beat_group, beat_group, children, .. } => {
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let value_len = value.len();
-                let mut token_type = "note".to_string();
-
-                // Keep token type as just "note" - beat group styling handled via character styles
+                let token_type = if *in_beat_group && matches!(beat_group, Some(crate::rhythm::types::BeatGroupRole::Start)) {
+                    // Find the beat containing this note position and count its elements
+                    let span = if let Some(rhythm_items) = rhythm_items {
+                        find_beat_element_count(rhythm_items, pos)
+                    } else {
+                        1 // fallback if no rhythm data
+                    };
+                    if span >= 2 {
+                        format!("note-loop-{}", span)
+                    } else {
+                        "note".to_string()
+                    }
+                } else {
+                    "note".to_string()
+                };
 
                 tokens.push(SyntaxToken {
                     token_type,
@@ -1072,8 +1122,35 @@ fn process_parsed_element(element: &ParsedElement, tokens: &mut Vec<SyntaxToken>
         ParsedElement::Dash { position: pos, .. } => {
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
+                // Check if this dash is the first element of a beat (starts a beat group)
+                let token_type = if let Some(rhythm_items) = rhythm_items {
+                    // Check if this dash position matches the first element of any beat
+                    let mut is_first = false;
+                    let mut span = 1;
+
+                    for item in rhythm_items {
+                        if let crate::rhythm::Item::Beat(beat) = item {
+                            if let Some(first) = beat.elements.first() {
+                                if first.position.row == pos.row && first.position.col == pos.col {
+                                    is_first = true;
+                                    span = beat.elements.len();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if is_first && span >= 2 {
+                        format!("note-loop-{}", span)
+                    } else {
+                        "dash".to_string()
+                    }
+                } else {
+                    "dash".to_string()
+                };
+
                 tokens.push(SyntaxToken {
-                    token_type: "dash".to_string(),
+                    token_type,
                     start: start_pos,
                     end: start_pos + 1,
                     content: "-".to_string(),

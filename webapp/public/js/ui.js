@@ -131,14 +131,9 @@ export const UI = {
             document.getElementById('spatial-output').textContent = 
                 JSON.stringify(result.parsed_document || {}, null, 2);
             
-            // Analyzer Output - VexFlow data, notation systems, etc.
-            const analyzerData = {
-                vexflow: result.vexflow,
-                detected_notation_systems: result.detected_notation_systems,
-                error: result.error
-            };
-            document.getElementById('analyzer-output').textContent = 
-                JSON.stringify(analyzerData, null, 2);
+            // Analyzer Output - rhythm analyzed document (final output from analyzer)
+            document.getElementById('analyzer-output').textContent =
+                JSON.stringify(result.rhythm_analyzed_document || {}, null, 2);
         } else {
             // Show error in all sections
             const errorMsg = `Parse error: ${result.error}`;
