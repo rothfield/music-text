@@ -21,20 +21,26 @@ whitespace = " "
 ### Content Lines
 
 ```ebnf
-content_line = line_number? barline? measure (barline measure)* barline? newline
+content_line = line_number? barline? beat+ barline? newline
 
-measure = beat+
-beat = simple_beat | delimited_beat
+beat = (pitch | dash) beat-element*
+beat-element = pitch | dash | breath-mark
 
-simple_beat = (pitch | dash | space)+
-delimited_beat = overline_marker newline (pitch | dash | space)+ newline
-
-pitch = pitch_char accidental?
-pitch_char = sargam_note | number_note | abc_note | doremi_note | hindi_note
-accidental = "#" | "b"
+pitch = sargam_note | number_note | abc_note | doremi_note | hindi_note
 dash = "-"
-space = " "
+breath-mark = ","
 ```
+
+## Design Decision: No Measures
+
+We decided not to support measure grouping for simplicity (KISS principle). Content lines contain beats directly. Beats are maximal sequences of beat elements that terminate when encountering:
+- End of line (EOL)
+- End of input (EOI)
+- Non-beat elements (spaces, barlines, etc.)
+
+## Design Decision: Atomic Pitches
+
+Pitches are treated as atomic units (e.g., "1", "1#", "1b", "S", "S#") rather than decomposed into base pitch + accidental components.
 
 ### Annotation Lines
 
@@ -148,13 +154,13 @@ Expected: Title "Amazing Grace", directives, single stave
 ### Basic Notation
 ```
 Input: |1 2 3 4|
-Expected: Single measure with four quarter notes
+Expected: Four beats separated by spaces
 ```
 
 ### Rhythm Extensions
 ```
-Input: |1-- 2- 3 4|  
-Expected: 1 (dotted half), 2 (quarter), 3 (eighth), 4 (eighth)
+Input: |1-- 2- 3 4|
+Expected: Beat 1: "1--", Beat 2: "2-", Beat 3: "3", Beat 4: "4"
 ```
 
 ### Spatial Octaves
