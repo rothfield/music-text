@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bravura Font Test</title>
+    <link rel="stylesheet" href="css/music-text.css">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .large { font-size: 2em; }
+    </style>
+</head>
+<body>
+    <h1>Bravura Music Font Test</h1>
+
+    <div class="test-section">
+        <h2>Basic Bravura Font Test</h2>
+        <p>Standard text: Hello World</p>
+        <p class="music-symbol">Music font: &#xE566; &#xE56C; &#xE4A0;</p>
+        <p class="music-symbol large">Large: &#xE566; &#xE56C; &#xE4A0;</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Trill Test</h2>
+        <p>With CSS class: <span class="music-trill"></span></p>
+        <p>Direct Unicode: &#xE566;</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Mordent Test</h2>
+        <p>With CSS class: <span class="music-mordent"></span></p>
+        <p>Direct Unicode: &#xE56C;</p>
+    </div>
+
+    <div class="test-section">
+        <h2>Other Ornaments</h2>
+        <p class="music-symbol">
+            Trill: &#xE566; <br>
+            Mordent: &#xE56C; <br>
+            Turn: &#xE567; <br>
+            Grace note: &#xE560; <br>
+        </p>
+    </div>
+</body>
+</html>

@@ -6,13 +6,13 @@ use crate::rhythm::process_rhythm_batch;
 /// This function takes the Document and enhances staves with rhythm analysis data,
 /// adapted to work with the current Document structure (elements/StaveLine format).
 pub fn analyze_rhythm(mut document: Document) -> Result<Document, String> {
-    // Collect all content lines for batch processing
+    // Collect all content lines for batch processing with mutable references
     let mut all_content_lines = Vec::new();
 
-    for element in &document.elements {
+    for element in &mut document.elements {
         if let DocumentElement::Stave(stave) = element {
             // Find the content line in this stave
-            for line in &stave.lines {
+            for line in &mut stave.lines {
                 if let StaveLine::Content(content_elements) = line {
                     all_content_lines.push(content_elements);
                     break; // Assume one content line per stave
@@ -21,8 +21,8 @@ pub fn analyze_rhythm(mut document: Document) -> Result<Document, String> {
         }
     }
 
-    // Process rhythm for all staves in batch
-    let all_rhythm_items = process_rhythm_batch(&all_content_lines);
+    // Process rhythm for all staves in batch, modifying original elements
+    let all_rhythm_items = process_rhythm_batch(&mut all_content_lines);
 
     // Store Beat structures for renderers
     let mut rhythm_item_index = 0;

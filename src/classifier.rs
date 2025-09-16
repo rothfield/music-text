@@ -149,10 +149,10 @@ mod tests {
                     content: RawAnnotationContent::Upper(vec![
                         UpperItem::OctaveMarker { 
                             marker: ".".to_string(), 
-                            position: Some(Position { row: 1, col: 1 }) 
+                            position: Some(Position { row: 1, col: 0 }) 
                         }
                     ]),
-                    position: Some(Position { row: 1, col: 1 }),
+                    position: Some(Position { row: 1, col: 0 }),
                 }
             ],
             content_line: ContentLine { line_number: None, measures: Vec::new() },
@@ -179,10 +179,10 @@ mod tests {
                     content: RawAnnotationContent::Lower(vec![
                         LowerItem::OctaveMarker { 
                             marker: ".".to_string(), 
-                            position: Some(Position { row: 2, col: 1 }) 
+                            position: Some(Position { row: 2, col: 0 }) 
                         }
                     ]),
-                    position: Some(Position { row: 2, col: 1 }),
+                    position: Some(Position { row: 2, col: 0 }),
                 }
             ],
             position: None,
@@ -207,10 +207,10 @@ mod tests {
                     content: RawAnnotationContent::Lower(vec![
                         LowerItem::OctaveMarker { 
                             marker: ".".to_string(), 
-                            position: Some(Position { row: 2, col: 1 }) 
+                            position: Some(Position { row: 2, col: 0 }) 
                         }
                     ]),
-                    position: Some(Position { row: 2, col: 1 }),
+                    position: Some(Position { row: 2, col: 0 }),
                 }
             ],
             position: None,

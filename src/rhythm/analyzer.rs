@@ -272,6 +272,24 @@ impl FSM {
         self.state = State::Halt;
     }
 
+    fn process_with_modifications(&mut self, elements: &mut [ParsedElement]) {
+        // First pass: collect the rhythm items (immutable processing)
+        let elements_slice: &[ParsedElement] = elements;
+        self.process(elements_slice);
+
+        // Second pass: assign beat group roles based on generated beats
+        self.assign_beat_group_roles_to_all_elements(elements);
+    }
+
+    fn assign_beat_group_roles_to_all_elements(&self, elements: &mut [ParsedElement]) {
+        // Go through all generated beats and assign roles to corresponding elements
+        for item in &self.output {
+            if let Item::Beat(beat) = item {
+                self.assign_beat_group_roles_to_elements(beat, elements);
+            }
+        }
+    }
+
     fn start_beat_with_note(&mut self, element: &ParsedElement) {
         // Finish any existing beat first
         if self.current_beat.is_some() {
@@ -454,8 +472,46 @@ impl FSM {
                     }
                 }
             }
-            
+
+            // TODO: Set beat_group and in_beat_group on original ParsedElements
+            // when beat has multiple elements (reuse existing attributes)
+
             self.output.push(Item::Beat(beat));
+        }
+    }
+
+
+    fn assign_beat_group_roles_to_elements(&self, beat: &Beat, elements: &mut [ParsedElement]) {
+        use crate::rhythm::types::BeatGroupRole;
+
+        // Find the corresponding elements in the original array by position
+        for (beat_element_index, beat_element) in beat.elements.iter().enumerate() {
+            let position = &beat_element.position;
+
+            // Find the matching element in the original array
+            for element in elements.iter_mut() {
+                if element.position() == position {
+                    // Assign beat group role based on position in beat
+                    let role = if beat_element_index == 0 {
+                        BeatGroupRole::Start
+                    } else if beat_element_index == beat.elements.len() - 1 {
+                        BeatGroupRole::End
+                    } else {
+                        BeatGroupRole::Middle
+                    };
+
+                    // Set the beat group fields on the original element
+                    match element {
+                        ParsedElement::Note { beat_group, in_beat_group, .. } => {
+                            *beat_group = Some(role);
+                            *in_beat_group = true;
+                        }
+                        // Other element types don't have beat_group fields but could be extended
+                        _ => {}
+                    }
+                    break;
+                }
+            }
         }
     }
 
@@ -495,7 +551,15 @@ impl ParsedElement {
 
 
 /// Convert ParsedElements to FSM output using hierarchical state design
-pub fn process_rhythm(elements: &[ParsedElement]) -> Vec<Item> {
+/// Also modifies the original elements to set beat group roles
+pub fn process_rhythm(elements: &mut [ParsedElement]) -> Vec<Item> {
+    let mut fsm = FSM::new();
+    fsm.process_with_modifications(elements);
+    fsm.output
+}
+
+/// Legacy immutable version for compatibility
+pub fn process_rhythm_immutable(elements: &[ParsedElement]) -> Vec<Item> {
     let mut fsm = FSM::new();
     fsm.process(elements);
     fsm.output
@@ -503,16 +567,15 @@ pub fn process_rhythm(elements: &[ParsedElement]) -> Vec<Item> {
 
 /// Batch rhythm processing - processes all staves together for better context
 /// This allows the FSM to track extension chains and ties across stave boundaries
-pub fn process_rhythm_batch(all_stave_content_lines: &[&Vec<ParsedElement>]) -> Vec<Vec<Item>> {
+pub fn process_rhythm_batch(all_stave_content_lines: &mut [&mut Vec<ParsedElement>]) -> Vec<Vec<Item>> {
     let mut all_results = Vec::new();
-    
+
     for content_line in all_stave_content_lines {
-        // For now, process each stave individually (same as before)
-        // Future enhancement: could track extension chains across staves
+        // Process each stave individually, modifying original elements
         let rhythm_items = process_rhythm(content_line);
         all_results.push(rhythm_items);
     }
-    
+
     all_results
 }
 

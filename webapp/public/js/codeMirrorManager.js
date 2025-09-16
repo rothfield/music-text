@@ -280,7 +280,7 @@ export class CodeMirrorManager {
     }
 
     // Apply syntax highlighting using character styles from server
-    applyCharacterStyles(characterStyles) {
+    applyCharacterStyles(characterStyles, parseResult = null) {
         if (!this.editor || !characterStyles) return;
 
         // Clear existing marks
@@ -296,7 +296,88 @@ export class CodeMirrorManager {
             });
         });
 
+        // Apply beat group styling if parse result available
+        if (parseResult) {
+            this.applyBeatGroupStyling(parseResult);
+        }
+
         console.log('✅ Applied character styling for', characterStyles.length, 'positions');
+    }
+
+    // Apply beat group styling with precise width calculation
+    applyBeatGroupStyling(parseResult) {
+        if (!this.editor || !parseResult.rhythm_analyzed_document) return;
+
+        const doc = parseResult.rhythm_analyzed_document;
+        if (!doc.elements) return;
+
+        doc.elements.forEach(element => {
+            if (element.Stave && element.Stave.lines) {
+                element.Stave.lines.forEach(line => {
+                    if (line.Content) {
+                        this.processBeatGroupsInLine(line.Content);
+                    }
+                });
+            }
+        });
+    }
+
+    // Process beat groups in a content line
+    processBeatGroupsInLine(contentElements) {
+        let beatGroupStart = null;
+        let beatGroupElements = [];
+
+        contentElements.forEach((element, index) => {
+            if (element.Note && element.Note.in_beat_group) {
+                const role = element.Note.beat_group;
+
+                if (role === 'Start') {
+                    beatGroupStart = element.Note.position;
+                    beatGroupElements = [element];
+                } else if (role === 'Middle' && beatGroupElements.length > 0) {
+                    beatGroupElements.push(element);
+                } else if (role === 'End' && beatGroupElements.length > 0) {
+                    beatGroupElements.push(element);
+
+                    // Apply beat group styling
+                    this.applyBeatGroupArc(beatGroupStart, element.Note.position, beatGroupElements.length);
+
+                    // Reset for next beat group
+                    beatGroupStart = null;
+                    beatGroupElements = [];
+                }
+            }
+        });
+    }
+
+    // Apply beat group arc with calculated width
+    applyBeatGroupArc(startPos, endPos, elementCount) {
+        if (!startPos || !endPos) return;
+
+        // Convert positions to CodeMirror coordinates
+        const startCmPos = { line: startPos.row, ch: startPos.col - 1 }; // Convert to 0-based
+        const endCmPos = { line: endPos.row, ch: endPos.col }; // End after the character
+
+        // Get DOM coordinates for width calculation
+        const startCoords = this.editor.charCoords(startCmPos, 'local');
+        const endCoords = this.editor.charCoords(endCmPos, 'local');
+        const arcWidth = Math.max(20, endCoords.left - startCoords.left); // Minimum 20px
+
+        // Apply mark with dynamic width
+        const mark = this.editor.markText(startCmPos, { line: startPos.row, ch: startPos.col }, {
+            className: `beat-group-start beat-group-${elementCount}`,
+            attributes: {
+                'data-arc-width': arcWidth + 'px'
+            }
+        });
+
+        // Apply CSS custom property for precise width
+        setTimeout(() => {
+            const markElement = mark.find()?.mark?.element;
+            if (markElement) {
+                markElement.style.setProperty('--beat-group-width', arcWidth + 'px');
+            }
+        }, 0);
     }
 
     // Clear all existing marks

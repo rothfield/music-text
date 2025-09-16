@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Circle Around Text</title>
+  <style>
+    .circle {
+      display: inline-grid;
+      width: max-content;       /* grow to fit text */
+      aspect-ratio: 1 / 1;      /* keep square */
+      border: 2px solid #333;   /* circle border */
+      border-radius: 50%;       /* make it round */
+      place-items: center;      /* center text */
+      padding: 0.6em 1em;       /* breathing room */
+      box-sizing: border-box;
+      margin: 0.5em;
+    }
+    .circle > span {
+      white-space: nowrap;      /* prevent wrapping */
+      font: 600 1rem/1 system-ui, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div class="circle"><span>A</span></div>
+  <div class="circle"><span>ABC</span></div>
+  <div class="circle"><span>HELLO</span></div>
+  <div class="circle"><span>WORLDWIDE</span></div>
+</body>
+</html>
+

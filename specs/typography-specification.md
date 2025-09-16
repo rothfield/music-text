@@ -112,6 +112,31 @@ border-right: 1px solid white;
 - **Descender Cases**: Test g, j, p, q, y in various notation contexts
 - **Edge Cases**: Empty beat groups, overlapping ornaments
 
+### Mordent Typography (Based on DoReMiScript)
+
+**Symbol Rendering**:
+- **Primary Symbol**: Unicode wavy line `∿` with 1.2x horizontal scaling
+- **Alternative**: Traditional tilde `~` for compatibility
+- **Inverted**: Right angle `⌐` for inverted mordents
+
+**Positioning** (DoReMiScript pattern):
+```css
+.cm-music-mordent {
+    position: absolute;
+    font-size: 1.5em;
+    top: 0.4em;
+    left: 0.13em;
+    z-index: 2;
+    font-family: "Times New Roman", Georgia, serif;
+}
+```
+
+**Visual Design**:
+- **Color**: Purple (`#6f42c1`) matching ornament theme
+- **Typography**: Serif font for classical appearance
+- **Scale**: 1.5x larger than base text for visibility
+- **Positioning**: Above and slightly left of target note
+
 ## Future Considerations
 
 ### Enhanced Typography Features
@@ -119,6 +144,7 @@ border-right: 1px solid white;
 - **Variable Fonts**: For dynamic weight adjustments
 - **Custom Font Loading**: Music-specific typefaces
 - **Accessibility**: High contrast and screen reader support
+- **Unicode Symbols**: Proper musical ornament characters (`∿`, `𝆝`)
 
 ### Performance Optimizations
 - **CSS Grid**: For complex notation layouts

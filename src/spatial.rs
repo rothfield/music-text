@@ -37,6 +37,12 @@ pub struct ConsumedBeatGroup {
     pub underscore_count: usize,  // Number of underscores in the group
 }
 
+/// Consumed mordent with move semantics - original source is consumed
+#[derive(Debug, Clone)]
+pub struct ConsumedMordent {
+    pub original_source: Source,  // Source.value is now None
+}
+
 /// Position tracker for spatial assignment
 #[derive(Debug)]
 pub struct PositionTracker {
@@ -176,6 +182,33 @@ pub fn consume_octave_markers(
     (consumed_markers, upper_line, lower_line)
 }
 
+/// Consume mordents from upper line with move semantics
+pub fn consume_mordents(
+    mut upper_line: UpperLine
+) -> (Vec<(usize, ConsumedMordent)>, UpperLine) {
+    let mut consumed_mordents = Vec::new();
+    let mut tracker = PositionTracker::new();
+
+    // Consume mordents from upper line
+    for element in &mut upper_line.elements {
+        let pos = tracker.advance_for_upper_element(element);
+
+        if let UpperElement::Mordent { source } = element {
+            if let Some(value) = source.value.take() {
+                let consumed = ConsumedMordent {
+                    original_source: Source {
+                        value: Some(value),
+                        position: source.position.clone(),
+                    },
+                };
+                consumed_mordents.push((pos, consumed));
+            }
+        }
+    }
+
+    (consumed_mordents, upper_line)
+}
+
 /// Assign consumed markers to content elements at exact positions
 pub fn assign_markers_direct(
     mut content_elements: Vec<ParsedElement>,
@@ -183,12 +216,12 @@ pub fn assign_markers_direct(
 ) -> (Vec<ParsedElement>, Vec<(usize, ConsumedMarker)>) {
     let mut remaining_markers = Vec::new();
 
-    // Extract note positions (convert from 1-based col to 0-based position for matching)
+    // Extract note positions (already 0-based)
     let note_positions: Vec<(usize, usize)> = content_elements.iter()
         .enumerate()
         .filter_map(|(idx, element)| {
             match element {
-                ParsedElement::Note { position, .. } => Some((position.col - 1, idx)),
+                ParsedElement::Note { position, .. } => Some((position.col, idx)),
                 _ => None,
             }
         })
@@ -222,6 +255,51 @@ pub fn assign_markers_direct(
     }
 
     (content_elements, remaining_markers)
+}
+
+/// Assign consumed mordents to content elements at exact positions
+pub fn assign_mordents_direct(
+    mut content_elements: Vec<ParsedElement>,
+    consumed_mordents: Vec<(usize, ConsumedMordent)>
+) -> (Vec<ParsedElement>, Vec<(usize, ConsumedMordent)>) {
+    let mut remaining_mordents = Vec::new();
+
+    // Extract note positions (already 0-based)
+    let note_positions: Vec<(usize, usize)> = content_elements.iter()
+        .enumerate()
+        .filter_map(|(idx, element)| {
+            match element {
+                ParsedElement::Note { position, .. } => Some((position.col, idx)),
+                _ => None,
+            }
+        })
+        .collect();
+
+    // Direct assignment pass
+    for (mordent_pos, consumed_mordent) in consumed_mordents {
+        let mut assigned = false;
+
+        for (note_pos, note_idx) in &note_positions {
+            if mordent_pos == *note_pos {
+                // Transfer ownership of mordent to note
+                if let ParsedElement::Note { children, .. } = &mut content_elements[*note_idx] {
+                    // Add mordent ornament to note children
+                    children.push(ParsedChild::Ornament {
+                        kind: crate::rhythm::types::OrnamentType::Mordent,
+                        distance: -1, // Above the note
+                    });
+                }
+                assigned = true;
+                break;
+            }
+        }
+
+        if !assigned {
+            remaining_mordents.push((mordent_pos, consumed_mordent));
+        }
+    }
+
+    (content_elements, remaining_mordents)
 }
 
 /// Assign remaining markers to closest unassigned notes
@@ -271,6 +349,46 @@ pub fn assign_markers_nearest(
     content_elements
 }
 
+/// Assign remaining mordents to closest notes
+pub fn assign_mordents_nearest(
+    mut content_elements: Vec<ParsedElement>,
+    remaining_mordents: Vec<(usize, ConsumedMordent)>
+) -> Vec<ParsedElement> {
+    for (mordent_pos, _consumed_mordent) in remaining_mordents {
+        let mut best_distance = usize::MAX;
+        let mut best_note_idx = None;
+
+        for (idx, element) in content_elements.iter().enumerate() {
+            if let ParsedElement::Note { position, .. } = element {
+                let note_pos = position.col;
+                let distance = if mordent_pos > note_pos {
+                    mordent_pos - note_pos
+                } else {
+                    note_pos - mordent_pos
+                };
+
+                if distance < best_distance {
+                    best_distance = distance;
+                    best_note_idx = Some(idx);
+                }
+            }
+        }
+
+        // Transfer ownership to best match
+        if let Some(note_idx) = best_note_idx {
+            if let ParsedElement::Note { children, .. } = &mut content_elements[note_idx] {
+                // Add mordent ornament to note children
+                children.push(ParsedChild::Ornament {
+                    kind: crate::rhythm::types::OrnamentType::Mordent,
+                    distance: -1, // Above the note
+                });
+            }
+        }
+    }
+
+    content_elements
+}
+
 /// Consume slur segments from upper line and assign to notes
 pub fn consume_and_assign_slurs(
     mut upper_line: UpperLine,
@@ -300,22 +418,30 @@ pub fn consume_and_assign_slurs(
         }
     }
 
-    // Assign slur types to notes based on consumed slurs
+    // Assign slur types to all elements based on consumed slurs
     for consumed_slur in consumed_slurs {
-        let note_positions: Vec<(usize, usize)> = content_elements.iter()
+        let element_positions: Vec<(usize, usize)> = content_elements.iter()
             .enumerate()
             .filter_map(|(idx, element)| {
                 match element {
-                    ParsedElement::Note { position, .. } => Some((position.col - 1, idx)),
+                    ParsedElement::Note { position, .. } => Some((position.col, idx)),
+                    ParsedElement::Rest { position, .. } => Some((position.col, idx)),
+                    ParsedElement::Dash { position, .. } => Some((position.col, idx)),
+                    ParsedElement::Barline { position, .. } => Some((position.col, idx)),
+                    ParsedElement::Whitespace { position, .. } => Some((position.col, idx)),
                     _ => None,
                 }
             })
             .collect();
 
-        for (note_pos, note_idx) in note_positions {
-            if note_pos >= consumed_slur.start_pos && note_pos <= consumed_slur.end_pos {
-                if let ParsedElement::Note { in_slur, .. } = &mut content_elements[note_idx] {
-                    *in_slur = true;
+        for (element_pos, element_idx) in element_positions {
+            if element_pos >= consumed_slur.start_pos && element_pos <= consumed_slur.end_pos {
+                match &mut content_elements[element_idx] {
+                    ParsedElement::Note { in_slur, .. } => {
+                        *in_slur = true;
+                    },
+                    // Only notes have in_slur field, skip other elements
+                    _ => {}
                 }
             }
         }
@@ -470,14 +596,16 @@ pub fn assign_beat_groups_direct(
     use crate::rhythm::types::BeatGroupRole;
     let mut remaining_beat_groups = Vec::new();
 
-    // Extract note positions (convert from 1-based col to 0-based position for matching)
+    // Extract element positions (convert from 1-based col to 0-based position for matching)
     let note_positions: Vec<(usize, usize)> = content_elements.iter()
         .enumerate()
         .filter_map(|(idx, element)| {
             match element {
-                ParsedElement::Note { position, .. } => Some((position.col - 1, idx)),
-                ParsedElement::Rest { position, .. } => Some((position.col - 1, idx)),
-                ParsedElement::Dash { position, .. } => Some((position.col - 1, idx)),
+                ParsedElement::Note { position, .. } => Some((position.col, idx)),
+                ParsedElement::Rest { position, .. } => Some((position.col, idx)),
+                ParsedElement::Dash { position, .. } => Some((position.col, idx)),
+                ParsedElement::Barline { position, .. } => Some((position.col, idx)),
+                ParsedElement::Whitespace { position, .. } => Some((position.col, idx)),
                 _ => None,
             }
         })
@@ -485,7 +613,7 @@ pub fn assign_beat_groups_direct(
 
     // Direct assignment pass
     for (beat_group_pos, consumed_beat_group) in consumed_beat_groups {
-        // Find notes within beat group span
+        // Find elements within beat group span
         let mut notes_in_group = Vec::new();
 
         for (note_pos, note_idx) in &note_positions {
@@ -532,8 +660,17 @@ pub fn assign_beat_groups_direct(
 
                         assigned = true;
                     },
-                    ParsedElement::Rest { position, .. } | ParsedElement::Dash { position, .. } => {
-                        // Rests and dashes don't have beat_group fields but are counted in grouping
+                    // Only notes have in_beat_group field, others are counted but not modified
+                    ParsedElement::Rest { .. } => {
+                        assigned = true;
+                    },
+                    ParsedElement::Dash { .. } => {
+                        assigned = true;
+                    },
+                    ParsedElement::Barline { .. } => {
+                        assigned = true;
+                    },
+                    ParsedElement::Whitespace { .. } => {
                         assigned = true;
                     },
                     _ => {}
@@ -561,24 +698,41 @@ pub fn assign_beat_groups_nearest(
     let mut still_remaining = Vec::new();
 
     for (beat_group_pos, consumed_beat_group) in remaining_beat_groups {
-        // Find available notes (not already in beat groups) within a reasonable range
+        // Find available elements (not already in beat groups) within a reasonable range
         let mut candidate_notes = Vec::new();
 
         for (idx, element) in content_elements.iter().enumerate() {
-            if let ParsedElement::Note { beat_group, position, .. } = element {
-                // Only consider notes without existing beat group assignments
-                if beat_group.is_none() {
-                    let note_pos = position.col - 1;  // Convert to 0-based
-                    let distance = if beat_group_pos > note_pos {
-                        beat_group_pos - note_pos
-                    } else {
-                        note_pos - beat_group_pos
-                    };
+            let (position, already_assigned) = match element {
+                ParsedElement::Note { beat_group, position, .. } => {
+                    (position, beat_group.is_some())
+                },
+                ParsedElement::Rest { position, .. } => {
+                    (position, false) // Rests don't have in_beat_group field
+                },
+                ParsedElement::Dash { position, .. } => {
+                    (position, false) // Dashes don't have in_beat_group field
+                },
+                ParsedElement::Barline { position, .. } => {
+                    (position, false) // Barlines don't have in_beat_group field
+                },
+                ParsedElement::Whitespace { position, .. } => {
+                    (position, false) // Whitespace doesn't have in_beat_group field
+                },
+                _ => continue,
+            };
 
-                    // Only consider notes within reasonable distance (e.g., 5 columns)
-                    if distance <= 5 {
-                        candidate_notes.push((distance, note_pos, idx));
-                    }
+            // Only consider elements without existing beat group assignments
+            if !already_assigned {
+                let element_pos = position.col;  // Already 0-based
+                let distance = if beat_group_pos > element_pos {
+                    beat_group_pos - element_pos
+                } else {
+                    element_pos - beat_group_pos
+                };
+
+                // Only consider elements within reasonable distance (e.g., 5 columns)
+                if distance <= 5 {
+                    candidate_notes.push((distance, element_pos, idx));
                 }
             }
         }
@@ -595,17 +749,33 @@ pub fn assign_beat_groups_nearest(
                 .collect();
 
             if selected_notes.len() >= 2 {
-                // Assign beat group roles to selected notes
+                // Assign beat group roles to selected elements
                 for (i, &element_index) in selected_notes.iter().enumerate() {
-                    if let ParsedElement::Note { beat_group, in_beat_group, .. } = &mut content_elements[element_index] {
-                        *beat_group = Some(if i == 0 {
-                            BeatGroupRole::Start
-                        } else if i == selected_notes.len() - 1 {
-                            BeatGroupRole::End
-                        } else {
-                            BeatGroupRole::Middle
-                        });
-                        *in_beat_group = true;
+                    match &mut content_elements[element_index] {
+                        ParsedElement::Note { beat_group, in_beat_group, .. } => {
+                            *beat_group = Some(if i == 0 {
+                                BeatGroupRole::Start
+                            } else if i == selected_notes.len() - 1 {
+                                BeatGroupRole::End
+                            } else {
+                                BeatGroupRole::Middle
+                            });
+                            *in_beat_group = true;
+                        },
+                        // Only notes have in_beat_group field, others are counted but not modified
+                        ParsedElement::Rest { .. } => {
+                            // Rests don't have in_beat_group field
+                        },
+                        ParsedElement::Dash { .. } => {
+                            // Dashes don't have in_beat_group field
+                        },
+                        ParsedElement::Barline { .. } => {
+                            // Barlines don't have in_beat_group field
+                        },
+                        ParsedElement::Whitespace { .. } => {
+                            // Whitespace doesn't have in_beat_group field
+                        },
+                        _ => {}
                     }
                 }
             } else {

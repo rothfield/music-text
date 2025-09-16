@@ -1,6 +1,17 @@
 /* Music Text - Syntax Highlighting Styles */
 /* Dedicated CSS for music-text parser visualization */
 
+/* Bravura Music Font */
+@font-face {
+    font-family: 'Bravura';
+    src: url('../assets/fonts/Bravura.woff2') format('woff2'),
+         url('../assets/fonts/Bravura.woff') format('woff'),
+         url('../assets/fonts/Bravura.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* XML Syntax Highlighting Classes */
 
 /* Notes - Green */
@@ -131,6 +142,7 @@
 
 
 
+
 .cm-music-barline {
     color: #6f42c1;
     font-weight: bold;
@@ -163,9 +175,63 @@
 }
 
 /* Beat group indicators - make underscore characters visually disappear */
-.cm-music-beat-group, .cm-music-beat_group {
+/* TEMPORARILY DISABLED */
+/*.cm-music-beat-group, .cm-music-beat_group {
     color: transparent;
     user-select: none;
+}*/
+
+/* Beat group role-specific styling for notes */
+.cm-music-note-beat-group-start {
+    position: relative;
+    color: #22863a;
+    font-weight: bold;
+}
+
+.cm-music-note-beat-group-start::after {
+    content: "";
+    position: absolute;
+    bottom: -1.2em;
+    left: 0;
+    right: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-bottom-left-radius: 0.8em;
+    border-left: 1px solid white;
+    padding-bottom: 0.75em;
+}
+
+.cm-music-note-beat-group-middle {
+    position: relative;
+    color: #22863a;
+    font-weight: bold;
+}
+
+.cm-music-note-beat-group-middle::after {
+    content: "";
+    position: absolute;
+    bottom: -1.2em;
+    left: 0;
+    right: 0;
+    border-bottom: 0.1em solid #0366d6;
+    padding-bottom: 0.75em;
+}
+
+.cm-music-note-beat-group-end {
+    position: relative;
+    color: #22863a;
+    font-weight: bold;
+}
+
+.cm-music-note-beat-group-end::after {
+    content: "";
+    position: absolute;
+    bottom: -1.2em;
+    left: 0;
+    right: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-bottom-right-radius: 0.8em;
+    border-right: 1px solid white;
+    padding-bottom: 0.75em;
 }
 
 /* Slur indicators - make underscore characters visually disappear */
@@ -204,7 +270,7 @@
 .cm-music-note.beat-group-start::after {
     content: '';
     position: absolute;
-    bottom: -0.2em;
+    bottom: 1.05em;
     left: 0;
     border-bottom: 0.1em solid #0366d6;
     border-top: none;
@@ -213,6 +279,7 @@
     border-bottom-left-radius: 0.8em;
     border-bottom-right-radius: 0.8em;
     padding-bottom: 0.75em;
+    width: 1em;
     z-index: 1;
     pointer-events: none;
 }
@@ -235,30 +302,146 @@
     pointer-events: none;
 }
 
-/* 2-note beat group */
-.cm-music-note.beat-group-start.beat-group-2::after {
-    width: 1.5em;
+/* Beat group width variants - Brute force 63 different classes */
+
+/* 2-character beat groups */
+.cm-music-beat-group-2-chars::after { width: 1.2em; }
+
+/* 3-character beat groups */
+.cm-music-beat-group-3-chars::after { width: 1.8em; }
+
+/* 4-character beat groups */
+.cm-music-beat-group-4-chars::after { width: 2.4em; }
+
+/* 5-character beat groups */
+.cm-music-beat-group-5-chars::after { width: 3.0em; }
+
+/* 6-character beat groups */
+.cm-music-beat-group-6-chars::after { width: 3.6em; }
+
+/* 7-character beat groups */
+.cm-music-beat-group-7-chars::after { width: 4.2em; }
+
+/* 8-character beat groups */
+.cm-music-beat-group-8-chars::after { width: 4.8em; }
+
+/* 9-character beat groups */
+.cm-music-beat-group-9-chars::after { width: 5.4em; }
+
+/* 10-character beat groups */
+.cm-music-beat-group-10-chars::after { width: 6.0em; }
+
+/* Base styling for all beat group classes */
+.cm-music-beat-group-1, .cm-music-beat-group-2, .cm-music-beat-group-3, .cm-music-beat-group-4, .cm-music-beat-group-5,
+.cm-music-beat-group-6, .cm-music-beat-group-7, .cm-music-beat-group-8, .cm-music-beat-group-9, .cm-music-beat-group-10,
+.cm-music-beat-group-11, .cm-music-beat-group-12, .cm-music-beat-group-13, .cm-music-beat-group-14, .cm-music-beat-group-15,
+.cm-music-beat-group-16, .cm-music-beat-group-17, .cm-music-beat-group-18, .cm-music-beat-group-19, .cm-music-beat-group-20,
+.cm-music-beat-group-21, .cm-music-beat-group-22, .cm-music-beat-group-23, .cm-music-beat-group-24, .cm-music-beat-group-25,
+.cm-music-beat-group-26, .cm-music-beat-group-27, .cm-music-beat-group-28, .cm-music-beat-group-29, .cm-music-beat-group-30,
+.cm-music-beat-group-31, .cm-music-beat-group-32, .cm-music-beat-group-33, .cm-music-beat-group-34, .cm-music-beat-group-35,
+.cm-music-beat-group-36, .cm-music-beat-group-37, .cm-music-beat-group-38, .cm-music-beat-group-39, .cm-music-beat-group-40,
+.cm-music-beat-group-41, .cm-music-beat-group-42, .cm-music-beat-group-43, .cm-music-beat-group-44, .cm-music-beat-group-45,
+.cm-music-beat-group-46, .cm-music-beat-group-47, .cm-music-beat-group-48, .cm-music-beat-group-49, .cm-music-beat-group-50,
+.cm-music-beat-group-51, .cm-music-beat-group-52, .cm-music-beat-group-53, .cm-music-beat-group-54, .cm-music-beat-group-55,
+.cm-music-beat-group-56, .cm-music-beat-group-57, .cm-music-beat-group-58, .cm-music-beat-group-59, .cm-music-beat-group-60,
+.cm-music-beat-group-61, .cm-music-beat-group-62, .cm-music-beat-group-63 {
+    position: relative;
+    color: #22863a;
+    font-weight: bold;
 }
 
-/* 3-note beat group */
-.cm-music-note.beat-group-start.beat-group-3::after {
-    width: 2.5em;
+.cm-music-beat-group-1::after, .cm-music-beat-group-2::after, .cm-music-beat-group-3::after, .cm-music-beat-group-4::after, .cm-music-beat-group-5::after,
+.cm-music-beat-group-6::after, .cm-music-beat-group-7::after, .cm-music-beat-group-8::after, .cm-music-beat-group-9::after, .cm-music-beat-group-10::after,
+.cm-music-beat-group-11::after, .cm-music-beat-group-12::after, .cm-music-beat-group-13::after, .cm-music-beat-group-14::after, .cm-music-beat-group-15::after,
+.cm-music-beat-group-16::after, .cm-music-beat-group-17::after, .cm-music-beat-group-18::after, .cm-music-beat-group-19::after, .cm-music-beat-group-20::after,
+.cm-music-beat-group-21::after, .cm-music-beat-group-22::after, .cm-music-beat-group-23::after, .cm-music-beat-group-24::after, .cm-music-beat-group-25::after,
+.cm-music-beat-group-26::after, .cm-music-beat-group-27::after, .cm-music-beat-group-28::after, .cm-music-beat-group-29::after, .cm-music-beat-group-30::after,
+.cm-music-beat-group-31::after, .cm-music-beat-group-32::after, .cm-music-beat-group-33::after, .cm-music-beat-group-34::after, .cm-music-beat-group-35::after,
+.cm-music-beat-group-36::after, .cm-music-beat-group-37::after, .cm-music-beat-group-38::after, .cm-music-beat-group-39::after, .cm-music-beat-group-40::after,
+.cm-music-beat-group-41::after, .cm-music-beat-group-42::after, .cm-music-beat-group-43::after, .cm-music-beat-group-44::after, .cm-music-beat-group-45::after,
+.cm-music-beat-group-46::after, .cm-music-beat-group-47::after, .cm-music-beat-group-48::after, .cm-music-beat-group-49::after, .cm-music-beat-group-50::after,
+.cm-music-beat-group-51::after, .cm-music-beat-group-52::after, .cm-music-beat-group-53::after, .cm-music-beat-group-54::after, .cm-music-beat-group-55::after,
+.cm-music-beat-group-56::after, .cm-music-beat-group-57::after, .cm-music-beat-group-58::after, .cm-music-beat-group-59::after, .cm-music-beat-group-60::after,
+.cm-music-beat-group-61::after, .cm-music-beat-group-62::after, .cm-music-beat-group-63::after {
+    content: '';
+    position: absolute;
+    bottom: 1.05em;
+    left: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-top: none;
+    border-left: 1px solid white;
+    border-right: 1px solid white;
+    border-bottom-left-radius: 0.8em;
+    border-bottom-right-radius: 0.8em;
+    padding-bottom: 0.75em;
+    z-index: 1;
+    pointer-events: none;
 }
 
-/* 4-note beat group */
-.cm-music-note.beat-group-start.beat-group-4::after {
-    width: 3.5em;
-}
-
-/* 5-note beat group */
-.cm-music-note.beat-group-start.beat-group-5::after {
-    width: 4.5em;
-}
-
-/* 6+ note beat group */
-.cm-music-note.beat-group-start.beat-group-6::after {
-    width: 5.5em;
-}
+/* Beat group classes 1-63 for comprehensive coverage */
+.cm-music-beat-group-1::after { width: 0.6em; }
+.cm-music-beat-group-2::after { width: 1.2em; }
+.cm-music-beat-group-3::after { width: 1.8em; }
+.cm-music-beat-group-4::after { width: 2.4em; }
+.cm-music-beat-group-5::after { width: 3.0em; }
+.cm-music-beat-group-6::after { width: 3.6em; }
+.cm-music-beat-group-7::after { width: 4.2em; }
+.cm-music-beat-group-8::after { width: 4.8em; }
+.cm-music-beat-group-9::after { width: 5.4em; }
+.cm-music-beat-group-10::after { width: 6.0em; }
+.cm-music-beat-group-11::after { width: 6.6em; }
+.cm-music-beat-group-12::after { width: 7.2em; }
+.cm-music-beat-group-13::after { width: 7.8em; }
+.cm-music-beat-group-14::after { width: 8.4em; }
+.cm-music-beat-group-15::after { width: 9.0em; }
+.cm-music-beat-group-16::after { width: 9.6em; }
+.cm-music-beat-group-17::after { width: 10.2em; }
+.cm-music-beat-group-18::after { width: 10.8em; }
+.cm-music-beat-group-19::after { width: 11.4em; }
+.cm-music-beat-group-20::after { width: 12.0em; }
+.cm-music-beat-group-21::after { width: 12.6em; }
+.cm-music-beat-group-22::after { width: 13.2em; }
+.cm-music-beat-group-23::after { width: 13.8em; }
+.cm-music-beat-group-24::after { width: 14.4em; }
+.cm-music-beat-group-25::after { width: 15.0em; }
+.cm-music-beat-group-26::after { width: 15.6em; }
+.cm-music-beat-group-27::after { width: 16.2em; }
+.cm-music-beat-group-28::after { width: 16.8em; }
+.cm-music-beat-group-29::after { width: 17.4em; }
+.cm-music-beat-group-30::after { width: 18.0em; }
+.cm-music-beat-group-31::after { width: 18.6em; }
+.cm-music-beat-group-32::after { width: 19.2em; }
+.cm-music-beat-group-33::after { width: 19.8em; }
+.cm-music-beat-group-34::after { width: 20.4em; }
+.cm-music-beat-group-35::after { width: 21.0em; }
+.cm-music-beat-group-36::after { width: 21.6em; }
+.cm-music-beat-group-37::after { width: 22.2em; }
+.cm-music-beat-group-38::after { width: 22.8em; }
+.cm-music-beat-group-39::after { width: 23.4em; }
+.cm-music-beat-group-40::after { width: 24.0em; }
+.cm-music-beat-group-41::after { width: 24.6em; }
+.cm-music-beat-group-42::after { width: 25.2em; }
+.cm-music-beat-group-43::after { width: 25.8em; }
+.cm-music-beat-group-44::after { width: 26.4em; }
+.cm-music-beat-group-45::after { width: 27.0em; }
+.cm-music-beat-group-46::after { width: 27.6em; }
+.cm-music-beat-group-47::after { width: 28.2em; }
+.cm-music-beat-group-48::after { width: 28.8em; }
+.cm-music-beat-group-49::after { width: 29.4em; }
+.cm-music-beat-group-50::after { width: 30.0em; }
+.cm-music-beat-group-51::after { width: 30.6em; }
+.cm-music-beat-group-52::after { width: 31.2em; }
+.cm-music-beat-group-53::after { width: 31.8em; }
+.cm-music-beat-group-54::after { width: 32.4em; }
+.cm-music-beat-group-55::after { width: 33.0em; }
+.cm-music-beat-group-56::after { width: 33.6em; }
+.cm-music-beat-group-57::after { width: 34.2em; }
+.cm-music-beat-group-58::after { width: 34.8em; }
+.cm-music-beat-group-59::after { width: 35.4em; }
+.cm-music-beat-group-60::after { width: 36.0em; }
+.cm-music-beat-group-61::after { width: 36.6em; }
+.cm-music-beat-group-62::after { width: 37.2em; }
+.cm-music-beat-group-63::after { width: 37.8em; }
 
 /* Slur width variants - mirroring beat group patterns */
 /* 2-note slur */
@@ -286,26 +469,27 @@
     width: 5.5em;
 }
 
+/* Beat group highlighting - TEMPORARILY DISABLED */
 /* Highlight notes in beat groups with subtle background */
-.cm-music-note.in-beat-group {
+/*.cm-music-note.in-beat-group {
     background-color: rgba(3, 102, 214, 0.1);
     border-radius: 3px;
     padding: 1px 2px;
-}
+}*/
 
 /* Start note gets slightly stronger highlight */
-.cm-music-note.beat-group-start {
+/*.cm-music-note.beat-group-start {
     background-color: rgba(3, 102, 214, 0.15);
     border-radius: 3px;
     padding: 1px 2px;
-}
+}*/
 
 /* End note styling */
-.cm-music-note.beat-group-end {
+/*.cm-music-note.beat-group-end {
     background-color: rgba(3, 102, 214, 0.12);
     border-radius: 3px;
     padding: 1px 2px;
-}
+}*/
 
 /* Highlight notes in slurs with subtle background */
 .cm-music-note.in-slur {
@@ -326,6 +510,79 @@
     background-color: rgba(215, 58, 73, 0.12);
     border-radius: 3px;
     padding: 1px 2px;
+}
+
+/* Mordent styling - based on DoReMiScript patterns */
+.cm-music-mordent {
+    position: absolute;
+    font-size: 1.5em;
+    top: 0.4em;
+    left: 0.13em;
+    z-index: 2;
+    font-family: "Times New Roman", Georgia, serif;
+    font-weight: normal;
+    color: #6f42c1; /* Purple like ornaments */
+}
+
+/* Enhanced mordent with symbol styling */
+.cm-music-mordent::before {
+    content: "∿"; /* Unicode wavy line for mordent */
+    display: inline-block;
+    transform: scaleX(1.2);
+}
+
+/* Alternative mordent symbols */
+.cm-music-mordent.short::before {
+    content: "~";
+}
+
+.cm-music-mordent.inverted::before {
+    content: "⌐";
+}
+
+/* Music Symbols using Bravura Font */
+.music-symbol {
+    font-family: 'Bravura', serif;
+    font-size: 1.2em;
+}
+
+/* Ornament symbols using Bravura */
+.music-ornament {
+    font-family: 'Bravura', serif;
+    font-size: 1.4em;
+    color: #6f42c1; /* Purple like other ornaments */
+    position: relative;
+    top: -0.1em;
+}
+
+/* Trill symbol - Unicode U+E566 in Bravura */
+.music-trill::before {
+    content: "\E566"; /* Bravura trill symbol */
+    font-family: 'Bravura', serif;
+}
+
+/* Mordent symbol - Unicode U+E56C in Bravura */
+.music-mordent::before {
+    content: "\E56C"; /* Bravura mordent symbol */
+    font-family: 'Bravura', serif;
+}
+
+/* Update mordent to use Bravura font */
+.cm-music-mordent {
+    position: absolute;
+    font-size: 1.5em;
+    top: 0.4em;
+    left: 0.13em;
+    z-index: 2;
+    font-family: 'Bravura', serif;
+    font-weight: normal;
+    color: #6f42c1;
+}
+
+/* Enhanced mordent with Bravura symbol */
+.cm-music-mordent::before {
+    content: "\E56C"; /* Bravura mordent symbol */
+    display: inline-block;
 }
 
 /* Future music-text specific styles can go here */

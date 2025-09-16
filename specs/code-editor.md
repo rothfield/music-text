@@ -121,6 +121,138 @@ User Types → Editor (Plain Text) → Server Parse → Character Tree → Style
 
 ## CSS Styling Framework
 
+### Brute Force CSS Approach for Beat Group Arcs
+
+The current implementation uses a **brute force CSS approach** for beat group arc styling, which generates 63 individual CSS classes to handle precise character width calculations.
+
+#### Why Brute Force Over Adaptive CSS?
+
+**Considered Approach: CSS `max-content` + `display: grid`**
+```css
+.beat-group-arc::after {
+    display: inline-grid;
+    width: max-content;       /* grow to fit content */
+    border-radius: 0 0 50% 50%;  /* bottom semi-circle */
+}
+```
+
+**Problem**: This requires wrapping multiple characters in a container div:
+```html
+<div class="beat-group-arc"><span>SRG</span></div>
+```
+
+**CodeMirror Limitation**: CodeMirror applies classes to individual characters in the token stream:
+```html
+<span class="cm-music-note">S</span><span class="cm-music-note">R</span><span class="cm-music-note">G</span>
+```
+
+**Solution**: Brute force CSS classes with precise monospaced font calculations.
+
+#### Implementation Details
+
+**1. CSS Class Generation (1-63 character widths)**
+```css
+/* Beat group classes for precise width control */
+.cm-music-beat-group-1::after { width: 0.6em; }
+.cm-music-beat-group-2::after { width: 1.2em; }
+.cm-music-beat-group-3::after { width: 1.8em; }
+/* ... continues to 63 */
+.cm-music-beat-group-63::after { width: 37.8em; }
+
+/* Base styling for all beat group classes */
+.cm-music-beat-group-1, .cm-music-beat-group-2, /* ... all 63 classes */ {
+    position: relative;
+    color: #22863a;
+    font-weight: bold;
+}
+
+.cm-music-beat-group-1::after, .cm-music-beat-group-2::after, /* ... all 63 */ {
+    content: '';
+    position: absolute;
+    bottom: 1.05em;
+    left: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-bottom-left-radius: 0.8em;
+    border-bottom-right-radius: 0.8em;
+    padding-bottom: 0.75em;
+    z-index: 1;
+    pointer-events: none;
+}
+```
+
+**2. Character Width Calculation**
+```rust
+fn add_beat_group_classes(styles: &mut Vec<CharacterStyle>, positions: &[usize], count: usize) {
+    for (i, &pos) in positions.iter().enumerate() {
+        if let Some(style) = styles.iter_mut().find(|s| s.pos == pos) {
+            if i == 0 {  // Only apply to start note
+                // Calculate character span of the beat group
+                let start_pos = positions[0];
+                let end_pos = positions[positions.len() - 1];
+                let char_width = end_pos - start_pos + 1; // +1 to include end character
+
+                // Clamp to available classes (1-63)
+                let clamped_width = char_width.min(63).max(1);
+
+                // Apply the specific numbered class
+                style.classes.push(format!("beat-group-{}", clamped_width));
+            }
+        }
+    }
+}
+```
+
+**3. Monospaced Font Precision**
+- Each character = 0.6em width in monospaced font
+- Arc width = character count × 0.6em
+- Perfect alignment guaranteed for any beat group span
+
+#### Benefits of Brute Force Approach
+
+1. **CodeMirror Compatibility**: Works with token-based character styling
+2. **Precise Control**: Exact width for each possible character span
+3. **Performance**: No JavaScript calculations or DOM measurements
+4. **Predictable**: Consistent behavior across all browsers
+5. **Monospaced Optimization**: Leverages fixed character widths
+
+#### Trade-offs
+
+**Pros**:
+- Perfect precision for monospaced fonts
+- No runtime calculations needed
+- Works with CodeMirror's architecture
+- 63 classes covers practical use cases
+
+**Cons**:
+- More CSS code (63 classes vs 1 adaptive rule)
+- Fixed to monospaced fonts only
+- Upper limit of 63 characters per beat group
+
+#### Alternative Approaches Considered
+
+**1. JavaScript Dynamic Styling**
+```javascript
+// Measure actual DOM element widths
+const arcWidth = endCoords.left - startCoords.left;
+markElement.style.setProperty('--beat-group-width', arcWidth + 'px');
+```
+*Rejected*: More complex, requires DOM measurements, potential performance issues
+
+**2. CSS Custom Properties**
+```css
+.beat-group-start::after {
+    width: var(--beat-group-width, 2em);
+}
+```
+*Rejected*: Still requires JavaScript to set the custom property values
+
+**3. Multiple CSS Classes**
+```css
+.beat-group-start.beat-group-2::after { width: 1.2em; }
+.beat-group-start.beat-group-3::after { width: 1.8em; }
+```
+*Rejected*: CodeMirror doesn't support multiple classes in token types
+
 ### Fixed-Width Character Layout
 ```css
 /* Every character gets same width for columnar alignment */
@@ -855,6 +987,39 @@ ____      <- Lower line (skipped - no row/col positions)
 
 The positions work because we **convert (row, col) to absolute offsets** that match CodeMirror's linear character indexing, but only for content elements that have semantic meaning for syntax highlighting.
 
+## Implementation TODOs
+
+### High Priority
+- [ ] **Implicit Beat Grouping in Code Editor**: Extend character styling to automatically group consecutive musical elements with same beat timing
+  - Use rhythm analyzer output to detect same-duration sequences
+  - Apply lower arc styling for implicit groups (2+ consecutive notes/rests/dashes with identical duration)
+  - Distinguish from explicit beat groups marked with `___`
+  - Ensure proper visual hierarchy: explicit groups (blue) vs implicit groups (lighter blue)
+
+### Current Implementation Status
+- [x] **Basic syntax highlighting** with token-based approach
+- [x] **Explicit beat group detection** via spatial assignment
+- [x] **Beat group arc visualization** with brute force CSS (63 classes)
+- [x] **Slur visualization** with upper arcs
+- [x] **Octave marker positioning** above/below notes
+- [x] **Character-level styling system** with precise position mapping
+- [x] **Monospaced font optimization** for perfect arc alignment
+- [ ] **Implicit beat grouping** for consecutive same-duration elements
+- [ ] **Character-level fixed-width styling** for perfect columnar alignment
+- [ ] **Race condition handling** for async styling updates
+- [ ] **Fallback styling** when server parsing fails
+
+### Medium Priority
+- [ ] **Enhanced token position mapping** for complex spatial relationships
+- [ ] **Performance optimization** for large notation documents
+- [ ] **Mobile responsiveness** with touch-friendly controls
+- [ ] **Accessibility support** for screen readers
+
+### Low Priority
+- [ ] **Custom font loading** for music-specific typefaces
+- [ ] **GPU acceleration** for smooth arc rendering
+- [ ] **Incremental updates** for efficient re-styling
+
 ## Conclusion
 
 This specification provides a comprehensive approach to implementing music-text as a code editor with perfect columnar alignment and rich syntax highlighting. The key innovations are:
@@ -864,5 +1029,6 @@ This specification provides a comprehensive approach to implementing music-text 
 3. **Race condition handling** for async styling updates
 4. **Fallback strategies** for robustness
 5. **Precise token position mapping** for syntax highlighting
+6. **Implicit beat grouping** for automatic visual organization
 
 The system maintains the plain-text data model essential for parsing while providing the rich visual experience users expect from modern editors.

@@ -7,19 +7,22 @@ use crate::rhythm::types::{ParsedElement, ParsedChild};
 fn position_to_absolute_offset(position: &crate::rhythm::types::Position, original_input: &str) -> Option<usize> {
     let lines: Vec<&str> = original_input.split('\n').collect();
 
-    if position.row == 0 || position.row > lines.len() {
+    // Convert 1-based row to 0-based for array indexing
+    let zero_based_row = if position.row > 0 { position.row - 1 } else { 0 };
+
+    if zero_based_row >= lines.len() {
         return None;
     }
 
     let mut offset = 0;
     // Add lengths of all previous lines (including newlines)
-    for i in 0..(position.row - 1) {
+    for i in 0..zero_based_row {
         offset += lines[i].len() + 1; // +1 for newline
     }
 
-    // Add column offset within the current line
-    if position.col > 0 && position.col <= lines[position.row - 1].len() + 1 {
-        offset += position.col - 1; // Convert 1-based to 0-based
+    // Add column offset within the current line (col is already 0-based)
+    if position.col <= lines[zero_based_row].len() {
+        offset += position.col;
     }
 
     Some(offset)
@@ -39,8 +42,8 @@ fn source_position_to_absolute_offset(line: usize, column: usize, original_input
     }
 
     // Add column offset within the current line
-    if column > 0 && column <= lines[line - 1].len() + 1 {
-        offset += column - 1; // Convert 1-based to 0-based
+    if column <= lines[line - 1].len() {
+        offset += column; // Already 0-based
     }
 
     Some(offset)
@@ -107,16 +110,17 @@ pub fn generate_character_styles(tokens: &[SyntaxToken]) -> Vec<CharacterStyle> 
     }
 }
 
-/// Enhanced character styles generation with beat group information
+/// Enhanced character styles generation with beat group and slur information
 /// Uses rhythm-analyzed document to identify both explicit beat groups (marked with ___)
 /// and implicit beat groups (consecutive musical elements with same beat)
+/// Also processes slurs (marked with ___ in upper lines)
 pub fn generate_character_styles_with_beat_groups(tokens: &[SyntaxToken], document: &crate::parse::Document) -> Vec<CharacterStyle> {
     use crate::parse::model::{DocumentElement, StaveLine};
     use crate::rhythm::types::{ParsedElement, BeatGroupRole};
 
     let mut styles = generate_character_styles(tokens);
 
-    // Add beat group classes to notes
+    // Add beat group and slur classes to elements
     for element in &document.elements {
         if let DocumentElement::Stave(stave) = element {
             for line in &stave.lines {
@@ -126,6 +130,9 @@ pub fn generate_character_styles_with_beat_groups(tokens: &[SyntaxToken], docume
 
                     // Process implicit beat groups (consecutive elements with same beat timing)
                     process_implicit_beat_groups(&mut styles, content_elements, document);
+
+                    // Process slurs (marked with ___ in upper lines)
+                    process_slurs(&mut styles, content_elements, document);
                 }
             }
         }
@@ -134,63 +141,62 @@ pub fn generate_character_styles_with_beat_groups(tokens: &[SyntaxToken], docume
     styles
 }
 
-/// Process explicit beat groups marked with ___
+/// Process explicit beat groups by spatially detecting elements under beat group indicators
 fn process_explicit_beat_groups(
     styles: &mut Vec<CharacterStyle>,
     content_elements: &[ParsedElement],
     document: &crate::parse::Document
 ) {
-    use crate::rhythm::types::{ParsedElement, BeatGroupRole};
+    use crate::parse::model::{DocumentElement, StaveLine, LowerElement};
 
-    let mut beat_group_notes = Vec::new();
+    // Find beat group indicators in lower lines and collect their spans
+    let mut beat_group_spans = Vec::new();
 
-    // Collect all notes with explicit beat group information
-    for element in content_elements {
-        if let ParsedElement::Note {
-            position, beat_group, in_beat_group, ..
-        } = element {
-            if *in_beat_group {
-                if let Some(absolute_pos) = position_to_absolute_offset(&position, &document.source.value.clone().unwrap_or_default()) {
-                    beat_group_notes.push((absolute_pos, beat_group.clone()));
+    for element in &document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            for line in &stave.lines {
+                if let StaveLine::Lower(lower_line) = line {
+                    for lower_element in &lower_line.elements {
+                        if let LowerElement::BeatGroupIndicator { value, source } = lower_element {
+                            let start_pos = source.position.column; // Convert to 0-based
+                            let end_pos = start_pos + value.len() - 1;
+                            beat_group_spans.push((start_pos, end_pos));
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Group consecutive beat group notes and add spanning classes
-    let mut current_group = Vec::new();
-    let mut current_group_positions = Vec::new();
+    // For each beat group span, find ALL elements within that span
+    for (start_pos, end_pos) in beat_group_spans {
+        let mut elements_in_beat_group = Vec::new();
 
-    for (pos, role) in beat_group_notes {
-        match role {
-            Some(BeatGroupRole::Start) => {
-                // Process previous group if any
-                if !current_group.is_empty() {
-                    add_beat_group_classes(styles, &current_group_positions, current_group.len(), "beat-group");
+        // Collect all elements within this beat group span
+        for element in content_elements {
+            let element_pos = match element {
+                ParsedElement::Note { position, .. } => Some(position.col),
+                ParsedElement::Rest { position, .. } => Some(position.col),
+                ParsedElement::Dash { position, .. } => Some(position.col),
+                ParsedElement::Barline { position, .. } => Some(position.col),
+                ParsedElement::Whitespace { position, .. } => Some(position.col),
+                _ => None,
+            };
+
+            if let Some(pos) = element_pos {
+                if pos >= start_pos && pos <= end_pos {
+                    if let Some(absolute_pos) = position_to_absolute_offset(&crate::rhythm::types::Position { row: 1, col: pos }, &document.source.value.clone().unwrap_or_default()) {
+                        elements_in_beat_group.push(absolute_pos);
+                    }
                 }
-                // Start new group
-                current_group = vec![role.clone().unwrap()];
-                current_group_positions = vec![pos];
             }
-            Some(BeatGroupRole::Middle) => {
-                current_group.push(role.clone().unwrap());
-                current_group_positions.push(pos);
-            }
-            Some(BeatGroupRole::End) => {
-                current_group.push(role.clone().unwrap());
-                current_group_positions.push(pos);
-                // Complete the group
-                add_beat_group_classes(styles, &current_group_positions, current_group.len(), "beat-group");
-                current_group.clear();
-                current_group_positions.clear();
-            }
-            _ => {}
         }
-    }
 
-    // Handle case where group doesn't end with End role
-    if !current_group.is_empty() {
-        add_beat_group_classes(styles, &current_group_positions, current_group.len(), "beat-group");
+        // Apply beat group classes to all elements in this span
+        if elements_in_beat_group.len() >= 2 {
+            elements_in_beat_group.sort();
+            add_beat_group_classes(styles, &elements_in_beat_group, elements_in_beat_group.len());
+        }
     }
 }
 
@@ -244,7 +250,7 @@ fn process_implicit_beat_groups(
         } else {
             // Process previous implicit group if it has 2+ elements
             if current_implicit_group.len() >= 2 {
-                add_beat_group_classes(styles, &current_implicit_group, current_implicit_group.len(), "implicit-beat-group");
+                add_beat_group_classes(styles, &current_implicit_group, current_implicit_group.len());
             }
             // Start new group
             current_implicit_group = vec![pos];
@@ -255,7 +261,87 @@ fn process_implicit_beat_groups(
 
     // Process final implicit group
     if current_implicit_group.len() >= 2 {
-        add_beat_group_classes(styles, &current_implicit_group, current_implicit_group.len(), "implicit-beat-group");
+        add_beat_group_classes(styles, &current_implicit_group, current_implicit_group.len());
+    }
+}
+
+/// Process slurs by spatially detecting elements under slur indicators
+fn process_slurs(
+    styles: &mut Vec<CharacterStyle>,
+    content_elements: &[ParsedElement],
+    document: &crate::parse::Document
+) {
+    use crate::parse::model::{DocumentElement, StaveLine, UpperElement};
+
+    // Find slur indicators in upper lines and collect their spans
+    let mut slur_spans = Vec::new();
+
+    for element in &document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            for line in &stave.lines {
+                if let StaveLine::Upper(upper_line) = line {
+                    for upper_element in &upper_line.elements {
+                        if let UpperElement::SlurIndicator { value, source } = upper_element {
+                            let start_pos = source.position.column; // Convert to 0-based
+                            let end_pos = start_pos + value.len() - 1;
+                            slur_spans.push((start_pos, end_pos));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // For each slur span, find ALL elements within that span
+    for (start_pos, end_pos) in slur_spans {
+        let mut elements_in_slur = Vec::new();
+
+        // Collect all elements within this slur span
+        for element in content_elements {
+            let element_pos = match element {
+                ParsedElement::Note { position, .. } => Some(position.col),
+                ParsedElement::Rest { position, .. } => Some(position.col),
+                ParsedElement::Dash { position, .. } => Some(position.col),
+                ParsedElement::Barline { position, .. } => Some(position.col),
+                ParsedElement::Whitespace { position, .. } => Some(position.col),
+                _ => None,
+            };
+
+            if let Some(pos) = element_pos {
+                if pos >= start_pos && pos <= end_pos {
+                    if let Some(absolute_pos) = position_to_absolute_offset(&crate::rhythm::types::Position { row: 1, col: pos }, &document.source.value.clone().unwrap_or_default()) {
+                        elements_in_slur.push(absolute_pos);
+                    }
+                }
+            }
+        }
+
+        // Apply slur classes to all elements in this span
+        if elements_in_slur.len() >= 2 {
+            elements_in_slur.sort();
+            add_slur_classes(styles, &elements_in_slur, elements_in_slur.len());
+        }
+    }
+}
+
+fn add_slur_classes(styles: &mut Vec<CharacterStyle>, positions: &[usize], count: usize) {
+    for (i, &pos) in positions.iter().enumerate() {
+        // Find the style at this position and add slur classes
+        if let Some(style) = styles.iter_mut().find(|s| s.pos == pos) {
+            // Add base in-slur class
+            style.classes.push("in-slur".to_string());
+
+            // Add role-specific class based on position in group
+            if i == 0 {
+                style.classes.push("slur-start".to_string());
+                // Add count class for arc sizing
+                style.classes.push(format!("slur-{}", count));
+            } else if i == positions.len() - 1 {
+                style.classes.push("slur-end".to_string());
+            } else {
+                style.classes.push("slur-middle".to_string());
+            }
+        }
     }
 }
 
@@ -601,7 +687,7 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                                         // The position tracker maintains the current position in the input
                                         // Since lower lines come after content, use current position
                                         tokens.push(SyntaxToken {
-                                            token_type: "beat-group".to_string(),
+                                            token_type: "beat_group".to_string(),
                                             start: position,
                                             end: position + value.len(),
                                             content: value.clone(),
@@ -746,8 +832,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
                 ":" => "upper-octave-marker-2",
                 _ => "upper-octave-marker"
             };
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: token_type.to_string(),
                 start: start_pos,
@@ -758,8 +844,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
         }
         UpperElement::SlurIndicator { value, source } => {
             let value_len = value.len();
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "slur-indicator".to_string(),
                 start: start_pos,
@@ -770,8 +856,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
         }
         UpperElement::UpperHashes { value, source } => {
             let value_len = value.len();
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "multi_stave_marker".to_string(),
                 start: start_pos,
@@ -784,8 +870,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             // Join pitches into ornament string
             let ornament_str = pitches.join("");
             let ornament_len = ornament_str.len();
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "ornament".to_string(),
                 start: start_pos,
@@ -798,8 +884,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             // Include brackets in chord token
             let chord_str = format!("[{}]", chord);
             let chord_len = chord_str.len();
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "chord".to_string(),
                 start: start_pos,
@@ -809,8 +895,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             *position += chord_len;
         }
         UpperElement::Mordent { source } => {
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "mordent".to_string(),
                 start: start_pos,
@@ -821,8 +907,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
         }
         UpperElement::Space { count, source } => {
             let spaces = " ".repeat(*count);
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "whitespace".to_string(),
                 start: start_pos,
@@ -833,8 +919,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
         }
         UpperElement::Unknown { value, source } => {
             let value_len = value.len();
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "unknown".to_string(),
                 start: start_pos,
@@ -845,8 +931,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
         }
         UpperElement::Newline { value, source } => {
             let value_len = value.len();
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "newline".to_string(),
                 start: start_pos,
@@ -870,8 +956,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
                 ":" => "lower-octave-marker-2",
                 _ => "lower-octave-marker"
             };
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: token_type.to_string(),
                 start: start_pos,
@@ -898,8 +984,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
         }
         LowerElement::Syllable { content, source } => {
             let content_len = content.len();
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "syllable".to_string(),
                 start: start_pos,
@@ -910,8 +996,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
         }
         LowerElement::Space { count, source } => {
             let spaces = " ".repeat(*count);
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "whitespace".to_string(),
                 start: start_pos,
@@ -922,8 +1008,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
         }
         LowerElement::Unknown { value, source } => {
             let value_len = value.len();
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "unknown".to_string(),
                 start: start_pos,
@@ -934,8 +1020,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
         }
         LowerElement::Newline { value, source } => {
             let value_len = value.len();
-            // Use the actual source column position (1-based) converted to 0-based indexing
-            let start_pos = source.position.column - 1;
+            // Use the actual source column position (already 0-based)
+            let start_pos = source.position.column;
             tokens.push(SyntaxToken {
                 token_type: "newline".to_string(),
                 start: start_pos,
@@ -953,11 +1039,13 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
 // Helper function to process parsed elements from content lines
 fn process_parsed_element(element: &ParsedElement, tokens: &mut Vec<SyntaxToken>, position: &mut usize, original_input: &str) {
     match element {
-        ParsedElement::Note { value, position: pos, in_slur, in_beat_group, .. } => {
+        ParsedElement::Note { value, position: pos, in_slur, in_beat_group, beat_group, .. } => {
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let value_len = value.len();
-                let token_type = "note".to_string();
+                let mut token_type = "note".to_string();
+
+                // Keep token type as just "note" - beat group styling handled via character styles
 
                 tokens.push(SyntaxToken {
                     token_type,

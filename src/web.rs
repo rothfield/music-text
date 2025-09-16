@@ -103,11 +103,11 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             let parsed_doc_json = serde_json::to_value(&result.parsed_document).unwrap();
             let xml_representation = crate::tree_functions::generate_xml_representation(&parsed_doc_json);
 
-            // Generate syntax tokens directly from Document struct (more efficient)
-            let syntax_tokens = crate::tree_functions::generate_syntax_tokens(&result.parsed_document, &input);
+            // Generate syntax tokens from rhythm-analyzed document (contains analyzer tags)
+            let syntax_tokens = crate::tree_functions::generate_syntax_tokens(&result.rhythm_analyzed_document, &input);
 
             // Generate character styles with beat group information for enhanced styling
-            let character_styles = crate::tree_functions::generate_character_styles_with_beat_groups(&syntax_tokens, &result.parsed_document);
+            let character_styles = crate::tree_functions::generate_character_styles_with_beat_groups(&syntax_tokens, &result.rhythm_analyzed_document);
 
             // Generate SVG if requested
             let lilypond_svg = if generate_svg && !result.lilypond.is_empty() {

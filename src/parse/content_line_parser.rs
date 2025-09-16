@@ -10,7 +10,7 @@ pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError>
 pub fn parse_content_line_with_row(input: &str, row: usize) -> Result<Vec<ParsedElement>, ParseError> {
     let mut elements = Vec::new();
     let mut chars = input.chars().peekable();
-    let mut position = 1;
+    let mut position = 0;
     let actual_row = row - 1;  // Adjust for post-increment line numbering
 
     while let Some(ch) = chars.next() {

@@ -233,7 +233,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
             // Create ParsedElements like Content lines do (consistent with Pattern #1)
             let line_without_newline = current_line.trim_end_matches('\n');
             let mut elements = Vec::new();
-            let mut col_position = 1;
+            let mut col_position = 0;
 
             // Parse whitespace characters into ParsedElements
             for ch in line_without_newline.chars() {
