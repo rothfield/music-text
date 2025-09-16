@@ -614,6 +614,58 @@
     padding: 1px 2px;
 }*/
 
+/* Implicit beat group highlighting - for spatially-delimited beats */
+/* Highlight notes in implicit beat groups with subtle background */
+.cm-music-note.in-implicit-beat {
+    background-color: rgba(255, 152, 0, 0.1);
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Start note gets slightly stronger highlight */
+.cm-music-note.implicit-beat-start {
+    position: relative;
+    background-color: rgba(255, 152, 0, 0.15);
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* End note styling */
+.cm-music-note.implicit-beat-end {
+    background-color: rgba(255, 152, 0, 0.12);
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Create spanning arc for implicit beats (same as beat groups but orange) */
+.cm-music-note.implicit-beat-start::after {
+    content: '';
+    position: absolute;
+    bottom: 1.05em;
+    left: 0;
+    border-bottom: 0.1em solid #ff9800;
+    border-top: none;
+    border-left: 1px solid white;
+    border-right: 1px solid white;
+    border-bottom-left-radius: 0.8em;
+    border-bottom-right-radius: 0.8em;
+    padding-bottom: 0.75em;
+    width: 1em;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Implicit beat width variants */
+.cm-music-implicit-beat-2-chars::after { width: 1.2em; }
+.cm-music-implicit-beat-3-chars::after { width: 1.8em; }
+.cm-music-implicit-beat-4-chars::after { width: 2.4em; }
+.cm-music-implicit-beat-5-chars::after { width: 3.0em; }
+.cm-music-implicit-beat-6-chars::after { width: 3.6em; }
+.cm-music-implicit-beat-7-chars::after { width: 4.2em; }
+.cm-music-implicit-beat-8-chars::after { width: 4.8em; }
+.cm-music-implicit-beat-9-chars::after { width: 5.4em; }
+.cm-music-implicit-beat-10-chars::after { width: 6.0em; }
+
 /* Highlight notes in slurs with subtle background */
 .cm-music-note.in-slur {
     background-color: rgba(215, 58, 73, 0.1);
@@ -706,6 +758,47 @@
 .cm-music-mordent::before {
     content: "\E56C"; /* Bravura mordent symbol */
     display: inline-block;
+}
+
+/* Visual slur CSS classes for toggle functionality */
+.slur-start {
+    position: relative;
+    background-color: rgba(215, 58, 73, 0.1);
+    border-radius: 2px;
+}
+
+.slur-start::before {
+    content: '';
+    position: absolute;
+    top: -0.4em;
+    left: 0;
+    border-top: 2px solid #d73a49;
+    border-left: 2px solid #d73a49;
+    border-top-left-radius: 0.6em;
+    width: 0.4em;
+    height: 0.4em;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.slur-end {
+    position: relative;
+    background-color: rgba(215, 58, 73, 0.1);
+    border-radius: 2px;
+}
+
+.slur-end::after {
+    content: '';
+    position: absolute;
+    top: -0.4em;
+    right: 0;
+    border-top: 2px solid #d73a49;
+    border-right: 2px solid #d73a49;
+    border-top-right-radius: 0.6em;
+    width: 0.4em;
+    height: 0.4em;
+    z-index: 3;
+    pointer-events: none;
 }
 
 /* Future music-text specific styles can go here */

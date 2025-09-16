@@ -16,6 +16,7 @@
                 <button onclick="parseMusic()">Parse</button>
                 <button onclick="generateSVG()" class="secondary">LilyPond</button>
                 <button onclick="clearAll()" class="secondary">Clear</button>
+                <button onclick="toggleSlur()" class="secondary">Slur</button>
                 <div class="font-selector">
                     <label for="fontSelect">Font:</label>
                     <select id="fontSelect" onchange="changeFontFamily(this.value)">
@@ -39,7 +40,7 @@
             <div class="tab" onclick="switchTab('document', this)">Document</div>
             <div class="tab" onclick="switchTab('analyzer', this)">Analyzer</div>
             <div class="tab" onclick="switchTab('tokens', this)">Syntax Tokens</div>
-            <div class="tab" onclick="switchTab('roundtrip', this)">Roundtrip</div>
+            <div class="tab" onclick="switchTab('source', this)">Source</div>
         </div>
         
         <div id="vexflow-tab" class="tab-content active">
@@ -66,8 +67,8 @@
             <div id="tokens-output" class="pipeline-section">Enter music notation to see syntax tokens</div>
         </div>
 
-        <div id="roundtrip-tab" class="tab-content">
-            <div id="roundtrip-output" class="pipeline-section">Enter music notation to test round-trip reconstruction</div>
+        <div id="source-tab" class="tab-content">
+            <div id="source-output" class="pipeline-section">Plain text will appear here after parsing</div>
         </div>
     </div></body>
 

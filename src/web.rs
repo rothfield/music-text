@@ -28,6 +28,7 @@ pub struct RoundtripData {
 #[derive(Debug, Serialize)]
 pub struct ParseResponse {
     success: bool,
+    plain_text: Option<String>,
     parsed_document: Option<crate::parse::Document>,
     rhythm_analyzed_document: Option<crate::parse::Document>,
     rhythm_items: Option<Vec<crate::rhythm::Item>>,
@@ -72,6 +73,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
         println!("Input is empty, returning null AST");
         return Json(ParseResponse {
             success: true,
+            plain_text: Some(input.clone()),
             parsed_document: None,
             rhythm_analyzed_document: None,
             rhythm_items: None,
@@ -140,6 +142,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
 
             Json(ParseResponse {
                 success: true,
+                plain_text: Some(input.clone()),
                 parsed_document: Some(result.parsed_document),
                 rhythm_analyzed_document: Some(result.rhythm_analyzed_document),
                 rhythm_items,
@@ -156,6 +159,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
         },
         Err(e) => Json(ParseResponse {
             success: false,
+            plain_text: Some(input.clone()),
             parsed_document: None,
             rhythm_analyzed_document: None,
             rhythm_items: None,

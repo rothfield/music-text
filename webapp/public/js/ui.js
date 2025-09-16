@@ -90,6 +90,7 @@ export const UI = {
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
         document.getElementById('tokens-output').textContent = 'Enter music notation to see syntax tokens';
+        document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
         document.getElementById('status').textContent = '';
     },
 
@@ -237,6 +238,17 @@ export const UI = {
         }
     },
 
+    // Update source output
+    updateSourceOutput(result) {
+        const sourceOutput = document.getElementById('source-output');
+
+        if (result.plain_text) {
+            sourceOutput.innerHTML = `<pre>${this.escapeHTML(result.plain_text)}</pre>`;
+        } else {
+            sourceOutput.innerHTML = '<p>No plain text in response</p>';
+        }
+    },
+
     // Helper function to escape HTML for safe display
     escapeHTML(str) {
         return str
@@ -255,7 +267,7 @@ export const UI = {
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
         document.getElementById('tokens-output').textContent = 'Enter music notation to see syntax tokens';
-        document.getElementById('roundtrip-output').textContent = 'Enter music notation to test round-trip reconstruction';
+        document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
     },
 
     // Music notation symbol conversion

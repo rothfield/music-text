@@ -1,9 +1,9 @@
 /**
- * CodeMirror Manager Module
- * Handles CodeMirror editor initialization and integration with existing app
+ * Editor Manager Module
+ * Handles code editor initialization and integration with existing app
  */
 
-export class CodeMirrorManager {
+export class EditorManager {
     constructor() {
         this.editor = null;
         this.container = null;
@@ -21,7 +21,7 @@ export class CodeMirrorManager {
             throw new Error('CodeMirror library not loaded');
         }
 
-        // Create CodeMirror instance
+        // Create editor instance
         this.editor = window.CodeMirror(this.container, {
             mode: 'text/plain', // Start with plain text, we'll add custom mode later
             lineNumbers: false,
@@ -44,7 +44,7 @@ export class CodeMirrorManager {
         // Add textarea-like interface methods to the container for compatibility
         this.addCompatibilityMethods();
 
-        console.log('✅ CodeMirror editor initialized');
+        console.log('✅ Editor initialized');
         return this.editor;
     }
 
@@ -94,7 +94,7 @@ export class CodeMirrorManager {
         const originalAddEventListener = container.addEventListener;
         container.addEventListener = function(type, listener, options) {
             if (type === 'input') {
-                // Map input events from CodeMirror
+                // Map input events from editor
                 editor.on('change', (instance, changeObj) => {
                     // Create a synthetic event object
                     const syntheticEvent = {
@@ -258,7 +258,7 @@ export class CodeMirrorManager {
         // Clear existing marks
         this.clearAllMarks();
 
-        // Apply each character style using CodeMirror marks
+        // Apply each character style using editor marks
         characterStyles.forEach(style => {
             const pos = this.editor.posFromIndex(style.pos);
             const endPos = this.editor.posFromIndex(style.pos + 1);
@@ -326,7 +326,7 @@ export class CodeMirrorManager {
     applyBeatGroupArc(startPos, endPos, elementCount) {
         if (!startPos || !endPos) return;
 
-        // Convert positions to CodeMirror coordinates
+        // Convert positions to editor coordinates
         const startCmPos = { line: startPos.row, ch: startPos.col - 1 }; // Convert to 0-based
         const endCmPos = { line: endPos.row, ch: endPos.col }; // End after the character
 
@@ -367,7 +367,7 @@ export class CodeMirrorManager {
         // Create custom mode based on the tokens
         const customMode = this.createTokenBasedMode(tokens);
 
-        // Define the mode with CodeMirror
+        // Define the mode with editor
         window.CodeMirror.defineMode("music-syntax", function() {
             return customMode;
         });
@@ -378,7 +378,7 @@ export class CodeMirrorManager {
         console.log('✅ Applied syntax highlighting with', tokens.length, 'tokens');
     }
 
-    // Create a CodeMirror mode based on syntax tokens
+    // Create an editor mode based on syntax tokens
     createTokenBasedMode(tokens) {
         // Pre-calculate line offsets from editor content
         const editorContent = this.editor.getValue();
@@ -427,5 +427,61 @@ export class CodeMirrorManager {
                 return {};
             }
         };
+    }
+
+    // Check if text has more than one pitch or dash
+    hasMoreThanOnePitchOrDash(text) {
+        const pitchOrDashMatches = text.match(/[SRGMPDNsrgmpdnCDEFGABcdefgab-]/g);
+        return pitchOrDashMatches && pitchOrDashMatches.length > 1;
+    }
+
+    // Toggle slur functionality for selected text
+    toggleSlur() {
+        if (!this.editor) {
+            console.warn('Editor not initialized');
+            return;
+        }
+
+        const selection = this.editor.getSelection();
+
+        if (!selection || selection.trim() === '') {
+            alert('Please select text to add a slur');
+            return;
+        }
+
+        // Check if selection has more than one pitch or dash
+        if (!this.hasMoreThanOnePitchOrDash(selection)) {
+            alert('Selection must contain more than one pitch or dash');
+            return;
+        }
+
+        const from = this.editor.getCursor('from');
+        const to = this.editor.getCursor('to');
+
+        // Check if selection already has slur marks
+        const existingMarks = this.editor.findMarksAt(from).concat(this.editor.findMarksAt(to));
+        const hasSlur = existingMarks.some(mark =>
+            mark.className && (mark.className.includes('slur-start') || mark.className.includes('slur-end'))
+        );
+
+        if (hasSlur) {
+            // Remove existing slur marks
+            existingMarks.forEach(mark => {
+                if (mark.className && (mark.className.includes('slur-start') || mark.className.includes('slur-end'))) {
+                    mark.clear();
+                }
+            });
+        } else {
+            // Add new slur marks
+            this.editor.markText(from, {line: from.line, ch: from.ch + 1}, {
+                className: 'slur-start',
+                title: 'Slur start'
+            });
+
+            this.editor.markText({line: to.line, ch: to.ch - 1}, to, {
+                className: 'slur-end',
+                title: 'Slur end'
+            });
+        }
     }
 }

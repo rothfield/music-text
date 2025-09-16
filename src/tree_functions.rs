@@ -8,8 +8,9 @@ fn position_to_absolute_offset(position: &crate::rhythm::types::Position, origin
     let lines: Vec<&str> = original_input.split('\n').collect();
 
     // Handle the case where position.row is 0-based vs 1-based
-    // Based on the parsing behavior, row appears to be 1-based in most cases
-    let target_row = position.row;
+    // The parser seems to use 1-based row numbering for content, but we need 0-based for array indexing
+    // For content lines, row 1 = lines[0], row 0 = lines[0] (both map to first line)
+    let target_row = if position.row >= 1 { position.row - 1 } else { position.row };
 
     if target_row >= lines.len() {
         return None;
@@ -124,8 +125,8 @@ pub fn generate_character_styles_with_beat_groups(tokens: &[SyntaxToken], docume
                     // Process explicit beat groups (marked with ___)
                     process_explicit_beat_groups(&mut styles, content_elements, document);
 
-                    // Process implicit beat groups (consecutive elements with same beat timing)
-                    process_implicit_beat_groups(&mut styles, content_elements, document);
+                    // Process implicit beat groups (spatially-delimited beats with multiple elements)
+                    process_rhythm_based_implicit_beats(&mut styles, content_elements, stave);
 
                     // Process slurs (marked with ___ in upper lines)
                     process_slurs(&mut styles, content_elements, document);
@@ -181,7 +182,16 @@ fn process_explicit_beat_groups(
 
             if let Some(pos) = element_pos {
                 if pos >= start_pos && pos <= end_pos {
-                    if let Some(absolute_pos) = position_to_absolute_offset(&crate::rhythm::types::Position { row: 1, col: pos }, &document.source.value.clone().unwrap_or_default()) {
+                    // Use the actual row from the element's position, not hardcoded row: 1
+                    let element_position = match element {
+                        ParsedElement::Note { position, .. } => position,
+                        ParsedElement::Rest { position, .. } => position,
+                        ParsedElement::Dash { position, .. } => position,
+                        ParsedElement::Barline { position, .. } => position,
+                        ParsedElement::Whitespace { position, .. } => position,
+                        _ => continue,
+                    };
+                    if let Some(absolute_pos) = position_to_absolute_offset(element_position, &document.source.value.clone().unwrap_or_default()) {
                         elements_in_beat_group.push(absolute_pos);
                     }
                 }
@@ -261,6 +271,40 @@ fn process_implicit_beat_groups(
     }
 }
 
+/// Process rhythm-based implicit beats (spatially-delimited beats from rhythm analysis)
+fn process_rhythm_based_implicit_beats(
+    styles: &mut Vec<CharacterStyle>,
+    content_elements: &[crate::rhythm::types::ParsedElement],
+    stave: &crate::parse::model::Stave
+) {
+    use crate::rhythm::Item;
+
+    // Get rhythm items from the stave
+    if let Some(rhythm_items) = &stave.rhythm_items {
+        for item in rhythm_items {
+            if let Item::Beat(beat) = item {
+                // Only process beats with multiple elements (spatially-delimited beats)
+                if beat.elements.len() >= 2 {
+                    let mut beat_positions = Vec::new();
+
+                    // Collect positions of all elements in this beat
+                    for beat_element in &beat.elements {
+                        if let Some(absolute_pos) = position_to_absolute_offset(&beat_element.position, &stave.source.value.as_ref().unwrap()) {
+                            beat_positions.push(absolute_pos);
+                        }
+                    }
+
+                    // Apply implicit beat classes
+                    if beat_positions.len() >= 2 {
+                        beat_positions.sort();
+                        add_implicit_beat_classes(styles, &beat_positions, beat_positions.len());
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Process slurs by spatially detecting elements under slur indicators
 fn process_slurs(
     styles: &mut Vec<CharacterStyle>,
@@ -305,7 +349,16 @@ fn process_slurs(
 
             if let Some(pos) = element_pos {
                 if pos >= start_pos && pos <= end_pos {
-                    if let Some(absolute_pos) = position_to_absolute_offset(&crate::rhythm::types::Position { row: 1, col: pos }, &document.source.value.clone().unwrap_or_default()) {
+                    // Use the actual row from the element's position, not hardcoded row: 1
+                    let element_position = match element {
+                        ParsedElement::Note { position, .. } => position,
+                        ParsedElement::Rest { position, .. } => position,
+                        ParsedElement::Dash { position, .. } => position,
+                        ParsedElement::Barline { position, .. } => position,
+                        ParsedElement::Whitespace { position, .. } => position,
+                        _ => continue,
+                    };
+                    if let Some(absolute_pos) = position_to_absolute_offset(element_position, &document.source.value.clone().unwrap_or_default()) {
                         elements_in_slur.push(absolute_pos);
                     }
                 }
@@ -357,6 +410,27 @@ fn add_beat_group_classes(styles: &mut Vec<CharacterStyle>, positions: &[usize],
                 style.classes.push("beat-group-end".to_string());
             } else {
                 style.classes.push("beat-group-middle".to_string());
+            }
+        }
+    }
+}
+
+fn add_implicit_beat_classes(styles: &mut Vec<CharacterStyle>, positions: &[usize], count: usize) {
+    for (i, &pos) in positions.iter().enumerate() {
+        // Find the style at this position and add implicit beat classes
+        if let Some(style) = styles.iter_mut().find(|s| s.pos == pos) {
+            // Add base in-implicit-beat class
+            style.classes.push("in-implicit-beat".to_string());
+
+            // Add role-specific class based on position in group
+            if i == 0 {
+                style.classes.push("implicit-beat-start".to_string());
+                // Add count class for arc sizing
+                style.classes.push(format!("implicit-beat-{}-chars", count));
+            } else if i == positions.len() - 1 {
+                style.classes.push("implicit-beat-end".to_string());
+            } else {
+                style.classes.push("implicit-beat-middle".to_string());
             }
         }
     }

@@ -7,13 +7,13 @@ import { LocalStorage } from './localStorage.js';
 import { UI } from './ui.js';
 import { API } from './api.js';
 import { FontManager } from './fontManager.js';
-import { CodeMirrorManager } from './codeMirrorManager.js';
+import { EditorManager } from './editorManager.js';
 
 class MusicTextApp {
     constructor() {
         this.currentParseResult = null;
         this.inputTimer = null;
-        this.codeMirrorManager = new CodeMirrorManager();
+        this.editorManager = new EditorManager();
     }
 
     // Initialize the application
@@ -31,8 +31,8 @@ class MusicTextApp {
 
     // Setup UI components
     async setupUI() {
-        // Initialize CodeMirror editor
-        this.codeMirrorManager.init('musicInput');
+        // Initialize editor
+        this.editorManager.init('musicInput');
         
         // Initialize font manager
         FontManager.init();
@@ -161,20 +161,20 @@ class MusicTextApp {
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
-            UI.updateRoundtripOutput(result);
             UI.updateTokensOutput(result);
+            UI.updateSourceOutput(result);
             await UI.updateVexFlowOutput(result);
             
-            // Update CodeMirror highlighting based on parse results
-            this.codeMirrorManager.highlightFromParseResult(result);
+            // Update editor highlighting based on parse results
+            this.editorManager.highlightFromParseResult(result);
 
             // Apply character styles using server-generated character styles (preferred)
             if (result.success && result.character_styles) {
-                this.codeMirrorManager.applyCharacterStyles(result.character_styles);
+                this.editorManager.applyCharacterStyles(result.character_styles);
             }
             // Fallback to token-based highlighting if character styles not available
             else if (result.success && result.syntax_tokens) {
-                this.codeMirrorManager.applySyntaxTokens(result.syntax_tokens);
+                this.editorManager.applySyntaxTokens(result.syntax_tokens);
             }
             
         } catch (error) {
@@ -208,7 +208,8 @@ class MusicTextApp {
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateTokensOutput(result);
-            
+            UI.updateSourceOutput(result);
+
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);
                 UI.setStatus('Parse successful! VexFlow preview updated.', 'success');
@@ -255,7 +256,8 @@ class MusicTextApp {
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateTokensOutput(result);
-            
+            UI.updateSourceOutput(result);
+
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);
             }
@@ -301,6 +303,7 @@ window.generateSVG = () => app.generateSVG();
 window.clearAll = () => app.clearAll();
 window.switchTab = (tabName, clickedTab) => UI.switchTab(tabName, clickedTab);
 window.changeFontFamily = (fontClass) => FontManager.changeFont(fontClass);
+window.toggleSlur = () => app.editorManager.toggleSlur();
 window.UI = UI;
 
 // Initialize when DOM is ready
