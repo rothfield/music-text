@@ -162,6 +162,7 @@ class MusicTextApp {
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateTokensOutput(result);
+            UI.updateStylesOutput(result);
             UI.updateSourceOutput(result);
             await UI.updateVexFlowOutput(result);
             
@@ -208,6 +209,7 @@ class MusicTextApp {
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateTokensOutput(result);
+            UI.updateStylesOutput(result);
             UI.updateSourceOutput(result);
 
             if (API.hasVexFlowData(result)) {
@@ -256,6 +258,7 @@ class MusicTextApp {
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateTokensOutput(result);
+            UI.updateStylesOutput(result);
             UI.updateSourceOutput(result);
 
             if (API.hasVexFlowData(result)) {

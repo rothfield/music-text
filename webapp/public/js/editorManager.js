@@ -3,6 +3,8 @@
  * Handles code editor initialization and integration with existing app
  */
 
+import { UI } from './ui.js';
+
 export class EditorManager {
     constructor() {
         this.editor = null;
@@ -259,13 +261,39 @@ export class EditorManager {
         this.clearAllMarks();
 
         // Apply each character style using editor marks
-        characterStyles.forEach(style => {
+        characterStyles.forEach((style, index) => {
             const pos = this.editor.posFromIndex(style.pos);
             const endPos = this.editor.posFromIndex(style.pos + 1);
 
-            this.editor.markText(pos, endPos, {
+            const mark = this.editor.markText(pos, endPos, {
                 className: style.classes.join(' ')
             });
+
+            // Set dynamic CSS properties for width calculation
+            setTimeout(() => {
+                const markElement = mark.find()?.mark?.element;
+                if (markElement) {
+                    // Calculate width based on the context if needed
+                    if (style.classes.includes('beat-group-start')) {
+                        this.setDynamicWidth(markElement, 'beat-group-width');
+                    }
+                    if (style.classes.includes('implicit-beat-start')) {
+                        // Find the corresponding implicit-beat-end to calculate span
+                        let spanWidth = 1;
+                        for (let i = index + 1; i < characterStyles.length; i++) {
+                            if (characterStyles[i].classes.includes('implicit-beat-end')) {
+                                spanWidth = characterStyles[i].pos - style.pos + 1;
+                                console.log(`Implicit beat: start=${style.pos}, end=${characterStyles[i].pos}, width=${spanWidth}ch`);
+                                break;
+                            }
+                        }
+                        markElement.style.setProperty('--implicit-beat-width', `${spanWidth}ch`);
+                    }
+                    if (style.classes.includes('slur-start')) {
+                        this.setDynamicWidth(markElement, 'slur-width');
+                    }
+                }
+            }, 0);
         });
 
         // Apply beat group styling if parse result available
@@ -274,6 +302,23 @@ export class EditorManager {
         }
 
         console.log('✅ Applied character styling for', characterStyles.length, 'positions');
+    }
+
+    // Set dynamic width using CSS custom properties
+    setDynamicWidth(element, property) {
+        // Calculate width based on surrounding elements or use a default formula
+        const baseWidth = 1.2; // em
+        const elementCount = this.getElementCount(element);
+        const calculatedWidth = baseWidth * elementCount;
+
+        element.style.setProperty(`--${property}`, `${calculatedWidth}em`);
+    }
+
+    // Helper to determine element count for width calculation
+    getElementCount(element) {
+        // This is a simplified approach - in practice you'd want to
+        // calculate based on the actual span of the grouping
+        return 2; // Default for now
     }
 
     // Apply beat group styling with precise width calculation
@@ -429,10 +474,11 @@ export class EditorManager {
         };
     }
 
-    // Check if text has more than one pitch or dash
+    // Check if text has at least one pitch or dash
     hasMoreThanOnePitchOrDash(text) {
-        const pitchOrDashMatches = text.match(/[SRGMPDNsrgmpdnCDEFGABcdefgab-]/g);
-        return pitchOrDashMatches && pitchOrDashMatches.length > 1;
+        const pitches = text.match(/[SRGMPDNsrgmpdnCDEFGABcdefgab]/g) || [];
+        const dashes = text.match(/-/g) || [];
+        return (pitches.length + dashes.length) > 1;
     }
 
     // Toggle slur functionality for selected text
@@ -445,13 +491,13 @@ export class EditorManager {
         const selection = this.editor.getSelection();
 
         if (!selection || selection.trim() === '') {
-            alert('Please select text to add a slur');
+            UI.setStatus('Please select text to add a slur', 'error');
             return;
         }
 
         // Check if selection has more than one pitch or dash
         if (!this.hasMoreThanOnePitchOrDash(selection)) {
-            alert('Selection must contain more than one pitch or dash');
+            UI.setStatus('Selection must contain more than one pitch or dash', 'error');
             return;
         }
 

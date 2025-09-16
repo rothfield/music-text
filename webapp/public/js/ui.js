@@ -90,6 +90,7 @@ export const UI = {
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
         document.getElementById('tokens-output').textContent = 'Enter music notation to see syntax tokens';
+        document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';
         document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
         document.getElementById('status').textContent = '';
     },
@@ -238,6 +239,19 @@ export const UI = {
         }
     },
 
+    // Update character styles output
+    updateStylesOutput(result) {
+        const stylesOutput = document.getElementById('styles-output');
+
+        if (result.success && result.character_styles) {
+            stylesOutput.textContent = JSON.stringify(result.character_styles, null, 2);
+        } else if (result.success) {
+            stylesOutput.textContent = 'Parse successful but no character styles available';
+        } else {
+            stylesOutput.textContent = `Parse error: ${result.error}`;
+        }
+    },
+
     // Update source output
     updateSourceOutput(result) {
         const sourceOutput = document.getElementById('source-output');
@@ -267,6 +281,7 @@ export const UI = {
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
         document.getElementById('tokens-output').textContent = 'Enter music notation to see syntax tokens';
+        document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';
         document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
     },
 

@@ -66,45 +66,135 @@ pub struct SyntaxToken {
 #[derive(Debug, Serialize, Clone)]
 pub struct CharacterStyle {
     pub pos: usize,
+    pub length: usize,  // Length of the token
     pub classes: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Clone)]
+pub struct NormalizedElement {
+    pub tag: String,        // "note", "dash", "barline", etc.
+    pub pos: usize,         // Character position
+    pub length: usize,      // Character length
+    pub content: String,    // Original text content
+    pub classes: Vec<String>, // Semantic classes like "beat-loop-4"
+}
 
-/// Convert syntax tokens to character styles for client-side application
+#[derive(Debug, Serialize, Clone)]
+pub struct TokenInfo {
+    pub pos: usize,
+    pub length: usize,
+    pub token_type: String,
+    pub content: String,
+}
+
+
+/// Generate normalized elements from rhythm-analyzed document
+/// Single tree walk to create semantic annotations
+pub fn generate_normalized_elements(rhythm_doc: &crate::rhythm::types::Document, original_input: &str) -> Vec<NormalizedElement> {
+    use crate::rhythm::types::{ParsedElement, DocumentElement};
+
+    let mut elements = Vec::new();
+
+    for doc_element in &rhythm_doc.elements {
+        if let DocumentElement::Stave(stave) = doc_element {
+            // Process each beat in the rhythm items
+            for rhythm_item in &stave.rhythm_items {
+                if let crate::rhythm::types::RhythmItem::Beat(beat) = rhythm_item {
+                    let beat_size = beat.elements.len();
+
+                    for (i, element) in beat.elements.iter().enumerate() {
+                        let mut classes = Vec::new();
+
+                        // Add beat loop class to first element of multi-element beats
+                        if i == 0 && beat_size > 1 {
+                            classes.push(format!("beat-loop-{}", beat_size));
+                        }
+
+                        // Add tuplet class if this is a tuplet
+                        if beat.is_tuplet {
+                            if let Some(ratio) = &beat.tuplet_ratio {
+                                classes.push(format!("tuplet-{}-{}", ratio.0, ratio.1));
+                            }
+                        }
+
+                        // Determine tag based on element type
+                        let tag = match element.event {
+                            crate::rhythm::types::Event::Note { .. } => "note",
+                            crate::rhythm::types::Event::Rest => "rest",
+                            crate::rhythm::types::Event::Dash => "dash",
+                        }.to_string();
+
+                        // Get absolute position from source mapping
+                        if let Some(absolute_pos) = position_to_absolute_offset(&element.position, original_input) {
+                            elements.push(NormalizedElement {
+                                tag,
+                                pos: absolute_pos,
+                                length: element.value.len(),
+                                content: element.value.clone(),
+                                classes,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by position
+    elements.sort_by_key(|e| e.pos);
+    elements
+}
+
+/// Generate tokens and styles from normalized elements
+pub fn generate_tokens_and_styles(elements: &[NormalizedElement]) -> (Vec<TokenInfo>, Vec<CharacterStyle>) {
+    let tokens = elements.iter()
+        .filter(|e| e.tag != "whitespace")  // Skip whitespace in tokens
+        .map(|e| TokenInfo {
+            pos: e.pos,
+            length: e.length,
+            token_type: e.tag.clone(),
+            content: e.content.clone(),
+        })
+        .collect();
+
+    let styles = elements.iter()
+        .filter(|e| e.tag != "whitespace")  // Skip whitespace in styles
+        .map(|e| {
+            let mut classes = vec![format!("cm-music-{}", e.tag)];
+            classes.extend(e.classes.clone());
+
+            CharacterStyle {
+                pos: e.pos,
+                length: e.length,
+                classes,
+            }
+        })
+        .collect();
+
+    (tokens, styles)
+}
+
+/// Convert syntax tokens to token-based styles for client-side application
 pub fn generate_character_styles(tokens: &[SyntaxToken]) -> Vec<CharacterStyle> {
-    // Filter out whitespace and newline tokens, then map to character styles
+    // Map each token to a single style entry (not per-character)
     let mut styles: Vec<CharacterStyle> = tokens
         .iter()
         .filter(|token| token.token_type != "whitespace" && token.token_type != "newline")
-        .flat_map(|token| {
+        .map(|token| {
             let css_class = format!("cm-music-{}", token.token_type);
-            (token.start..token.end).map(move |pos| CharacterStyle {
-                pos,
-                classes: vec![css_class.clone()],
-            })
+            CharacterStyle {
+                pos: token.start,  // Token start position
+                length: token.end - token.start,  // Token length
+                classes: vec![css_class],
+            }
         })
         .collect();
 
     // Sort by position
     styles.sort_by_key(|style| style.pos);
 
-    // Fill gaps to make CodeMirror happy
-    if let Some(&max_pos) = tokens.iter().map(|t| t.end).max_by_key(|&x| x).as_ref() {
-        (0..max_pos)
-            .map(|pos| {
-                styles
-                    .iter()
-                    .find(|s| s.pos == pos)
-                    .cloned()
-                    .unwrap_or(CharacterStyle {
-                        pos,
-                        classes: vec![],
-                    })
-            })
-            .collect()
-    } else {
-        styles
-    }
+    // Return token-based styles (no gap filling needed)
+    styles
 }
 
 /// Enhanced character styles generation with beat group and slur information
@@ -122,8 +212,8 @@ pub fn generate_character_styles_with_beat_groups(tokens: &[SyntaxToken], docume
         if let DocumentElement::Stave(stave) = element {
             for line in &stave.lines {
                 if let StaveLine::Content(content_elements) = line {
-                    // Process explicit beat groups (marked with ___)
-                    process_explicit_beat_groups(&mut styles, content_elements, document);
+                    // SKIP: Process explicit beat groups (marked with ___)
+                    // process_explicit_beat_groups(&mut styles, content_elements, document);
 
                     // Process implicit beat groups (spatially-delimited beats with multiple elements)
                     process_rhythm_based_implicit_beats(&mut styles, content_elements, stave);
@@ -404,8 +494,7 @@ fn add_beat_group_classes(styles: &mut Vec<CharacterStyle>, positions: &[usize],
             // Add role-specific class based on position in group
             if i == 0 {
                 style.classes.push("beat-group-start".to_string());
-                // Add count class for arc sizing
-                style.classes.push(format!("beat-group-{}", count));
+                // Note: Width will be set dynamically via CSS custom properties
             } else if i == positions.len() - 1 {
                 style.classes.push("beat-group-end".to_string());
             } else {
@@ -425,8 +514,7 @@ fn add_implicit_beat_classes(styles: &mut Vec<CharacterStyle>, positions: &[usiz
             // Add role-specific class based on position in group
             if i == 0 {
                 style.classes.push("implicit-beat-start".to_string());
-                // Add count class for arc sizing
-                style.classes.push(format!("implicit-beat-{}-chars", count));
+                // Note: Width will be set dynamically via CSS custom properties
             } else if i == positions.len() - 1 {
                 style.classes.push("implicit-beat-end".to_string());
             } else {
@@ -786,12 +874,8 @@ fn process_rhythm_items_for_tokens(
 
                 for (index, element) in beat.elements.iter().enumerate() {
                     if let Some(start_pos) = position_to_absolute_offset(&element.position, original_input) {
-                        // Only first element gets note-loop-N, rest get plain "note"
-                        let token_type = if beat_size > 1 && index == 0 {
-                            format!("note-loop-{}", beat_size)
-                        } else {
-                            "note".to_string()
-                        };
+                        // Just use plain "note" for all notes
+                        let token_type = "note".to_string();
 
                         tokens.push(SyntaxToken {
                             token_type,
@@ -1143,11 +1227,7 @@ fn process_parsed_element(
                     } else {
                         1 // fallback if no rhythm data
                     };
-                    if span >= 2 {
-                        format!("note-loop-{}", span)
-                    } else {
-                        "note".to_string()
-                    }
+                    "note".to_string()
                 } else {
                     "note".to_string()
                 };
@@ -1195,11 +1275,7 @@ fn process_parsed_element(
                         }
                     }
 
-                    if is_first && span >= 2 {
-                        format!("note-loop-{}", span)
-                    } else {
-                        "dash".to_string()
-                    }
+                    "dash".to_string()
                 } else {
                     "dash".to_string()
                 };

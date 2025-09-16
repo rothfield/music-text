@@ -59,6 +59,9 @@ enum Commands {
     FullLily { input: Option<String> },
     /// Generate syntax tokens for editor integration
     Tokens { input: Option<String> },
+    /// Generate character styles for editor highlighting
+    #[command(name = "character-styles")]
+    CharacterStyles { input: Option<String> },
     /// Generate VexFlow JSON data
     Vexflow { input: Option<String> },
     /// Show rhythm analysis results
@@ -127,6 +130,14 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let result = pipeline::process_notation(&notation)?;
             let tokens = music_text::tree_functions::generate_syntax_tokens(&result.parsed_document, &notation);
             println!("{}", serde_json::to_string_pretty(&tokens)?);
+            return Ok(());
+        }
+        Some(Commands::CharacterStyles { input }) => {
+            let notation = get_input_from_option_or_stdin(input)?;
+            let result = pipeline::process_notation(&notation)?;
+            let tokens = music_text::tree_functions::generate_syntax_tokens(&result.parsed_document, &notation);
+            let styles = music_text::tree_functions::generate_character_styles_with_beat_groups(&tokens, &result.rhythm_analyzed_document);
+            println!("{}", serde_json::to_string_pretty(&styles)?);
             return Ok(());
         }
         Some(Commands::Vexflow { input }) => {
@@ -321,6 +332,7 @@ enum OutputFormat {
     SVG,
     Tokens,
     Document,
+    CharacterStyles,
 }
 
 impl OutputFormat {
@@ -332,6 +344,7 @@ impl OutputFormat {
             OutputFormat::SVG => "SVG",
             OutputFormat::Tokens => "Tokens",
             OutputFormat::Document => "Document",
+            OutputFormat::CharacterStyles => "CharStyles",
         }
     }
 
@@ -343,6 +356,7 @@ impl OutputFormat {
             OutputFormat::SVG,
             OutputFormat::Tokens,
             OutputFormat::Document,
+            OutputFormat::CharacterStyles,
         ]
     }
 }
@@ -430,6 +444,9 @@ impl App {
                     },
                     OutputFormat::Document => {
                         serde_json::to_string_pretty(&json["parsed_document"]).unwrap_or_else(|e| format!("JSON error: {}", e))
+                    },
+                    OutputFormat::CharacterStyles => {
+                        serde_json::to_string_pretty(&json["character_styles"]).unwrap_or("Character styles not available".to_string())
                     },
                 };
             }

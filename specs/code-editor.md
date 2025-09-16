@@ -467,11 +467,131 @@ Result: ❌ FAIL - shows exactly what failed
 **Our approach appears to be novel because:**
 
 1. **Spatial Parsing**: Music notation has 2D spatial relationships (octave markers above notes)
-2. **Move Semantics**: Physical consumption prevents double-counting  
+2. **Move Semantics**: Physical consumption prevents double-counting
 3. **Line Granularity**: Balances precision with simplicity
 4. **Perfect Diagnostics**: Shows exactly what parsing couldn't handle
 
 This makes it particularly valuable for **domain-specific languages** with complex spatial relationships.
+
+## Multiple CSS Classes on Single Characters
+
+### How Multiple Classes Are Applied
+
+The music-text editor supports **multiple CSS classes on individual characters** through the `CharacterStyle` system, enabling complex visual effects like simultaneous syntax highlighting, beat grouping, and slur annotations.
+
+#### Backend: CharacterStyle Structure
+```rust
+#[derive(Debug, Serialize, Clone)]
+pub struct CharacterStyle {
+    pub pos: usize,           // Character position in document
+    pub classes: Vec<String>, // Multiple CSS class names
+}
+```
+
+#### Class Accumulation Process
+```rust
+// 1. Start with basic syntax highlighting
+CharacterStyle {
+    pos: 0,
+    classes: vec!["cm-music-note".to_string()],
+}
+
+// 2. Add beat group classes
+style.classes.push("in-beat-group".to_string());
+style.classes.push("beat-group-start".to_string());
+
+// 3. Add implicit beat classes (if applicable)
+style.classes.push("in-implicit-beat".to_string());
+style.classes.push("implicit-beat-start".to_string());
+
+// 4. Final result
+CharacterStyle {
+    pos: 0,
+    classes: vec![
+        "cm-music-note",
+        "in-beat-group",
+        "beat-group-start",
+        "in-implicit-beat",
+        "implicit-beat-start"
+    ],
+}
+```
+
+#### Frontend: CSS Class Application
+```javascript
+// Apply all classes to CodeMirror text mark
+const mark = this.editor.markText(pos, endPos, {
+    className: style.classes.join(' ')  // "cm-music-note in-beat-group beat-group-start in-implicit-beat implicit-beat-start"
+});
+```
+
+#### CSS: Dynamic Width with Custom Properties
+```css
+/* Base syntax highlighting */
+.cm-music-note {
+    color: #22863a;
+    font-weight: bold;
+}
+
+/* Beat group arc (blue, lower position) */
+.beat-group-start::after {
+    border-bottom: 0.1em solid #0366d6;
+    width: var(--beat-group-width, 1em);
+}
+
+/* Implicit beat arc (orange, lower position) */
+.implicit-beat-start::after {
+    border-bottom: 0.1em solid #ff9800;
+    width: var(--implicit-beat-width, 1.2em);
+}
+
+/* Slur arc (red, upper position) */
+.slur-start::after {
+    border-top: 0.1em solid #d73a49;
+    width: var(--slur-width, 1.5em);
+}
+```
+
+#### Dynamic Width Calculation
+```javascript
+// Set CSS custom properties for dynamic widths
+setTimeout(() => {
+    const markElement = mark.find()?.mark?.element;
+    if (markElement) {
+        if (style.classes.includes('beat-group-start')) {
+            markElement.style.setProperty('--beat-group-width', '2.4em');
+        }
+        if (style.classes.includes('implicit-beat-start')) {
+            markElement.style.setProperty('--implicit-beat-width', '1.8em');
+        }
+        if (style.classes.includes('slur-start')) {
+            markElement.style.setProperty('--slur-width', '3.0em');
+        }
+    }
+}, 0);
+```
+
+#### Benefits of Multiple Classes
+1. **Layered Visual Effects**: A single character can show syntax highlighting + beat grouping + slur marking simultaneously
+2. **No Class Explosion**: Instead of generating `beat-group-2-note-slur-start` permutation classes, use `beat-group-start slur-start`
+3. **Dynamic CSS Properties**: Width calculations done in JavaScript, CSS stays clean
+4. **Z-Index Layering**: Different visual elements stack properly using CSS positioning
+
+#### Example: Fully Annotated Character
+For the character "S" at position 0 in `"SRG"` with a slur over `"SR"` and beat grouping over `"SRG"`:
+
+```html
+<span class="cm-music-note in-beat-group beat-group-start in-slur slur-start"
+      style="--beat-group-width: 1.8em; --slur-width: 1.2em;">S</span>
+```
+
+This renders:
+- Green text color (note syntax highlighting)
+- Orange background (beat group member)
+- Blue arc below (beat group start)
+- Red arc above (slur start)
+
+This approach **eliminates the need for 60,000+ redundant CSS classes** and provides unlimited flexibility for visual annotation combinations.
 
 ## Race Condition Handling
 
