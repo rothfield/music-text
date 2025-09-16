@@ -90,49 +90,51 @@ pub struct TokenInfo {
 
 /// Generate normalized elements from rhythm-analyzed document
 /// Single tree walk to create semantic annotations
-pub fn generate_normalized_elements(rhythm_doc: &crate::rhythm::types::Document, original_input: &str) -> Vec<NormalizedElement> {
-    use crate::rhythm::types::{ParsedElement, DocumentElement};
+pub fn generate_normalized_elements(rhythm_doc: &crate::parse::Document, original_input: &str) -> Vec<NormalizedElement> {
+    use crate::parse::model::DocumentElement;
 
     let mut elements = Vec::new();
 
     for doc_element in &rhythm_doc.elements {
         if let DocumentElement::Stave(stave) = doc_element {
             // Process each beat in the rhythm items
-            for rhythm_item in &stave.rhythm_items {
-                if let crate::rhythm::types::RhythmItem::Beat(beat) = rhythm_item {
-                    let beat_size = beat.elements.len();
+            if let Some(rhythm_items) = &stave.rhythm_items {
+                for rhythm_item in rhythm_items {
+                    if let crate::rhythm::Item::Beat(beat) = rhythm_item {
+                        let beat_size = beat.elements.len();
 
-                    for (i, element) in beat.elements.iter().enumerate() {
-                        let mut classes = Vec::new();
+                        for (i, element) in beat.elements.iter().enumerate() {
+                            let mut classes = Vec::new();
 
-                        // Add beat loop class to first element of multi-element beats
-                        if i == 0 && beat_size > 1 {
-                            classes.push(format!("beat-loop-{}", beat_size));
-                        }
-
-                        // Add tuplet class if this is a tuplet
-                        if beat.is_tuplet {
-                            if let Some(ratio) = &beat.tuplet_ratio {
-                                classes.push(format!("tuplet-{}-{}", ratio.0, ratio.1));
+                            // Add beat loop class to first element of multi-element beats
+                            if i == 0 && beat_size > 1 {
+                                classes.push(format!("beat-loop-{}", beat_size));
                             }
-                        }
 
-                        // Determine tag based on element type
-                        let tag = match element.event {
-                            crate::rhythm::types::Event::Note { .. } => "note",
-                            crate::rhythm::types::Event::Rest => "rest",
-                            crate::rhythm::types::Event::Dash => "dash",
-                        }.to_string();
+                            // Add tuplet class if this is a tuplet
+                            if beat.is_tuplet {
+                                if let Some(ratio) = &beat.tuplet_ratio {
+                                    classes.push(format!("tuplet-{}-{}", ratio.0, ratio.1));
+                                }
+                            }
 
-                        // Get absolute position from source mapping
-                        if let Some(absolute_pos) = position_to_absolute_offset(&element.position, original_input) {
-                            elements.push(NormalizedElement {
-                                tag,
-                                pos: absolute_pos,
-                                length: element.value.len(),
-                                content: element.value.clone(),
-                                classes,
-                            });
+                            // Determine tag based on element type
+                            let tag = match element.event {
+                                crate::rhythm::Event::Note { .. } => "note",
+                                crate::rhythm::Event::Rest => "rest",
+                                crate::rhythm::Event::Dash => "dash",
+                            }.to_string();
+
+                            // Get absolute position from source mapping
+                            if let Some(absolute_pos) = position_to_absolute_offset(&element.position, original_input) {
+                                elements.push(NormalizedElement {
+                                    tag,
+                                    pos: absolute_pos,
+                                    length: element.value.len(),
+                                    content: element.value.clone(),
+                                    classes,
+                                });
+                            }
                         }
                     }
                 }
