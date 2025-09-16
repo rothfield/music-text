@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Beat Loop CSS Test</title>
+    <link rel="stylesheet" href="webapp/public/css/music-text.css">
+    <style>
+        /* Force refresh of CSS for testing */
+        .cm-music-note {
+            position: relative !important;
+        }
+    </style>
+    <style>
+        body {
+            font-family: monospace;
+            font-size: 16px;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .test-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Beat Loop CSS Test</h1>
+
+    <div class="test-section">
+        <div class="test-title">2-element beat (should show 2ch orange arc):</div>
+        <span class="cm-music-note beat-loop-2">1</span><span class="cm-music-note">2</span>
+    </div>
+
+    <div class="test-section">
+        <div class="test-title">3-element beat (should show 3ch orange arc):</div>
+        <span class="cm-music-note beat-loop-3">1</span><span class="cm-music-note">2</span><span class="cm-music-note">3</span>
+    </div>
+
+    <div class="test-section">
+        <div class="test-title">4-element beat (should show 4ch orange arc):</div>
+        <span class="cm-music-note beat-loop-4">1</span><span class="cm-music-note">2</span><span class="cm-music-note">3</span><span class="cm-music-note">4</span>
+    </div>
+
+    <div class="test-section">
+        <div class="test-title">No loop (single note):</div>
+        <span class="cm-music-note">1</span>
+    </div>
+
+    <div class="test-section">
+        <div class="test-title">CSS selector test:</div>
+        <span class="cm-music-note beat-loop-5">Should have 5ch orange arc</span>
+    </div>
+</body>
+</html>
