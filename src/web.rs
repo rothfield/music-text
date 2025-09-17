@@ -37,7 +37,7 @@ pub struct ParseResponse {
     lilypond_svg: Option<String>,
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
-    syntax_tokens: Option<Vec<crate::tree_functions::SyntaxToken>>,
+    syntax_spans: Option<Vec<crate::tree_functions::Span>>,
     character_styles: Option<Vec<crate::tree_functions::CharacterStyle>>,
     roundtrip: Option<RoundtripData>,
     error: Option<String>,
@@ -82,7 +82,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
-            syntax_tokens: None,
+            syntax_spans: None,
             character_styles: None,
             roundtrip: None,
             error: None,
@@ -106,7 +106,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             let normalized_elements = crate::tree_functions::generate_normalized_elements(&result.rhythm_analyzed_document, &input);
 
             // Generate both tokens and character styles from normalized array
-            let (syntax_tokens, character_styles) = crate::tree_functions::generate_tokens_and_styles(&normalized_elements);
+            let (syntax_spans, character_styles) = crate::tree_functions::generate_spans_and_styles(&normalized_elements);
 
             // Extract rhythm_items from all staves in the rhythm analyzed document
             let rhythm_items = {
@@ -151,7 +151,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
                 lilypond_svg,
                 vexflow: Some(result.vexflow_data),
                 vexflow_svg: Some(result.vexflow_svg),
-                syntax_tokens: Some(syntax_tokens),
+                syntax_spans: Some(syntax_spans),
                 character_styles: Some(character_styles),
                 roundtrip: Some(roundtrip),
                 error: None,
@@ -168,7 +168,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
-            syntax_tokens: None,
+            syntax_spans: None,
             character_styles: None,
             roundtrip: None,
             error: Some(e.to_string()),

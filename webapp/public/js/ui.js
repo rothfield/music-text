@@ -89,7 +89,7 @@ export const UI = {
         document.getElementById('svg-output').innerHTML = 'Click "LilyPond" to generate SVG';
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
-        document.getElementById('tokens-output').textContent = 'Enter music notation to see syntax tokens';
+        document.getElementById('spans-output').textContent = 'Enter music notation to see syntax spans';
         document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';
         document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
         document.getElementById('status').textContent = '';
@@ -226,14 +226,14 @@ export const UI = {
     },
 
 
-    // Update syntax tokens output
+    // Update syntax spans output
     updateTokensOutput(result) {
-        const tokensOutput = document.getElementById('tokens-output');
+        const tokensOutput = document.getElementById('spans-output');
 
-        if (result.success && result.syntax_tokens) {
-            tokensOutput.textContent = JSON.stringify(result.syntax_tokens, null, 2);
+        if (result.success && result.syntax_spans) {
+            tokensOutput.textContent = JSON.stringify(result.syntax_spans, null, 2);
         } else if (result.success) {
-            tokensOutput.textContent = 'Parse successful but no syntax tokens available';
+            tokensOutput.textContent = 'Parse successful but no syntax spans available';
         } else {
             tokensOutput.textContent = `Parse error: ${result.error}`;
         }
@@ -280,7 +280,7 @@ export const UI = {
         document.getElementById('lilypond-output').textContent = 'Enter music notation above to see LilyPond source';
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
-        document.getElementById('tokens-output').textContent = 'Enter music notation to see syntax tokens';
+        document.getElementById('spans-output').textContent = 'Enter music notation to see syntax spans';
         document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';
         document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
     },

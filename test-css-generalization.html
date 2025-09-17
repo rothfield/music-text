@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSS Generalization Demo</title>
+    <link rel="stylesheet" href="webapp/public/css/music-text.css">
+    <style>
+        body {
+            font-family: monospace;
+            font-size: 16px;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .demo-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .demo-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .editor-simulation {
+            border: 1px solid #ccc;
+            padding: 20px;
+            background: white;
+            font-family: monospace;
+            min-height: 80px;
+            position: relative;
+        }
+
+        /* Ultra-generalized CSS using custom properties */
+        .generalized-tuplet {
+            position: relative;
+        }
+
+        .generalized-tuplet::before {
+            content: var(--tuplet-number) !important;
+            position: absolute !important;
+            top: -1.4em !important;
+            left: 0 !important;
+            width: var(--tuplet-width) !important;
+            text-align: center !important;
+            font-family: serif !important;
+            font-size: 0.7em !important;
+            font-style: italic !important;
+            font-weight: normal !important;
+            color: #666 !important;
+            z-index: 11 !important;
+            pointer-events: none !important;
+        }
+
+        .generalized-tuplet::after {
+            content: '' !important;
+            position: absolute !important;
+            bottom: -0.8em !important;
+            left: 0 !important;
+            width: var(--tuplet-width) !important;
+            height: 0.6em !important;
+            border: 2px solid #ff9800 !important;
+            border-top: none !important;
+            border-bottom-left-radius: 50% !important;
+            border-bottom-right-radius: 50% !important;
+            z-index: 10 !important;
+            pointer-events: none !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSS Generalization Capabilities</h1>
+
+    <div class="demo-section">
+        <div class="demo-title">1. Current Approach (Specific Classes):</div>
+        <div class="editor-simulation">
+            <span class="cm-music-note beat-loop-3 tuplet-3-2">1</span><span class="cm-music-note tuplet-3-2">2</span><span class="cm-music-note tuplet-3-2">3</span>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">2. Ultra-Generalized Approach (CSS Custom Properties):</div>
+        <div class="editor-simulation">
+            <span class="generalized-tuplet" style="--tuplet-number: '3'; --tuplet-width: 3ch;">1</span><span>2</span><span>3</span>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">3. JavaScript-Generated Tuplets:</div>
+        <div id="js-generated" class="editor-simulation">
+            <button onclick="generateTuplet(11, '11:8')">Generate 11-tuplet</button>
+            <button onclick="generateTuplet(13, '13:8')">Generate 13-tuplet</button>
+            <button onclick="generateTuplet(17, '17:16')">Generate 17-tuplet</button>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">4. Dynamic CSS Generation Demo:</div>
+        <div id="dynamic-css" class="editor-simulation">
+            <input type="number" id="tupletNum" value="7" min="2" max="32">
+            <button onclick="generateDynamicTuplet()">Generate Any Tuplet</button>
+        </div>
+    </div>
+
+    <script>
+        function generateTuplet(num, ratio) {
+            const container = document.getElementById('js-generated');
+            container.innerHTML = `<div style="margin: 10px 0;">`;
+
+            for (let i = 1; i <= num; i++) {
+                const span = document.createElement('span');
+                span.textContent = i;
+                span.className = 'generalized-tuplet';
+
+                if (i === 1) {
+                    // Only first element gets the tuplet number and arc
+                    span.style.setProperty('--tuplet-number', `"${num}"`);
+                    span.style.setProperty('--tuplet-width', `${num}ch`);
+                } else {
+                    // Other elements just get normal styling
+                    span.className = '';
+                }
+
+                container.appendChild(span);
+            }
+
+            container.innerHTML += `</div>`;
+        }
+
+        function generateDynamicTuplet() {
+            const num = parseInt(document.getElementById('tupletNum').value);
+            const container = document.getElementById('dynamic-css');
+
+            // Clear previous content except input/button
+            const elements = container.querySelectorAll('span');
+            elements.forEach(el => el.remove());
+
+            // Generate tuplet elements
+            for (let i = 1; i <= num; i++) {
+                const span = document.createElement('span');
+                span.textContent = i;
+
+                if (i === 1) {
+                    span.className = 'generalized-tuplet';
+                    span.style.setProperty('--tuplet-number', `"${num}"`);
+                    span.style.setProperty('--tuplet-width', `${num}ch`);
+                } else {
+                    span.style.marginLeft = '0';
+                }
+
+                container.appendChild(span);
+            }
+        }
+    </script>
+</body>
+</html>

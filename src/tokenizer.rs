@@ -119,10 +119,15 @@ mod tests {
         let (system, tokens) = classify_and_tokenize("123");
         assert_eq!(system, NotationSystem::Number);
         assert_eq!(tokens, vec!["1", "2", "3"]);
-        
+
         let (system, tokens) = classify_and_tokenize("1# 2bb 3");
         assert_eq!(system, NotationSystem::Number);
         assert_eq!(tokens, vec!["1#", "2bb", "3"]);
+
+        // Test Unicode accidentals
+        let (system, tokens) = classify_and_tokenize("5♯ 3♭ 7");
+        assert_eq!(system, NotationSystem::Number);
+        assert_eq!(tokens, vec!["5♯", "3♭", "7"]);
     }
 
     #[test]

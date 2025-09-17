@@ -253,47 +253,31 @@ export class EditorManager {
         this._originalContent = null;
     }
 
-    // Apply syntax highlighting using character styles from server
-    applyCharacterStyles(characterStyles, parseResult = null) {
-        if (!this.editor || !characterStyles) return;
+    // Apply syntax highlighting using span styles from server
+    applySpanStyles(spanStyles, parseResult = null) {
+        if (!this.editor || !spanStyles) return;
 
         // Clear existing marks
         this.clearAllMarks();
 
-        // Apply each character style using editor marks
-        characterStyles.forEach((style, index) => {
-            const pos = this.editor.posFromIndex(style.pos);
-            const endPos = this.editor.posFromIndex(style.pos + style.length);
+        // Apply all styles from backend
+        spanStyles.forEach((spanSpec) => {
+            const pos = this.editor.posFromIndex(spanSpec.pos);
+            const endPos = this.editor.posFromIndex(spanSpec.pos + spanSpec.length);
 
-            const mark = this.editor.markText(pos, endPos, {
-                className: style.classes.join(' ')
+            // Build CSS string from styles object if it exists
+            let cssString = '';
+            if (spanSpec.styles) {
+                cssString = Object.entries(spanSpec.styles)
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join('; ');
+                if (cssString) cssString += '; ';
+            }
+
+            this.editor.markText(pos, endPos, {
+                className: spanSpec.classes.join(' '),
+                css: cssString
             });
-
-            // Set dynamic CSS properties for width calculation
-            setTimeout(() => {
-                const markElement = mark.find()?.mark?.element;
-                if (markElement) {
-                    // Calculate width based on the context if needed
-                    if (style.classes.includes('beat-group-start')) {
-                        this.setDynamicWidth(markElement, 'beat-group-width');
-                    }
-                    if (style.classes.includes('implicit-beat-start')) {
-                        // Find the corresponding implicit-beat-end to calculate span
-                        let spanWidth = 1;
-                        for (let i = index + 1; i < characterStyles.length; i++) {
-                            if (characterStyles[i].classes.includes('implicit-beat-end')) {
-                                spanWidth = characterStyles[i].pos - style.pos + 1;
-                                console.log(`Implicit beat: start=${style.pos}, end=${characterStyles[i].pos}, width=${spanWidth}ch`);
-                                break;
-                            }
-                        }
-                        markElement.style.setProperty('--implicit-beat-width', `${spanWidth}ch`);
-                    }
-                    if (style.classes.includes('slur-start')) {
-                        this.setDynamicWidth(markElement, 'slur-width');
-                    }
-                }
-            }, 0);
         });
 
         // Apply beat group styling if parse result available
@@ -301,8 +285,9 @@ export class EditorManager {
             this.applyBeatGroupStyling(parseResult);
         }
 
-        console.log('✅ Applied character styling for', characterStyles.length, 'positions');
+        console.log('✅ Applied span styling for', spanStyles.length, 'positions');
     }
+
 
     // Set dynamic width using CSS custom properties
     setDynamicWidth(element, property) {
@@ -405,12 +390,12 @@ export class EditorManager {
         marks.forEach(mark => mark.clear());
     }
 
-    // Apply syntax highlighting using tokens from server (legacy method)
-    applySyntaxTokens(tokens) {
-        if (!this.editor || !tokens) return;
+    // Apply syntax highlighting using spans from server (legacy method)
+    applySyntaxSpans(spans) {
+        if (!this.editor || !spans) return;
 
-        // Create custom mode based on the tokens
-        const customMode = this.createTokenBasedMode(tokens);
+        // Create custom mode based on the spans
+        const customMode = this.createSpanBasedMode(spans);
 
         // Define the mode with editor
         window.CodeMirror.defineMode("music-syntax", function() {
@@ -420,11 +405,11 @@ export class EditorManager {
         // Apply the custom mode
         this.editor.setOption('mode', 'music-syntax');
 
-        console.log('✅ Applied syntax highlighting with', tokens.length, 'tokens');
+        console.log('✅ Applied syntax highlighting with', spans.length, 'spans');
     }
 
-    // Create an editor mode based on syntax tokens
-    createTokenBasedMode(tokens) {
+    // Create an editor mode based on syntax spans
+    createSpanBasedMode(spans) {
         // Pre-calculate line offsets from editor content
         const editorContent = this.editor.getValue();
         const lines = editorContent.split('\n');
@@ -454,14 +439,14 @@ export class EditorManager {
                 // Calculate absolute position: line offset + stream position
                 const lineOffset = lineOffsets[state.lineNumber] || 0;
                 const absolutePos = lineOffset + stream.pos;
-                const token = tokens.find(t => absolutePos >= t.start && absolutePos < t.end);
+                const span = spans.find(t => absolutePos >= t.start && absolutePos < t.end);
 
                 // Removed console logging for cleaner output
 
-                if (token) {
+                if (span) {
                     // Consume one character
                     stream.next();
-                    return `music-${token.token_type}`;
+                    return `music-${span.type}`;
                 }
 
                 // Fallback - consume one character

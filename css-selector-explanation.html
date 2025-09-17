@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSS Selector Explanation</title>
+    <style>
+        body {
+            font-family: monospace;
+            font-size: 16px;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .demo-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .code {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            border-left: 4px solid #007acc;
+        }
+        .highlight { background: yellow; }
+        .part1 { color: #d73a49; font-weight: bold; }
+        .part2 { color: #005cc5; font-weight: bold; }
+        .part3 { color: #6f42c1; font-weight: bold; }
+
+        /* The actual selector being explained */
+        .cm-music-note[style*="--tuplet-number"]::before {
+            content: var(--tuplet-number) !important;
+            position: absolute;
+            top: -1.4em;
+            left: 0;
+            width: var(--tuplet-width) !important;
+            text-align: center;
+            font-family: serif;
+            font-size: 0.7em;
+            font-style: italic;
+            color: #666;
+            z-index: 11;
+        }
+
+        /* Test elements */
+        .cm-music-note {
+            position: relative;
+            display: inline-block;
+            margin: 0 2px;
+            color: #22863a;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSS Selector Breakdown</h1>
+
+    <div class="demo-section">
+        <div class="code">
+            <span class="part1">.cm-music-note</span><span class="part2">[style*="--tuplet-number"]</span><span class="part3">::before</span> {
+                content: var(--tuplet-number) !important;
+                width: var(--tuplet-width) !important;
+            }
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h3>Part 1: <span class="part1">.cm-music-note</span></h3>
+        <p><strong>What it means:</strong> Select elements with class "cm-music-note"</p>
+        <p><strong>Example matches:</strong></p>
+        <div class="code">
+            &lt;span class="<span class="highlight">cm-music-note</span>"&gt;1&lt;/span&gt;  ✅ Matches<br>
+            &lt;span class="other-class"&gt;1&lt;/span&gt;        ❌ Doesn't match
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h3>Part 2: <span class="part2">[style*="--tuplet-number"]</span></h3>
+        <p><strong>What it means:</strong> Element must have a style attribute that CONTAINS the text "--tuplet-number"</p>
+        <p><strong>The *= operator means "contains substring"</strong></p>
+        <p><strong>Example matches:</strong></p>
+        <div class="code">
+            &lt;span style="<span class="highlight">--tuplet-number: '3'</span>"&gt;              ✅ Matches<br>
+            &lt;span style="color: red; <span class="highlight">--tuplet-number: '5'</span>; margin: 2px"&gt; ✅ Matches<br>
+            &lt;span style="<span class="highlight">--tuplet-number</span>: '7'; color: blue"&gt;    ✅ Matches<br>
+            &lt;span style="color: red"&gt;                          ❌ Doesn't match<br>
+            &lt;span style="--other-prop: '3'"&gt;                  ❌ Doesn't match
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h3>Part 3: <span class="part3">::before</span></h3>
+        <p><strong>What it means:</strong> Create a pseudo-element BEFORE the content of the matched element</p>
+        <p><strong>Visual representation:</strong></p>
+        <div class="code">
+            &lt;span&gt;
+                [::before pseudo-element goes here] ← This is where the tuplet number appears
+                1 ← This is the actual content
+            &lt;/span&gt;
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h3>Complete Selector Logic:</h3>
+        <p><strong>English translation:</strong></p>
+        <div class="code">
+            "Find any element that has BOTH:
+             1. The class 'cm-music-note' AND
+             2. A style attribute containing '--tuplet-number'
+
+             Then create a ::before pseudo-element for that element"
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h3>Live Examples:</h3>
+
+        <p><strong>✅ This will show a tuplet number:</strong></p>
+        <span class="cm-music-note" style="--tuplet-number: '3'; --tuplet-width: 3ch;">1</span><span class="cm-music-note">2</span><span class="cm-music-note">3</span>
+        <div class="code">&lt;span class="cm-music-note" style="--tuplet-number: '3'; --tuplet-width: 3ch;"&gt;1&lt;/span&gt;</div>
+
+        <p><strong>✅ This will also work (different number):</strong></p>
+        <span class="cm-music-note" style="--tuplet-number: '7'; --tuplet-width: 7ch;">A</span><span class="cm-music-note">B</span><span class="cm-music-note">C</span><span class="cm-music-note">D</span><span class="cm-music-note">E</span><span class="cm-music-note">F</span><span class="cm-music-note">G</span>
+        <div class="code">&lt;span class="cm-music-note" style="--tuplet-number: '7'; --tuplet-width: 7ch;"&gt;A&lt;/span&gt;</div>
+
+        <p><strong>❌ This won't show a tuplet number (no custom property):</strong></p>
+        <span class="cm-music-note">X</span><span class="cm-music-note">Y</span><span class="cm-music-note">Z</span>
+        <div class="code">&lt;span class="cm-music-note"&gt;X&lt;/span&gt;</div>
+
+        <p><strong>❌ This won't work (wrong class):</strong></p>
+        <span style="--tuplet-number: '5'; --tuplet-width: 5ch;">1</span>
+        <div class="code">&lt;span style="--tuplet-number: '5';"&gt;1&lt;/span&gt; (missing cm-music-note class)</div>
+    </div>
+
+    <div class="demo-section">
+        <h3>Why This is Powerful:</h3>
+        <ul>
+            <li><strong>Dynamic:</strong> Works with ANY number in --tuplet-number</li>
+            <li><strong>Automatic:</strong> No need to predefine classes for each tuplet type</li>
+            <li><strong>Clean:</strong> One CSS rule handles infinite possibilities</li>
+            <li><strong>Flexible:</strong> Can be mixed with other inline styles</li>
+        </ul>
+    </div>
+
+    <div class="demo-section">
+        <h3>Alternative CSS Attribute Selectors:</h3>
+        <div class="code">
+            [style*="--tuplet-number"]     /* Contains substring */
+            [style^="--tuplet-number"]     /* Starts with */
+            [style$="--tuplet-number"]     /* Ends with */
+            [style~="--tuplet-number"]     /* Contains word */
+            [style|="--tuplet-number"]     /* Starts with word followed by hyphen */
+        </div>
+        <p>The *= is perfect here because --tuplet-number could appear anywhere in the style attribute.</p>
+    </div>
+</body>
+</html>

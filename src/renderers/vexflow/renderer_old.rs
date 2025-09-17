@@ -1,5 +1,5 @@
 use crate::parse::model::{Document, DocumentElement};
-use crate::rhythm::types::Degree;
+use crate::models::pitch::Degree;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

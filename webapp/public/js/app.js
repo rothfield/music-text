@@ -169,13 +169,13 @@ class MusicTextApp {
             // Update editor highlighting based on parse results
             this.editorManager.highlightFromParseResult(result);
 
-            // Apply character styles using server-generated character styles (preferred)
+            // Apply span styles using server-generated span styles (preferred)
             if (result.success && result.character_styles) {
-                this.editorManager.applyCharacterStyles(result.character_styles);
+                this.editorManager.applySpanStyles(result.character_styles);
             }
-            // Fallback to token-based highlighting if character styles not available
-            else if (result.success && result.syntax_tokens) {
-                this.editorManager.applySyntaxTokens(result.syntax_tokens);
+            // Fallback to span-based highlighting if character styles not available
+            else if (result.success && result.syntax_spans) {
+                this.editorManager.applySyntaxSpans(result.syntax_spans);
             }
             
         } catch (error) {

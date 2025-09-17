@@ -141,8 +141,8 @@
     position: relative;
 }
 
-/* Beat Loop Arc Styling - Semantic Markup Rendering */
-/* Specific width classes for common beat sizes */
+/* OLD Beat Loop Arc Styling - Replaced by ultra-generalized approach below */
+/* Keeping commented for reference
 .cm-music-note.beat-loop-2::after { width: 2ch !important; }
 .cm-music-note.beat-loop-3::after { width: 3ch !important; }
 .cm-music-note.beat-loop-4::after { width: 4ch !important; }
@@ -151,7 +151,6 @@
 .cm-music-note.beat-loop-7::after { width: 7ch !important; }
 .cm-music-note.beat-loop-8::after { width: 8ch !important; }
 
-/* Common arc styling for all beat loops */
 .cm-music-note[class*="beat-loop-"]::after {
     content: '' !important;
     position: absolute !important;
@@ -162,6 +161,56 @@
     border-top: none !important;
     border-bottom-left-radius: 50% !important;
     border-bottom-right-radius: 50% !important;
+    z-index: 10 !important;
+    pointer-events: none !important;
+}
+*/
+
+/* Beat and Loop Display - Ultra-Generalized CSS using Custom Properties */
+
+/* Division number display (centered above middle element) */
+.cm-music-note[style*="--display-division"]::before {
+    content: var(--display-division) !important;
+    position: absolute !important;
+    top: -1.4em !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    text-align: center !important;
+    font-family: serif !important;
+    font-size: 0.7em !important;
+    font-style: italic !important;
+    font-weight: normal !important;
+    color: #666 !important;
+    z-index: 11 !important;
+    pointer-events: none !important;
+}
+
+/* Lower loop arc (orange arc under beat groups) */
+.cm-music-note[style*="--lower-loop-char-count"]::after {
+    content: '' !important;
+    position: absolute !important;
+    bottom: -0.8em !important;
+    left: 0 !important;
+    width: calc(var(--lower-loop-char-count) * 1ch) !important;
+    height: 0.6em !important;
+    border: 2px solid #ff9800 !important;
+    border-top: none !important;
+    border-bottom-left-radius: 50% !important;
+    border-bottom-right-radius: 50% !important;
+    z-index: 10 !important;
+    pointer-events: none !important;
+}
+
+/* Division number display (small italics above middle notes) */
+.cm-music-note[style*="--show-divisions"]::before {
+    content: var(--show-divisions) !important;
+    position: absolute !important;
+    top: -1.2em !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    font-size: 0.7em !important;
+    font-style: italic !important;
+    color: #666 !important;
     z-index: 10 !important;
     pointer-events: none !important;
 }

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Class vs Style - The Difference</title>
+    <style>
+        body {
+            font-family: monospace;
+            font-size: 16px;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .demo-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .code {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            border-left: 4px solid #007acc;
+        }
+        .highlight-class { background: #ffeb3b; }
+        .highlight-style { background: #ff9800; }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        .comparison-table th, .comparison-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .comparison-table th {
+            background-color: #f2f2f2;
+        }
+
+        /* Example CSS classes */
+        .red-text { color: red; }
+        .big-text { font-size: 20px; }
+        .fancy-box {
+            border: 2px solid purple;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .tuplet-3 {
+            --tuplet-number: "3";
+            --tuplet-width: 3ch;
+            position: relative;
+        }
+        .tuplet-3::before {
+            content: var(--tuplet-number);
+            position: absolute;
+            top: -1.2em;
+            left: 0;
+            width: var(--tuplet-width);
+            text-align: center;
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Class vs Style - The Complete Guide</h1>
+
+    <div class="demo-section">
+        <h2>📝 HTML Attributes: class vs style</h2>
+
+        <div class="code">
+            &lt;!-- Using CLASS attribute --&gt;<br>
+            &lt;span <span class="highlight-class">class="red-text big-text"</span>&gt;Hello&lt;/span&gt;<br><br>
+
+            &lt;!-- Using STYLE attribute --&gt;<br>
+            &lt;span <span class="highlight-style">style="color: red; font-size: 20px;"</span>&gt;Hello&lt;/span&gt;
+        </div>
+
+        <p><strong>Visual result is identical:</strong></p>
+        <p>
+            <span class="red-text big-text">Hello (using class)</span><br>
+            <span style="color: red; font-size: 20px;">Hello (using style)</span>
+        </p>
+    </div>
+
+    <div class="demo-section">
+        <h2>🔍 Key Differences</h2>
+
+        <table class="comparison-table">
+            <tr>
+                <th>Aspect</th>
+                <th>class="..."</th>
+                <th>style="..."</th>
+            </tr>
+            <tr>
+                <td><strong>Location</strong></td>
+                <td>References CSS rules defined elsewhere</td>
+                <td>CSS rules written directly in HTML</td>
+            </tr>
+            <tr>
+                <td><strong>Reusability</strong></td>
+                <td>✅ Can be reused on many elements</td>
+                <td>❌ Must be copied to each element</td>
+            </tr>
+            <tr>
+                <td><strong>Specificity</strong></td>
+                <td>Lower priority (can be overridden)</td>
+                <td>Higher priority (hard to override)</td>
+            </tr>
+            <tr>
+                <td><strong>Maintainability</strong></td>
+                <td>✅ Change CSS once, affects all elements</td>
+                <td>❌ Must change each element individually</td>
+            </tr>
+            <tr>
+                <td><strong>Dynamic Values</strong></td>
+                <td>❌ Fixed values in CSS</td>
+                <td>✅ Can have computed/dynamic values</td>
+            </tr>
+            <tr>
+                <td><strong>CSS Custom Properties</strong></td>
+                <td>❌ Can't set custom properties</td>
+                <td>✅ Perfect for custom properties</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="demo-section">
+        <h2>🎵 Music Notation Examples</h2>
+
+        <h3>Method 1: Using Classes</h3>
+        <div class="code">
+            &lt;!-- CSS --&gt;<br>
+            .tuplet-3 { --tuplet-number: "3"; }<br>
+            .tuplet-5 { --tuplet-number: "5"; }<br>
+            .tuplet-7 { --tuplet-number: "7"; }<br><br>
+
+            &lt;!-- HTML --&gt;<br>
+            &lt;span class="cm-music-note tuplet-3"&gt;1&lt;/span&gt;<br>
+            &lt;span class="cm-music-note tuplet-5"&gt;1&lt;/span&gt;<br>
+            &lt;span class="cm-music-note tuplet-7"&gt;1&lt;/span&gt;
+        </div>
+
+        <h3>Method 2: Using Inline Styles</h3>
+        <div class="code">
+            &lt;!-- No predefined classes needed! --&gt;<br>
+            &lt;span class="cm-music-note" style="--tuplet-number: '3'"&gt;1&lt;/span&gt;<br>
+            &lt;span class="cm-music-note" style="--tuplet-number: '5'"&gt;1&lt;/span&gt;<br>
+            &lt;span class="cm-music-note" style="--tuplet-number: '23'"&gt;1&lt;/span&gt;
+        </div>
+
+        <p><strong>Live example:</strong></p>
+        <p>Class method: <span class="tuplet-3">1</span> (triplet)</p>
+        <p>Style method: <span class="tuplet-3" style="--tuplet-number: '23'; --tuplet-width: 23ch;">1</span> (23-tuplet - no class needed!)</p>
+    </div>
+
+    <div class="demo-section">
+        <h2>🧠 When to Use Which?</h2>
+
+        <h3>✅ Use <strong>class</strong> when:</h3>
+        <ul>
+            <li>You have <strong>fixed, reusable styles</strong> (like "red-text", "large-button")</li>
+            <li>You want <strong>maintainable CSS</strong> that can be changed globally</li>
+            <li>The styling is <strong>semantic</strong> (like "error", "warning", "primary")</li>
+            <li>You have a <strong>limited set</strong> of variations</li>
+        </ul>
+        <div class="code">
+            &lt;span class="error-message"&gt;Invalid input&lt;/span&gt;<br>
+            &lt;span class="success-message"&gt;Saved successfully&lt;/span&gt;
+        </div>
+
+        <h3>✅ Use <strong>style</strong> when:</h3>
+        <ul>
+            <li>You have <strong>dynamic/computed values</strong></li>
+            <li>Each element needs <strong>unique styling</strong></li>
+            <li>You're setting <strong>CSS custom properties</strong></li>
+            <li>You have <strong>infinite variations</strong> (like any tuplet number)</li>
+        </ul>
+        <div class="code">
+            &lt;span style="--tuplet-number: '11'; width: 200px;"&gt;Dynamic&lt;/span&gt;<br>
+            &lt;span style="left: 45px; top: 123px;"&gt;Positioned&lt;/span&gt;
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h2>🎯 CSS Selector Implications</h2>
+
+        <h3>Selecting by Class:</h3>
+        <div class="code">
+            .red-text { color: red; }              /* Selects class="red-text" */<br>
+            .tuplet-3 { --tuplet-number: "3"; }   /* Selects class="tuplet-3" */
+        </div>
+
+        <h3>Selecting by Style Attribute:</h3>
+        <div class="code">
+            [style*="color: red"] { }              /* Selects style="color: red" */<br>
+            [style*="--tuplet-number"] { }         /* Selects style="--tuplet-number: '3'" */
+        </div>
+
+        <p><strong>This is why the ultra-generalized selector works:</strong></p>
+        <div class="code">
+            .cm-music-note[style*="--tuplet-number"]::before {<br>
+            &nbsp;&nbsp;content: var(--tuplet-number);<br>
+            }
+        </div>
+        <p>It finds elements that have BOTH the class AND the style attribute!</p>
+    </div>
+
+    <div class="demo-section">
+        <h2>🏆 Best of Both Worlds</h2>
+        <p>You can combine class and style for maximum flexibility:</p>
+
+        <div class="code">
+            &lt;span class="cm-music-note tuplet" style="--tuplet-number: '7'; --color: purple;"&gt;1&lt;/span&gt;
+        </div>
+
+        <ul>
+            <li><strong>class="cm-music-note"</strong> → Basic note styling</li>
+            <li><strong>class="tuplet"</strong> → General tuplet behavior</li>
+            <li><strong>style="--tuplet-number: '7'"</strong> → Specific tuplet number</li>
+        </ul>
+    </div>
+</body>
+</html>

@@ -56,8 +56,8 @@ fn source_position_to_absolute_offset(line: usize, column: usize, original_input
 }
 
 #[derive(Debug, Serialize, Clone)]
-pub struct SyntaxToken {
-    pub token_type: String,
+pub struct Span {
+    pub r#type: String,
     pub start: usize,
     pub end: usize,
     pub content: String,
@@ -68,10 +68,12 @@ pub struct CharacterStyle {
     pub pos: usize,
     pub length: usize,  // Length of the token
     pub classes: Vec<String>,
+    #[serde(skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub styles: std::collections::HashMap<String, String>, // CSS custom properties
 }
 
 #[derive(Debug, Serialize, Clone)]
-pub struct NormalizedElement {
+pub struct DocumentNode {
     pub tag: String,        // "note", "dash", "barline", etc.
     pub pos: usize,         // Character position
     pub length: usize,      // Character length
@@ -83,14 +85,14 @@ pub struct NormalizedElement {
 pub struct TokenInfo {
     pub pos: usize,
     pub length: usize,
-    pub token_type: String,
+    pub r#type: String,
     pub content: String,
 }
 
 
 /// Generate normalized elements from rhythm-analyzed document
 /// Single tree walk to create semantic annotations
-pub fn generate_normalized_elements(rhythm_doc: &crate::parse::Document, original_input: &str) -> Vec<NormalizedElement> {
+pub fn generate_normalized_elements(rhythm_doc: &crate::parse::Document, original_input: &str) -> Vec<DocumentNode> {
     use crate::parse::model::DocumentElement;
 
     let mut elements = Vec::new();
@@ -111,12 +113,6 @@ pub fn generate_normalized_elements(rhythm_doc: &crate::parse::Document, origina
                                 classes.push(format!("beat-loop-{}", beat_size));
                             }
 
-                            // Add tuplet class if this is a tuplet
-                            if beat.is_tuplet {
-                                if let Some(ratio) = &beat.tuplet_ratio {
-                                    classes.push(format!("tuplet-{}-{}", ratio.0, ratio.1));
-                                }
-                            }
 
                             // Determine tag based on element type
                             let tag = match &element.event {
@@ -127,7 +123,7 @@ pub fn generate_normalized_elements(rhythm_doc: &crate::parse::Document, origina
 
                             // Get absolute position from source mapping
                             if let Some(absolute_pos) = position_to_absolute_offset(&element.position, original_input) {
-                                elements.push(NormalizedElement {
+                                elements.push(DocumentNode {
                                     tag,
                                     pos: absolute_pos,
                                     length: element.value.len(),
@@ -147,47 +143,147 @@ pub fn generate_normalized_elements(rhythm_doc: &crate::parse::Document, origina
     elements
 }
 
-/// Generate tokens and styles from normalized elements
-pub fn generate_tokens_and_styles(elements: &[NormalizedElement]) -> (Vec<SyntaxToken>, Vec<CharacterStyle>) {
-    let tokens = elements.iter()
-        .filter(|e| e.tag != "whitespace")  // Skip whitespace in tokens
-        .map(|e| SyntaxToken {
-            token_type: e.tag.clone(),
-            start: e.pos,
-            end: e.pos + e.length,
-            content: e.content.clone(),
+/// Convert document nodes to spans for editor syntax highlighting
+pub fn nodes_to_spans(nodes: &[DocumentNode]) -> Vec<Span> {
+    nodes.iter()
+        .filter(|node| node.tag != "whitespace")  // Skip whitespace in spans
+        .map(|node| Span {
+            r#type: node.tag.clone(),
+            start: node.pos,
+            end: node.pos + node.length,
+            content: node.content.clone(),
         })
-        .collect();
-
-    let styles = elements.iter()
-        .filter(|e| e.tag != "whitespace")  // Skip whitespace in styles
-        .map(|e| {
-            let mut classes = vec![format!("cm-music-{}", e.tag)];
-            classes.extend(e.classes.clone());
-
-            CharacterStyle {
-                pos: e.pos,
-                length: e.length,
-                classes,
-            }
-        })
-        .collect();
-
-    (tokens, styles)
+        .collect()
 }
 
-/// Convert syntax tokens to token-based styles for client-side application
-pub fn generate_character_styles(tokens: &[SyntaxToken]) -> Vec<CharacterStyle> {
+/// Convert document nodes to character styles for web display
+pub fn nodes_to_styles(nodes: &[DocumentNode]) -> Vec<CharacterStyle> {
+    let mut styles: Vec<CharacterStyle> = Vec::new();
+
+    for (i, node) in nodes.iter().enumerate() {
+        if node.tag == "whitespace" {
+            continue; // Skip whitespace in styles
+        }
+
+        let mut classes = vec![format!("cm-music-{}", node.tag)];
+        classes.extend(node.classes.clone());
+
+        let mut css_styles = std::collections::HashMap::new();
+
+        // Check if this is a beat-loop first element
+        let is_beat_loop_first = node.classes.iter().any(|c| c.starts_with("beat-loop-"));
+
+        if is_beat_loop_first {
+            // Extract loop size from beat-loop-N class
+            if let Some(beat_loop_class) = node.classes.iter().find(|c| c.starts_with("beat-loop-")) {
+                if let Some(captures) = regex::Regex::new(r"beat-loop-(\d+)").unwrap().captures(beat_loop_class) {
+                    let loop_size = &captures[1];
+                    css_styles.insert("--lower-loop-char-count".to_string(), loop_size.to_string());
+
+                    // Find middle element for --show-divisions
+                    let mut beat_elements = vec![i];
+
+                    // Find all subsequent elements that are part of this beat group
+                    for j in (i + 1)..nodes.len() {
+                        if nodes[j].tag == "whitespace" {
+                            continue;
+                        }
+                        // Check if this element is part of the same beat group by checking position proximity
+                        // Since we don't have explicit beat grouping info, we'll count consecutive musical elements
+                        if j - i <= loop_size.parse::<usize>().unwrap_or(1) {
+                            beat_elements.push(j);
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // Add --show-divisions to middle element(s)
+                    if beat_elements.len() > 2 {
+                        let middle_idx = beat_elements[beat_elements.len() / 2];
+                        if middle_idx != i {
+                            // We'll mark this for later processing
+                            // For now, just note which elements need --show-divisions
+                        }
+                    }
+                }
+            }
+        }
+
+        styles.push(CharacterStyle {
+            pos: node.pos,
+            length: node.length,
+            classes,
+            styles: css_styles,
+        });
+    }
+
+    // Second pass: add --show-divisions to middle elements
+    for (i, node) in nodes.iter().enumerate() {
+        if node.tag == "whitespace" {
+            continue;
+        }
+
+        // Check if previous element has beat-loop class
+        let mut beat_loop_size = None;
+        for j in (0..i).rev() {
+            if nodes[j].tag == "whitespace" {
+                continue;
+            }
+            if let Some(beat_loop_class) = nodes[j].classes.iter().find(|c| c.starts_with("beat-loop-")) {
+                if let Some(captures) = regex::Regex::new(r"beat-loop-(\d+)").unwrap().captures(beat_loop_class) {
+                    beat_loop_size = captures[1].parse().ok();
+                    break;
+                }
+            }
+            break; // Only check immediate previous musical element
+        }
+
+        // If this is not the first element and we have a beat loop, check if this is middle
+        if let Some(loop_size) = beat_loop_size {
+            // Simple heuristic: if this is the 2nd or later element in a 3+ element group
+            let mut musical_count = 0;
+            for j in (i.saturating_sub(loop_size))..=i {
+                if j < nodes.len() && nodes[j].tag != "whitespace" {
+                    musical_count += 1;
+                }
+            }
+
+            // Only add --show-divisions for:
+            // - Odd numbers: 3, 5, 7, 9
+            // - Numbers above 9: 10, 11, 12, 13+
+            let should_show_divisions = (loop_size % 2 == 1 && loop_size >= 3) || (loop_size > 9);
+
+            if musical_count > 1 && musical_count < loop_size && should_show_divisions {
+                // This is a middle element, add --show-divisions with the division number
+                if let Some(style) = styles.iter_mut().find(|s| s.pos == node.pos) {
+                    style.styles.insert("--show-divisions".to_string(), loop_size.to_string());
+                }
+            }
+        }
+    }
+
+    styles
+}
+
+/// DEPRECATED: Use nodes_to_spans() and nodes_to_styles() instead
+/// Generate spans and styles from document nodes (legacy function)
+pub fn generate_spans_and_styles(nodes: &[DocumentNode]) -> (Vec<Span>, Vec<CharacterStyle>) {
+    (nodes_to_spans(nodes), nodes_to_styles(nodes))
+}
+
+/// Convert syntax spans to token-based styles for client-side application
+pub fn generate_character_styles(spans: &[Span]) -> Vec<CharacterStyle> {
     // Map each token to a single style entry (not per-character)
-    let mut styles: Vec<CharacterStyle> = tokens
+    let mut styles: Vec<CharacterStyle> = spans
         .iter()
-        .filter(|token| token.token_type != "whitespace" && token.token_type != "newline")
+        .filter(|token| token.r#type != "whitespace" && token.r#type != "newline")
         .map(|token| {
-            let css_class = format!("cm-music-{}", token.token_type);
+            let css_class = format!("cm-music-{}", token.r#type);
             CharacterStyle {
                 pos: token.start,  // Token start position
                 length: token.end - token.start,  // Token length
                 classes: vec![css_class],
+                styles: std::collections::HashMap::new(),
             }
         })
         .collect();
@@ -203,11 +299,11 @@ pub fn generate_character_styles(tokens: &[SyntaxToken]) -> Vec<CharacterStyle> 
 /// Uses rhythm-analyzed document to identify both explicit beat groups (marked with ___)
 /// and implicit beat groups (consecutive musical elements with same beat)
 /// Also processes slurs (marked with ___ in upper lines)
-pub fn generate_character_styles_with_beat_groups(tokens: &[SyntaxToken], document: &crate::parse::Document) -> Vec<CharacterStyle> {
+pub fn generate_character_styles_with_beat_groups(spans: &[Span], document: &crate::parse::Document) -> Vec<CharacterStyle> {
     use crate::parse::model::{DocumentElement, StaveLine};
     use crate::rhythm::types::{ParsedElement, BeatGroupRole};
 
-    let mut styles = generate_character_styles(tokens);
+    let mut styles = generate_character_styles(spans);
 
     // Add beat group and slur classes to elements
     for element in &document.elements {
@@ -527,9 +623,9 @@ fn add_implicit_beat_classes(styles: &mut Vec<CharacterStyle>, positions: &[usiz
 }
 
 
-/// Generate syntax tokens from parsed document for CodeMirror highlighting (JSON-based for backward compatibility)
-pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<SyntaxToken> {
-    let mut tokens = Vec::new();
+/// Generate syntax spans from parsed document for CodeMirror highlighting (JSON-based for backward compatibility)
+pub fn generate_syntax_spans_from_json(document: &serde_json::Value) -> Vec<Span> {
+    let mut spans = Vec::new();
     let mut position = 0usize;
 
     // Process elements array (actual document format)
@@ -538,8 +634,8 @@ pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<Syn
             // Handle BlankLines elements
             if let Some(blank_lines) = element.get("BlankLines") {
                 if let Some(content) = blank_lines.get("content").and_then(|c| c.as_str()) {
-                    tokens.push(SyntaxToken {
-                        token_type: "blank_lines".to_string(),
+                    spans.push(Span {
+                        r#type: "blank_lines".to_string(),
                         start: position,
                         end: position + content.len(),
                         content: content.to_string(),
@@ -554,8 +650,8 @@ pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<Syn
                         // Process BlankLines within stave
                         if let Some(blank_lines) = line.get("BlankLines") {
                             if let Some(content) = blank_lines.get("content").and_then(|c| c.as_str()) {
-                                tokens.push(SyntaxToken {
-                                    token_type: "stave_blank_lines".to_string(),
+                                spans.push(Span {
+                                    r#type: "stave_blank_lines".to_string(),
                                     start: position,
                                     end: position + content.len(),
                                     content: content.to_string(),
@@ -568,8 +664,8 @@ pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<Syn
                             for el in content {
                                 if let Some(note) = el.get("Note") {
                                     if let Some(value) = note.get("value").and_then(|v| v.as_str()) {
-                                        tokens.push(SyntaxToken {
-                                            token_type: "note".to_string(),
+                                        spans.push(Span {
+                                            r#type: "note".to_string(),
                                             start: position,
                                             end: position + value.len(),
                                             content: value.to_string(),
@@ -583,8 +679,8 @@ pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<Syn
                                     }
                                 } else if let Some(barline) = el.get("Barline") {
                                     if let Some(style) = barline.get("style").and_then(|s| s.as_str()) {
-                                        tokens.push(SyntaxToken {
-                                            token_type: "barline".to_string(),
+                                        spans.push(Span {
+                                            r#type: "barline".to_string(),
                                             start: position,
                                             end: position + style.len(),
                                             content: style.to_string(),
@@ -592,8 +688,8 @@ pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<Syn
                                         position += style.len();
                                     }
                                 } else if let Some(_dash) = el.get("Dash") {
-                                    tokens.push(SyntaxToken {
-                                        token_type: "dash".to_string(),
+                                    spans.push(Span {
+                                        r#type: "dash".to_string(),
                                         start: position,
                                         end: position + 1,
                                         content: "-".to_string(),
@@ -601,8 +697,8 @@ pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<Syn
                                     position += 1;
                                 } else if let Some(rest) = el.get("Rest") {
                                     if let Some(value) = rest.get("value").and_then(|v| v.as_str()) {
-                                        tokens.push(SyntaxToken {
-                                            token_type: "rest".to_string(),
+                                        spans.push(Span {
+                                            r#type: "rest".to_string(),
                                             start: position,
                                             end: position + value.len(),
                                             content: value.to_string(),
@@ -610,8 +706,8 @@ pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<Syn
                                         position += value.len();
                                     }
                                 } else if let Some(_breath) = el.get("Breath") {
-                                    tokens.push(SyntaxToken {
-                                        token_type: "breath".to_string(),
+                                    spans.push(Span {
+                                        r#type: "breath".to_string(),
                                         start: position,
                                         end: position + 1,
                                         content: "'".to_string(),
@@ -624,8 +720,8 @@ pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<Syn
                                     }
                                 } else if let Some(unknown) = el.get("Unknown") {
                                     if let Some(value) = unknown.get("value").and_then(|v| v.as_str()) {
-                                        tokens.push(SyntaxToken {
-                                            token_type: "unknown".to_string(),
+                                        spans.push(Span {
+                                            r#type: "unknown".to_string(),
                                             start: position,
                                             end: position + value.len(),
                                             content: value.to_string(),
@@ -641,13 +737,13 @@ pub fn generate_syntax_tokens_from_json(document: &serde_json::Value) -> Vec<Syn
         }
     }
 
-    tokens
+    spans
 }
 
-/// Generate syntax tokens from parsed document for CodeMirror highlighting
+/// Generate syntax spans from parsed document for CodeMirror highlighting
 /// This version works directly with the Document struct for better performance and type safety
-pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<SyntaxToken> {
-    let mut tokens = Vec::new();
+pub fn generate_syntax_spans(document: &Document, original_input: &str) -> Vec<Span> {
+    let mut spans = Vec::new();
     let mut position = 0usize;
 
     // Process directives first (if any)
@@ -655,8 +751,8 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
         // Directive key
         let key_len = directive.key.len();
         if key_len > 0 {
-            tokens.push(SyntaxToken {
-                token_type: "directive_key".to_string(),
+            spans.push(Span {
+                r#type: "directive_key".to_string(),
                 start: position,
                 end: position + key_len,
                 content: directive.key.clone(),
@@ -665,8 +761,8 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
         }
 
         // Colon separator
-        tokens.push(SyntaxToken {
-            token_type: "directive_sep".to_string(),
+        spans.push(Span {
+            r#type: "directive_sep".to_string(),
             start: position,
             end: position + 1,
             content: ":".to_string(),
@@ -679,8 +775,8 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
         // Directive value
         let value_len = directive.value.len();
         if value_len > 0 {
-            tokens.push(SyntaxToken {
-                token_type: "directive_value".to_string(),
+            spans.push(Span {
+                r#type: "directive_value".to_string(),
                 start: position,
                 end: position + value_len,
                 content: directive.value.clone(),
@@ -712,7 +808,7 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                         }
                         StaveLine::Upper(upper_line) => {
                             // Process upper line elements for slurs and ornaments
-                            // Even though they're consumed, we need tokens for editor highlighting
+                            // Even though they're consumed, we need spans for editor highlighting
                             for element in &upper_line.elements {
                                 match element {
                                     UpperElement::SlurIndicator { value, source } => {
@@ -722,8 +818,8 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                                             source.position.column,
                                             original_input
                                         ) {
-                                            tokens.push(SyntaxToken {
-                                                token_type: "note-slur".to_string(),
+                                            spans.push(Span {
+                                                r#type: "note-slur".to_string(),
                                                 start: start_pos,
                                                 end: start_pos + value.len(),
                                                 content: value.clone(),
@@ -738,8 +834,8 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                                             source.position.column,
                                             original_input
                                         ) {
-                                            tokens.push(SyntaxToken {
-                                                token_type: "upper-octave-marker".to_string(),
+                                            spans.push(Span {
+                                                r#type: "upper-octave-marker".to_string(),
                                                 start: start_pos,
                                                 end: start_pos + marker.len(),
                                                 content: marker.clone(),
@@ -748,7 +844,7 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                                         }
                                     }
                                     _ => {
-                                        // Other upper elements might need tokens too
+                                        // Other upper elements might need spans too
                                     }
                                 }
                             }
@@ -766,25 +862,25 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                         StaveLine::Content(parsed_elements) => {
                             // Process rhythm items first if available, otherwise fall back to individual elements
                             if let Some(rhythm_items) = &stave.rhythm_items {
-                                process_rhythm_items_for_tokens(rhythm_items, &mut tokens, &mut position, original_input);
+                                process_rhythm_items_for_spans(rhythm_items, &mut spans, &mut position, original_input);
                             } else {
                                 // Fallback: process content line elements individually
                                 for element in parsed_elements {
-                                    process_parsed_element(element, &mut tokens, &mut position, original_input, &None);
+                                    process_parsed_element(element, &mut spans, &mut position, original_input, &None);
                                 }
                             }
                         }
                         StaveLine::Lower(lower_line) => {
                             // Process lower line elements for beat group indicators
-                            // Even though they're consumed, we need tokens for editor highlighting
+                            // Even though they're consumed, we need spans for editor highlighting
                             for element in &lower_line.elements {
                                 match element {
                                     LowerElement::BeatGroupIndicator { value, source } => {
                                         // Generate token for beat group indicator
                                         // The position tracker maintains the current position in the input
                                         // Since lower lines come after content, use current position
-                                        tokens.push(SyntaxToken {
-                                            token_type: "beat_group".to_string(),
+                                        spans.push(Span {
+                                            r#type: "beat_group".to_string(),
                                             start: position,
                                             end: position + value.len(),
                                             content: value.clone(),
@@ -793,8 +889,8 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                                     }
                                     LowerElement::LowerOctaveMarker { marker, source } => {
                                         // Generate token for octave marker (even if consumed)
-                                        tokens.push(SyntaxToken {
-                                            token_type: "lower-octave-marker".to_string(),
+                                        spans.push(Span {
+                                            r#type: "lower-octave-marker".to_string(),
                                             start: position,
                                             end: position + marker.len(),
                                             content: marker.clone(),
@@ -802,7 +898,7 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
                                         position += marker.len();
                                     }
                                     _ => {
-                                        // Other lower elements don't generate tokens
+                                        // Other lower elements don't generate spans
                                     }
                                 }
                             }
@@ -827,8 +923,8 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
 
                                 let syllable_len = syllable.content.len();
                                 if syllable_len > 0 {
-                                    tokens.push(SyntaxToken {
-                                        token_type: "syllable".to_string(),
+                                    spans.push(Span {
+                                        r#type: "syllable".to_string(),
                                         start: position,
                                         end: position + syllable_len,
                                         content: syllable.content.clone(),
@@ -852,19 +948,19 @@ pub fn generate_syntax_tokens(document: &Document, original_input: &str) -> Vec<
         }
     }
 
-    // Don't fill gaps - just return the tokens we have
-    // Whitespace, newlines and consumed elements should not generate tokens
-    tokens
+    // Don't fill gaps - just return the spans we have
+    // Whitespace, newlines and consumed elements should not generate spans
+    spans
         .into_iter()
-        .filter(|t| t.token_type != "whitespace" && t.token_type != "newline")
+        .filter(|t| t.r#type != "whitespace" && t.r#type != "newline")
         .collect()
 }
 
 
-/// Process rhythm items to generate beat-aware tokens
-fn process_rhythm_items_for_tokens(
+/// Process rhythm items to generate beat-aware spans
+fn process_rhythm_items_for_spans(
     rhythm_items: &[crate::rhythm::Item],
-    tokens: &mut Vec<SyntaxToken>,
+    spans: &mut Vec<Span>,
     position: &mut usize,
     original_input: &str
 ) {
@@ -877,10 +973,10 @@ fn process_rhythm_items_for_tokens(
                 for (index, element) in beat.elements.iter().enumerate() {
                     if let Some(start_pos) = position_to_absolute_offset(&element.position, original_input) {
                         // Just use plain "note" for all notes
-                        let token_type = "note".to_string();
+                        let r#type = "note".to_string();
 
-                        tokens.push(SyntaxToken {
-                            token_type,
+                        spans.push(Span {
+                            r#type,
                             start: start_pos,
                             end: start_pos + element.value.len(),
                             content: element.value.clone(),
@@ -905,13 +1001,13 @@ fn process_rhythm_items_for_tokens(
     }
 }
 
-fn fill_token_gaps(mut tokens: Vec<SyntaxToken>, input_length: usize, original_input: &str) -> Vec<SyntaxToken> {
-    // Step 1: Filter out whitespace and newline tokens (already done by caller)
-    // tokens should only contain real content tokens at this point
+fn fill_token_gaps(mut spans: Vec<Span>, input_length: usize, original_input: &str) -> Vec<Span> {
+    // Step 1: Filter out whitespace and newline spans (already done by caller)
+    // spans should only contain real content spans at this point
 
     // Step 2: Create a coverage map
     let mut covered = vec![false; input_length];
-    for token in &tokens {
+    for token in &spans {
         for pos in token.start..token.end {
             if pos < input_length {
                 covered[pos] = true;
@@ -920,7 +1016,7 @@ fn fill_token_gaps(mut tokens: Vec<SyntaxToken>, input_length: usize, original_i
     }
 
     // Step 3: Fill gaps - step through each character
-    let mut result = tokens; // Start with existing tokens
+    let mut result = spans; // Start with existing spans
     let input_chars: Vec<char> = original_input.chars().collect();
     let mut gap_start = None;
 
@@ -934,8 +1030,8 @@ fn fill_token_gaps(mut tokens: Vec<SyntaxToken>, input_length: usize, original_i
             // End of a gap
             if let Some(start) = gap_start {
                 let gap_content: String = input_chars[start..pos].iter().collect();
-                result.push(SyntaxToken {
-                    token_type: "dummy".to_string(),
+                result.push(Span {
+                    r#type: "dummy".to_string(),
                     start: start,
                     end: pos,
                     content: gap_content,
@@ -948,8 +1044,8 @@ fn fill_token_gaps(mut tokens: Vec<SyntaxToken>, input_length: usize, original_i
     // Handle final gap if it extends to end of input
     if let Some(start) = gap_start {
         let gap_content: String = input_chars[start..].iter().collect();
-        result.push(SyntaxToken {
-            token_type: "dummy".to_string(),
+        result.push(Span {
+            r#type: "dummy".to_string(),
             start: start,
             end: input_length,
             content: gap_content,
@@ -962,21 +1058,21 @@ fn fill_token_gaps(mut tokens: Vec<SyntaxToken>, input_length: usize, original_i
 }
 
 // Helper function to process upper line elements
-fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<SyntaxToken>, position: &mut usize, original_input: &str) {
+fn process_upper_element(element: &crate::parse::UpperElement, spans: &mut Vec<Span>, position: &mut usize, original_input: &str) {
     use crate::parse::UpperElement;
 
     match element {
         UpperElement::UpperOctaveMarker { marker, source } => {
             let marker_len = marker.len();
-            let token_type = match marker.as_str() {
+            let r#type = match marker.as_str() {
                 "." => "upper-octave-marker",
                 ":" => "upper-octave-marker-2",
                 _ => "upper-octave-marker"
             };
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: token_type.to_string(),
+            spans.push(Span {
+                r#type: r#type.to_string(),
                 start: start_pos,
                 end: start_pos + marker_len,
                 content: marker.clone(),
@@ -987,8 +1083,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             let value_len = value.len();
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "slur-indicator".to_string(),
+            spans.push(Span {
+                r#type: "slur-indicator".to_string(),
                 start: start_pos,
                 end: start_pos + value_len,
                 content: value.clone(),
@@ -999,8 +1095,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             let value_len = value.len();
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "multi_stave_marker".to_string(),
+            spans.push(Span {
+                r#type: "multi_stave_marker".to_string(),
                 start: start_pos,
                 end: start_pos + value_len,
                 content: value.clone(),
@@ -1013,8 +1109,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             let ornament_len = ornament_str.len();
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "ornament".to_string(),
+            spans.push(Span {
+                r#type: "ornament".to_string(),
                 start: start_pos,
                 end: start_pos + ornament_len,
                 content: ornament_str,
@@ -1027,8 +1123,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             let chord_len = chord_str.len();
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "chord".to_string(),
+            spans.push(Span {
+                r#type: "chord".to_string(),
                 start: start_pos,
                 end: start_pos + chord_len,
                 content: chord_str,
@@ -1038,8 +1134,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
         UpperElement::Mordent { source } => {
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "mordent".to_string(),
+            spans.push(Span {
+                r#type: "mordent".to_string(),
                 start: start_pos,
                 end: start_pos + 1,
                 content: "~".to_string(),
@@ -1050,8 +1146,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             let spaces = " ".repeat(*count);
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "whitespace".to_string(),
+            spans.push(Span {
+                r#type: "whitespace".to_string(),
                 start: start_pos,
                 end: start_pos + count,
                 content: spaces,
@@ -1062,8 +1158,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             let value_len = value.len();
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "unknown".to_string(),
+            spans.push(Span {
+                r#type: "unknown".to_string(),
                 start: start_pos,
                 end: start_pos + value_len,
                 content: value.clone(),
@@ -1074,8 +1170,8 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
             let value_len = value.len();
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "newline".to_string(),
+            spans.push(Span {
+                r#type: "newline".to_string(),
                 start: start_pos,
                 end: start_pos + value_len,
                 content: value.clone(),
@@ -1086,21 +1182,21 @@ fn process_upper_element(element: &crate::parse::UpperElement, tokens: &mut Vec<
 }
 
 // Helper function to process lower line elements
-fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<SyntaxToken>, position: &mut usize, original_input: &str) {
+fn process_lower_element(element: &crate::parse::LowerElement, spans: &mut Vec<Span>, position: &mut usize, original_input: &str) {
     use crate::parse::LowerElement;
 
     match element {
         LowerElement::LowerOctaveMarker { marker, source } => {
             let marker_len = marker.len();
-            let token_type = match marker.as_str() {
+            let r#type = match marker.as_str() {
                 "." => "lower-octave-marker",
                 ":" => "lower-octave-marker-2",
                 _ => "lower-octave-marker"
             };
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: token_type.to_string(),
+            spans.push(Span {
+                r#type: r#type.to_string(),
                 start: start_pos,
                 end: start_pos + marker_len,
                 content: marker.clone(),
@@ -1115,8 +1211,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
                     eprintln!("Warning: Failed to convert beat group position line={}, column={}", source.position.line, source.position.column);
                     0
                 });
-            tokens.push(SyntaxToken {
-                token_type: "beat_group".to_string(),
+            spans.push(Span {
+                r#type: "beat_group".to_string(),
                 start: start_pos,
                 end: start_pos + value_len,
                 content: value.clone(),
@@ -1127,8 +1223,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
             let content_len = content.len();
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "syllable".to_string(),
+            spans.push(Span {
+                r#type: "syllable".to_string(),
                 start: start_pos,
                 end: start_pos + content_len,
                 content: content.clone(),
@@ -1139,8 +1235,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
             let spaces = " ".repeat(*count);
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "whitespace".to_string(),
+            spans.push(Span {
+                r#type: "whitespace".to_string(),
                 start: start_pos,
                 end: start_pos + count,
                 content: spaces,
@@ -1151,8 +1247,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
             let value_len = value.len();
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "unknown".to_string(),
+            spans.push(Span {
+                r#type: "unknown".to_string(),
                 start: start_pos,
                 end: start_pos + value_len,
                 content: value.clone(),
@@ -1163,8 +1259,8 @@ fn process_lower_element(element: &crate::parse::LowerElement, tokens: &mut Vec<
             let value_len = value.len();
             // Use the actual source column position (already 0-based)
             let start_pos = source.position.column;
-            tokens.push(SyntaxToken {
-                token_type: "newline".to_string(),
+            spans.push(Span {
+                r#type: "newline".to_string(),
                 start: start_pos,
                 end: start_pos + value_len,
                 content: value.clone(),
@@ -1212,7 +1308,7 @@ fn find_beat_element_count(rhythm_items: &[crate::rhythm::Item], target_position
 // Helper function to process parsed elements from content lines
 fn process_parsed_element(
     element: &ParsedElement,
-    tokens: &mut Vec<SyntaxToken>,
+    spans: &mut Vec<Span>,
     position: &mut usize,
     original_input: &str,
     rhythm_items: &Option<Vec<crate::rhythm::Item>>
@@ -1222,7 +1318,7 @@ fn process_parsed_element(
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let value_len = value.len();
-                let token_type = if *in_beat_group && matches!(beat_group, Some(crate::rhythm::types::BeatGroupRole::Start)) {
+                let r#type = if *in_beat_group && matches!(beat_group, Some(crate::rhythm::types::BeatGroupRole::Start)) {
                     // Find the beat containing this note position and count its elements
                     let span = if let Some(rhythm_items) = rhythm_items {
                         find_beat_element_count(rhythm_items, pos)
@@ -1234,8 +1330,8 @@ fn process_parsed_element(
                     "note".to_string()
                 };
 
-                tokens.push(SyntaxToken {
-                    token_type,
+                spans.push(Span {
+                    r#type,
                     start: start_pos,
                     end: start_pos + value_len,
                     content: value.clone(),
@@ -1247,8 +1343,8 @@ fn process_parsed_element(
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let value_len = value.len();
-                tokens.push(SyntaxToken {
-                    token_type: "rest".to_string(),
+                spans.push(Span {
+                    r#type: "rest".to_string(),
                     start: start_pos,
                     end: start_pos + value_len,
                     content: value.clone(),
@@ -1260,7 +1356,7 @@ fn process_parsed_element(
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 // Check if this dash is the first element of a beat (starts a beat group)
-                let token_type = if let Some(rhythm_items) = rhythm_items {
+                let r#type = if let Some(rhythm_items) = rhythm_items {
                     // Check if this dash position matches the first element of any beat
                     let mut is_first = false;
                     let mut span = 1;
@@ -1282,8 +1378,8 @@ fn process_parsed_element(
                     "dash".to_string()
                 };
 
-                tokens.push(SyntaxToken {
-                    token_type,
+                spans.push(Span {
+                    r#type,
                     start: start_pos,
                     end: start_pos + 1,
                     content: "-".to_string(),
@@ -1295,8 +1391,8 @@ fn process_parsed_element(
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let style_len = style.len();
-                tokens.push(SyntaxToken {
-                    token_type: "barline".to_string(),
+                spans.push(Span {
+                    r#type: "barline".to_string(),
                     start: start_pos,
                     end: start_pos + style_len,
                     content: style.clone(),
@@ -1308,8 +1404,8 @@ fn process_parsed_element(
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let value_len = value.len();
-                tokens.push(SyntaxToken {
-                    token_type: "whitespace".to_string(),
+                spans.push(Span {
+                    r#type: "whitespace".to_string(),
                     start: start_pos,
                     end: start_pos + value_len,
                     content: value.clone(),
@@ -1321,8 +1417,8 @@ fn process_parsed_element(
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let value_len = value.len();
-                tokens.push(SyntaxToken {
-                    token_type: "symbol".to_string(),
+                spans.push(Span {
+                    r#type: "symbol".to_string(),
                     start: start_pos,
                     end: start_pos + value_len,
                     content: value.clone(),
@@ -1334,8 +1430,8 @@ fn process_parsed_element(
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let value_len = value.len();
-                tokens.push(SyntaxToken {
-                    token_type: "unknown".to_string(),
+                spans.push(Span {
+                    r#type: "unknown".to_string(),
                     start: start_pos,
                     end: start_pos + value_len,
                     content: value.clone(),
@@ -1347,8 +1443,8 @@ fn process_parsed_element(
             // Calculate absolute position from row/col
             if let Some(start_pos) = position_to_absolute_offset(pos, original_input) {
                 let value_len = value.len();
-                tokens.push(SyntaxToken {
-                    token_type: "newline".to_string(),
+                spans.push(Span {
+                    r#type: "newline".to_string(),
                     start: start_pos,
                     end: start_pos + value_len,
                     content: value.clone(),

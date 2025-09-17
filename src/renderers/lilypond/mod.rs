@@ -100,8 +100,8 @@ fn convert_beat_element_to_lilypond(element: &crate::rhythm::analyzer::BeatEleme
 }
 
 /// Convert degree to LilyPond note name
-fn degree_to_lilypond(degree: crate::rhythm::types::Degree) -> &'static str {
-    use crate::rhythm::types::Degree::*;
+fn degree_to_lilypond(degree: crate::models::pitch::Degree) -> &'static str {
+    use crate::models::pitch::Degree::*;
     match degree {
         N1 | N1s | N1ss | N1b | N1bb => "c'",
         N2 | N2s | N2ss | N2b | N2bb => "d'",

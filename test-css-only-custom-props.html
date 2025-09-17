@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSS Custom Properties - No JavaScript Required</title>
+    <style>
+        body {
+            font-family: monospace;
+            font-size: 16px;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .demo-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .demo-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        /* Pure CSS approach - No JavaScript needed! */
+        .tuplet {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tuplet::before {
+            content: var(--tuplet-number);
+            position: absolute;
+            top: -1.4em;
+            left: 0;
+            width: var(--tuplet-width);
+            text-align: center;
+            font-family: serif;
+            font-size: 0.7em;
+            font-style: italic;
+            color: #666;
+            z-index: 11;
+        }
+
+        .tuplet::after {
+            content: '';
+            position: absolute;
+            bottom: -0.8em;
+            left: 0;
+            width: var(--tuplet-width);
+            height: 0.6em;
+            border: 2px solid #ff9800;
+            border-top: none;
+            border-bottom-left-radius: 50%;
+            border-bottom-right-radius: 50%;
+            z-index: 10;
+        }
+
+        /* Method 1: Set custom properties in CSS classes */
+        .triplet {
+            --tuplet-number: "3";
+            --tuplet-width: 3ch;
+        }
+
+        .quintuplet {
+            --tuplet-number: "5";
+            --tuplet-width: 5ch;
+        }
+
+        .septuplet {
+            --tuplet-number: "7";
+            --tuplet-width: 7ch;
+        }
+
+        .huge-tuplet {
+            --tuplet-number: "23";
+            --tuplet-width: 23ch;
+        }
+
+        /* Method 2: CSS can even calculate values! */
+        .calculated-tuplet {
+            --base-size: 6;
+            --tuplet-number: "6";
+            --tuplet-width: calc(var(--base-size) * 1ch);
+        }
+
+        /* Method 3: Root variables that can be inherited */
+        :root {
+            --default-tuplet-color: #666;
+            --default-arc-color: #ff9800;
+        }
+
+        .themed-tuplet {
+            --tuplet-number: "4";
+            --tuplet-width: 4ch;
+            --tuplet-color: var(--default-tuplet-color);
+        }
+
+        .themed-tuplet::before {
+            color: var(--tuplet-color, #666);
+        }
+
+        .themed-tuplet::after {
+            border-color: var(--default-arc-color);
+        }
+    </style>
+</head>
+<body>
+    <h1>CSS Custom Properties - No JavaScript Required!</h1>
+
+    <div class="demo-section">
+        <div class="demo-title">Method 1: CSS Classes with Custom Properties</div>
+        <p>
+            <span class="tuplet triplet">1</span><span>2</span><span>3</span> (triplet)
+        </p>
+        <p>
+            <span class="tuplet quintuplet">1</span><span>2</span><span>3</span><span>4</span><span>5</span> (quintuplet)
+        </p>
+        <p>
+            <span class="tuplet septuplet">1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span> (septuplet)
+        </p>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">Method 2: Inline Style Custom Properties</div>
+        <p>
+            <span class="tuplet" style="--tuplet-number: '11'; --tuplet-width: 11ch;">1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span> (11-tuplet)
+        </p>
+        <p>
+            <span class="tuplet" style="--tuplet-number: '13'; --tuplet-width: 13ch;">A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span><span>J</span><span>K</span><span>L</span><span>M</span> (13-tuplet)
+        </p>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">Method 3: CSS Calculations</div>
+        <p>
+            <span class="tuplet calculated-tuplet">1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span> (calculated 6-tuplet)
+        </p>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">Method 4: Extreme Example (No JS!)</div>
+        <p>
+            <span class="tuplet huge-tuplet">S</span><span>u</span><span>p</span><span>e</span><span>r</span><span>c</span><span>a</span><span>l</span><span>i</span><span>f</span><span>r</span><span>a</span><span>g</span><span>i</span><span>l</span><span>i</span><span>s</span><span>t</span><span>i</span><span>c</span><span>e</span><span>x</span><span>p</span> (23-tuplet)
+        </p>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">How it works (CSS only!):</div>
+        <pre><code>/* Define the tuplet styling */
+.tuplet::before {
+    content: var(--tuplet-number);  /* Gets "3", "5", "7", etc. */
+    width: var(--tuplet-width);     /* Gets 3ch, 5ch, 7ch, etc. */
+}
+
+/* Set the properties in CSS */
+.triplet {
+    --tuplet-number: "3";
+    --tuplet-width: 3ch;
+}
+
+/* Or set them inline */
+&lt;span class="tuplet" style="--tuplet-number: '23'; --tuplet-width: 23ch;"&gt;</code></pre>
+    </div>
+</body>
+</html>

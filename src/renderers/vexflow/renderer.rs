@@ -1,5 +1,5 @@
 use crate::parse::model::{Document, DocumentElement};
-use crate::rhythm::types::Degree;
+use crate::models::pitch::Degree;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone)]
@@ -177,7 +177,7 @@ fn is_beamable_duration(duration: &str) -> bool {
 
 /// Convert degree to VexFlow key with octave
 fn degree_to_vexflow_key(degree: Degree, octave: i8) -> (String, Vec<serde_json::Value>) {
-    use crate::rhythm::types::Degree::*;
+    use crate::models::pitch::Degree::*;
 
     let (base_note, accidental) = match degree {
         N1 => ("C", None),

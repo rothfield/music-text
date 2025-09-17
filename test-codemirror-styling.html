@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CodeMirror Styling Options Test</title>
+    <link rel="stylesheet" href="webapp/public/css/music-text.css">
+    <link rel="stylesheet" href="webapp/public/assets/codemirror.min.css">
+    <style>
+        body {
+            font-family: monospace;
+            font-size: 16px;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .demo-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .demo-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .editor-container {
+            border: 1px solid #ccc;
+            height: 100px;
+            font-family: monospace;
+        }
+        .code {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            border-left: 4px solid #007acc;
+            margin: 10px 0;
+        }
+
+        /* Test CSS for ultra-generalized approach */
+        .cm-music-note[style*="--tuplet-number"]::before {
+            content: var(--tuplet-number) !important;
+            position: absolute !important;
+            top: -1.4em !important;
+            left: 0 !important;
+            width: var(--tuplet-width) !important;
+            text-align: center !important;
+            font-family: serif !important;
+            font-size: 0.7em !important;
+            font-style: italic !important;
+            color: #666 !important;
+            z-index: 11 !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>CodeMirror Styling Options</h1>
+
+    <div class="demo-section">
+        <div class="demo-title">Test Editor:</div>
+        <div id="editor" class="editor-container"></div>
+        <button onclick="testClassApproach()">Test Class Approach</button>
+        <button onclick="testStyleApproach()">Test Style Approach</button>
+        <button onclick="testHybridApproach()">Test Hybrid Approach</button>
+        <button onclick="clearMarks()">Clear All</button>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">CodeMirror markText() API:</div>
+        <div class="code">
+editor.markText(from, to, {
+    className: "my-class",           ✅ Supported
+    css: "color: red;",             ❓ Let's test
+    style: "color: red;",           ❓ Let's test
+    attributes: {"style": "..."},   ❓ Let's test
+    replacedWith: domElement,       ✅ Supported (but overkill)
+});
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">Current Approach (what we're doing now):</div>
+        <div class="code">
+// Step 1: Apply class
+const mark = editor.markText(pos, endPos, {
+    className: 'cm-music-note beat-loop-3 tuplet-3-2'
+});
+
+// Step 2: Access DOM and set properties manually
+setTimeout(() => {
+    const element = mark.find()?.mark?.element;
+    if (element) {
+        element.style.setProperty('--tuplet-number', '3');
+    }
+}, 0);
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <div class="demo-title">Test Results:</div>
+        <div id="results"></div>
+    </div>
+
+    <script src="webapp/public/assets/codemirror.min.js"></script>
+    <script>
+        let editor;
+        let marks = [];
+
+        // Initialize CodeMirror
+        document.addEventListener('DOMContentLoaded', function() {
+            editor = CodeMirror(document.getElementById('editor'), {
+                value: '|123| |1234| |12345|',
+                mode: 'text/plain',
+                lineNumbers: false,
+                lineWrapping: true
+            });
+        });
+
+        function log(message) {
+            const results = document.getElementById('results');
+            results.innerHTML += '<div>' + message + '</div>';
+        }
+
+        function clearMarks() {
+            marks.forEach(mark => mark.clear());
+            marks = [];
+            document.getElementById('results').innerHTML = '';
+            log('All marks cleared');
+        }
+
+        function testClassApproach() {
+            log('<strong>Testing Class Approach:</strong>');
+
+            try {
+                const mark = editor.markText(
+                    {line: 0, ch: 1},
+                    {line: 0, ch: 2},
+                    {
+                        className: 'cm-music-note beat-loop-3 tuplet-3-2'
+                    }
+                );
+                marks.push(mark);
+                log('✅ className: SUCCESS - Applied class successfully');
+
+                // Try to access DOM element
+                setTimeout(() => {
+                    const element = mark.find()?.mark?.element;
+                    if (element) {
+                        log('✅ DOM access: SUCCESS - Can access mark element');
+                        log('Element classes: ' + element.className);
+                    } else {
+                        log('❌ DOM access: FAILED - Cannot access mark element');
+                    }
+                }, 100);
+
+            } catch (e) {
+                log('❌ className: FAILED - ' + e.message);
+            }
+        }
+
+        function testStyleApproach() {
+            log('<strong>Testing Style Approaches:</strong>');
+
+            // Test 1: css property
+            try {
+                const mark1 = editor.markText(
+                    {line: 0, ch: 7},
+                    {line: 0, ch: 8},
+                    {
+                        className: 'cm-music-note',
+                        css: 'color: red; --tuplet-number: "4"; --tuplet-width: 4ch;'
+                    }
+                );
+                marks.push(mark1);
+                log('✅ css property: SUCCESS');
+            } catch (e) {
+                log('❌ css property: FAILED - ' + e.message);
+            }
+
+            // Test 2: style property
+            try {
+                const mark2 = editor.markText(
+                    {line: 0, ch: 14},
+                    {line: 0, ch: 15},
+                    {
+                        className: 'cm-music-note',
+                        style: 'color: blue; --tuplet-number: "5"; --tuplet-width: 5ch;'
+                    }
+                );
+                marks.push(mark2);
+                log('✅ style property: SUCCESS');
+            } catch (e) {
+                log('❌ style property: FAILED - ' + e.message);
+            }
+
+            // Test 3: attributes
+            try {
+                const mark3 = editor.markText(
+                    {line: 0, ch: 16},
+                    {line: 0, ch: 17},
+                    {
+                        className: 'cm-music-note',
+                        attributes: {
+                            'style': '--tuplet-number: "5"; --tuplet-width: 5ch;'
+                        }
+                    }
+                );
+                marks.push(mark3);
+                log('✅ attributes: SUCCESS');
+            } catch (e) {
+                log('❌ attributes: FAILED - ' + e.message);
+            }
+        }
+
+        function testHybridApproach() {
+            log('<strong>Testing Hybrid Approach (Current Method):</strong>');
+
+            try {
+                const mark = editor.markText(
+                    {line: 0, ch: 2},
+                    {line: 0, ch: 3},
+                    {
+                        className: 'cm-music-note'
+                    }
+                );
+                marks.push(mark);
+
+                // Set custom properties via DOM manipulation
+                setTimeout(() => {
+                    const element = mark.find()?.mark?.element;
+                    if (element) {
+                        element.style.setProperty('--tuplet-number', '"3"');
+                        element.style.setProperty('--tuplet-width', '3ch');
+                        log('✅ Hybrid: SUCCESS - Set custom properties via DOM');
+                        log('Element style: ' + element.getAttribute('style'));
+                    } else {
+                        log('❌ Hybrid: FAILED - Cannot access DOM element');
+                    }
+                }, 100);
+
+            } catch (e) {
+                log('❌ Hybrid: FAILED - ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

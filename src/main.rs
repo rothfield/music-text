@@ -57,7 +57,7 @@ enum Commands {
     /// Show full LilyPond score
     #[command(name = "full-lily")]
     FullLily { input: Option<String> },
-    /// Generate syntax tokens for editor integration
+    /// Generate syntax spans for editor integration
     Tokens { input: Option<String> },
     /// Generate character styles for editor highlighting
     #[command(name = "character-styles")]
@@ -128,15 +128,15 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         Some(Commands::Tokens { input }) => {
             let notation = get_input_from_option_or_stdin(input)?;
             let result = pipeline::process_notation(&notation)?;
-            let tokens = music_text::tree_functions::generate_syntax_tokens(&result.parsed_document, &notation);
-            println!("{}", serde_json::to_string_pretty(&tokens)?);
+            let spans = music_text::tree_functions::generate_syntax_spans(&result.parsed_document, &notation);
+            println!("{}", serde_json::to_string_pretty(&spans)?);
             return Ok(());
         }
         Some(Commands::CharacterStyles { input }) => {
             let notation = get_input_from_option_or_stdin(input)?;
             let result = pipeline::process_notation(&notation)?;
             let normalized_elements = music_text::tree_functions::generate_normalized_elements(&result.rhythm_analyzed_document, &notation);
-            let (_tokens, styles) = music_text::tree_functions::generate_tokens_and_styles(&normalized_elements);
+            let (_spans, styles) = music_text::tree_functions::generate_spans_and_styles(&normalized_elements);
             println!("{}", serde_json::to_string_pretty(&styles)?);
             return Ok(());
         }
@@ -440,7 +440,7 @@ impl App {
                         }
                     },
                     OutputFormat::Tokens => {
-                        serde_json::to_string_pretty(&json["syntax_tokens"]).unwrap_or("Tokens not available".to_string())
+                        serde_json::to_string_pretty(&json["syntax_spans"]).unwrap_or("Spans not available".to_string())
                     },
                     OutputFormat::Document => {
                         serde_json::to_string_pretty(&json["parsed_document"]).unwrap_or_else(|e| format!("JSON error: {}", e))

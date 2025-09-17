@@ -1,12 +1,19 @@
-use crate::rhythm::types::{ParsedElement, Degree, Position};
+use crate::rhythm::types::{ParsedElement, Position};
+use crate::models::pitch::Degree;
 use crate::parse::recursive_descent::ParseError;
+use crate::parse::model::NotationSystem;
 use crate::rhythm::analyzer::{Beat, BeatElement, Event, Item};
 use crate::rhythm::converters::BarlineType;
+use crate::models::pitch_systems::{sargam, western, number};
 use fraction::Fraction;
+use std::iter::Peekable;
+use std::str::Chars;
 
 /// Parse content line according to grammar: content_line ends in newline or EOI
 pub fn parse_content_line(input: &str) -> Result<Vec<ParsedElement>, ParseError> {
-    parse_content_line_with_row(input, 1)
+    // For backward compatibility, detect notation system automatically
+    let notation_system = detect_notation_system_from_input(input);
+    parse_content_line_with_system(input, 1, notation_system)
 }
 
 /// Parse content line with beats directly created
@@ -20,8 +27,15 @@ pub fn parse_content_line_with_beats_and_row(input: &str, row: usize) -> Result<
     Ok(create_beats_from_elements(&elements))
 }
 
-/// Parse content line with correct row number
+/// Parse content line with correct row number (backward compatibility)
 pub fn parse_content_line_with_row(input: &str, row: usize) -> Result<Vec<ParsedElement>, ParseError> {
+    // For backward compatibility, detect notation system automatically
+    let notation_system = detect_notation_system_from_input(input);
+    parse_content_line_with_system(input, row, notation_system)
+}
+
+/// Parse content line with notation system specified - main implementation
+pub fn parse_content_line_with_system(input: &str, row: usize, notation_system: NotationSystem) -> Result<Vec<ParsedElement>, ParseError> {
     let mut elements = Vec::new();
     let mut chars = input.chars().peekable();
     let mut position = 0;
@@ -62,142 +76,28 @@ pub fn parse_content_line_with_row(input: &str, row: usize) -> Result<Vec<Parsed
                 });
                 position += 1;
             }
-            '1'..='7' => {
-                let degree = match ch {
-                    '1' => Degree::N1,
-                    '2' => Degree::N2,
-                    '3' => Degree::N3,
-                    '4' => Degree::N4,
-                    '5' => Degree::N5,
-                    '6' => Degree::N6,
-                    '7' => Degree::N7,
-                    _ => unreachable!(),
-                };
-                elements.push(ParsedElement::Note {
-                    degree,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: Position { row: actual_row, col: position },
-                    children: Vec::new(),  // Will be populated by analyzer with octave markers, ornaments
-                    duration: None,
-                    slur: None,
-                    beat_group: None,
-                    in_slur: false,
-                    in_beat_group: false,
-                });
-                position += 1;
-            }
-            'S' | 's' => {
-                elements.push(ParsedElement::Note {
-                    degree: Degree::N1,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: Position { row: actual_row, col: position },
-                    children: Vec::new(),
-                    duration: None,
-                    slur: None,
-                    beat_group: None,
-                    in_slur: false,
-                    in_beat_group: false,
-                });
-                position += 1;
-            }
-            'R' | 'r' => {
-                elements.push(ParsedElement::Note {
-                    degree: Degree::N2,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: Position { row: actual_row, col: position },
-                    children: Vec::new(),
-                    duration: None,
-                    slur: None,
-                    beat_group: None,
-                    in_slur: false,
-                    in_beat_group: false,
-                });
-                position += 1;
-            }
-            'G' | 'g' => {
-                elements.push(ParsedElement::Note {
-                    degree: Degree::N3,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: Position { row: actual_row, col: position },
-                    children: Vec::new(),
-                    duration: None,
-                    slur: None,
-                    beat_group: None,
-                    in_slur: false,
-                    in_beat_group: false,
-                });
-                position += 1;
-            }
-            'M' | 'm' => {
-                elements.push(ParsedElement::Note {
-                    degree: Degree::N4,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: Position { row: actual_row, col: position },
-                    children: Vec::new(),
-                    duration: None,
-                    slur: None,
-                    beat_group: None,
-                    in_slur: false,
-                    in_beat_group: false,
-                });
-                position += 1;
-            }
-            'P' | 'p' => {
-                elements.push(ParsedElement::Note {
-                    degree: Degree::N5,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: Position { row: actual_row, col: position },
-                    children: Vec::new(),
-                    duration: None,
-                    slur: None,
-                    beat_group: None,
-                    in_slur: false,
-                    in_beat_group: false,
-                });
-                position += 1;
-            }
-            'D' | 'd' => {
-                elements.push(ParsedElement::Note {
-                    degree: Degree::N6,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: Position { row: actual_row, col: position },
-                    children: Vec::new(),
-                    duration: None,
-                    slur: None,
-                    beat_group: None,
-                    in_slur: false,
-                    in_beat_group: false,
-                });
-                position += 1;
-            }
-            'N' | 'n' => {
-                elements.push(ParsedElement::Note {
-                    degree: Degree::N7,
-                    octave: 0,
-                    value: ch.to_string(),
-                    position: Position { row: actual_row, col: position },
-                    children: Vec::new(),
-                    duration: None,
-                    slur: None,
-                    beat_group: None,
-                    in_slur: false,
-                    in_beat_group: false,
-                });
-                position += 1;
-            }
             _ => {
-                elements.push(ParsedElement::Unknown {
-                    value: ch.to_string(),
-                    position: Position { row: actual_row, col: position },
-                });
-                position += 1;
+                // Try to parse as a pitch note based on the specified notation system
+                if let Some((note_value, degree, consumed_chars)) = try_parse_pitch_by_system(ch, &mut chars, notation_system) {
+                    elements.push(create_note_element(
+                        note_value,
+                        degree,
+                        Position { row: actual_row, col: position }
+                    ));
+
+                    // Consume the additional characters from the iterator (first char already consumed by main loop)
+                    for _ in 1..consumed_chars {
+                        chars.next();
+                    }
+                    position += consumed_chars;
+                } else {
+                    // Not a pitch note - treat as unknown character
+                    elements.push(ParsedElement::Unknown {
+                        value: ch.to_string(),
+                        position: Position { row: actual_row, col: position },
+                    });
+                    position += 1;
+                }
             }
         }
     }
@@ -360,4 +260,194 @@ fn find_next_lower_power_of_2(n: usize) -> usize {
         power *= 2;
     }
     power.max(2)
+}
+
+/// Factory method for creating note elements - eliminates duplication
+fn create_note_element(value: String, degree: Degree, position: Position) -> ParsedElement {
+    ParsedElement::Note {
+        degree,
+        octave: 0,
+        value,
+        position,
+        children: Vec::new(),
+        duration: None,
+        slur: None,
+        beat_group: None,
+        in_slur: false,
+        in_beat_group: false,
+    }
+}
+
+/// Try to parse a number note with accidentals (1-7 with optional #, b, ##, bb, ♯, ♭, ♯♯, ♭♭)
+/// This function is called when we already know the first character is 1-7
+/// Returns (matched_string, degree, consumed_chars) on success, None on failure
+fn try_parse_number_note(first_char: char, chars: &mut Peekable<Chars>) -> Option<(String, Degree, usize)> {
+    // We already know first_char is 1-7
+    if !('1'..='7').contains(&first_char) {
+        return None;
+    }
+
+    // Collect remaining characters to check for accidentals
+    let lookahead_chars: Vec<char> = chars.clone().collect();
+
+    let base_digit = first_char;
+    let remaining = &lookahead_chars[..];
+
+    // Try productions in order (longest first)
+    // Double accidentals first
+    if remaining.len() >= 2 {
+        if remaining.starts_with(&['#', '#']) {
+            let token = format!("{}##", base_digit);
+            let degree = match base_digit {
+                '1' => Degree::N1ss, '2' => Degree::N2ss, '3' => Degree::N3ss, '4' => Degree::N4ss,
+                '5' => Degree::N5ss, '6' => Degree::N6ss, '7' => Degree::N7ss,
+                _ => return None,
+            };
+            return Some((token, degree, 3));
+        }
+        if remaining.starts_with(&['b', 'b']) {
+            let token = format!("{}bb", base_digit);
+            let degree = match base_digit {
+                '1' => Degree::N1bb, '2' => Degree::N2bb, '3' => Degree::N3bb, '4' => Degree::N4bb,
+                '5' => Degree::N5bb, '6' => Degree::N6bb, '7' => Degree::N7bb,
+                _ => return None,
+            };
+            return Some((token, degree, 3));
+        }
+        // Unicode double accidentals
+        if remaining.starts_with(&['♯', '♯']) {
+            let token = format!("{}♯♯", base_digit);
+            let degree = match base_digit {
+                '1' => Degree::N1ss, '2' => Degree::N2ss, '3' => Degree::N3ss, '4' => Degree::N4ss,
+                '5' => Degree::N5ss, '6' => Degree::N6ss, '7' => Degree::N7ss,
+                _ => return None,
+            };
+            return Some((token, degree, 3)); // Note: Unicode chars are still 1 char each in char iterator
+        }
+        if remaining.starts_with(&['♭', '♭']) {
+            let token = format!("{}♭♭", base_digit);
+            let degree = match base_digit {
+                '1' => Degree::N1bb, '2' => Degree::N2bb, '3' => Degree::N3bb, '4' => Degree::N4bb,
+                '5' => Degree::N5bb, '6' => Degree::N6bb, '7' => Degree::N7bb,
+                _ => return None,
+            };
+            return Some((token, degree, 3));
+        }
+    }
+
+    // Single accidentals
+    if !remaining.is_empty() {
+        if remaining[0] == '#' {
+            let token = format!("{}#", base_digit);
+            let degree = match base_digit {
+                '1' => Degree::N1s, '2' => Degree::N2s, '3' => Degree::N3s, '4' => Degree::N4s,
+                '5' => Degree::N5s, '6' => Degree::N6s, '7' => Degree::N7s,
+                _ => return None,
+            };
+            return Some((token, degree, 2));
+        }
+        if remaining[0] == 'b' {
+            let token = format!("{}b", base_digit);
+            let degree = match base_digit {
+                '1' => Degree::N1b, '2' => Degree::N2b, '3' => Degree::N3b, '4' => Degree::N4b,
+                '5' => Degree::N5b, '6' => Degree::N6b, '7' => Degree::N7b,
+                _ => return None,
+            };
+            return Some((token, degree, 2));
+        }
+        // Unicode single accidentals
+        if remaining[0] == '♯' {
+            let token = format!("{}♯", base_digit);
+            let degree = match base_digit {
+                '1' => Degree::N1s, '2' => Degree::N2s, '3' => Degree::N3s, '4' => Degree::N4s,
+                '5' => Degree::N5s, '6' => Degree::N6s, '7' => Degree::N7s,
+                _ => return None,
+            };
+            return Some((token, degree, 2));
+        }
+        if remaining[0] == '♭' {
+            let token = format!("{}♭", base_digit);
+            let degree = match base_digit {
+                '1' => Degree::N1b, '2' => Degree::N2b, '3' => Degree::N3b, '4' => Degree::N4b,
+                '5' => Degree::N5b, '6' => Degree::N6b, '7' => Degree::N7b,
+                _ => return None,
+            };
+            return Some((token, degree, 2));
+        }
+    }
+
+    // Natural note (no accidentals)
+    let token = base_digit.to_string();
+    let degree = match base_digit {
+        '1' => Degree::N1, '2' => Degree::N2, '3' => Degree::N3, '4' => Degree::N4,
+        '5' => Degree::N5, '6' => Degree::N6, '7' => Degree::N7,
+        _ => return None,
+    };
+    Some((token, degree, 1))
+}
+
+/// Generic function to try parsing any pitch system using its symbol list and lookup function
+/// This leverages the existing pitch system modules (sargam, western, etc.)
+fn try_parse_pitch_system<F, L>(
+    first_char: char,
+    chars: &mut Peekable<Chars>,
+    get_symbols: F,
+    lookup: L,
+) -> Option<(String, Degree, usize)>
+where
+    F: Fn() -> Vec<String>,
+    L: Fn(&str) -> Option<Degree>,
+{
+    let symbols = get_symbols();
+
+    // Collect lookahead characters for matching
+    let mut lookahead: Vec<char> = vec![first_char];
+    lookahead.extend(chars.clone());
+    let lookahead_str: String = lookahead.iter().collect();
+
+    // Try symbols in order (they should already be sorted longest first)
+    for symbol in &symbols {
+        if lookahead_str.starts_with(symbol) {
+            if let Some(degree) = lookup(symbol) {
+                return Some((symbol.clone(), degree, symbol.chars().count()));
+            }
+        }
+    }
+
+    None
+}
+
+/// Detect notation system from input string (for backward compatibility)
+fn detect_notation_system_from_input(input: &str) -> NotationSystem {
+    if input.chars().any(|c| matches!(c, 'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N' | 's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n')) {
+        NotationSystem::Sargam
+    } else if input.chars().any(|c| matches!(c, '1'..='7')) {
+        NotationSystem::Number
+    } else {
+        NotationSystem::Western
+    }
+}
+
+/// Try to parse a pitch note using the specified notation system
+fn try_parse_pitch_by_system(
+    first_char: char,
+    chars: &mut Peekable<Chars>,
+    notation_system: NotationSystem,
+) -> Option<(String, Degree, usize)> {
+    match notation_system {
+        NotationSystem::Number => {
+            if ('1'..='7').contains(&first_char) {
+                try_parse_number_note(first_char, chars)
+            } else {
+                None
+            }
+        }
+        NotationSystem::Sargam => {
+            try_parse_pitch_system(first_char, chars, sargam::get_all_symbols, sargam::lookup)
+        }
+        NotationSystem::Western => {
+            try_parse_pitch_system(first_char, chars, western::get_all_symbols, western::lookup)
+        }
+        _ => None, // Other systems not implemented yet
+    }
 }

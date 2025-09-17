@@ -182,8 +182,10 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 lines.push(crate::parse::model::StaveLine::Text(text_line));
             }
         } else if is_content_line(&current_line.trim_end_matches('\n')) {
-            // Parse the content line using dedicated parser
-            let content_line_elements = crate::parse::content_line_parser::parse_content_line_with_row(&current_line, *line)?;
+            // Detect notation system from the content line
+            let notation_system = detect_notation_system(&current_line);
+            // Parse the content line using dedicated parser with notation system
+            let content_line_elements = crate::parse::content_line_parser::parse_content_line_with_system(&current_line, *line, notation_system)?;
             lines.push(crate::parse::model::StaveLine::Content(content_line_elements));
             break; // Exit after finding content_line
         } else {
