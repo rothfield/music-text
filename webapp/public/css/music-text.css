@@ -135,10 +135,14 @@
 }
 
 /* Other token types can be styled here */
-.cm-music-note {
-    color: #22863a;
-    font-weight: bold;
-    position: relative;
+.cm-music-note{
+  position: relative;
+  display: inline-block;
+  width: 1ch;           /* preserves column grid */
+  text-align: center;   /* centers the glyph in the cell */
+  line-height: 1;
+  color: #22863a;
+  font-weight: bold;
 }
 
 /* OLD Beat Loop Arc Styling - Replaced by ultra-generalized approach below */
@@ -201,18 +205,18 @@
     pointer-events: none !important;
 }
 
-/* Division number display (small italics above middle notes) */
-.cm-music-note[style*="--show-divisions"]::before {
-    content: var(--show-divisions) !important;
-    position: absolute !important;
-    top: -1.2em !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-    font-size: 0.7em !important;
-    font-style: italic !important;
-    color: #666 !important;
-    z-index: 10 !important;
-    pointer-events: none !important;
+/* tuplet number above the note */
+.cm-music-note::before,
+.cm-music-unknown::before{
+  content: var(--tuplet, "");
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -0.9em;
+  font-size: 0.7em;
+  line-height: 1;
+  opacity: .8;
+  pointer-events: none;
 }
 
 .cm-music-barline {

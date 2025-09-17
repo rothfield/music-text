@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::HashMap;
 use crate::parse::{Document, UpperElement, LowerElement};
 use crate::parse::model::{DocumentElement, StaveLine};
 use crate::rhythm::types::{ParsedElement, ParsedChild, Position};
@@ -75,7 +76,8 @@ pub struct CharacterStyle {
 #[derive(Debug, Serialize, Clone)]
 pub struct DocumentNode {
     pub tag: String,        // "note", "dash", "barline", etc.
-    pub pos: usize,         // Character position
+    pub pos: usize,         // Character position (from row/col conversion)
+    pub char_index: usize,  // Zero-based index into whole document
     pub length: usize,      // Character length
     pub content: String,    // Original text content
     pub classes: Vec<String>, // Semantic classes like "beat-loop-4"
@@ -121,16 +123,17 @@ pub fn generate_normalized_elements(rhythm_doc: &crate::parse::Document, origina
                                 crate::rhythm::Event::Unknown { .. } => "unknown",
                             }.to_string();
 
-                            // Get absolute position from source mapping
-                            if let Some(absolute_pos) = position_to_absolute_offset(&element.position, original_input) {
-                                elements.push(DocumentNode {
-                                    tag,
-                                    pos: absolute_pos,
-                                    length: element.value.len(),
-                                    content: element.value.clone(),
-                                    classes,
-                                });
-                            }
+                            // Use char_index directly from the position
+                            let absolute_pos = position_to_absolute_offset(&element.position, original_input).unwrap_or(element.position.char_index);
+
+                            elements.push(DocumentNode {
+                                tag,
+                                pos: absolute_pos,
+                                char_index: element.position.char_index,
+                                length: element.value.len(),
+                                content: element.value.clone(),
+                                classes,
+                            });
                         }
                     }
                 }
@@ -156,7 +159,132 @@ pub fn nodes_to_spans(nodes: &[DocumentNode]) -> Vec<Span> {
         .collect()
 }
 
-/// Convert document nodes to character styles for web display
+/// Generate spans and styles in a single pass with consistent positioning
+pub fn nodes_to_spans_and_styles(nodes: &[DocumentNode]) -> (Vec<Span>, Vec<CharacterStyle>) {
+    let mut spans = Vec::new();
+    let mut styles = Vec::new();
+
+    // First pass: create base spans and styles with consistent positioning
+    for node in nodes.iter() {
+        // Create span (skip whitespace for spans)
+        if node.tag != "whitespace" {
+            spans.push(Span {
+                r#type: node.tag.clone(),
+                start: node.pos,
+                end: node.pos + node.length,
+                content: node.content.clone(),
+            });
+        }
+
+        // Create base style for all nodes
+        let mut css_styles = HashMap::new();
+        let mut css_classes = vec![format!("cm-music-{}", node.tag)];
+
+        // Add classes from the node
+        css_classes.extend(node.classes.iter().cloned());
+
+        styles.push(CharacterStyle {
+            pos: node.pos,
+            length: node.length,
+            classes: css_classes,
+            styles: css_styles,
+        });
+    }
+
+    // Second pass: add beat loop styling
+    for (i, node) in nodes.iter().enumerate() {
+        if node.tag == "whitespace" {
+            continue;
+        }
+
+        // Check if this is the first element of a beat group
+        let is_beat_loop_first = node.classes.iter().any(|c| c.starts_with("beat-loop-"));
+
+        if is_beat_loop_first {
+            // Extract loop size and add CSS styles
+            if let Some(beat_loop_class) = node.classes.iter().find(|c| c.starts_with("beat-loop-")) {
+                if let Some(captures) = regex::Regex::new(r"beat-loop-(\d+)").unwrap().captures(beat_loop_class) {
+                    let loop_size = &captures[1];
+                    if let Some(style) = styles.iter_mut().find(|s| s.pos == node.pos) {
+                        style.styles.insert("--lower-loop-char-count".to_string(), loop_size.to_string());
+                        style.styles.insert("--show-divisions".to_string(), loop_size.to_string());
+                    }
+                }
+            }
+        }
+
+        // Add tuplet labels to middle elements
+        let beat_loop_size: Option<usize> = if node.classes.iter().any(|c| c.starts_with("beat-loop-")) {
+            // Current element starts the group
+            node.classes.iter()
+                .find(|c| c.starts_with("beat-loop-"))
+                .and_then(|c| regex::Regex::new(r"beat-loop-(\d+)").unwrap().captures(c))
+                .and_then(|captures| captures[1].parse().ok())
+        } else {
+            // Find previous element with beat-loop class
+            let mut prev_loop_size = None;
+            for j in (0..i).rev() {
+                if nodes[j].tag == "whitespace" {
+                    continue;
+                }
+                if let Some(beat_loop_class) = nodes[j].classes.iter().find(|c| c.starts_with("beat-loop-")) {
+                    if let Some(captures) = regex::Regex::new(r"beat-loop-(\d+)").unwrap().captures(beat_loop_class) {
+                        prev_loop_size = captures[1].parse().ok();
+                        break;
+                    }
+                }
+                break;
+            }
+            prev_loop_size
+        };
+
+        if let Some(loop_size) = beat_loop_size {
+            // Find beat group start
+            let beat_group_start = if node.classes.iter().any(|c| c.starts_with("beat-loop-")) {
+                i
+            } else {
+                let mut start = i;
+                for j in (0..i).rev() {
+                    if nodes[j].tag == "whitespace" {
+                        continue;
+                    }
+                    if nodes[j].classes.iter().any(|c| c.starts_with("beat-loop-")) {
+                        start = j;
+                        break;
+                    }
+                    break;
+                }
+                start
+            };
+
+            // Count position within beat group
+            let mut musical_count = 0;
+            for j in beat_group_start..=i {
+                if j < nodes.len() && nodes[j].tag != "whitespace" {
+                    musical_count += 1;
+                }
+            }
+
+            // Add tuplet to middle element
+            let should_show_tuplet = (loop_size % 2 == 1 && loop_size >= 3) || (loop_size > 9);
+            let is_middle = if loop_size % 2 == 1 {
+                musical_count == (loop_size + 1) / 2
+            } else {
+                musical_count == loop_size / 2
+            };
+
+            if is_middle && should_show_tuplet {
+                if let Some(style) = styles.iter_mut().find(|s| s.pos == node.pos) {
+                    style.styles.insert("--tuplet".to_string(), format!("'{}'", loop_size));
+                }
+            }
+        }
+    }
+
+    (spans, styles)
+}
+
+/// Convert document nodes to character styles for web display (DEPRECATED)
 pub fn nodes_to_styles(nodes: &[DocumentNode]) -> Vec<CharacterStyle> {
     let mut styles: Vec<CharacterStyle> = Vec::new();
 
@@ -179,6 +307,7 @@ pub fn nodes_to_styles(nodes: &[DocumentNode]) -> Vec<CharacterStyle> {
                 if let Some(captures) = regex::Regex::new(r"beat-loop-(\d+)").unwrap().captures(beat_loop_class) {
                     let loop_size = &captures[1];
                     css_styles.insert("--lower-loop-char-count".to_string(), loop_size.to_string());
+                    css_styles.insert("--show-divisions".to_string(), loop_size.to_string());
 
                     // Find middle element for --show-divisions
                     let mut beat_elements = vec![i];
@@ -223,26 +352,54 @@ pub fn nodes_to_styles(nodes: &[DocumentNode]) -> Vec<CharacterStyle> {
             continue;
         }
 
-        // Check if previous element has beat-loop class
-        let mut beat_loop_size = None;
-        for j in (0..i).rev() {
-            if nodes[j].tag == "whitespace" {
-                continue;
+        // Check if current or previous element has beat-loop class
+        let mut beat_loop_size: Option<usize> = None;
+
+        // First check if current element has beat-loop class
+        if let Some(beat_loop_class) = node.classes.iter().find(|c| c.starts_with("beat-loop-")) {
+            if let Some(captures) = regex::Regex::new(r"beat-loop-(\d+)").unwrap().captures(beat_loop_class) {
+                beat_loop_size = captures[1].parse().ok();
             }
-            if let Some(beat_loop_class) = nodes[j].classes.iter().find(|c| c.starts_with("beat-loop-")) {
-                if let Some(captures) = regex::Regex::new(r"beat-loop-(\d+)").unwrap().captures(beat_loop_class) {
-                    beat_loop_size = captures[1].parse().ok();
+        } else {
+            // If not, check previous element
+            for j in (0..i).rev() {
+                if nodes[j].tag == "whitespace" {
+                    continue;
+                }
+                if let Some(beat_loop_class) = nodes[j].classes.iter().find(|c| c.starts_with("beat-loop-")) {
+                    if let Some(captures) = regex::Regex::new(r"beat-loop-(\d+)").unwrap().captures(beat_loop_class) {
+                        beat_loop_size = captures[1].parse().ok();
+                        break;
+                    }
+                }
+                break; // Only check immediate previous musical element
+            }
+        }
+
+        // If we have a beat loop, determine position within the group
+        if let Some(loop_size) = beat_loop_size {
+            // Find the start of the current beat group
+            let mut beat_group_start = i;
+            if node.classes.iter().any(|c| c.starts_with("beat-loop-")) {
+                // Current element starts the group
+                beat_group_start = i;
+            } else {
+                // Find the previous element with beat-loop class
+                for j in (0..i).rev() {
+                    if nodes[j].tag == "whitespace" {
+                        continue;
+                    }
+                    if nodes[j].classes.iter().any(|c| c.starts_with("beat-loop-")) {
+                        beat_group_start = j;
+                        break;
+                    }
                     break;
                 }
             }
-            break; // Only check immediate previous musical element
-        }
 
-        // If this is not the first element and we have a beat loop, check if this is middle
-        if let Some(loop_size) = beat_loop_size {
-            // Simple heuristic: if this is the 2nd or later element in a 3+ element group
+            // Count position within the beat group
             let mut musical_count = 0;
-            for j in (i.saturating_sub(loop_size))..=i {
+            for j in beat_group_start..=i {
                 if j < nodes.len() && nodes[j].tag != "whitespace" {
                     musical_count += 1;
                 }
@@ -253,10 +410,17 @@ pub fn nodes_to_styles(nodes: &[DocumentNode]) -> Vec<CharacterStyle> {
             // - Numbers above 9: 10, 11, 12, 13+
             let should_show_divisions = (loop_size % 2 == 1 && loop_size >= 3) || (loop_size > 9);
 
-            if musical_count > 1 && musical_count < loop_size && should_show_divisions {
-                // This is a middle element, add --show-divisions with the division number
+            // Add tuplet to middle element (for odd-sized groups)
+            let is_middle = if loop_size % 2 == 1 {
+                musical_count == (loop_size + 1) / 2
+            } else {
+                musical_count == loop_size / 2
+            };
+
+            if is_middle && should_show_divisions {
+                // This is the middle element, add --tuplet with the division number
                 if let Some(style) = styles.iter_mut().find(|s| s.pos == node.pos) {
-                    style.styles.insert("--show-divisions".to_string(), loop_size.to_string());
+                    style.styles.insert("--tuplet".to_string(), format!("'{}'", loop_size));
                 }
             }
         }
@@ -265,10 +429,10 @@ pub fn nodes_to_styles(nodes: &[DocumentNode]) -> Vec<CharacterStyle> {
     styles
 }
 
-/// DEPRECATED: Use nodes_to_spans() and nodes_to_styles() instead
+/// DEPRECATED: Use nodes_to_spans_and_styles() instead
 /// Generate spans and styles from document nodes (legacy function)
 pub fn generate_spans_and_styles(nodes: &[DocumentNode]) -> (Vec<Span>, Vec<CharacterStyle>) {
-    (nodes_to_spans(nodes), nodes_to_styles(nodes))
+    nodes_to_spans_and_styles(nodes)
 }
 
 /// Convert syntax spans to token-based styles for client-side application

@@ -9,6 +9,7 @@ pub use crate::models::pitch::Degree;
 pub struct Position {
     pub row: usize,
     pub col: usize,
+    pub char_index: usize,  // Zero-based character index into whole document
 }
 
 /// Types of musical ornaments that can be attached to notes
