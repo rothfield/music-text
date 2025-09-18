@@ -46,7 +46,24 @@ export class EditorManager {
         // Add textarea-like interface methods to the container for compatibility
         this.addCompatibilityMethods();
 
-        console.log('✅ Editor initialized');
+        // Add Sargam notation key handlers
+        this.editor.on('keydown', function(cm, event) {
+            // Handle Sargam notation keys that should be auto-capitalized
+            if ((event.key === 's' || event.key === 'p') && !event.ctrlKey && !event.altKey && !event.metaKey) {
+                event.preventDefault();
+                const char = event.key;
+                const upperChar = char.toUpperCase();
+
+                if (EditorManager.shouldConvertToSargamUppercase(cm)) {
+                    cm.replaceSelection(upperChar);
+                } else {
+                    cm.replaceSelection(char);
+                }
+                return;
+            }
+        });
+
+        console.log('✅ Editor initialized with Sargam key handlers');
         return this.editor;
     }
 
@@ -464,6 +481,84 @@ export class EditorManager {
         const pitches = text.match(/[SRGMPDNsrgmpdnCDEFGABcdefgab]/g) || [];
         const dashes = text.match(/-/g) || [];
         return (pitches.length + dashes.length) > 1;
+    }
+
+    // Static method to determine if s/p should be converted to S/P for Sargam notation
+    static shouldConvertToSargamUppercase(cm) {
+        const cursor = cm.getCursor();
+        const lineText = cm.getLine(cursor.line);
+
+        console.log('🔍 Sargam Detection Debug:');
+        console.log('  Line text:', JSON.stringify(lineText));
+        console.log('  Cursor position:', cursor);
+
+        // Check if we're in a content line (contains music notation)
+        const isContent = EditorManager.isContentLine(lineText);
+        console.log('  Is content line:', isContent);
+        if (!isContent) {
+            return false;
+        }
+
+        // Detect notation system from existing content in the line
+        const notationSystem = EditorManager.detectNotationSystem(lineText);
+        console.log('  Detected notation system:', notationSystem);
+        const shouldConvert = notationSystem === 'sargam';
+        console.log('  Should convert to uppercase:', shouldConvert);
+
+        return shouldConvert;
+    }
+
+    // Detect if a line is a content line (contains music notation)
+    static isContentLine(lineText) {
+        // Content lines typically contain:
+        // - Barlines (|)
+        // - Musical notes/pitches
+        // - Dashes (-)
+        // - Breath marks (')
+        // Exclude directive lines (key: value format)
+        if (lineText.includes(':') && !lineText.includes('|')) {
+            return false; // Likely a directive line
+        }
+
+        // Look for musical content indicators
+        const musicalIndicators = /[|\-'SRGMPDNsrgmpdnCDEFGAB1-7]/;
+        return musicalIndicators.test(lineText);
+    }
+
+    // Detect notation system from line content
+    static detectNotationSystem(lineText) {
+        // Remove whitespace and barlines for analysis
+        const content = lineText.replace(/[|\s\-']/g, '');
+        console.log('    Cleaned content for analysis:', JSON.stringify(content));
+
+        if (content.length === 0) {
+            console.log('    Empty content - returning unknown');
+            return 'unknown';
+        }
+
+        // Count occurrences of different notation systems
+        const sargamChars = content.match(/[SRGMPDNsrgmpdn]/g) || [];
+        const westernChars = content.match(/[CDEFGAB]/g) || [];
+        const numberChars = content.match(/[1-7]/g) || [];
+
+        console.log('    Sargam chars found:', sargamChars, 'count:', sargamChars.length);
+        console.log('    Western chars found:', westernChars, 'count:', westernChars.length);
+        console.log('    Number chars found:', numberChars, 'count:', numberChars.length);
+
+        // Determine dominant system
+        if (sargamChars.length > westernChars.length && sargamChars.length > numberChars.length) {
+            console.log('    Detected: sargam (dominant)');
+            return 'sargam';
+        } else if (westernChars.length > numberChars.length) {
+            console.log('    Detected: western (dominant)');
+            return 'western';
+        } else if (numberChars.length > 0) {
+            console.log('    Detected: number (has numbers)');
+            return 'number';
+        }
+
+        console.log('    Detected: unknown (no clear system)');
+        return 'unknown';
     }
 
     // Toggle slur functionality for selected text

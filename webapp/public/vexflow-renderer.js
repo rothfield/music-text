@@ -125,7 +125,7 @@ async function renderVexFlowNotation(vexflowData, containerId = 'vexflow-output'
             // Title centered
             if (vexflowData.title) {
                 context.setFont('serif', 18, 'bold');
-                context.setFillStyle('#333');
+                context.setFillStyle('darkslategray');
                 const titleWidth = context.measureText(vexflowData.title).width || vexflowData.title.length * 10;
                 const titleX = (canvasWidth / 2) - (titleWidth / 2);
                 context.fillText(vexflowData.title, titleX, currentY);
@@ -134,7 +134,7 @@ async function renderVexFlowNotation(vexflowData, containerId = 'vexflow-output'
             // Author on same line, right-aligned
             if (vexflowData.author) {
                 context.setFont('serif', 14, 'normal');
-                context.setFillStyle('#666');
+                context.setFillStyle('dimgray');
                 const authorWidth = context.measureText(vexflowData.author).width || vexflowData.author.length * 8;
                 const rightMargin = 20;
                 const authorX = canvasWidth - authorWidth - rightMargin;
@@ -641,7 +641,7 @@ function drawSyllablesRelativeToStave(context, stave, notes) {
             context.save();
             context.font = 'italic 0.8em Arial';  // Like old code
             context.textAlign = 'center';
-            context.fillStyle = '#000';
+            context.fillStyle = 'black';
             context.fillText(note._syllable, noteX, syllableY);
             context.restore();
         }

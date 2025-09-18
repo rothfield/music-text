@@ -38,9 +38,8 @@
             <div class="tab" onclick="switchTab('svg', this)">LilyPond SVG</div>
             <div class="tab" onclick="switchTab('lilypond', this)">LilyPond Src</div>
             <div class="tab" onclick="switchTab('document', this)">Document</div>
-            <div class="tab" onclick="switchTab('analyzer', this)">Analyzer</div>
-            <div class="tab" onclick="switchTab('spans', this)">Syntax Spans</div>
-            <div class="tab" onclick="switchTab('styles', this)">Character Styles</div>
+            <div class="tab" onclick="switchTab('spans', this)">Spans</div>
+            <div class="tab" onclick="switchTab('styles', this)">Span Classes</div>
             <div class="tab" onclick="switchTab('source', this)">Source</div>
         </div>
         
@@ -60,16 +59,13 @@
             <div id="document-output" class="pipeline-section">Enter music notation to see parsed document output</div>
         </div>
         
-        <div id="analyzer-tab" class="tab-content">
-            <div id="analyzer-output" class="pipeline-section">Enter music notation to see analyzer output</div>
-        </div>
 
         <div id="spans-tab" class="tab-content">
-            <div id="spans-output" class="pipeline-section">Enter music notation to see syntax spans</div>
+            <div id="spans-output" class="pipeline-section">Enter music notation to see spans</div>
         </div>
 
         <div id="styles-tab" class="tab-content">
-            <div id="styles-output" class="pipeline-section">Enter music notation to see character styles</div>
+            <div id="styles-output" class="pipeline-section">Enter music notation to see span classes</div>
         </div>
 
         <div id="source-tab" class="tab-content">

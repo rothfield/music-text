@@ -88,7 +88,6 @@ export const UI = {
         document.getElementById('vexflow-output').innerHTML = '';
         document.getElementById('svg-output').innerHTML = 'Click "LilyPond" to generate SVG';
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
-        document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
         document.getElementById('spans-output').textContent = 'Enter music notation to see syntax spans';
         document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';
         document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
@@ -99,36 +98,16 @@ export const UI = {
     updatePipelineData(result) {
         if (result.success) {
             // Document Output - structured document representation
-            const documentStructure = {
-                source: result.parsed_document?.source || null,
-                directives: result.parsed_document?.directives || [],
-                elements: result.parsed_document?.elements?.map(element => {
-                    if (element.Stave) {
-                        return {
-                            type: "Stave",
-                            lines: element.Stave.lines || [],
-                            rhythm_items: element.Stave.rhythm_items || [],
-                            notation_system: element.Stave.notation_system || null,
-                            source: element.Stave.source || null
-                        };
-                    }
-                    return element;
-                }) || []
-            };
-            document.getElementById('document-output').textContent = 
-                JSON.stringify(documentStructure, null, 2);
+            document.getElementById('document-output').textContent =
+                JSON.stringify(result.document || {}, null, 2);
             
             
             
             
-            // Analyzer Output - rhythm items from analyzer
-            document.getElementById('analyzer-output').textContent =
-                JSON.stringify(result.rhythm_items || [], null, 2);
         } else {
             // Show error in all sections
             const errorMsg = `Parse error: ${result.error}`;
             document.getElementById('document-output').textContent = errorMsg;
-            document.getElementById('analyzer-output').textContent = errorMsg;
         }
     },
 
@@ -192,39 +171,6 @@ export const UI = {
         }
     },
 
-    // Update roundtrip output
-    updateRoundtripOutput(result) {
-        const roundtripOutput = document.getElementById('roundtrip-output');
-        
-        if (result.success && result.roundtrip) {
-            const roundtrip = result.roundtrip;
-            
-            if (roundtrip.works) {
-                roundtripOutput.innerHTML = `
-                    <div style="color: green; font-weight: bold;">✅ ROUNDTRIP SUCCESS</div>
-                    <div>Original length: ${roundtrip.original_length} characters</div>
-                    <div>Reconstructed length: ${roundtrip.reconstructed_length} characters</div>
-                    <div style="margin-top: 1em;"><strong>Reconstructed text:</strong></div>
-                    <pre style="background: #f0f0f0; padding: 8px; border-radius: 4px;">${roundtrip.reconstructed_text}</pre>
-                `;
-            } else {
-                roundtripOutput.innerHTML = `
-                    <div style="color: red; font-weight: bold;">❌ ROUNDTRIP FAILURE</div>
-                    <div>Original length: ${roundtrip.original_length} characters</div>
-                    <div>Reconstructed length: ${roundtrip.reconstructed_length} characters</div>
-                    <div style="margin-top: 1em;"><strong>Where it failed:</strong></div>
-                    <div style="color: red;">${roundtrip.where_it_failed || 'Unknown failure'}</div>
-                    <div style="margin-top: 1em;"><strong>Reconstructed text:</strong></div>
-                    <pre style="background: #ffe6e6; padding: 8px; border-radius: 4px;">${roundtrip.reconstructed_text}</pre>
-                `;
-            }
-        } else if (result.success) {
-            roundtripOutput.textContent = 'Parse successful but no roundtrip data available';
-        } else {
-            roundtripOutput.textContent = `Parse error: ${result.error}`;
-        }
-    },
-
 
     // Update syntax spans output
     updateTokensOutput(result) {
@@ -279,24 +225,9 @@ export const UI = {
         document.getElementById('vexflow-output').innerHTML = '';
         document.getElementById('lilypond-output').textContent = 'Enter music notation above to see LilyPond source';
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
-        document.getElementById('analyzer-output').textContent = 'Enter music notation to see analyzer output';
         document.getElementById('spans-output').textContent = 'Enter music notation to see syntax spans';
         document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';
         document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
     },
 
-    // Music notation symbol conversion
-    convertMusicNotation(text) {
-        let convertedValue = text;
-        
-        // Convert # to ♯ when it follows a note (number, letter, or sargam)
-        convertedValue = convertedValue.replace(/([1-7A-GSRGMPDNsrgmpdnrbdb])#/g, '$1♯');
-        convertedValue = convertedValue.replace(/([1-7A-GSRGMPDNsrgmpdnrbdb])##/g, '$1♯♯');
-        
-        // Convert b to ♭ when it follows a note (number, letter, or sargam) 
-        convertedValue = convertedValue.replace(/([1-7A-GSRGMPDNsrgmpdnrbdb])b/g, '$1♭');
-        convertedValue = convertedValue.replace(/([1-7A-GSRGMPDNsrgmpdnrbdb])bb/g, '$1♭♭');
-        
-        return convertedValue;
-    }
 };

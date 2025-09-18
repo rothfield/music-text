@@ -73,24 +73,7 @@ class MusicTextApp {
     handleInput(event) {
         
         const textarea = event.target;
-        const originalValue = textarea.value;
-        
-        // Convert music notation symbols
-        const convertedValue = UI.convertMusicNotation(originalValue);
-        
-        if (convertedValue !== originalValue) {
-            // Save cursor position before changing text
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            
-            // Update text with converted symbols
-            textarea.value = convertedValue;
-            
-            // Restore cursor position (accounting for potential symbol changes)
-            const cursorOffset = convertedValue.length - originalValue.length;
-            textarea.setSelectionRange(start + cursorOffset, end + cursorOffset);
-        }
-        
+
         // Save input text
         LocalStorage.saveInputText(textarea.value);
         

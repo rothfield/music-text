@@ -8,14 +8,14 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     margin: 0;
     padding: 8px;
-    background: #fafafa;
+    background: ghostwhite;
 }
 
 .app {
     max-width: 1200px;
     margin: 0 auto;
     background: white;
-    border: 1px solid #e1e5e9;
+    border: 1px solid lightgray;
     border-radius: 6px;
     overflow: hidden;
 }
@@ -26,7 +26,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    background: #f6f8fa;
+    background: whitesmoke;
     border-bottom: 1px solid #e1e5e9;
     font-size: 13px;
 }
@@ -39,7 +39,7 @@ body {
 
 /* Buttons */
 button {
-    background: #0969da;
+    background: royalblue;
     color: white;
     border: none;
     padding: 4px 12px;
@@ -50,16 +50,16 @@ button {
 }
 
 button:hover { 
-    background: #0550ae; 
+    background: mediumblue; 
 }
 
 button.secondary {
-    background: #6f7681;
+    background: dimgray;
     color: white;
 }
 
 button.secondary:hover { 
-    background: #656d76; 
+    background: darkslategray; 
 }
 
 /* Status */
@@ -69,15 +69,15 @@ button.secondary:hover {
 }
 
 .status.success { 
-    color: #1a7f37; 
+    color: forestgreen; 
 }
 
 .status.error { 
-    color: #cf222e; 
+    color: crimson; 
 }
 
 .status.loading { 
-    color: #656d76; 
+    color: dimgray; 
 }
 
 /* Textarea and CodeMirror */
@@ -94,7 +94,7 @@ textarea {
 }
 
 textarea:focus {
-    border-bottom-color: #0969da;
+    border-bottom-color: royalblue;
 }
 
 /* CodeMirror Editor Styles */
@@ -113,7 +113,7 @@ textarea:focus {
 }
 
 .CodeMirror-focused {
-    border-bottom-color: #0969da;
+    border-bottom-color: royalblue;
 }
 
 .CodeMirror-scroll {
@@ -122,7 +122,7 @@ textarea:focus {
 
 /* Content line highlighting with doremi font */
 .CodeMirror-linebackground.content-line {
-    background: #e3f2fd !important;
+    background: aliceblue !important;
     padding-left: 0.5em;
 }
 
@@ -148,7 +148,7 @@ textarea:focus {
 
 /* Lyrics styling from doremi */
 .CodeMirror-linebackground.lyrics-line {
-    background: #fffef5 !important;
+    background: cornsilk !important;
     padding-left: 0.5em;
 }
 
@@ -156,13 +156,13 @@ textarea:focus {
     font-family: serif !important;
     font-size: 1.4em !important;
     font-style: italic;
-    color: #666;
+    color: dimgray;
     line-height: 1.6em !important;
 }
 
 /* Directive lines (Title, Composer, etc) */
 .CodeMirror-linebackground.directive-line {
-    background: #f1f8e9 !important;
+    background: honeydew !important;
     padding-left: 0.5em;
 }
 
@@ -232,31 +232,31 @@ textarea:focus {
 
 .font-selector select {
     background: white;
-    border: 1px solid #e1e5e9;
+    border: 1px solid lightgray;
     border-radius: 4px;
     padding: 4px 8px;
     font-size: 12px;
     font-weight: 500;
-    color: #24292f;
+    color: darkslategray;
     cursor: pointer;
     outline: none;
 }
 
 .font-selector select:focus {
-    border-color: #0969da;
-    box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.2);
+    border-color: royalblue;
+    box-shadow: 0 0 0 2px lightsteelblue;
 }
 
 .font-selector label {
     font-size: 12px;
-    color: #656d76;
+    color: dimgray;
     margin-right: 4px;
 }
 
 /* Tabs */
 .tabs {
     display: flex;
-    background: #f6f8fa;
+    background: whitesmoke;
     border-bottom: 1px solid #e1e5e9;
 }
 
@@ -266,12 +266,12 @@ textarea:focus {
     font-weight: 500;
     cursor: pointer;
     border-bottom: 2px solid transparent;
-    color: #656d76;
+    color: dimgray;
 }
 
 .tab.active {
-    color: #24292f;
-    border-bottom-color: #fd8c73;
+    color: darkslategray;
+    border-bottom-color: lightsalmon;
 }
 
 .tab-content {
@@ -294,7 +294,7 @@ textarea:focus {
     white-space: pre-wrap;
     font-family: 'SF Mono', Monaco, Consolas, monospace;
     font-size: 12px;
-    color: #24292f;
+    color: darkslategray;
     overflow-x: auto;
     line-height: 1.4;
 }
@@ -303,12 +303,12 @@ textarea:focus {
     white-space: pre-wrap;
     font-family: 'SF Mono', Monaco, Consolas, monospace;
     font-size: 12px;
-    color: #24292f;
+    color: darkslategray;
     overflow-x: auto;
     line-height: 1.4;
-    background: #f6f8fa;
+    background: whitesmoke;
     padding: 12px;
-    border: 1px solid #e1e5e9;
+    border: 1px solid lightgray;
     border-radius: 6px;
 }
 
@@ -320,12 +320,12 @@ textarea:focus {
     white-space: pre-wrap;
     font-family: 'SF Mono', Monaco, Consolas, monospace;
     font-size: 12px;
-    color: #24292f;
+    color: darkslategray;
     overflow-x: auto;
     line-height: 1.4;
-    background: #f6f8fa;
+    background: whitesmoke;
     padding: 12px;
-    border: 1px solid #e1e5e9;
+    border: 1px solid lightgray;
     border-radius: 6px;
     margin-bottom: 16px;
 }
@@ -340,32 +340,32 @@ textarea:focus {
 
 /* Notes: green background */
 .parsed-note {
-    background-color: #d4ff87;
-    color: #1a5a1a;
+    background-color: greenyellow;
+    color: darkgreen;
 }
 
 /* Dashes: red background */
 .parsed-dash {
-    background-color: #ffb3ba;
-    color: #8b0000;
+    background-color: lightpink;
+    color: darkred;
 }
 
 /* Lyrics: yellow background */
 .parsed-lyrics {
-    background-color: #fff87d;
-    color: #b8860b;
+    background-color: khaki;
+    color: darkgoldenrod;
 }
 
 /* Barlines: bold purple */
 .parsed-barline {
-    background-color: #e6ccff;
-    color: #4b0082;
+    background-color: lavender;
+    color: indigo;
     font-weight: bold;
 }
 
 /* Unparsed/unconsumed: blinking red */
 .unparsed {
-    background-color: #ff6b6b;
+    background-color: tomato;
     color: white;
     animation: blink 1.5s linear infinite;
     font-weight: bold;
@@ -378,62 +378,60 @@ textarea:focus {
 
 /* Rests: gray background */
 .parsed-rest {
-    background-color: #e0e0e0;
-    color: #666;
+    background-color: gainsboro;
+    color: dimgray;
 }
 
 /* Whitespace: subtle blue background */
 .parsed-whitespace {
-    background-color: #f0f8ff;
-    color: #4682b4;
+    background-color: aliceblue;
+    color: steelblue;
 }
 
 /* Breath marks: light cyan */
 .parsed-breath {
-    background-color: #e0ffff;
-    color: #008b8b;
+    background-color: lightcyan;
+    color: darkcyan;
 }
 
 /* Unknown elements: orange background */
 .parsed-unknown {
-    background-color: #ffcc99;
-    color: #cc4400;
+    background-color: peachpuff;
+    color: chocolate;
 }
 
 /* CodeMirror XML Syntax Highlighting */
 .CodeMirror .cm-tag { 
-    color: #22863a !important; 
+    color: forestgreen !important; 
     font-weight: bold; 
 }
 .CodeMirror .cm-attribute { 
-    color: #6f42c1 !important; 
+    color: mediumorchid !important; 
 }
 .CodeMirror .cm-string { 
-    color: #032f62 !important; 
+    color: midnightblue !important; 
 }
 .CodeMirror .cm-atom { 
-    color: #e36209 !important; 
+    color: chocolate !important; 
 }
 .CodeMirror .cm-bracket { 
-    color: #d73a49 !important; 
+    color: crimson !important; 
     font-weight: bold; 
 }
 
 /* CodeMirror Music Token Syntax Highlighting */
-.CodeMirror .cm-music-note { 
-    color: #d63384 !important; 
-    font-weight: bold; 
-    background: #ffff00 !important;
+.CodeMirror .cm-music-note,
+.CodeMirror .cm-music-dash {
+    color: mediumvioletred !important;
+    font-weight: bold;
+    background: yellow !important;
 }
 .CodeMirror .cm-music-barline { 
     color: #4b0082 !important; 
     font-weight: bold; 
     background: #e6ccff !important;
 }
-.CodeMirror .cm-music-dash { 
-    color: #8b0000 !important; 
-    background: #ffb3ba !important;
-}
+/* Dash styling now handled by combined rule above */
 .CodeMirror .cm-music-lyrics { 
     color: #b8860b !important; 
     background: #fff87d !important;
@@ -442,7 +440,7 @@ textarea:focus {
     background: #f0f8ff !important;
 }
 .CodeMirror .cm-music-rest { 
-    color: #666 !important; 
+    color: dimgray !important; 
     background: #e0e0e0 !important;
 }
 .CodeMirror .cm-music-breath { 
@@ -456,8 +454,8 @@ textarea:focus {
     font-weight: bold;
 }
 .CodeMirror .cm-music-unknown { 
-    background: #ff8c00 !important;
+    background: darkorange !important;
     color: white !important;
     font-weight: bold;
-    border: 2px solid #ff4500 !important;
+    border: 2px solid orangered !important;
 }

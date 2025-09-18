@@ -16,111 +16,111 @@
 
 /* Notes - Green */
 .xml-note {
-    color: #22863a;
+    color: forestgreen;
     font-weight: bold;
 }
 
 .xml-note-content {
-    color: #22863a;
-    background: #f0fff4;
+    color: forestgreen;
+    background: honeydew;
     padding: 1px 3px;
     border-radius: 2px;
 }
 
 /* Barlines - Purple */
 .xml-barline {
-    color: #6f42c1;
+    color: mediumorchid;
     font-weight: bold;
 }
 
 .xml-barline-content {
-    color: #6f42c1;
-    background: #f8f4ff;
+    color: mediumorchid;
+    background: lavender;
     padding: 1px 3px;
     border-radius: 2px;
 }
 
 /* Dashes - Red */
 .xml-dash {
-    color: #d73a49;
+    color: crimson;
     font-weight: bold;
 }
 
 .xml-dash-content {
-    color: #d73a49;
-    background: #fff5f5;
+    color: crimson;
+    background: lavenderblush;
     padding: 1px 3px;
     border-radius: 2px;
 }
 
 /* Syllables/Lyrics - Orange/Yellow */
 .xml-syllable {
-    color: #e36209;
+    color: chocolate;
     font-weight: bold;
 }
 
 .xml-syllable-content {
-    color: #e36209;
-    background: #fff8f0;
+    color: chocolate;
+    background: oldlace;
     padding: 1px 3px;
     border-radius: 2px;
 }
 
 /* Whitespace - Blue */
 .xml-whitespace {
-    color: #0366d6;
+    color: dodgerblue;
     font-weight: bold;
 }
 
 .xml-whitespace-content {
-    color: #0366d6;
-    background: #f6f8ff;
+    color: dodgerblue;
+    background: ghostwhite;
     padding: 1px 3px;
     border-radius: 2px;
 }
 
 /* Rests - Gray */
 .xml-rest {
-    color: #586069;
+    color: dimgray;
     font-weight: bold;
 }
 
 .xml-rest-content {
-    color: #586069;
-    background: #fafbfc;
+    color: dimgray;
+    background: whitesmoke;
     padding: 1px 3px;
     border-radius: 2px;
 }
 
 /* Breath marks - Cyan */
 .xml-breath {
-    color: #0598bc;
+    color: darkcyan;
     font-weight: bold;
 }
 
 .xml-breath-content {
-    color: #0598bc;
-    background: #f0fdff;
+    color: darkcyan;
+    background: azure;
     padding: 1px 3px;
     border-radius: 2px;
 }
 
 /* Unknown elements - Warning Orange */
 .xml-unknown {
-    color: #f66a0a;
+    color: darkorange;
     font-weight: bold;
 }
 
 .xml-unknown-content {
-    color: #f66a0a;
-    background: #fff5f0;
+    color: darkorange;
+    background: seashell;
     padding: 1px 3px;
     border-radius: 2px;
 }
 
 /* Structural elements (music, stave, lyrics) - Dark Blue */
 .xml-structure {
-    color: #032f62;
+    color: midnightblue;
     font-weight: bold;
 }
 
@@ -135,13 +135,12 @@
 }
 
 /* Other token types can be styled here */
-.cm-music-note{
+.cm-music-note,
+.cm-music-dash {
   position: relative;
-  display: inline-block;
-  width: 1ch;           /* preserves column grid */
-  text-align: center;   /* centers the glyph in the cell */
+  display: inline;      /* allow natural width instead of forcing 1ch */
   line-height: 1;
-  color: #22863a;
+  color: #22863a;       /* green - main note color */
   font-weight: bold;
 }
 
@@ -161,7 +160,7 @@
     bottom: -0.8em !important;
     left: 0 !important;
     height: 0.6em !important;
-    border: 2px solid #ff9800 !important;
+    border: 2px solid orange !important;
     border-top: none !important;
     border-bottom-left-radius: 50% !important;
     border-bottom-right-radius: 50% !important;
@@ -184,12 +183,30 @@
     font-size: 0.7em !important;
     font-style: italic !important;
     font-weight: normal !important;
-    color: #666 !important;
+    color: dimgray !important;
     z-index: 11 !important;
     pointer-events: none !important;
 }
 
-/* Lower loop arc (orange arc under beat groups) */
+/* Beat loop arc - attached to first element (note or dash) of beat group */
+.cm-music-note.beat-start[style*="--beat-char-loop-length"]::after,
+.cm-music-dash.beat-start[style*="--beat-char-loop-length"]::after {
+    content: '' !important;
+    position: absolute !important;
+    bottom: -0.8em !important;
+    left: 0 !important;
+    /* Calculate width based on number of characters only */
+    width: calc(var(--beat-char-loop-length) * 1ch) !important;
+    height: 0.6em !important;
+    border: 2px solid orange !important;  /* orange - beat grouping arcs */
+    border-top: none !important;
+    border-bottom-left-radius: 50% !important;
+    border-bottom-right-radius: 50% !important;
+    z-index: 10 !important;
+    pointer-events: none !important;
+}
+
+/* Legacy support for --lower-loop-char-count */
 .cm-music-note[style*="--lower-loop-char-count"]::after {
     content: '' !important;
     position: absolute !important;
@@ -197,7 +214,7 @@
     left: 0 !important;
     width: calc(var(--lower-loop-char-count) * 1ch) !important;
     height: 0.6em !important;
-    border: 2px solid #ff9800 !important;
+    border: 2px solid orange !important;  /* orange - beat grouping arcs */
     border-top: none !important;
     border-bottom-left-radius: 50% !important;
     border-bottom-right-radius: 50% !important;
@@ -220,34 +237,30 @@
 }
 
 .cm-music-barline {
-    color: #6f42c1;
+    color: mediumorchid;      /* purple - barlines */
     font-weight: bold;
 }
 
-.cm-music-dash {
-    color: #d73a49;
-    font-weight: bold;
-}
 
 .cm-music-syllable {
-    color: #e36209;
+    color: chocolate;      /* orange - lyrics/syllables */
     font-weight: bold;
 }
 
 .cm-music-rest {
-    color: #586069;
+    color: dimgray;      /* gray - rests */
     font-weight: bold;
 }
 
 .cm-music-breath {
-    color: #0598bc;
+    color: darkcyan;      /* cyan - breath marks */
     font-weight: bold;
 }
 
 .cm-music-unknown {
-    color: #f66a0a;
+    color: darkorange;                /* bright orange - unknown elements */
     font-weight: bold;
-    background-color: #ffe6cc;
+    background-color: bisque;     /* light peach background */
 }
 
 /* Beat group indicators - make underscore characters transparent but still present */
@@ -259,7 +272,7 @@
 /* Beat group role-specific styling for notes */
 .cm-music-note-beat-group-start {
     position: relative;
-    color: #22863a;
+    color: forestgreen;
     font-weight: bold;
 }
 
@@ -277,7 +290,7 @@
 
 .cm-music-note-beat-group-middle {
     position: relative;
-    color: #22863a;
+    color: forestgreen;
     font-weight: bold;
 }
 
@@ -293,7 +306,7 @@
 
 .cm-music-note-beat-group-end {
     position: relative;
-    color: #22863a;
+    color: forestgreen;
     font-weight: bold;
 }
 
@@ -317,7 +330,7 @@
 
 /* Slur notes - notes that are within slur spans */
 .cm-music-note-slur {
-    color: #2196F3;
+    color: deepskyblue;
     font-weight: 500;
 }
 
@@ -393,7 +406,7 @@
 .cm-music-dash-loop,
 .cm-music-note-loop {
     position: relative;
-    color: #22863a;
+    color: forestgreen;
     font-weight: bold;
 }
 
@@ -424,21 +437,21 @@
 /* Beat group highlighting - TEMPORARILY DISABLED */
 /* Highlight notes in beat groups with subtle background */
 /*.cm-music-note.in-beat-group {
-    background-color: rgba(3, 102, 214, 0.1);
+    background-color: aliceblue;
     border-radius: 3px;
     padding: 1px 2px;
 }*/
 
 /* Start note gets slightly stronger highlight */
 /*.cm-music-note.beat-group-start {
-    background-color: rgba(3, 102, 214, 0.15);
+    background-color: lightcyan;
     border-radius: 3px;
     padding: 1px 2px;
 }*/
 
 /* End note styling */
 /*.cm-music-note.beat-group-end {
-    background-color: rgba(3, 102, 214, 0.12);
+    background-color: lightblue;
     border-radius: 3px;
     padding: 1px 2px;
 }*/
@@ -446,7 +459,7 @@
 /* Implicit beat group highlighting - for spatially-delimited beats */
 /* Highlight notes in implicit beat groups with subtle background */
 .cm-music-note.in-implicit-beat {
-    background-color: rgba(255, 152, 0, 0.1);
+    background-color: cornsilk;
     border-radius: 3px;
     padding: 1px 2px;
 }
@@ -454,14 +467,14 @@
 /* Start note gets slightly stronger highlight */
 .cm-music-note.implicit-beat-start {
     position: relative;
-    background-color: rgba(255, 152, 0, 0.15);
+    background-color: papayawhip;
     border-radius: 3px;
     padding: 1px 2px;
 }
 
 /* End note styling */
 .cm-music-note.implicit-beat-end {
-    background-color: rgba(255, 152, 0, 0.12);
+    background-color: moccasin;
     border-radius: 3px;
     padding: 1px 2px;
 }
@@ -484,21 +497,21 @@
 
 /* Highlight notes in slurs with subtle background */
 .cm-music-note.in-slur {
-    background-color: rgba(215, 58, 73, 0.1);
+    background-color: mistyrose;
     border-radius: 3px;
     padding: 1px 2px;
 }
 
 /* Start note gets slightly stronger highlight */
 .cm-music-note.slur-start {
-    background-color: rgba(215, 58, 73, 0.15);
+    background-color: pink;
     border-radius: 3px;
     padding: 1px 2px;
 }
 
 /* End note styling */
 .cm-music-note.slur-end {
-    background-color: rgba(215, 58, 73, 0.12);
+    background-color: lightpink;
     border-radius: 3px;
     padding: 1px 2px;
 }
@@ -512,7 +525,7 @@
     z-index: 2;
     font-family: "Times New Roman", Georgia, serif;
     font-weight: normal;
-    color: #6f42c1; /* Purple like ornaments */
+    color: mediumorchid; /* Purple like ornaments */
 }
 
 /* Enhanced mordent with symbol styling */
@@ -541,7 +554,7 @@
 .music-ornament {
     font-family: 'Bravura', serif;
     font-size: 1.4em;
-    color: #6f42c1; /* Purple like other ornaments */
+    color: mediumorchid; /* Purple like other ornaments */
     position: relative;
     top: -0.1em;
 }
@@ -567,7 +580,7 @@
     z-index: 2;
     font-family: 'Bravura', serif;
     font-weight: normal;
-    color: #6f42c1;
+    color: mediumorchid;
 }
 
 /* Enhanced mordent with Bravura symbol */
@@ -579,7 +592,7 @@
 /* Visual slur CSS classes for toggle functionality */
 .slur-start {
     position: relative;
-    background-color: rgba(215, 58, 73, 0.1);
+    background-color: mistyrose;
     border-radius: 2px;
 }
 
@@ -599,7 +612,7 @@
 
 .slur-end {
     position: relative;
-    background-color: rgba(215, 58, 73, 0.1);
+    background-color: mistyrose;
     border-radius: 2px;
 }
 
@@ -616,5 +629,6 @@
     z-index: 3;
     pointer-events: none;
 }
+
 
 /* Future music-text specific styles can go here */

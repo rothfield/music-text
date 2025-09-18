@@ -12,7 +12,7 @@ div.lyrics_section {
    font-family: serif;
    font-size: 1.6em;
    white-space: pre; 
-   /* border: 2px dotted #CCCCCC; */
+   /* border: 2px dotted lightgray; */
    margin-top: 0.5em;
    margin-bottom: 0.5em;
    text-align:center;
@@ -28,7 +28,7 @@ button.button_on {
    font-size:14px;
 }
 div#rendered_doremi_script, div.rendered_doremi_script, div.parseTree {
-  border: 2px dotted #CCCCCC;
+  border: 2px dotted lightgray;
 }
 span.note_wrapper span.alteration {
   bottom: 0.7em;
