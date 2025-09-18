@@ -1,6 +1,6 @@
 use crate::parse::model::{
     Document, DocumentElement, Stave, StaveLine, UpperLine, LowerLine, LyricsLine,
-    UpperElement, LowerElement, Syllable, Source, Position
+    UpperElement, LowerElement, Syllable, Source, Position, ContentLine, ContentElement, Beat, BeatElement, Note, SpatialAssignment
 };
 use crate::rhythm::types::{ParsedElement, Position as RhythmPosition, ParsedChild};
 
@@ -799,7 +799,7 @@ pub fn process_spatial_assignments(
 
     for element in &mut document.elements {
         if let DocumentElement::Stave(stave) = element {
-            let (enhanced_stave, stave_warnings) = process_stave_spatial(stave)?;
+            let (enhanced_stave, stave_warnings) = process_stave_spatial_old(stave)?;
             *stave = enhanced_stave;
             warnings.extend(stave_warnings);
         }
@@ -808,8 +808,158 @@ pub fn process_spatial_assignments(
     Ok((document, warnings))
 }
 
-/// Process spatial assignments for a single stave
-fn process_stave_spatial(stave: &mut Stave) -> Result<(Stave, Vec<String>), String> {
+/// Process spatial assignments for unified model (ContentLine with beats)
+pub fn process_spatial_assignments_unified(
+    mut document: Document
+) -> Result<(Document, Vec<String>), String> {
+    let mut warnings = Vec::new();
+
+    for element in &mut document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            let (enhanced_stave, stave_warnings) = process_stave_spatial_unified(stave)?;
+            *stave = enhanced_stave;
+            warnings.extend(stave_warnings);
+        }
+    }
+
+    Ok((document, warnings))
+}
+
+/// Process spatial assignments for a single stave with unified model
+fn process_stave_spatial_unified(stave: &mut Stave) -> Result<(Stave, Vec<String>), String> {
+    let mut warnings = Vec::new();
+
+    // Extract different line types
+    let mut upper_lines = Vec::new();
+    let mut lower_lines = Vec::new();
+    let mut lyrics_lines = Vec::new();
+    let mut content_line_indices = Vec::new();
+
+    // Collect lines and find content line indices
+    for (idx, line) in stave.lines.iter().enumerate() {
+        match line {
+            StaveLine::Upper(upper_line) => {
+                upper_lines.push(upper_line.clone());
+            }
+            StaveLine::Lower(lower_line) => {
+                lower_lines.push(lower_line.clone());
+            }
+            StaveLine::Lyrics(lyrics_line) => {
+                lyrics_lines.push(lyrics_line.clone());
+            }
+            StaveLine::ContentLine(_) => {
+                content_line_indices.push(idx);
+            }
+            _ => {} // Handle other line types as needed
+        }
+    }
+
+    // Process spatial assignments for each content line
+    for content_idx in content_line_indices {
+        if let StaveLine::ContentLine(content_line) = &mut stave.lines[content_idx] {
+            // Process spatial assignments for this content line
+            let (updated_content_line, line_warnings) = process_content_line_spatial(
+                content_line,
+                &upper_lines,
+                &lower_lines,
+                &lyrics_lines
+            )?;
+
+            *content_line = updated_content_line;
+            warnings.extend(line_warnings);
+        }
+    }
+
+    Ok((stave.clone(), warnings))
+}
+
+/// Process spatial assignments for a single content line
+fn process_content_line_spatial(
+    content_line: &mut ContentLine,
+    upper_lines: &[UpperLine],
+    lower_lines: &[LowerLine],
+    lyrics_lines: &[LyricsLine]
+) -> Result<(ContentLine, Vec<String>), String> {
+    let mut warnings = Vec::new();
+
+    // For each beat in the content line, find notes and apply spatial assignments
+    for element in &mut content_line.elements {
+        if let ContentElement::Beat(beat) = element {
+            for beat_element in &mut beat.elements {
+                if let BeatElement::Note(note) = beat_element {
+                    // Apply spatial assignments to this note
+                    apply_spatial_assignments_to_note(note, upper_lines, lower_lines, lyrics_lines);
+                }
+            }
+        }
+    }
+
+    Ok((content_line.clone(), warnings))
+}
+
+/// Apply spatial assignments from annotation lines to a specific note
+fn apply_spatial_assignments_to_note(
+    note: &mut Note,
+    upper_lines: &[UpperLine],
+    lower_lines: &[LowerLine],
+    _lyrics_lines: &[LyricsLine]
+) {
+    let note_position = note.pitch_string.source.position.column;
+
+    // Process octave markers from upper and lower lines
+    for upper_line in upper_lines {
+        for element in &upper_line.elements {
+            if let UpperElement::UpperOctaveMarker { marker, source } = element {
+                if source.position.column == note_position {
+                    let octave_value = match marker.as_str() {
+                        "." => 1,
+                        ":" => 2,
+                        "*" => 3,
+                        _ => 0,
+                    };
+
+                    note.spatial_assignments.push(SpatialAssignment::OctaveMarker {
+                        octave_value,
+                        marker_symbol: marker.clone(),
+                        is_upper: true,
+                    });
+
+                    // Apply octave modification
+                    note.octave += octave_value;
+                }
+            }
+        }
+    }
+
+    for lower_line in lower_lines {
+        for element in &lower_line.elements {
+            if let LowerElement::LowerOctaveMarker { marker, source } = element {
+                if source.position.column == note_position {
+                    let octave_value = match marker.as_str() {
+                        "." => -1,
+                        ":" => -2,
+                        "*" => -3,
+                        _ => 0,
+                    };
+
+                    note.spatial_assignments.push(SpatialAssignment::OctaveMarker {
+                        octave_value,
+                        marker_symbol: marker.clone(),
+                        is_upper: false,
+                    });
+
+                    // Apply octave modification
+                    note.octave += octave_value;
+                }
+            }
+        }
+    }
+
+    // TODO: Add slur, syllable, beat group, and mordent processing
+}
+
+/// Process spatial assignments for a single stave (OLD VERSION - ParsedElement based)
+fn process_stave_spatial_old(stave: &mut Stave) -> Result<(Stave, Vec<String>), String> {
     let mut warnings = Vec::new();
 
     // Extract different line types
@@ -830,7 +980,7 @@ fn process_stave_spatial(stave: &mut Stave) -> Result<(Stave, Vec<String>), Stri
             StaveLine::Lyrics(lyrics_line) => {
                 lyrics_lines.push(lyrics_line.clone());
             }
-            StaveLine::Content(_) => {
+            StaveLine::Content(_) | StaveLine::ContentLine(_) => {
                 content_line_index = Some(idx);
             }
             _ => {} // Handle other line types as needed
@@ -842,14 +992,15 @@ fn process_stave_spatial(stave: &mut Stave) -> Result<(Stave, Vec<String>), Stri
         let content_idx = content_line_index.unwrap();
 
         // Extract content elements from the content line
-        if let StaveLine::Content(content_elements) = &mut stave.lines[content_idx] {
+        match &mut stave.lines[content_idx] {
+            StaveLine::Content(content_elements) => {
             // Create empty upper line if none exists
             let upper_line = if upper_lines.is_empty() {
                 UpperLine {
                     elements: vec![],
                     source: Source {
                         value: Some("".to_string()),
-                        position: Position { line: 0, column: 0 },
+                        position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 }
             } else {
@@ -906,11 +1057,18 @@ fn process_stave_spatial(stave: &mut Stave) -> Result<(Stave, Vec<String>), Stri
                     }
                 }
             }
+            }
+            StaveLine::ContentLine(_content_line) => {
+                // ContentLine processing is handled by the unified version
+                // This old function is kept for backward compatibility with ParsedElement-based processing
+            }
+            _ => {}
         }
     }
 
     Ok((stave.clone(), warnings))
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -922,14 +1080,13 @@ mod tests {
             pitch_string: PitchString {
                 source: Source {
                     value: Some(pitch.to_string()),
-                    position: Position { line: 1, column },
+                    position: Position { line: 1, column, index_in_line: (column.saturating_sub(1)), index_in_doc: 0 },
                 },
             },
             octave: 0,
             pitch_code: PitchCode::N1,
             notation_system: NotationSystem::Number,
-            in_slur: false,
-            in_beat_group: false,
+            spatial_assignments: Vec::new(),
         }
     }
 
@@ -940,27 +1097,27 @@ mod tests {
                     marker: ".".to_string(),
                     source: Source {
                         value: Some(".".to_string()),
-                        position: Position { line: 0, column: 0 },
+                        position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
                 UpperElement::Space {
                     count: 2,
                     source: Source {
                         value: Some("  ".to_string()),
-                        position: Position { line: 0, column: 1 },
+                        position: Position { line: 0, column: 1, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
                 UpperElement::UpperOctaveMarker {
                     marker: ":".to_string(),
                     source: Source {
                         value: Some(":".to_string()),
-                        position: Position { line: 0, column: 3 },
+                        position: Position { line: 0, column: 3, index_in_line: 2, index_in_doc: 0 },
                     },
                 },
             ],
             source: Source {
                 value: Some(".  :".to_string()),
-                position: Position { line: 0, column: 0 },
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
         }
     }
@@ -970,7 +1127,7 @@ mod tests {
             elements: vec![],
             source: Source {
                 value: Some("".to_string()),
-                position: Position { line: 2, column: 0 },
+                position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
         }
     }
@@ -982,13 +1139,13 @@ mod tests {
                     marker: ".".to_string(),
                     source: Source {
                         value: Some(".".to_string()),
-                        position: Position { line: 2, column: 0 },
+                        position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
             ],
             source: Source {
                 value: Some(".".to_string()),
-                position: Position { line: 2, column: 0 },
+                position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
         }
     }
@@ -1014,7 +1171,7 @@ mod tests {
             count: 3,
             source: Source {
                 value: Some("   ".to_string()),
-                position: Position { line: 0, column: 0 },
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
         };
 
@@ -1062,14 +1219,14 @@ mod tests {
                 octave_value: 1,
                 original_source: Source {
                     value: Some(".".to_string()),
-                    position: Position { line: 0, column: 0 },
+                    position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                 },
             }),
             (3, ConsumedMarker {
                 octave_value: 2,
                 original_source: Source {
                     value: Some(":".to_string()),
-                    position: Position { line: 0, column: 3 },
+                    position: Position { line: 0, column: 3, index_in_line: 2, index_in_doc: 0 },
                 },
             }),
         ];
@@ -1095,7 +1252,7 @@ mod tests {
                 octave_value: 1,
                 original_source: Source {
                     value: Some(".".to_string()),
-                    position: Position { line: 0, column: 2 },
+                    position: Position { line: 0, column: 2, index_in_line: 1, index_in_doc: 0 },
                 },
             }),
         ];
@@ -1116,20 +1273,20 @@ mod tests {
                     count: 2,
                     source: Source {
                         value: Some("  ".to_string()),
-                        position: Position { line: 0, column: 0 },
+                        position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
                 UpperElement::SlurIndicator {
                     value: "___".to_string(),
                     source: Source {
                         value: Some("___".to_string()),
-                        position: Position { line: 0, column: 2 },
+                        position: Position { line: 0, column: 2, index_in_line: 1, index_in_doc: 0 },
                     },
                 },
             ],
             source: Source {
                 value: Some("  ___".to_string()),
-                position: Position { line: 0, column: 0 },
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
         };
 
@@ -1166,13 +1323,13 @@ mod tests {
                     marker: ".".to_string(),
                     source: Source {
                         value: None, // Consumed
-                        position: Position { line: 0, column: 0 },
+                        position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
             ],
             source: Source {
                 value: Some(".".to_string()),
-                position: Position { line: 0, column: 0 },
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
         };
 
@@ -1189,13 +1346,13 @@ mod tests {
                     marker: ".".to_string(),
                     source: Source {
                         value: Some(".".to_string()), // Not consumed
-                        position: Position { line: 0, column: 0 },
+                        position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
             ],
             source: Source {
                 value: Some(".".to_string()),
-                position: Position { line: 0, column: 0 },
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
         };
 
@@ -1210,7 +1367,7 @@ mod tests {
             elements: vec![],
             source: Source {
                 value: Some("".to_string()),
-                position: Position { line: 0, column: 0 },
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
         };
         let lower_line = create_test_lower_line_with_markers();
@@ -1243,7 +1400,7 @@ mod tests {
                 octave_value: -1,  // Lower line marker
                 original_source: Source {
                     value: Some(".".to_string()),
-                    position: Position { line: 2, column: 0 },
+                    position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
                 },
             }),
         ];
@@ -1260,7 +1417,7 @@ mod tests {
     fn test_consumed_marker_move_semantics() {
         let mut original_source = Source {
             value: Some(".".to_string()),
-            position: Position { line: 0, column: 0 },
+            position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
         };
 
         // Simulate consumption

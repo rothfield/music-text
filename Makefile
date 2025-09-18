@@ -1,4 +1,4 @@
-.PHONY: help build clean run web web-watch kill kill-watch kill-all restart test test-cli test-web logs dev mtx zellij-clean
+.PHONY: help build clean run web web-watch kill kill-watch kill-all restart test test-cli test-web logs dev mtx zellij-clean tui direct-test
 
 # PERMANENT DEVELOPMENT MODE: Always use fastest debug build with warnings suppressed
 # Philosophy: We are ALWAYS in dev mode for fastest iteration
@@ -69,7 +69,7 @@ web-watch: ## Watch for changes and auto-restart web server
 	done
 
 
-repl: ## Start interactive REPL for musical notation
+tui: build ## Start TUI REPL
 	@./target/debug/music-text repl
 
 perf: build ## Run parser performance benchmarks
@@ -77,6 +77,13 @@ perf: build ## Run parser performance benchmarks
 
 cli-test: build ## Test CLI with example input
 	./target/debug/music-text --input "|1 2 3"
+
+direct-test: build ## Test new direct parsing pipeline
+	@echo "Testing direct parsing pipeline..."
+	@echo "Old pipeline:"
+	@echo "1 2 3 | 4 - 5 6 |" | ./target/debug/music-text --output debug | head -10
+	@echo "\nNew direct pipeline:"
+	@echo "1 2 3 | 4 - 5 6 |" | ./target/debug/music-text --direct --output debug | head -10
 
 kill: ## Stop the web server
 	@pkill -f "music-text --web" && echo "✓ Web server stopped" || echo "✗ No web server running"

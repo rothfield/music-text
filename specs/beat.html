@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Beat with Lower Loop</title>
+<style>
+.line { 
+  position: relative; 
+  font: 32px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.note.number { 
+  display:inline-block; 
+  position:relative; 
+  padding-inline:0.05em; 
+}
+
+.beat-start { anchor-name: --beat-start; }
+.beat-end   { anchor-name: --beat-end; }
+
+/* draw the lower loop */
+.line:has(.beat-start ~ .beat-end)::after {
+  content: "";
+  position: absolute;
+
+  /* span from start note’s left edge to end note’s right edge */
+  left: anchor(--beat-start left);
+  right: calc(100% - anchor(--beat-end right));
+
+  bottom: -0.45em;   /* vertical offset */
+  height: 1.2em;     /* loop height controls curvature */
+
+  background:
+    radial-gradient(100% 100% at 50% 100%, currentColor 98%, transparent 100%);
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<div class="line">
+  <span class="barline">|</span>
+  <span class="note number beat-start">1</span>
+  <span class="note number">2</span>
+  <span class="note number">3</span>
+  <span class="note number beat-end">4</span>
+</div>
+
+</body>
+</html>

@@ -1,13 +1,60 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use fraction::Fraction;
+
+// Spatial assignment types that can be applied to notes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SpatialAssignment {
+    OctaveMarker {
+        octave_value: i8,
+        marker_symbol: String,
+        is_upper: bool,
+    },
+    Slur {
+        start_pos: usize,
+        end_pos: usize,
+    },
+    Syllable {
+        content: String,
+    },
+    BeatGroup {
+        start_pos: usize,
+        end_pos: usize,
+        underscore_count: usize,
+    },
+    Mordent,
+}
 
 // Notation system types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NotationSystem {
     Number,     // 1 2 3 4 5 6 7 (numeric system)
-    Western,    // C D E F G A B (standard western notes)  
+    Western,    // C D E F G A B (standard western notes)
     Sargam,     // S R G M P D N (Indian classical music)
     Bhatkhande, // स रे ग म प ध नि (Devanagari script)
     Tabla,      // dha dhin ta ka taka trkt ge (tabla bols/percussion syllables)
+}
+
+// Alternative notation enum for legacy compatibility
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Notation {
+    Western,
+    Number,
+    Sargam,
+    Tabla,
+    Bhatkhande,
+}
+
+impl From<NotationSystem> for Notation {
+    fn from(system: NotationSystem) -> Self {
+        match system {
+            NotationSystem::Western => Notation::Western,
+            NotationSystem::Number => Notation::Number,
+            NotationSystem::Sargam => Notation::Sargam,
+            NotationSystem::Tabla => Notation::Tabla,
+            NotationSystem::Bhatkhande => Notation::Bhatkhande,
+        }
+    }
 }
 
 impl NotationSystem {
@@ -46,8 +93,12 @@ impl NotationSystem {
 // Position information for source tracking
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Position {
+    // 1-based line number and column for human-readable diagnostics
     pub line: usize,
     pub column: usize,
+    // Zero-based character offsets for precise indexing
+    pub index_in_line: usize, // offset from start of line
+    pub index_in_doc: usize,  // offset from start of document
 }
 
 // Source information tracking with move semantics
@@ -76,84 +127,153 @@ pub enum PitchCode {
     N7bb, N7b, N7, N7s, N7ss,
 }
 
+/// Lookup pitch from symbol and notation system (ported from old system)
+pub fn lookup_pitch(symbol: &str, notation: Notation) -> Option<PitchCode> {
+    match notation {
+        Notation::Western => match symbol {
+            // Natural notes
+            "C" => Some(PitchCode::N1),
+            "D" => Some(PitchCode::N2),
+            "E" => Some(PitchCode::N3),
+            "F" => Some(PitchCode::N4),
+            "G" => Some(PitchCode::N5),
+            "A" => Some(PitchCode::N6),
+            "B" => Some(PitchCode::N7),
+            // Sharps
+            "C#" => Some(PitchCode::N1s),
+            "D#" => Some(PitchCode::N2s),
+            "E#" => Some(PitchCode::N3s),
+            "F#" => Some(PitchCode::N4s),
+            "G#" => Some(PitchCode::N5s),
+            "A#" => Some(PitchCode::N6s),
+            "B#" => Some(PitchCode::N7s),
+            // Flats
+            "Cb" => Some(PitchCode::N1b),
+            "Db" => Some(PitchCode::N2b),
+            "Eb" => Some(PitchCode::N3b),
+            "Fb" => Some(PitchCode::N4b),
+            "Gb" => Some(PitchCode::N5b),
+            "Ab" => Some(PitchCode::N6b),
+            "Bb" => Some(PitchCode::N7b),
+            // Double sharps
+            "C##" => Some(PitchCode::N1ss),
+            "D##" => Some(PitchCode::N2ss),
+            "E##" => Some(PitchCode::N3ss),
+            "F##" => Some(PitchCode::N4ss),
+            "G##" => Some(PitchCode::N5ss),
+            "A##" => Some(PitchCode::N6ss),
+            "B##" => Some(PitchCode::N7ss),
+            // Double flats
+            "Cbb" => Some(PitchCode::N1bb),
+            "Dbb" => Some(PitchCode::N2bb),
+            "Ebb" => Some(PitchCode::N3bb),
+            "Fbb" => Some(PitchCode::N4bb),
+            "Gbb" => Some(PitchCode::N5bb),
+            "Abb" => Some(PitchCode::N6bb),
+            "Bbb" => Some(PitchCode::N7bb),
+            _ => None,
+        },
+        Notation::Number => match symbol {
+            "1" => Some(PitchCode::N1),
+            "2" => Some(PitchCode::N2),
+            "3" => Some(PitchCode::N3),
+            "4" => Some(PitchCode::N4),
+            "5" => Some(PitchCode::N5),
+            "6" => Some(PitchCode::N6),
+            "7" => Some(PitchCode::N7),
+            // With sharps and flats
+            "1#" => Some(PitchCode::N1s), "1b" => Some(PitchCode::N1b),
+            "2#" => Some(PitchCode::N2s), "2b" => Some(PitchCode::N2b),
+            "3#" => Some(PitchCode::N3s), "3b" => Some(PitchCode::N3b),
+            "4#" => Some(PitchCode::N4s), "4b" => Some(PitchCode::N4b),
+            "5#" => Some(PitchCode::N5s), "5b" => Some(PitchCode::N5b),
+            "6#" => Some(PitchCode::N6s), "6b" => Some(PitchCode::N6b),
+            "7#" => Some(PitchCode::N7s), "7b" => Some(PitchCode::N7b),
+            // Double sharps and flats
+            "1##" => Some(PitchCode::N1ss), "1bb" => Some(PitchCode::N1bb),
+            "2##" => Some(PitchCode::N2ss), "2bb" => Some(PitchCode::N2bb),
+            "3##" => Some(PitchCode::N3ss), "3bb" => Some(PitchCode::N3bb),
+            "4##" => Some(PitchCode::N4ss), "4bb" => Some(PitchCode::N4bb),
+            "5##" => Some(PitchCode::N5ss), "5bb" => Some(PitchCode::N5bb),
+            "6##" => Some(PitchCode::N6ss), "6bb" => Some(PitchCode::N6bb),
+            "7##" => Some(PitchCode::N7ss), "7bb" => Some(PitchCode::N7bb),
+            _ => None,
+        },
+        Notation::Sargam => match symbol {
+            // Basic sargam notes (uppercase and lowercase)
+            "S" | "s" => Some(PitchCode::N1),  // Sa
+            "R" => Some(PitchCode::N2),         // Re (shuddha)
+            "r" => Some(PitchCode::N2b),        // Re (komal)
+            "G" => Some(PitchCode::N3),         // Ga (shuddha)
+            "g" => Some(PitchCode::N3b),        // Ga (komal)
+            "M" => Some(PitchCode::N4s),        // Ma (tivra)
+            "m" => Some(PitchCode::N4),         // Ma (shuddha)
+            "P" | "p" => Some(PitchCode::N5),   // Pa
+            "D" => Some(PitchCode::N6),         // Dha (shuddha)
+            "d" => Some(PitchCode::N6b),        // Dha (komal)
+            "N" => Some(PitchCode::N7),         // Ni (shuddha)
+            "n" => Some(PitchCode::N7b),        // Ni (komal)
+            // With explicit sharps and flats
+            "S#" | "s#" => Some(PitchCode::N1s),
+            "R#" => Some(PitchCode::N2s), "Rb" => Some(PitchCode::N2b),
+            "G#" => Some(PitchCode::N3s), "Gb" => Some(PitchCode::N3b),
+            "M#" => Some(PitchCode::N4ss), "Mb" => Some(PitchCode::N4b),
+            "P#" | "p#" => Some(PitchCode::N5s), "Pb" | "pb" => Some(PitchCode::N5b),
+            "D#" => Some(PitchCode::N6s), "Db" => Some(PitchCode::N6b),
+            "N#" => Some(PitchCode::N7s), "Nb" => Some(PitchCode::N7b),
+            _ => None,
+        },
+        Notation::Tabla => match symbol {
+            // All tabla bols map to N1 (tonic) since tabla is percussion
+            "dha" | "dhin" | "ta" | "ka" | "taka" | "trkt" | "ge" |
+            "Dha" | "Dhin" | "Ta" | "Ka" | "Taka" | "Trkt" | "Ge" |
+            "DHA" | "DHIN" | "TA" | "KA" | "TAKA" | "TRKT" | "GE" => Some(PitchCode::N1),
+            _ => None,
+        },
+        Notation::Bhatkhande => match symbol {
+            // Devanagari script
+            "स" => Some(PitchCode::N1), "रे" => Some(PitchCode::N2), "र" => Some(PitchCode::N2b),
+            "ग" => Some(PitchCode::N3), "म" => Some(PitchCode::N4), "प" => Some(PitchCode::N5),
+            "ध" => Some(PitchCode::N6), "द" => Some(PitchCode::N6b), "नि" => Some(PitchCode::N7), "न" => Some(PitchCode::N7b),
+            // Roman equivalents
+            "S" => Some(PitchCode::N1), "R" => Some(PitchCode::N2), "G" => Some(PitchCode::N3),
+            "M" => Some(PitchCode::N4), "P" => Some(PitchCode::N5), "D" => Some(PitchCode::N6), "N" => Some(PitchCode::N7),
+            // With accidentals
+            "स#" | "S#" => Some(PitchCode::N1s), "म#" | "M#" => Some(PitchCode::N4s),
+            "धb" | "Db" => Some(PitchCode::N6b),
+            _ => None,
+        },
+    }
+}
+
 impl PitchCode {
-    /// Convert complete source pitch token to normalized pitch code  
+    /// Convert complete source pitch token to normalized pitch code
     /// Context-aware version that handles ambiguous characters based on notation system
-    pub fn from_source_with_context(source_pitch: &str, notation_system: NotationSystem) -> Self {
-        // Handle ambiguous characters based on context
-        match (source_pitch, notation_system) {
-            ("G", NotationSystem::Sargam) => PitchCode::N3,  // Sargam Ga
-            ("G", NotationSystem::Western) => PitchCode::N5,  // Western G
-            ("D", NotationSystem::Sargam) => PitchCode::N6,   // Sargam Dha  
-            ("D", NotationSystem::Western) => PitchCode::N2,  // Western D
-            ("R", NotationSystem::Sargam) => PitchCode::N2,   // Sargam Re
-            ("R", NotationSystem::Western) => PitchCode::N2,  // R not standard Western, default to N2
-            ("M", NotationSystem::Sargam) => PitchCode::N4s,  // Sargam Ma tivra
-            ("M", NotationSystem::Western) => PitchCode::N4s, // M not standard Western, default to N4s
-            ("P", NotationSystem::Sargam) => PitchCode::N5,   // Sargam Pa
-            ("P", NotationSystem::Western) => PitchCode::N5,  // P not standard Western, default to N5
-            ("N", NotationSystem::Sargam) => PitchCode::N7,   // Sargam Ni
-            ("N", NotationSystem::Western) => PitchCode::N7,  // N not standard Western, default to N7
-            _ => Self::from_source(source_pitch), // Fall back to original method
-        }
+    pub fn from_source_with_context(source_pitch: &str, notation_system: NotationSystem) -> Option<Self> {
+        // Use the new lookup_pitch function
+        lookup_pitch(source_pitch, notation_system.into())
     }
     
-    /// Convert complete source pitch token to normalized pitch code  
-    /// Now handles all 35 combinations explicitly
-    pub fn from_source(source_pitch: &str) -> Self {
-        match source_pitch {
-            // Number notation - all 35 combinations
-            "1bb" => PitchCode::N1bb, "1b" => PitchCode::N1b, "1" => PitchCode::N1, "1#" => PitchCode::N1s, "1##" => PitchCode::N1ss,
-            "2bb" => PitchCode::N2bb, "2b" => PitchCode::N2b, "2" => PitchCode::N2, "2#" => PitchCode::N2s, "2##" => PitchCode::N2ss,
-            "3bb" => PitchCode::N3bb, "3b" => PitchCode::N3b, "3" => PitchCode::N3, "3#" => PitchCode::N3s, "3##" => PitchCode::N3ss,
-            "4bb" => PitchCode::N4bb, "4b" => PitchCode::N4b, "4" => PitchCode::N4, "4#" => PitchCode::N4s, "4##" => PitchCode::N4ss,
-            "5bb" => PitchCode::N5bb, "5b" => PitchCode::N5b, "5" => PitchCode::N5, "5#" => PitchCode::N5s, "5##" => PitchCode::N5ss,
-            "6bb" => PitchCode::N6bb, "6b" => PitchCode::N6b, "6" => PitchCode::N6, "6#" => PitchCode::N6s, "6##" => PitchCode::N6ss,
-            "7bb" => PitchCode::N7bb, "7b" => PitchCode::N7b, "7" => PitchCode::N7, "7#" => PitchCode::N7s, "7##" => PitchCode::N7ss,
-            
-            // Western notation - all 35 combinations
-            "Cbb" => PitchCode::N1bb, "Cb" => PitchCode::N1b, "C" => PitchCode::N1, "C#" => PitchCode::N1s, "C##" => PitchCode::N1ss,
-            "Dbb" => PitchCode::N2bb, "Db" => PitchCode::N2b, "D" => PitchCode::N2, "D#" => PitchCode::N2s, "D##" => PitchCode::N2ss,
-            "Ebb" => PitchCode::N3bb, "Eb" => PitchCode::N3b, "E" => PitchCode::N3, "E#" => PitchCode::N3s, "E##" => PitchCode::N3ss,
-            "Fbb" => PitchCode::N4bb, "Fb" => PitchCode::N4b, "F" => PitchCode::N4, "F#" => PitchCode::N4s, "F##" => PitchCode::N4ss,
-            "Gbb" => PitchCode::N5bb, "Gb" => PitchCode::N5b, "G" => PitchCode::N5, "G#" => PitchCode::N5s, "G##" => PitchCode::N5ss,
-            "Abb" => PitchCode::N6bb, "Ab" => PitchCode::N6b, "A" => PitchCode::N6, "A#" => PitchCode::N6s, "A##" => PitchCode::N6ss,
-            "Bbb" => PitchCode::N7bb, "Bb" => PitchCode::N7b, "B" => PitchCode::N7, "B#" => PitchCode::N7s, "B##" => PitchCode::N7ss,
-            
-            // Sargam notation - including all pitch variants
-            // Sa (tonic)
-            "Sbb" => PitchCode::N1bb, "Sb" => PitchCode::N1b, "S" => PitchCode::N1, "s" => PitchCode::N1, "S#" => PitchCode::N1s, "S##" => PitchCode::N1ss,
-            // Re (second) - komal/shuddha system
-            "r" => PitchCode::N2b, "R" => PitchCode::N2, "Rbb" => PitchCode::N2bb, "R#" => PitchCode::N2s, "R##" => PitchCode::N2ss,
-            // Ga (third) - komal/shuddha system (lowercase g only - G already handled in Western)
-            "g" => PitchCode::N3b,
-            // Ma (fourth) - shuddha/tivra system  
-            "m" => PitchCode::N4, "M" => PitchCode::N4s, 
-            "mbb" => PitchCode::N4bb, "mb" => PitchCode::N4b, "m#" => PitchCode::N4s, "m##" => PitchCode::N4ss,
-            "M#" => PitchCode::N4ss, "M##" => PitchCode::N4ss, "Mbb" => PitchCode::N4bb, "Mb" => PitchCode::N4b,
-            // Pa (fifth)
-            "Pbb" => PitchCode::N5bb, "Pb" => PitchCode::N5b, "P" => PitchCode::N5, "p" => PitchCode::N5, "P#" => PitchCode::N5s, "P##" => PitchCode::N5ss,
-            // Dha (sixth) - komal/shuddha system (lowercase d only - D already handled in Western)
-            "d" => PitchCode::N6b,
-            // Ni (seventh) - komal/shuddha system
-            "n" => PitchCode::N7b, "N" => PitchCode::N7, "Nbb" => PitchCode::N7bb, "N#" => PitchCode::N7s, "N##" => PitchCode::N7ss,
-            
-            // Tabla notation - all tabla bols map to N1 (tonic) as requested
-            "dha" => PitchCode::N1, "dhin" => PitchCode::N1, "ta" => PitchCode::N1, "ka" => PitchCode::N1,
-            "taka" => PitchCode::N1, "trkt" => PitchCode::N1, "ge" => PitchCode::N1,
-            "Dha" => PitchCode::N1, "Dhin" => PitchCode::N1, "Ta" => PitchCode::N1, "Ka" => PitchCode::N1,
-            "Taka" => PitchCode::N1, "Trkt" => PitchCode::N1, "Ge" => PitchCode::N1,
-            "DHA" => PitchCode::N1, "DHIN" => PitchCode::N1, "TA" => PitchCode::N1, "KA" => PitchCode::N1,
-            "TAKA" => PitchCode::N1, "TRKT" => PitchCode::N1, "GE" => PitchCode::N1,
-            
-            // Bhatkhande Devanagari notation - basic support (extended variants rare in practice)
-            "स" => PitchCode::N1, "रे" => PitchCode::N2, "र" => PitchCode::N2b, "ग" => PitchCode::N3,
-            "म" => PitchCode::N4, "प" => PitchCode::N5, "ध" => PitchCode::N6, "द" => PitchCode::N6b,
-            "नि" => PitchCode::N7, "न" => PitchCode::N7b,
-            
-            // Return error for unrecognized input instead of silent fallback
-            _ => panic!("Unrecognized pitch: {}", source_pitch), // Will be replaced with proper error handling
+    /// Convert complete source pitch token to normalized pitch code
+    /// Legacy method - tries all notation systems
+    pub fn from_source(source_pitch: &str) -> Option<Self> {
+        // Try each notation system in order of likelihood
+        if let Some(pitch) = lookup_pitch(source_pitch, Notation::Number) {
+            return Some(pitch);
         }
+        if let Some(pitch) = lookup_pitch(source_pitch, Notation::Sargam) {
+            return Some(pitch);
+        }
+        if let Some(pitch) = lookup_pitch(source_pitch, Notation::Western) {
+            return Some(pitch);
+        }
+        if let Some(pitch) = lookup_pitch(source_pitch, Notation::Tabla) {
+            return Some(pitch);
+        }
+        if let Some(pitch) = lookup_pitch(source_pitch, Notation::Bhatkhande) {
+            return Some(pitch);
+        }
+        None // Unknown pitch
     }
 }
 
@@ -166,24 +286,19 @@ pub struct PitchString {
 // ContentElement struct types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Barline {
+    pub barline_type: crate::rhythm::converters::BarlineType,
     pub source: Source,
-    pub in_slur: bool,
-    pub in_beat_group: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Space {
     pub count: usize,
     pub source: Source,
-    pub in_slur: bool,
-    pub in_beat_group: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dash {
     pub source: Source,
-    pub in_slur: bool,
-    pub in_beat_group: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -197,31 +312,8 @@ pub struct EndOfInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SlurBegin {
+pub struct BreathMark {
     pub source: Source,
-    pub in_slur: bool,
-    pub in_beat_group: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SlurEnd {
-    pub source: Source,
-    pub in_slur: bool,
-    pub in_beat_group: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BeatGroupBegin {
-    pub source: Source,
-    pub in_slur: bool,
-    pub in_beat_group: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BeatGroupEnd {
-    pub source: Source,
-    pub in_slur: bool,
-    pub in_beat_group: bool,
 }
 
 // Note object with pitchString attribute
@@ -231,8 +323,8 @@ pub struct Note {
     pub octave: i8,                     // Octave -4..4
     pub pitch_code: PitchCode,          // Normalized pitch code
     pub notation_system: NotationSystem, // Which notation system this note uses
-    pub in_slur: bool,                  // Whether this note is within a slur
-    pub in_beat_group: bool,            // Whether this note is within a beat group
+    pub spatial_assignments: Vec<SpatialAssignment>, // Spatial elements assigned to this note
+    pub duration: Option<Fraction>,     // Duration fraction (1/4, 1/8, etc.) - added by rhythm analysis
 }
 
 // Directive structure for key:value pairs
@@ -261,7 +353,9 @@ pub struct BlankLines {
 // Document structure types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
-    pub directives: Vec<Directive>,
+    pub title: Option<String>,
+    pub author: Option<String>,
+    pub directives: HashMap<String, String>, // key -> value
     pub elements: Vec<DocumentElement>, // Document as sequence of elements
     pub source: Source,
 }
@@ -295,7 +389,8 @@ impl Document {
 pub enum StaveLine {
     Text(TextLine),
     Upper(UpperLine),
-    Content(Vec<crate::rhythm::types::ParsedElement>),
+    Content(Vec<crate::rhythm::types::ParsedElement>), // Keep for backward compat
+    ContentLine(ContentLine),  // New: elements parsed directly
     Lower(LowerLine),
     Lyrics(LyricsLine),
     Whitespace(WhitespaceLine),
@@ -305,7 +400,6 @@ pub enum StaveLine {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stave {
     pub lines: Vec<StaveLine>,  // All lines in order
-    pub rhythm_items: Option<Vec<crate::rhythm::Item>>, // Beat structures from rhythm FSM
     pub notation_system: NotationSystem,
     pub source: Source,
 }
@@ -317,9 +411,39 @@ pub struct TextLine {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContentLine {
-    pub elements: Vec<ContentElement>,
+pub enum ContentElement {
+    Barline(Barline),
+    Whitespace(Whitespace),
+    Beat(Beat),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Whitespace {
+    pub content: String,
     pub source: Source,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentLine {
+    pub elements: Vec<ContentElement>,  // Mixed elements: barlines, whitespace, beats
+    pub source: Source,
+}
+
+// Beat structure - a sequence of beat elements
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Beat {
+    pub elements: Vec<BeatElement>,
+    pub source: Source,
+    pub divisions: Option<usize>,        // Number of divisions in this beat (e.g., 12 for 12 sixteenths)
+    pub total_duration: Option<Fraction>, // Total duration of this beat (e.g., 1/4 for quarter note beat)
+}
+
+// Elements that can appear in a beat
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BeatElement {
+    Note(Note),
+    Dash(Dash),
+    BreathMark(BreathMark),
 }
 
 // Spatial annotation lines per MUSIC_TEXT_SPECIFICATION.md
@@ -430,16 +554,3 @@ pub struct Syllable {
     pub source: Source,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ContentElement {
-    PitchString(PitchString),
-    Barline(Barline),
-    Space(Space),
-    Dash(Dash),
-    SlurBegin(SlurBegin),
-    SlurEnd(SlurEnd),
-    BeatGroupBegin(BeatGroupBegin),
-    BeatGroupEnd(BeatGroupEnd),
-    Newline(Newline),
-    EndOfInput(EndOfInput),
-}

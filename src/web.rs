@@ -29,16 +29,14 @@ pub struct RoundtripData {
 pub struct ParseResponse {
     success: bool,
     plain_text: Option<String>,
-    parsed_document: Option<crate::parse::Document>,
-    rhythm_analyzed_document: Option<crate::parse::Document>,
-    rhythm_items: Option<Vec<crate::rhythm::Item>>,
+    document: Option<crate::parse::Document>,
     detected_notation_systems: Option<Vec<String>>,
     lilypond: Option<String>,
     lilypond_svg: Option<String>,
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
-    syntax_spans: Option<Vec<crate::tree_functions::Span>>,
-    character_styles: Option<Vec<crate::tree_functions::CharacterStyle>>,
+    syntax_spans: Option<Vec<crate::renderers::codemirror::Span>>,
+    character_styles: Option<Vec<crate::renderers::codemirror::CharacterStyle>>,
     roundtrip: Option<RoundtripData>,
     error: Option<String>,
 }
@@ -74,9 +72,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
         return Json(ParseResponse {
             success: true,
             plain_text: Some(input.clone()),
-            parsed_document: None,
-            rhythm_analyzed_document: None,
-            rhythm_items: None,
+            document: None,
             detected_notation_systems: None,
             lilypond: None,
             lilypond_svg: None,
@@ -102,24 +98,10 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             };
 
 
-            // Generate normalized elements using the new architecture
-            let normalized_elements = crate::tree_functions::generate_normalized_elements(&result.rhythm_analyzed_document, &input);
+            // Generate spans and character styles directly from document in single tree walk
+            let (syntax_spans, character_styles) = crate::renderers::codemirror::render_codemirror(&result.document, &input);
 
-            // Generate both tokens and character styles from normalized array
-            let (syntax_spans, character_styles) = crate::tree_functions::generate_spans_and_styles(&normalized_elements);
-
-            // Extract rhythm_items from all staves in the rhythm analyzed document
-            let rhythm_items = {
-                let mut all_rhythm_items = Vec::new();
-                for element in &result.rhythm_analyzed_document.elements {
-                    if let crate::parse::model::DocumentElement::Stave(stave) = element {
-                        if let Some(rhythm_items) = &stave.rhythm_items {
-                            all_rhythm_items.extend(rhythm_items.iter().cloned());
-                        }
-                    }
-                }
-                if all_rhythm_items.is_empty() { None } else { Some(all_rhythm_items) }
-            };
+            // Extract beats from all ContentLine elements in staves
 
             // Generate SVG if requested
             let lilypond_svg = if generate_svg && !result.lilypond.is_empty() {
@@ -143,9 +125,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             Json(ParseResponse {
                 success: true,
                 plain_text: Some(input.clone()),
-                parsed_document: Some(result.parsed_document),
-                rhythm_analyzed_document: Some(result.rhythm_analyzed_document),
-                rhythm_items,
+                document: Some(result.document),
                 detected_notation_systems: None,
                 lilypond: Some(result.lilypond),
                 lilypond_svg,
@@ -160,9 +140,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
         Err(e) => Json(ParseResponse {
             success: false,
             plain_text: Some(input.clone()),
-            parsed_document: None,
-            rhythm_analyzed_document: None,
-            rhythm_items: None,
+            document: None,
             detected_notation_systems: None,
             lilypond: None,
             lilypond_svg: None,

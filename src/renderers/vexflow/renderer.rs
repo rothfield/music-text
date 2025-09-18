@@ -20,14 +20,10 @@ impl VexFlowRenderer {
     pub fn render_data_from_document(&self, document: &Document) -> serde_json::Value {
         let mut staves_data = Vec::new();
 
-        // Convert each stave using rhythm analysis results
+        // Convert each stave using ContentLine beats
         for element in &document.elements {
             if let DocumentElement::Stave(stave) = element {
-                let notes = if let Some(rhythm_items) = &stave.rhythm_items {
-                    process_items(rhythm_items)
-                } else {
-                    Vec::new() // No rhythm items available
-                };
+                let notes = extract_beats_from_stave(stave);
 
                 staves_data.push(serde_json::json!({
                     "notes": notes,
@@ -36,14 +32,18 @@ impl VexFlowRenderer {
             }
         }
 
+        // Ensure there's always at least one empty stave if no content
+        if staves_data.is_empty() {
+            staves_data.push(serde_json::json!({
+                "notes": [],
+                "key_signature": "C"
+            }));
+        }
+
         serde_json::json!({
             "staves": staves_data,
-            "title": document.directives.iter().find_map(|d| {
-                if d.key == "title" { Some(&d.value) } else { None }
-            }),
-            "author": document.directives.iter().find_map(|d| {
-                if d.key == "author" { Some(&d.value) } else { None }
-            }),
+            "title": document.title.as_ref().or_else(|| document.directives.get("title")),
+            "author": document.author.as_ref().or_else(|| document.directives.get("author")),
             "time_signature": "4/4",
             "clef": "treble",
             "key_signature": "C"
@@ -57,151 +57,34 @@ impl Default for VexFlowRenderer {
     }
 }
 
-/// Process rhythm items to VexFlow JSON
-fn process_items(rhythm_items: &[crate::rhythm::analyzer::Item]) -> Vec<serde_json::Value> {
-    let mut notes = Vec::new();
 
-    for item in rhythm_items {
-        match item {
-            crate::rhythm::analyzer::Item::Beat(beat) => {
-                if beat.is_tuplet {
-                    // Handle tuplet as a group
-                    let tuplet_notes = convert_beat_to_vexflow_elements(beat);
-                    notes.push(serde_json::json!({
-                        "type": "Tuplet",
-                        "divisions": beat.divisions,
-                        "ratio": beat.tuplet_ratio,
-                        "notes": tuplet_notes
-                    }));
-                } else {
-                    // Regular beat - add elements directly
-                    let beat_elements = convert_beat_to_vexflow_elements(beat);
-                    notes.extend(beat_elements);
-                }
-            },
-            crate::rhythm::analyzer::Item::Barline(barline_type, _) => {
-                notes.push(serde_json::json!({
-                    "type": "BarLine",
-                    "bar_type": format!("{:?}", barline_type)
-                }));
-            },
-            crate::rhythm::analyzer::Item::Breathmark => {
-                notes.push(serde_json::json!({
-                    "type": "Breathmark"
-                }));
-            },
-            crate::rhythm::analyzer::Item::Tonic(_) => {
-                // Tonic doesn't generate visual elements
-            }
-        }
-    }
-
-    notes
-}
-
-/// Convert a beat to VexFlow elements with beaming
-fn convert_beat_to_vexflow_elements(beat: &crate::rhythm::analyzer::Beat) -> Vec<serde_json::Value> {
-    let mut elements = Vec::new();
-
-    // Apply beaming logic: beam consecutive beamable notes within beat
-    let beaming_info = analyze_beat_for_beaming(beat);
-
-    for (element_index, beat_element) in beat.elements.iter().enumerate() {
-        match &beat_element.event {
-            crate::rhythm::analyzer::Event::Note { degree, octave, .. } => {
-                let (key, accidentals) = degree_to_vexflow_key(*degree, *octave);
-                let (duration, dots) = convert_fraction_to_vexflow(beat_element.tuplet_duration);
-
-                // Determine beaming for this note
-                let is_beamable_note = beaming_info.beamable_notes.contains(&element_index);
-                let beam_start = beaming_info.should_beam && is_beamable_note &&
-                                Some(element_index) == beaming_info.beamable_notes.first().copied();
-                let beam_end = beaming_info.should_beam && is_beamable_note &&
-                              Some(element_index) == beaming_info.beamable_notes.last().copied();
-
-                elements.push(serde_json::json!({
-                    "type": "Note",
-                    "keys": [key],
-                    "duration": duration,
-                    "dots": dots,
-                    "accidentals": accidentals,
-                    "tied": false,
-                    "beam_start": beam_start,
-                    "beam_end": beam_end
-                }));
-            },
-            crate::rhythm::analyzer::Event::Rest => {
-                let (duration, dots) = convert_fraction_to_vexflow(beat_element.tuplet_duration);
-
-                elements.push(serde_json::json!({
-                    "type": "Rest",
-                    "duration": duration,
-                    "dots": dots
-                }));
-            },
-            crate::rhythm::analyzer::Event::Unknown { .. } => {
-                // Skip unknown elements
-            }
-        }
-    }
-
-    elements
-}
-
-/// Analyze beat for beaming decisions
-fn analyze_beat_for_beaming(beat: &crate::rhythm::analyzer::Beat) -> BeamingInfo {
-    let mut beamable_notes = Vec::new();
-
-    // Find consecutive beamable notes (eighth notes or smaller)
-    for (index, element) in beat.elements.iter().enumerate() {
-        if matches!(&element.event, crate::rhythm::analyzer::Event::Note { .. }) {
-            let (duration, _) = convert_fraction_to_vexflow(element.tuplet_duration);
-            if is_beamable_duration(&duration) {
-                beamable_notes.push(index);
-            }
-        }
-    }
-
-    let should_beam = beamable_notes.len() >= 2;
-
-    BeamingInfo {
-        should_beam,
-        beamable_notes,
-    }
-}
-
-/// Check if a duration is beamable (eighth note or smaller)
-fn is_beamable_duration(duration: &str) -> bool {
-    matches!(duration, "8" | "16" | "32" | "64")
-}
 
 /// Convert degree to VexFlow key with octave
 fn degree_to_vexflow_key(degree: Degree, octave: i8) -> (String, Vec<serde_json::Value>) {
     use crate::models::pitch::Degree::*;
 
     let (base_note, accidental) = match degree {
-        N1 => ("C", None),
-        N1s => ("C", Some("#")),
-        N1b => ("C", Some("b")),
-        N2 => ("D", None),
-        N2s => ("D", Some("#")),
-        N2b => ("D", Some("b")),
-        N3 => ("E", None),
-        N3s => ("E", Some("#")),
-        N3b => ("E", Some("b")),
-        N4 => ("F", None),
-        N4s => ("F", Some("#")),
-        N4b => ("F", Some("b")),
-        N5 => ("G", None),
-        N5s => ("G", Some("#")),
-        N5b => ("G", Some("b")),
-        N6 => ("A", None),
-        N6s => ("A", Some("#")),
-        N6b => ("A", Some("b")),
-        N7 => ("B", None),
-        N7s => ("B", Some("#")),
-        N7b => ("B", Some("b")),
-        _ => ("C", None), // Default for other variants
+        // Scale degree 1 (Do/Sa/C) - all 5 variants
+        N1bb => ("C", Some("bb")),  N1b => ("C", Some("b")),   N1 => ("C", None),
+        N1s => ("C", Some("#")),    N1ss => ("C", Some("##")),
+        // Scale degree 2 (Re/D) - all 5 variants
+        N2bb => ("D", Some("bb")),  N2b => ("D", Some("b")),   N2 => ("D", None),
+        N2s => ("D", Some("#")),    N2ss => ("D", Some("##")),
+        // Scale degree 3 (Mi/Ga/E) - all 5 variants
+        N3bb => ("E", Some("bb")),  N3b => ("E", Some("b")),   N3 => ("E", None),
+        N3s => ("E", Some("#")),    N3ss => ("E", Some("##")),
+        // Scale degree 4 (Fa/Ma/F) - all 5 variants
+        N4bb => ("F", Some("bb")),  N4b => ("F", Some("b")),   N4 => ("F", None),
+        N4s => ("F", Some("#")),    N4ss => ("F", Some("##")),
+        // Scale degree 5 (Sol/Pa/G) - all 5 variants
+        N5bb => ("G", Some("bb")),  N5b => ("G", Some("b")),   N5 => ("G", None),
+        N5s => ("G", Some("#")),    N5ss => ("G", Some("##")),
+        // Scale degree 6 (La/Dha/A) - all 5 variants
+        N6bb => ("A", Some("bb")),  N6b => ("A", Some("b")),   N6 => ("A", None),
+        N6s => ("A", Some("#")),    N6ss => ("A", Some("##")),
+        // Scale degree 7 (Ti/Ni/B) - all 5 variants
+        N7bb => ("B", Some("bb")),  N7b => ("B", Some("b")),   N7 => ("B", None),
+        N7s => ("B", Some("#")),    N7ss => ("B", Some("##")),
     };
 
     let vexflow_octave = 4 + octave; // Default to 4th octave
@@ -241,5 +124,66 @@ fn convert_fraction_to_vexflow(duration: fraction::Fraction) -> (String, u8) {
         (7, 32) => ("8".to_string(), 2),       // double-dotted eighth
         (7, 64) => ("16".to_string(), 2),      // double-dotted sixteenth
         _ => ("q".to_string(), 0),             // default to quarter note
+    }
+}
+
+/// Extract beats from a stave's ContentLine elements
+fn extract_beats_from_stave(stave: &crate::parse::model::Stave) -> Vec<serde_json::Value> {
+    let mut notes = Vec::new();
+
+    for line in &stave.lines {
+        if let crate::parse::model::StaveLine::ContentLine(content_line) = line {
+            for element in &content_line.elements {
+                if let crate::parse::model::ContentElement::Beat(beat) = element {
+                    // Convert parse::model::Beat to VexFlow format
+                    for beat_element in &beat.elements {
+                        match beat_element {
+                            crate::parse::model::BeatElement::Note(note) => {
+                                // Convert PitchCode to Degree (they have identical variants)
+                                let degree = pitch_code_to_degree(note.pitch_code);
+                                let (pitch_name, accidentals) = degree_to_vexflow_key(degree, note.octave);
+                                notes.push(serde_json::json!({
+                                    "type": "Note",
+                                    "pitch": pitch_name,
+                                    "accidentals": accidentals,
+                                    "duration": "q" // Default to quarter note for now
+                                }));
+                            }
+                            crate::parse::model::BeatElement::Dash(_) => {
+                                notes.push(serde_json::json!({
+                                    "type": "Rest",
+                                    "duration": "q" // Default to quarter rest
+                                }));
+                            }
+                            crate::parse::model::BeatElement::BreathMark(_) => {
+                                // Breath marks could be rendered as symbols
+                                notes.push(serde_json::json!({
+                                    "type": "Symbol",
+                                    "symbol": "breathmark"
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    notes
+}
+
+/// Convert PitchCode to Degree (they have identical variants)
+fn pitch_code_to_degree(pitch_code: crate::parse::model::PitchCode) -> crate::models::pitch::Degree {
+    use crate::parse::model::PitchCode::*;
+    use crate::models::pitch::Degree;
+
+    match pitch_code {
+        N1bb => Degree::N1bb, N1b => Degree::N1b, N1 => Degree::N1, N1s => Degree::N1s, N1ss => Degree::N1ss,
+        N2bb => Degree::N2bb, N2b => Degree::N2b, N2 => Degree::N2, N2s => Degree::N2s, N2ss => Degree::N2ss,
+        N3bb => Degree::N3bb, N3b => Degree::N3b, N3 => Degree::N3, N3s => Degree::N3s, N3ss => Degree::N3ss,
+        N4bb => Degree::N4bb, N4b => Degree::N4b, N4 => Degree::N4, N4s => Degree::N4s, N4ss => Degree::N4ss,
+        N5bb => Degree::N5bb, N5b => Degree::N5b, N5 => Degree::N5, N5s => Degree::N5s, N5ss => Degree::N5ss,
+        N6bb => Degree::N6bb, N6b => Degree::N6b, N6 => Degree::N6, N6s => Degree::N6s, N6ss => Degree::N6ss,
+        N7bb => Degree::N7bb, N7b => Degree::N7b, N7 => Degree::N7, N7s => Degree::N7s, N7ss => Degree::N7ss,
     }
 }

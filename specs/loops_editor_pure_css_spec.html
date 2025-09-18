@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Loop with Inline --chars</title>
+<style>
+  /* Container for one line of notation */
+  .line {
+    font: 32px/1.3 ui-monospace, monospace; /* monospace so 1ch = one note cell */
+    display: inline-flex;   /* lay out notes in a row with predictable gaps */
+    align-items: flex-end;
+    column-gap: 0.25ch;     /* horizontal space between notes */
+  }
+
+  /* A single note */
+  .note.number {
+    display: inline-flex;
+    justify-content: center;
+    width: 1ch;             /* exactly one character wide */
+    position: relative;     /* so ::after can be placed relative to it */
+  }
+
+  /* The loop arc: attached only to the FIRST note of the group */
+  .note.beat::after {
+    content: "";
+    position: absolute;
+    left: 0;                /* start under this note */
+    bottom: -0.42em;        /* how far below the text */
+    height: 1.2em;          /* arc depth (bigger = rounder smile) */
+
+    /* total width = N characters + (N−1) gaps, where N = --chars */
+    width: calc(var(--chars) * 1ch + (var(--chars) - 1) * 0.25ch);
+
+    border-bottom: 2px solid currentColor;   /* the visible line */
+    border-radius: 0 0 9999px 9999px;        /* make it a half-ellipse */
+    pointer-events: none;                    /* ignore mouse events */
+  }
+</style>
+</head>
+<body>
+
+<p>Loop under the first 3 notes (1, 2, 3):</p>
+<div class="line">
+  <!-- This is the first note of the beat. We pass --chars:3 inline. -->
+  <span class="note number beat" style="--chars:3">1</span>
+  <span class="note number">2</span>
+  <span class="note number">3</span>
+  <span class="note number">4</span>
+  <span>|</span>
+</div>
+
+<p>Loop under only the first 2 notes (1, 2):</p>
+<div class="line">
+  <span class="note number beat" style="--chars:2">1</span>
+  <span class="note number">2</span>
+  <span class="note number">3</span>
+  <span class="note number">4</span>
+  <span>|</span>
+</div>
+
+<p>Loop under all 4 notes:</p>
+<div class="line">
+  <span class="note number beat" style="--chars:4">1</span>
+  <span class="note number">2</span>
+  <span class="note number">3</span>
+  <span class="note number">4</span>
+  <span>|</span>
+</div>
+
+</body>
+</html>
+

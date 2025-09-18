@@ -1,582 +1,117 @@
-/// Sophisticated Rhythm FSM - Copied from old working system
-/// Converts flat element lists into beat-grouped structures with proper fraction-based durations
-
-// ContentElement import removed - no longer needed with direct ParsedElement architecture
-use crate::rhythm::types::*;
-use crate::rhythm::converters::BarlineType;
+// Rhythm analyzer that adds duration information to parsed documents
+use crate::parse::model::{Document, DocumentElement, StaveLine, ContentElement, Beat, BeatElement, Note};
 use fraction::Fraction;
 
-// FSM output structures for rhythm processing
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum Event {
-    Note {
-        degree: Degree,
-        octave: i8,
-        children: Vec<ParsedChild>,  // syllables, ornaments, octave markers
-        slur: Option<SlurRole>,
-    },
-    Rest,  // Rests have no additional data
-    Unknown { text: String },  // Unknown tokens from upper/lower lines
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct BeatElement {
-    pub event: Event,
-    pub subdivisions: usize,
-    pub duration: Fraction,               // Actual beat fraction: subdivisions/divisions  
-    pub tuplet_duration: Fraction,        // Mathematical tuplet duration (1/6, 1/3, etc.)
-    pub tuplet_display_duration: Option<Fraction>, // Display duration for tuplets (1/16, 1/8, etc.), None for regular notes
-    pub value: String,                    // Original text value
-    pub position: Position,               // Source position
-}
-
-impl BeatElement {
-    pub fn with_subdivisions(mut self, subdivisions: usize) -> Self {
-        self.subdivisions = subdivisions;
-        self
-    }
-    
-    pub fn extend_subdivision(&mut self) {
-        self.subdivisions += 1;
-    }
-    
-    pub fn is_note(&self) -> bool {
-        matches!(self.event, Event::Note { .. })
-    }
-    
-    pub fn is_rest(&self) -> bool {
-        matches!(self.event, Event::Rest)
-    }
-    
-    pub fn as_note(&self) -> Option<(&Degree, &i8, &Vec<ParsedChild>, &Option<SlurRole>)> {
-        if let Event::Note { degree, octave, children, slur } = &self.event {
-            Some((degree, octave, children, slur))
-        } else {
-            None
-        }
-    }
-    
-    pub fn syl(&self) -> Option<String> {
-        // Extract syllable from ParsedChild::Syllable in children
-        if let Event::Note { children, .. } = &self.event {
-            children.iter().rev().find_map(|child| match child {
-                ParsedChild::Syllable { text, .. } => Some(text.clone()),
-                _ => None
-            })
-        } else {
-            None
-        }
-    }
-    
-    pub fn ornaments(&self) -> Vec<OrnamentType> {
-        if let Event::Note { children, .. } = &self.event {
-            children.iter().filter_map(|child| {
-                if let ParsedChild::Ornament { kind, .. } = child {
-                    Some(kind.clone())
-                } else {
-                    None
-                }
-            }).collect()
-        } else {
-            Vec::new()
-        }
-    }
-}
-
-impl From<ParsedElement> for BeatElement {
-    fn from(element: ParsedElement) -> Self {
-        let (event, value, position) = match element {
-            ParsedElement::Note { degree, octave, value, position, children, slur, .. } => {
-                let event = Event::Note { degree, octave, children, slur };
-                (event, value, position)
-            },
-            ParsedElement::Rest { value, position, .. } => {
-                (Event::Rest, value, position)
-            },
-            ParsedElement::Unknown { value, position } => {
-                let event = Event::Unknown { text: value.clone() };
-                (event, value, position)
-            },
-            ParsedElement::Dash { degree, octave, position, .. } => {
-                // Dash creates a tied note if it has degree/octave, otherwise it's handled as rest
-                if let (Some(deg), Some(oct)) = (degree, octave) {
-                    let event = Event::Note { 
-                        degree: deg, 
-                        octave: oct, 
-                        children: vec![], 
-                        slur: None 
-                    };
-                    (event, "-".to_string(), position)
-                } else {
-                    (Event::Rest, "-".to_string(), position)
-                }
-            },
-            _ => {
-                // Other elements (Barline, Whitespace, etc.) shouldn't reach here
-                // but we'll handle them as rests for safety
-                return BeatElement {
-                    event: Event::Rest,
-                    subdivisions: 1,
-                    duration: Fraction::new(0u64, 1u64),
-                    tuplet_duration: Fraction::new(0u64, 1u64),
-                    tuplet_display_duration: None,
-                    value: "".to_string(),
-                    position: Position { row: 0, col: 0 },
-                };
-            }
-        };
-        
-        BeatElement {
-            event,
-            subdivisions: 1,
-            duration: Fraction::new(1u64, 4u64),
-            tuplet_duration: Fraction::new(1u64, 4u64),
-            tuplet_display_duration: None,
-            value,
-            position,
-        }
-    }
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Beat {
-    pub divisions: usize,
-    pub elements: Vec<BeatElement>,
-    pub tied_to_previous: bool,
-    pub is_tuplet: bool,                      
-    pub tuplet_ratio: Option<(usize, usize)>, 
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum Item {
-    Beat(Beat),
-    Barline(BarlineType, Option<u8>), // BarlineType and optional tala (0-6)
-    Breathmark,
-    Tonic(Degree), // Tonic/Key declaration (e.g., "key: D" -> Degree::N2)
-}
-
-// FSM State Machine (simplified version of old rhythm_fsm.rs)
-#[derive(Debug, PartialEq)]
-enum State {
-    S0,                       // Initial/Between elements
-    ExtendingPitchInBeat,     // Extending current note with dashes
-    ExtendingDashInBeat,      // Extending dashes (rests/ties) with more dashes
-    Halt,                     // End of processing
-}
-
-struct FSM {
-    state: State,
-    extension_chain_active: bool,
-    last_note_across_beats: Option<Degree>,
-    pending_tie: bool,  // Track when a dash has created a tie intention
-    current_beat: Option<Beat>,
-    output: Vec<Item>,
-}
-
-impl FSM {
-    fn new() -> Self {
-        Self {
-            state: State::S0,
-            extension_chain_active: false,
-            last_note_across_beats: None,
-            pending_tie: false,
-            current_beat: None,
-            output: vec![],
-        }
-    }
-
-    fn process(&mut self, elements: &[ParsedElement]) {
-        for element in elements {
-            match (&self.state, element) {
-                // S0 State - Initial/Between elements
-                (State::S0, ParsedElement::Note { .. }) => {
-                    self.start_beat_with_note(element);
-                },
-                (State::S0, ParsedElement::Dash { .. }) => {
-                    if self.extension_chain_active && self.last_note_across_beats.is_some() {
-                        self.pending_tie = true;  // Mark that we have a tie intention
-                        self.start_beat_with_tied_note(element);
-                    } else {
-                        self.start_beat_with_rest(element);
-                    }
-                },
-                (State::S0, ParsedElement::Barline { .. }) => {
-                    self.emit_barline(element);
-                },
-                (State::S0, ParsedElement::Symbol { value, .. }) if value == "'" => {
-                    self.handle_breathmark();
-                },
-                (State::S0, ParsedElement::Whitespace { .. }) => {
-                    // Whitespace in S0 is ignored (beat separators handled elsewhere)
-                },
-                (State::S0, ParsedElement::Unknown { .. }) => {
-                    self.start_beat_with_unknown(element);
-                    // Stay in S0 - self-transition
-                },
-
-
-                // ExtendingPitchInBeat State - Extending current note with dashes
-                (State::ExtendingPitchInBeat, ParsedElement::Dash { .. }) => {
-                    self.extend_last_element();
-                },
-                (State::ExtendingPitchInBeat, ParsedElement::Note { .. }) => {
-                    self.add_note_to_beat(element);
-                },
-                (State::ExtendingPitchInBeat, ParsedElement::Unknown { .. }) => {
-                    self.add_unknown_to_beat(element);
-                    // Stay in ExtendingPitchInBeat - self-transition
-                },
-                (State::ExtendingPitchInBeat, ParsedElement::Whitespace { .. }) => {
-                    self.finish_beat();
-                    self.state = State::S0;
-                },
-                (State::ExtendingPitchInBeat, ParsedElement::Barline { .. }) => {
-                    self.finish_beat();
-                    self.emit_barline(element);
-                    self.state = State::S0;
-                },
-
-                // ExtendingDashInBeat State - Extending dashes (rests/ties) with more dashes
-                (State::ExtendingDashInBeat, ParsedElement::Dash { .. }) => {
-                    self.extend_last_element();
-                },
-                (State::ExtendingDashInBeat, ParsedElement::Note { .. }) => {
-                    self.add_note_to_beat(element);
-                    self.state = State::ExtendingPitchInBeat;
-                },
-                (State::ExtendingDashInBeat, ParsedElement::Unknown { .. }) => {
-                    self.add_unknown_to_beat(element);
-                    // Stay in ExtendingDashInBeat - self-transition
-                },
-                (State::ExtendingDashInBeat, ParsedElement::Whitespace { .. }) => {
-                    self.finish_beat();
-                    self.state = State::S0;
-                },
-                (State::ExtendingDashInBeat, ParsedElement::Barline { .. }) => {
-                    self.finish_beat();
-                    self.emit_barline(element);
-                    self.state = State::S0;
-                },
-
-                // Unhandled combinations
-                _ => {
-                    // Skip unhandled transitions
-                }
-            }
-        }
-
-        // Finish any pending beat
-        if matches!(self.state, State::S0 | State::ExtendingPitchInBeat | State::ExtendingDashInBeat) {
-            self.finish_beat();
-        }
-        self.state = State::Halt;
-    }
-
-    fn process_with_modifications(&mut self, elements: &mut [ParsedElement]) {
-        // First pass: collect the rhythm items (immutable processing)
-        let elements_slice: &[ParsedElement] = elements;
-        self.process(elements_slice);
-
-        // Second pass: assign beat group roles based on generated beats
-        self.assign_beat_group_roles_to_all_elements(elements);
-    }
-
-    fn assign_beat_group_roles_to_all_elements(&self, elements: &mut [ParsedElement]) {
-        // Go through all generated beats and assign roles to corresponding elements
-        for item in &self.output {
-            if let Item::Beat(beat) = item {
-                self.assign_beat_group_roles_to_elements(beat, elements);
-            }
-        }
-    }
-
-    fn start_beat_with_note(&mut self, element: &ParsedElement) {
-        // Finish any existing beat first
-        if self.current_beat.is_some() {
-            self.finish_beat();
-        }
-        let tied_to_previous = self.check_for_tie(element);
-        
-        let mut beat = Beat {
-            divisions: 1,
-            elements: vec![],
-            tied_to_previous,
-            is_tuplet: false,
-            tuplet_ratio: None,
-        };
-        
-        beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
-        self.current_beat = Some(beat);
-        self.update_extension_chain(element);
-        self.state = State::ExtendingPitchInBeat;
-    }
-
-    fn start_beat_with_tied_note(&mut self, dash_element: &ParsedElement) {
-        if let Some(degree) = self.last_note_across_beats {
-            // Create tied note with same pitch as last note
-            let tied_note = ParsedElement::new_note(
-                degree,
-                0, // Default octave - could be improved
-                format!("{:?}", degree),
-                dash_element.position().clone(),
-            );
-
-            let mut beat = Beat {
-                divisions: 1,
-                elements: vec![],
-                tied_to_previous: true,
-                is_tuplet: false,
-                tuplet_ratio: None,
-            };
-            
-            beat.elements.push(BeatElement::from(tied_note).with_subdivisions(1));
-            self.current_beat = Some(beat);
-            self.state = State::ExtendingPitchInBeat;
-        } else {
-            // Fallback to rest if no previous note
-            self.start_beat_with_rest(dash_element);
-        }
-    }
-
-    fn start_beat_with_rest(&mut self, dash_element: &ParsedElement) {
-        let rest_element = ParsedElement::Rest {
-            value: "r".to_string(),
-            position: dash_element.position().clone(),
-            duration: None,
-        };
-
-        let mut beat = Beat {
-            divisions: 1,
-            elements: vec![],
-            tied_to_previous: false,
-            is_tuplet: false,
-            tuplet_ratio: None,
-        };
-        
-        beat.elements.push(BeatElement::from(rest_element).with_subdivisions(1));
-        self.current_beat = Some(beat);
-        self.state = State::ExtendingDashInBeat;
-    }
-
-    fn add_note_to_beat(&mut self, element: &ParsedElement) {
-        if let Some(beat) = &mut self.current_beat {
-            beat.divisions += 1;  // Notes count toward divisions
-            beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
-            self.update_extension_chain(element);
-        }
-    }
-
-    fn start_beat_with_unknown(&mut self, element: &ParsedElement) {
-        // Finish any existing beat first
-        if self.current_beat.is_some() {
-            self.finish_beat();
-        }
-        
-        let mut beat = Beat {
-            divisions: 1,
-            elements: vec![],
-            tied_to_previous: false,
-            is_tuplet: false,
-            tuplet_ratio: None,
-        };
-        
-        beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
-        self.current_beat = Some(beat);
-        // Don't change state - unknown tokens are self-transitions
-    }
-
-    fn add_unknown_to_beat(&mut self, element: &ParsedElement) {
-        if let Some(beat) = &mut self.current_beat {
-            // DON'T increment divisions for unknown tokens - they don't affect beat timing
-            beat.elements.push(BeatElement::from(element.clone()).with_subdivisions(1));
-        }
-    }
-
-    
-
-    fn extend_last_element(&mut self) {
-        if let Some(beat) = &mut self.current_beat {
-            beat.divisions += 1;  // Dashes count toward divisions (extend duration)
-            if let Some(last) = beat.elements.last_mut() {
-                last.extend_subdivision();
-            }
-        }
-    }
-
-    fn check_for_tie(&mut self, element: &ParsedElement) -> bool {
-        if let ParsedElement::Note { degree, .. } = element {
-            if self.pending_tie {
-                if let Some(pending_pitch) = self.last_note_across_beats {
-                    if *degree == pending_pitch {
-                        self.pending_tie = false;  // Clear tie intention after using
-                        self.last_note_across_beats = None; // Clear after using
-                        return true;
-                    }
-                }
-            }
-        }
-        // Clear any unused tie intention
-        self.pending_tie = false;
-        false
-    }
-
-    fn update_extension_chain(&mut self, element: &ParsedElement) {
-        if let ParsedElement::Note { degree, .. } = element {
-            self.last_note_across_beats = Some(*degree);
-            self.extension_chain_active = true;
-        }
-    }
-
-    fn handle_breathmark(&mut self) {
-        self.extension_chain_active = false;
-        self.last_note_across_beats = None;
-        self.pending_tie = false;  // Clear any pending ties
-        self.output.push(Item::Breathmark);
-    }
-
-    fn finish_beat(&mut self) {
-        if let Some(mut beat) = self.current_beat.take() {
-            // Tuplet detection: not a power of 2 AND more than one element
-            beat.is_tuplet = beat.elements.len() > 1 && 
-                           beat.divisions > 1 && 
-                           (beat.divisions & (beat.divisions - 1)) != 0;
-            
-            if beat.is_tuplet {
-                let power_of_2 = Self::find_next_lower_power_of_2(beat.divisions);
-                beat.tuplet_ratio = Some((beat.divisions, power_of_2));
-                
-                // Calculate duration for tuplet elements
-                let each_unit = Fraction::new(1u64, 4u64) / power_of_2;
-                for beat_element in &mut beat.elements {
-                    // Actual duration (subdivision fraction of the beat)
-                    beat_element.duration = Fraction::new(beat_element.subdivisions as u64, beat.divisions as u64);
-                    // Tuplet duration for display
-                    beat_element.tuplet_duration = each_unit * beat_element.subdivisions;
-                    beat_element.tuplet_display_duration = Some(each_unit * beat_element.subdivisions);
-                }
-            } else {
-                // Regular beat processing
-                for beat_element in &mut beat.elements {
-                    let base_duration = Fraction::new(beat_element.subdivisions as u64, beat.divisions as u64) 
-                                      * Fraction::new(1u64, 4u64);
-                    beat_element.duration = base_duration;
-                    beat_element.tuplet_duration = base_duration;
-                }
-            }
-            
-            // Set pending tie for next beat if last element can be extended
-            if let Some(last_element) = beat.elements.last() {
-                if last_element.is_note() && self.extension_chain_active {
-                    if let Some((degree, _, _, _)) = last_element.as_note() {
-                        self.last_note_across_beats = Some(*degree);
-                    }
-                }
-            }
-
-            // TODO: Set beat_group and in_beat_group on original ParsedElements
-            // when beat has multiple elements (reuse existing attributes)
-
-            self.output.push(Item::Beat(beat));
-        }
-    }
-
-
-    fn assign_beat_group_roles_to_elements(&self, beat: &Beat, elements: &mut [ParsedElement]) {
-        use crate::rhythm::types::BeatGroupRole;
-
-        // Find the corresponding elements in the original array by position
-        for (beat_element_index, beat_element) in beat.elements.iter().enumerate() {
-            let position = &beat_element.position;
-
-            // Find the matching element in the original array
-            for element in elements.iter_mut() {
-                if element.position() == position {
-                    // Assign beat group role based on position in beat
-                    let role = if beat_element_index == 0 {
-                        BeatGroupRole::Start
-                    } else if beat_element_index == beat.elements.len() - 1 {
-                        BeatGroupRole::End
-                    } else {
-                        BeatGroupRole::Middle
-                    };
-
-                    // Set the beat group fields on the original element
-                    match element {
-                        ParsedElement::Note { beat_group, in_beat_group, .. } => {
-                            *beat_group = Some(role);
-                            *in_beat_group = true;
-                        }
-                        // Other element types don't have beat_group fields but could be extended
-                        _ => {}
-                    }
-                    break;
+/// Analyze rhythm patterns and add duration information to the document
+/// This function modifies the document in place, adding duration info to Notes and Beats
+pub fn analyze_rhythm_into_document(document: &mut Document) -> Result<(), String> {
+    // Walk through all staves and content lines
+    for element in &mut document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            for line in &mut stave.lines {
+                if let StaveLine::ContentLine(content_line) = line {
+                    analyze_content_line_rhythm(&mut content_line.elements)?;
                 }
             }
         }
     }
+    Ok(())
+}
 
-    fn find_next_lower_power_of_2(n: usize) -> usize {
-        let mut power = 1;
-        while power * 2 < n {
-            power *= 2;
-        }
-        power.max(2)
-    }
-
-    fn emit_barline(&mut self, element: &ParsedElement) {
-        if let ParsedElement::Barline { style, tala, .. } = element {
-            match BarlineType::from_str(style) {
-                Ok(barline_type) => self.output.push(Item::Barline(barline_type, *tala)),
-                Err(_err) => {} // Skip invalid barlines
-            }
+/// Analyze rhythm for a content line (sequence of beats and other elements)
+fn analyze_content_line_rhythm(elements: &mut Vec<ContentElement>) -> Result<(), String> {
+    for element in elements {
+        if let ContentElement::Beat(beat) = element {
+            analyze_beat_rhythm(beat)?;
         }
     }
+    Ok(())
 }
 
-impl ParsedElement {
-    pub fn position(&self) -> &Position {
-        match self {
-            ParsedElement::Note { position, .. } => position,
-            ParsedElement::Rest { position, .. } => position,
-            ParsedElement::Dash { position, .. } => position,
-            ParsedElement::Barline { position, .. } => position,
-            ParsedElement::Whitespace { position, .. } => position,
-            ParsedElement::Symbol { position, .. } => position,
-            ParsedElement::Unknown { position, .. } => position,
-            ParsedElement::Newline { position, .. } => position,
-            ParsedElement::EndOfInput { position, .. } => position,
+/// Analyze rhythm for a single beat
+fn analyze_beat_rhythm(beat: &mut Beat) -> Result<(), String> {
+    let element_count = beat.elements.len();
+
+    if element_count == 0 {
+        return Ok(());
+    }
+
+    // Analyze based on the number of elements in the beat
+    // This implements the doremi-script rhythm logic where:
+    // - Single element = quarter note (1/4)
+    // - Multiple elements = subdivisions (1/8, 1/16, etc.)
+
+    let (individual_duration, beat_total_duration) = determine_beat_durations(element_count);
+
+    // Set beat-level metadata
+    beat.divisions = Some(element_count);
+    beat.total_duration = Some(beat_total_duration);
+
+    // Set duration for each note in the beat
+    for beat_element in &mut beat.elements {
+        if let BeatElement::Note(note) = beat_element {
+            note.duration = Some(individual_duration);
+        }
+        // Dashes and breath marks don't get duration - they're handled differently
+    }
+
+    Ok(())
+}
+
+/// Determine duration based on the number of elements in a beat
+/// Returns (individual_note_duration, total_beat_duration)
+fn determine_beat_durations(element_count: usize) -> (Fraction, Fraction) {
+    match element_count {
+        1 => {
+            // Single element = quarter note
+            (Fraction::new(1u64, 4u64), Fraction::new(1u64, 4u64))
+        }
+        2 => {
+            // Two elements = eighth notes
+            (Fraction::new(1u64, 8u64), Fraction::new(1u64, 4u64))
+        }
+        3 => {
+            // Three elements = eighth note triplet (each is 1/12)
+            (Fraction::new(1u64, 12u64), Fraction::new(1u64, 4u64))
+        }
+        4 => {
+            // Four elements = sixteenth notes
+            (Fraction::new(1u64, 16u64), Fraction::new(1u64, 4u64))
+        }
+        6 => {
+            // Six elements = sixteenth note triplet (each is 1/24)
+            (Fraction::new(1u64, 24u64), Fraction::new(1u64, 4u64))
+        }
+        8 => {
+            // Eight elements = thirty-second notes
+            (Fraction::new(1u64, 32u64), Fraction::new(1u64, 4u64))
+        }
+        12 => {
+            // Twelve elements = thirty-second note triplet (each is 1/48)
+            (Fraction::new(1u64, 48u64), Fraction::new(1u64, 4u64))
+        }
+        16 => {
+            // Sixteen elements = sixty-fourth notes
+            (Fraction::new(1u64, 64u64), Fraction::new(1u64, 4u64))
+        }
+        n => {
+            // For other counts, calculate based on subdividing a quarter note
+            // This handles cases like 5, 7, 9, 10, 11, etc.
+            let denominator = 4 * n as u64;
+            (Fraction::new(1u64, denominator), Fraction::new(1u64, 4u64))
         }
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// Convert ParsedElements to FSM output using hierarchical state design
-/// Also modifies the original elements to set beat group roles
-pub fn process_rhythm(elements: &mut [ParsedElement]) -> Vec<Item> {
-    let mut fsm = FSM::new();
-    fsm.process_with_modifications(elements);
-    fsm.output
-}
-
-/// Legacy immutable version for compatibility
-pub fn process_rhythm_immutable(elements: &[ParsedElement]) -> Vec<Item> {
-    let mut fsm = FSM::new();
-    fsm.process(elements);
-    fsm.output
-}
-
-/// Batch rhythm processing - processes all staves together for better context
-/// This allows the FSM to track extension chains and ties across stave boundaries
-pub fn process_rhythm_batch(all_stave_content_lines: &mut [&mut Vec<ParsedElement>]) -> Vec<Vec<Item>> {
-    let mut all_results = Vec::new();
-
-    for content_line in all_stave_content_lines {
-        // Process each stave individually, modifying original elements
-        let rhythm_items = process_rhythm(content_line);
-        all_results.push(rhythm_items);
+    #[test]
+    fn test_determine_beat_durations() {
+        assert_eq!(determine_beat_durations(1), (Fraction::new(1u64, 4u64), Fraction::new(1u64, 4u64)));
+        assert_eq!(determine_beat_durations(2), (Fraction::new(1u64, 8u64), Fraction::new(1u64, 4u64)));
+        assert_eq!(determine_beat_durations(4), (Fraction::new(1u64, 16u64), Fraction::new(1u64, 4u64)));
+        assert_eq!(determine_beat_durations(12), (Fraction::new(1u64, 48u64), Fraction::new(1u64, 4u64)));
     }
-
-    all_results
 }
-
-// ContentElement conversion functions removed - no longer needed with direct ParsedElement architecture

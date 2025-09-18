@@ -1,5 +1,7 @@
 use crate::parse::model::{Document, Stave, TextLine, WhitespaceLine, Source, NotationSystem, Position as ModelPosition};
+use crate::parse::document_header;
 use crate::rhythm::types::{ParsedElement, Degree, Position};
+use std::collections::HashMap;
 
 /// Parse error for recursive descent parser
 #[derive(Debug, Clone)]
@@ -23,52 +25,31 @@ impl From<ParseError> for String {
     }
 }
 
+
 /// Parse document according to formal grammar:
-/// document = blank_lines* (stave (blank_lines stave)*)? blank_lines?
+/// document = document_header? document_body?
 pub fn parse_document(input: &str) -> Result<Document, ParseError> {
-    let mut chars = input.chars().peekable();
-    let mut line = 1;
-    let mut column = 1;
+    let lines: Vec<&str> = input.lines().collect();
+    let mut line_idx = 0;
     let mut elements = Vec::new();
 
-    // Parse optional leading blank_lines*
-    while is_blank_lines_start(&mut chars.clone()) {
-        let blank_lines = parse_blank_lines_element(&mut chars, &mut line, &mut column)?;
-        elements.push(crate::parse::model::DocumentElement::BlankLines(blank_lines));
-    }
+    // Parse document_header?
+    let header = document_header::parse(&lines, &mut line_idx)?;
 
-    // Parse optional (stave (blank_lines stave)*)?
-    if chars.peek().is_some() {
-        // We have content that might be a stave
-        let first_stave = parse_stave_from_chars(&mut chars, &mut line, &mut column)?;
-        elements.push(crate::parse::model::DocumentElement::Stave(first_stave));
-
-        // Parse (blank_lines stave)*
-        while chars.peek().is_some() {
-            // Check if we have blank_lines
-            if is_blank_lines_start(&mut chars.clone()) {
-                let blank_lines = parse_blank_lines_element(&mut chars, &mut line, &mut column)?;
-                elements.push(crate::parse::model::DocumentElement::BlankLines(blank_lines));
-
-                // After blank_lines, there might be another stave
-                if chars.peek().is_some() {
-                    let stave = parse_stave_from_chars(&mut chars, &mut line, &mut column)?;
-                    elements.push(crate::parse::model::DocumentElement::Stave(stave));
-                }
-            } else {
-                // No blank_lines, so this should be continuation of current stave
-                // This shouldn't happen with proper stave parsing, but let's handle it
-                break;
-            }
-        }
+    // Parse document_body? (remaining lines)
+    if line_idx < lines.len() {
+        let body_input = lines[line_idx..].join("\n");
+        elements = parse_document_body(&body_input)?;
     }
 
     Ok(Document {
-        directives: Vec::new(),
+        title: header.title,
+        author: header.author,
+        directives: header.directives,
         elements,
         source: Source {
             value: Some(input.to_string()),
-            position: ModelPosition { line: 1, column: 1 },
+            position: ModelPosition { line: 1, column: 1, index_in_line: 0, index_in_doc: 0 },
         },
     })
 }
@@ -79,10 +60,12 @@ fn is_blank_lines_start(chars: &mut std::iter::Peekable<std::str::Chars>) -> boo
 }
 
 /// Parse blank_lines (newline (whitespace* newline)+) and return BlankLines element
-fn parse_blank_lines_element(chars: &mut std::iter::Peekable<std::str::Chars>, line: &mut usize, column: &mut usize) -> Result<crate::parse::model::BlankLines, ParseError> {
+fn parse_blank_lines_element(chars: &mut std::iter::Peekable<std::str::Chars>, line: &mut usize, column: &mut usize, doc_index: &mut usize) -> Result<crate::parse::model::BlankLines, ParseError> {
     let mut content = String::new();
     let start_line = *line;
     let start_column = *column;
+    let start_index_in_line = if *column > 0 { *column - 1 } else { 0 };
+    let start_index_in_doc = *doc_index;
 
     // First newline
     if let Some(&'\n') = chars.peek() {
@@ -90,6 +73,7 @@ fn parse_blank_lines_element(chars: &mut std::iter::Peekable<std::str::Chars>, l
         content.push('\n');
         *line += 1;
         *column = 1;
+        *doc_index += 1;
     } else {
         return Err(ParseError {
             message: "Expected newline for blank_lines".to_string(),
@@ -106,6 +90,7 @@ fn parse_blank_lines_element(chars: &mut std::iter::Peekable<std::str::Chars>, l
                 chars.next();
                 content.push(ch);
                 *column += 1;
+                *doc_index += 1;
             } else {
                 break;
             }
@@ -117,6 +102,7 @@ fn parse_blank_lines_element(chars: &mut std::iter::Peekable<std::str::Chars>, l
             content.push('\n');
             *line += 1;
             *column = 1;
+            *doc_index += 1;
         } else {
             break; // End of blank_lines
         }
@@ -127,15 +113,16 @@ fn parse_blank_lines_element(chars: &mut std::iter::Peekable<std::str::Chars>, l
         content,
         source: Source {
             value: Some(source_value),
-            position: ModelPosition { line: start_line, column: start_column },
+            position: ModelPosition { line: start_line, column: start_column, index_in_line: start_index_in_line, index_in_doc: start_index_in_doc },
         },
     })
 }
 
 /// Parse stave from character stream following grammar:
 /// stave = upper_line* content_line (lower_line | lyrics_line)* (blank_lines | (whitespace* newline)* EOI)
-fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line: &mut usize, column: &mut usize) -> Result<Stave, ParseError> {
+fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line: &mut usize, column: &mut usize, doc_index: &mut usize) -> Result<Stave, ParseError> {
     let start_line = *line;
+    let stave_start_doc_index = *doc_index;
     let mut lines = Vec::new();
     let mut stave_content = String::new();
 
@@ -148,6 +135,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
 
         // Collect the current line
         let mut current_line = String::new();
+        let this_line_start_doc_index = *doc_index;
         while let Some(&ch) = chars.peek() {
             if ch == '\n' {
                 chars.next(); // consume newline
@@ -155,12 +143,14 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 stave_content.push(ch);
                 *line += 1;
                 *column = 1;
+                *doc_index += 1;
                 break;
             } else {
                 let consumed_char = chars.next().unwrap();
                 current_line.push(consumed_char);
                 stave_content.push(consumed_char);
                 *column += 1;
+                *doc_index += 1;
             }
         }
 
@@ -168,7 +158,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
         // because lines like ".123" could match both but should be treated as upper lines
         if is_upper_line(&current_line.trim_end_matches('\n')) {
             // Parse as upper line using our upper_line parser
-            if let Ok(parsed_upper) = crate::parse::upper_line_parser::parse_upper_line(&current_line, *line - 1) {
+            if let Ok(parsed_upper) = crate::parse::upper_line_parser::parse_upper_line(&current_line, *line - 1, this_line_start_doc_index) {
                 lines.push(crate::parse::model::StaveLine::Upper(parsed_upper));
             } else {
                 // Fall back to text line
@@ -176,7 +166,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                     content: current_line.trim_end_matches('\n').to_string(),
                     source: Source {
                         value: Some(current_line.trim_end_matches('\n').to_string()),
-                        position: ModelPosition { line: *line - 1, column: 1 },
+                        position: ModelPosition { line: *line - 1, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                     },
                 };
                 lines.push(crate::parse::model::StaveLine::Text(text_line));
@@ -184,9 +174,18 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
         } else if is_content_line(&current_line.trim_end_matches('\n')) {
             // Detect notation system from the content line
             let notation_system = detect_notation_system(&current_line);
-            // Parse the content line using dedicated parser with notation system
-            let content_line_elements = crate::parse::content_line_parser::parse_content_line_with_system(&current_line, *line, notation_system)?;
-            lines.push(crate::parse::model::StaveLine::Content(content_line_elements));
+            // Parse directly to ContentLine using v3 parser
+            let content_line = crate::parse::content_line_parser_v3::parse_content_line(
+                &current_line,
+                *line,
+                notation_system,
+                this_line_start_doc_index
+            ).map_err(|e| ParseError {
+                message: format!("Content line parsing failed: {}", e.message),
+                line: e.line,
+                column: e.column,
+            })?;
+            lines.push(crate::parse::model::StaveLine::ContentLine(content_line));
             break; // Exit after finding content_line
         } else {
             // Treat as text line
@@ -194,7 +193,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 content: current_line.trim_end_matches('\n').to_string(),
                 source: Source {
                     value: Some(current_line.trim_end_matches('\n').to_string()),
-                    position: ModelPosition { line: *line - 1, column: 1 },
+                    position: ModelPosition { line: *line - 1, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                 },
             };
             lines.push(crate::parse::model::StaveLine::Text(text_line));
@@ -210,6 +209,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
 
         // Collect the current line
         let mut current_line = String::new();
+        let this_line_start_doc_index = *doc_index;
         while let Some(&ch) = chars.peek() {
             if ch == '\n' {
                 chars.next(); // consume newline
@@ -217,12 +217,14 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 stave_content.push(ch);
                 *line += 1;
                 *column = 1;
+                *doc_index += 1;
                 break;
             } else {
                 let consumed_char = chars.next().unwrap();
                 current_line.push(consumed_char);
                 stave_content.push(consumed_char);
                 *column += 1;
+                *doc_index += 1;
             }
         }
 
@@ -242,13 +244,13 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 if ch.is_whitespace() {
                     elements.push(ParsedElement::Whitespace {
                         value: ch.to_string(),
-                        position: Position { row: *line, col: col_position },
+                        position: Position { row: *line, col: col_position, char_index: this_line_start_doc_index + col_position },
                     });
                 } else {
                     // Non-whitespace in what we thought was a whitespace line - treat as unknown
                     elements.push(ParsedElement::Unknown {
                         value: ch.to_string(),
-                        position: Position { row: *line, col: col_position },
+                        position: Position { row: *line, col: col_position, char_index: this_line_start_doc_index + col_position },
                     });
                 }
                 col_position += 1;
@@ -258,7 +260,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
             if current_line.ends_with('\n') {
                 elements.push(ParsedElement::Newline {
                     value: "\n".to_string(),
-                    position: Position { row: *line, col: col_position },
+                    position: Position { row: *line, col: col_position, char_index: this_line_start_doc_index + col_position },
                 });
             }
 
@@ -266,13 +268,13 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 elements,
                 source: Source {
                     value: Some(current_line.clone()),
-                    position: ModelPosition { line: *line, column: 1 },
+                    position: ModelPosition { line: *line, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                 },
             };
             lines.push(crate::parse::model::StaveLine::Whitespace(whitespace_line));
         } else if is_lower_line(&current_line.trim_end_matches('\n')) {
             // Parse as lower line using our lower_line parser (include newline)
-            if let Ok(parsed_lower) = crate::parse::lower_line_parser::parse_lower_line(&current_line, *line - 1) {
+            if let Ok(parsed_lower) = crate::parse::lower_line_parser::parse_lower_line(&current_line, *line - 1, this_line_start_doc_index) {
                 lines.push(crate::parse::model::StaveLine::Lower(parsed_lower));
             } else {
                 // Fall back to text line
@@ -280,7 +282,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                     content: current_line.trim_end_matches('\n').to_string(),
                     source: Source {
                         value: Some(current_line.trim_end_matches('\n').to_string()),
-                        position: ModelPosition { line: *line - 1, column: 1 },
+                        position: ModelPosition { line: *line - 1, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                     },
                 };
                 lines.push(crate::parse::model::StaveLine::Text(text_line));
@@ -291,7 +293,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 content: current_line.trim_end_matches('\n').to_string(),
                 source: Source {
                     value: Some(current_line.trim_end_matches('\n').to_string()),
-                    position: ModelPosition { line: *line - 1, column: 1 },
+                    position: ModelPosition { line: *line - 1, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                 },
             };
             lines.push(crate::parse::model::StaveLine::Text(text_line));
@@ -309,11 +311,10 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
 
     Ok(Stave {
         lines,
-        rhythm_items: None,
         notation_system: detect_notation_system(&stave_content),
         source: Source {
             value: Some(stave_content),
-            position: ModelPosition { line: start_line, column: 1 },
+            position: ModelPosition { line: start_line, column: 1, index_in_line: 0, index_in_doc: stave_start_doc_index },
         },
     })
 }
@@ -347,4 +348,40 @@ fn detect_notation_system(input: &str) -> NotationSystem {
     } else {
         NotationSystem::Western
     }
+}
+
+/// Parse document body (reuse existing stave parsing logic)
+fn parse_document_body(input: &str) -> Result<Vec<crate::parse::model::DocumentElement>, ParseError> {
+    let mut chars = input.chars().peekable();
+    let mut line = 1;
+    let mut column = 1;
+    let mut doc_index: usize = 0;
+    let mut elements = Vec::new();
+
+    // Parse optional leading blank_lines*
+    while is_blank_lines_start(&mut chars.clone()) {
+        let blank_lines = parse_blank_lines_element(&mut chars, &mut line, &mut column, &mut doc_index)?;
+        elements.push(crate::parse::model::DocumentElement::BlankLines(blank_lines));
+    }
+
+    // Parse optional (stave (blank_lines stave)*)?
+    if chars.peek().is_some() {
+        let first_stave = parse_stave_from_chars(&mut chars, &mut line, &mut column, &mut doc_index)?;
+        elements.push(crate::parse::model::DocumentElement::Stave(first_stave));
+
+        // Parse (blank_lines stave)*
+        while chars.peek().is_some() {
+            if is_blank_lines_start(&mut chars.clone()) {
+                let blank_lines = parse_blank_lines_element(&mut chars, &mut line, &mut column, &mut doc_index)?;
+                elements.push(crate::parse::model::DocumentElement::BlankLines(blank_lines));
+            }
+
+            if chars.peek().is_some() {
+                let stave = parse_stave_from_chars(&mut chars, &mut line, &mut column, &mut doc_index)?;
+                elements.push(crate::parse::model::DocumentElement::Stave(stave));
+            }
+        }
+    }
+
+    Ok(elements)
 }

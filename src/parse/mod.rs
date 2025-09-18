@@ -7,11 +7,22 @@ pub mod recursive_descent;
 pub mod model;
 pub mod lower_line_parser;
 pub mod upper_line_parser;
-pub mod content_line_parser;
+pub mod content_line_parser_v3;
+
+// Grammar rule modules
+pub mod title_line;
+pub mod directive_line;
+pub mod text_line;
+pub mod header_line;
+pub mod document_header;
+pub mod line_classifier;
+pub mod pitch;
+pub mod beat;
 
 // Re-export key types and functions for convenience
-pub use model::{Document, Directive, Stave, ContentLine, ContentElement, TextLine, Position, PitchCode, NotationSystem, Source, LowerLine, LowerElement, UpperLine, UpperElement, WhitespaceLine};
+pub use model::{Document, Directive, Stave, ContentLine, ContentElement, TextLine, Position, PitchCode, NotationSystem, Source, LowerLine, LowerElement, UpperLine, UpperElement, WhitespaceLine, Beat, BeatElement, Note, Dash, BreathMark};
 pub use recursive_descent::{parse_document, ParseError};
 pub use lower_line_parser::parse_lower_line;
 pub use upper_line_parser::parse_upper_line;
-pub use content_line_parser::{parse_content_line, parse_content_line_with_row, parse_content_line_with_system};
+pub use pitch::{parse_pitch, is_pitch_start};
+pub use beat::parse_beat;

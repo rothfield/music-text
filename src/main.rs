@@ -17,6 +17,7 @@ use ratatui::{
 };
 
 use music_text::pipeline;
+use music_text::parse::line_classifier;
 
 
 #[derive(Parser)]
@@ -39,6 +40,10 @@ struct Cli {
     #[arg(long)]
     web: bool,
 
+    /// Show line classification tags like #content number# or #text#
+    #[arg(long)]
+    classify: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -50,9 +55,6 @@ enum Commands {
     /// Show parsed document structure (JSON)
     Document {
         input: Option<String>,
-        /// Show rhythm-analyzed document instead of parsed document
-        #[arg(long)]
-        rhythm: bool,
     },
     /// Show full LilyPond score
     #[command(name = "full-lily")]
@@ -64,8 +66,6 @@ enum Commands {
     CharacterStyles { input: Option<String> },
     /// Generate VexFlow JSON data
     Vexflow { input: Option<String> },
-    /// Show rhythm analysis results
-    Rhythm { input: Option<String> },
     /// Parse with advanced options
     Parse {
         input: Option<String>,
@@ -108,15 +108,10 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             run_tui_repl().await?;
             return Ok(());
         }
-        Some(Commands::Document { input, rhythm }) => {
+        Some(Commands::Document { input }) => {
             let notation = get_input_from_option_or_stdin(input)?;
             let result = pipeline::process_notation(&notation)?;
-            let doc = if rhythm {
-                &result.rhythm_analyzed_document
-            } else {
-                &result.parsed_document
-            };
-            println!("{}", serde_json::to_string_pretty(doc)?);
+            println!("{}", serde_json::to_string_pretty(&result.document)?);
             return Ok(());
         }
         Some(Commands::FullLily { input }) => {
@@ -128,15 +123,14 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         Some(Commands::Tokens { input }) => {
             let notation = get_input_from_option_or_stdin(input)?;
             let result = pipeline::process_notation(&notation)?;
-            let spans = music_text::tree_functions::generate_syntax_spans(&result.parsed_document, &notation);
+            let spans = music_text::renderers::codemirror::render_codemirror_spans(&result.document, &notation);
             println!("{}", serde_json::to_string_pretty(&spans)?);
             return Ok(());
         }
         Some(Commands::CharacterStyles { input }) => {
             let notation = get_input_from_option_or_stdin(input)?;
             let result = pipeline::process_notation(&notation)?;
-            let normalized_elements = music_text::tree_functions::generate_normalized_elements(&result.rhythm_analyzed_document, &notation);
-            let (_spans, styles) = music_text::tree_functions::generate_spans_and_styles(&normalized_elements);
+            let (_spans, styles) = music_text::renderers::codemirror::render_codemirror(&result.document, &notation);
             println!("{}", serde_json::to_string_pretty(&styles)?);
             return Ok(());
         }
@@ -144,12 +138,6 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let notation = get_input_from_option_or_stdin(input)?;
             let result = pipeline::process_notation(&notation)?;
             println!("{}", serde_json::to_string_pretty(&result.vexflow_data)?);
-            return Ok(());
-        }
-        Some(Commands::Rhythm { input }) => {
-            let notation = get_input_from_option_or_stdin(input)?;
-            let result = pipeline::process_notation(&notation)?;
-            println!("{}", serde_json::to_string_pretty(&result.rhythm_analyzed_document)?);
             return Ok(());
         }
         Some(Commands::Parse { input, validate, roundtrip, show_warnings }) => {
@@ -172,7 +160,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 eprintln!("No warnings");
             }
 
-            println!("{}", serde_json::to_string_pretty(&result.parsed_document)?);
+            println!("{}", serde_json::to_string_pretty(&result.document)?);
             return Ok(());
         }
         Some(Commands::Validate { input, strict }) => {
@@ -200,7 +188,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("{{");
             println!("  \"original_length\": {},", notation.len());
             println!("  \"parsed_successfully\": true,");
-            println!("  \"stave_count\": {}", result.parsed_document.elements.len());
+            println!("  \"stave_count\": {}", result.document.elements.len());
             println!("}}");
             return Ok(());
         }
@@ -229,14 +217,23 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         buffer
     };
 
+    // Handle classification mode
+    if cli.classify {
+        let classified_lines = line_classifier::classify_lines(&input);
+        for line in classified_lines {
+            println!("{}", line);
+        }
+        return Ok(());
+    }
+
     match pipeline::process_notation(&input) {
         Ok(result) => {
             match cli.output.as_str() {
                 "json" => {
-                    println!("{}", serde_json::to_string_pretty(&result.rhythm_analyzed_document)?);
+                    println!("{}", serde_json::to_string_pretty(&result.document)?);
                 }
                 "debug" => {
-                    println!("{:#?}", result.rhythm_analyzed_document);
+                    println!("{:#?}", result.document);
                 }
                 _ => {
                     eprintln!("Unknown output format: {}", cli.output);
@@ -392,61 +389,38 @@ impl App {
 
         let format = OutputFormat::all()[self.selected_format];
 
-        // Make HTTP request to the web server
-        let client = reqwest::Client::new();
-        let generate_svg = format == OutputFormat::SVG;
-        let url = format!("http://localhost:3000/api/parse?input={}&generate_svg={}",
-            urlencoding::encode(&self.input), generate_svg);
-
-        let result = match client.get(&url).send().await {
-            Ok(response) => {
-                match response.json::<serde_json::Value>().await {
-                    Ok(json) => {
-                        if json["success"].as_bool().unwrap_or(false) {
-                            Ok(json)
-                        } else {
-                            Err(json["error"].as_str().unwrap_or("Unknown error").to_string())
-                        }
-                    }
-                    Err(e) => Err(format!("JSON parse error: {}", e))
-                }
-            }
-            Err(e) => Err(format!("Request error: {} (is web server running?)", e))
-        };
+        // Use new parser structure (no HTTP requests)
+        let result = pipeline::process_notation(&self.input);
 
         match result {
-            Ok(json) => {
+            Ok(processing_result) => {
                 self.error = None;
                 self.scroll_offset = 0; // Reset scroll when content changes
                 self.output = match format {
                     OutputFormat::LilyPond => {
-                        json["lilypond"].as_str().unwrap_or("").to_string()
+                        processing_result.lilypond
                     },
                     OutputFormat::JSON => {
-                        serde_json::to_string_pretty(&json["parsed_document"]).unwrap_or_else(|e| format!("JSON error: {}", e))
+                        serde_json::to_string_pretty(&processing_result.document)
+                            .unwrap_or_else(|e| format!("JSON error: {}", e))
                     },
                     OutputFormat::Debug => {
-                        format!("{:#?}", json["parsed_document"])
+                        format!("{:#?}", processing_result.document)
                     },
                     OutputFormat::SVG => {
-                        if let Some(svg_content) = json["lilypond_svg"].as_str() {
-                            if !svg_content.is_empty() {
-                                svg_content.to_string()
-                            } else {
-                                "SVG not available (server may need generate_svg=true)".to_string()
-                            }
-                        } else {
-                            "SVG not available".to_string()
-                        }
+                        processing_result.vexflow_svg.clone()
                     },
                     OutputFormat::Tokens => {
-                        serde_json::to_string_pretty(&json["syntax_spans"]).unwrap_or("Spans not available".to_string())
+                        let spans = music_text::renderers::codemirror::render_codemirror_spans(&processing_result.document, &self.input);
+                        serde_json::to_string_pretty(&spans).unwrap_or("Spans not available".to_string())
                     },
                     OutputFormat::Document => {
-                        serde_json::to_string_pretty(&json["parsed_document"]).unwrap_or_else(|e| format!("JSON error: {}", e))
+                        serde_json::to_string_pretty(&processing_result.document)
+                            .unwrap_or_else(|e| format!("JSON error: {}", e))
                     },
                     OutputFormat::CharacterStyles => {
-                        serde_json::to_string_pretty(&json["character_styles"]).unwrap_or("Character styles not available".to_string())
+                        let (_spans, styles) = music_text::renderers::codemirror::render_codemirror(&processing_result.document, &self.input);
+                        serde_json::to_string_pretty(&styles).unwrap_or("Character styles not available".to_string())
                     },
                 };
             }
@@ -553,15 +527,16 @@ fn draw_ui(frame: &mut Frame, app: &App) {
         .split(frame.area());
 
     let content_layout = Layout::default()
-        .direction(Direction::Horizontal)
+        .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(main_layout[0]);
 
     // Input pane
     let input_block = Block::default()
-        .title("Input (ESC to quit, Tab to switch format, ↑↓ to scroll output)")
+        .title("Input (ESC=quit, Tab=format, ↑↓=scroll)")
         .borders(Borders::ALL);
 
+    // Simple input text rendering (cursor not visible in this simplified version)
     let input_text = if app.input.is_empty() {
         vec![Line::from("Type your musical notation here...")]
     } else {
@@ -570,7 +545,8 @@ fn draw_ui(frame: &mut Frame, app: &App) {
 
     let input_paragraph = Paragraph::new(input_text)
         .block(input_block)
-        .style(Style::default());
+        .style(Style::default())
+        .wrap(ratatui::widgets::Wrap { trim: true });
 
     frame.render_widget(input_paragraph, content_layout[0]);
 

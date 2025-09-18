@@ -446,7 +446,7 @@ fn test_parse_and_render(test_name: &str, input: &str) -> Result<String, String>
         .map_err(|e| format!("Process notation failed for {}: {}", test_name, e))?;
     
     // Step 3: Check that we got staves
-    if result.rhythm_analyzed_document.staves.is_empty() {
+    if result.document.elements.is_empty() {
         return Err(format!("{}: No staves produced", test_name));
     }
     
@@ -461,7 +461,7 @@ fn test_parse_and_render(test_name: &str, input: &str) -> Result<String, String>
     validate_lilypond_output(test_name, &lilypond)?;
     
     Ok(format!("{} test passed - {} staves, {} chars LilyPond", 
-        test_name, result.rhythm_analyzed_document.staves.len(), lilypond.len()))
+        test_name, result.document.elements.len(), lilypond.len()))
 }
 
 /// Test specific feature detection

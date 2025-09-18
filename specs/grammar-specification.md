@@ -9,20 +9,55 @@ This specification defines the formal grammar for the music-text notation langua
 ### Document Structure
 
 ```ebnf
-document = blank_lines* (stave (blank_lines stave)*)? blank_lines?
+document = stave_only_document | header_and_staves_document
+
+stave_only_document = stave (blank_lines stave)*
+
+header_and_staves_document = document_header document_body
+
+document_header = header_content blank_lines+
+
+header_content = header_line (newline header_line)*
+
+header_line = title_line | directive_line | text_line
+
+directive_line = directive whitespace* (newline | EOI)
+
+directive = key ":" value
+
+title_line = whitespace{3,} title whitespace{3,} author whitespace* (newline | EOI)
+
+title = text_content
+
+author = text_content
+
+text_line = text_content (newline | EOI)
+
+
+key = identifier
+
+value = text_content
+
+text_content = (!newline ANY)*
+
+identifier = letter (letter | digit | "_")*
+
+document_body = stave (blank_lines stave)*
 
 stave = upper_line* content_line (lower_line | lyrics_line)* (blank_lines | (whitespace* newline)* EOI)
 
 blank_lines = newline (whitespace* newline)+
 newline = "\n"
 whitespace = " "
+letter = "A".."Z" | "a".."z"
+digit = "0".."9"
 ```
 
 ### Content Lines
 
 ```ebnf
-content_line = line_number? barline? beat+ barline? newline
-
+content_line = line_number? non-beat-element* beat (non-beat-elemnt | beat)  newline
+non-beat-element = barline | whitespace
 beat = spatially-delimited-beat |
       (pitch | dash) beat-element*
 beat-element = pitch | dash | breath-mark
@@ -102,6 +137,20 @@ tabla_note = "dha" | "dhin" | "ta" | "ka" | "taka" | "trkt" | "ge" |
 hindi_note = "स" | "र" | "ग" | "म" | "प" | "ध" | "न"
 ```
 
+### Accidentals: ASCII-Only Approach
+
+**Design Decision**: For simplicity and to avoid Unicode complications, we use ASCII characters for accidentals:
+- **Sharp**: `#` (ASCII 35) - not `♯` (Unicode U+266F)
+- **Flat**: `b` (ASCII 98) - not `♭` (Unicode U+266D)
+- **Double sharp**: `##`
+- **Double flat**: `bb`
+
+**Examples**: `1#`, `2b`, `S#`, `Cb`, `4##`, `Rbb`
+
+**Rationale**: Unicode symbols can cause positioning and rendering issues across different systems. ASCII characters are universally supported and avoid character boundary complications in text processing.
+
+**Future Consideration**: Unicode symbols (`♯`, `♭`) may be added as a display-only transformation in the JavaScript presentation layer, but the core parser and data model will remain ASCII-only for robustness.
+
 ### Barlines and Structure
 
 ```ebnf
@@ -148,6 +197,54 @@ The grammar has not yet been fully updated to formalize all spatial relationship
   [ ta re ga ]  →  spatially-syllabled-notes
   ```
 
+## Document Metadata
+
+The document header contains optional metadata that appears before the musical content. This section handles titles, composer information, and musical directives.
+
+### Header Structure
+
+```ebnf
+// Examples of valid headers:
+
+// Title followed by directives
+Amazing Grace
+Author: John Newton
+Key: G
+Tempo: Andante
+
+// Just directives (no title)
+Author: John Newton
+Tempo: 120
+Key: G
+
+// Just title (no directives)
+Amazing Grace
+```
+
+### Supported Directives
+
+| Directive | Purpose | Example |
+|-----------|---------|---------|
+| `Title` | Song title | `Title: Amazing Grace` |
+| `Author` | Composer/arranger | `Author: John Newton` |
+| `Tonic` | Tonal center | `Tonic: G` |
+| `Key` | Key signature | `Key: G major` |
+| `Tempo` | Tempo marking | `Tempo: 120` or `Tempo: Andante` |
+| `Time` | Time signature | `Time: 4/4` |
+
+### Parsing Rules
+
+1. **First non-blank line determines format**:
+   - Contains `|` → Parse as inline metadata
+   - Contains `:` without `|` → Single directive
+   - No `:` → Standalone title
+
+2. **Subsequent lines** (until blank line):
+   - Lines with `:` → Directives
+   - Lines without `:` → Additional title text
+
+3. **Blank line** → End of header, start of musical content
+
 ## Spatial Relationship Rules
 
 ### Octave Markers
@@ -175,31 +272,36 @@ The grammar has not yet been fully updated to formalize all spatial relationship
 
 ## Test Cases
 
-### Document with Title/Author
-```
-Input: 
-Title: Amazing Grace | Author: John Newton
-Tonic: G
-
-|1 2 3 4|
-Expected: Title "Amazing Grace", Author "John Newton", directives, single stave
-```
-
-### Document with Separate Title Line
-```
-Input: 
-Amazing Grace
-Author: John Newton
-Tonic: G
-
-|1 2 3 4|
-Expected: Title "Amazing Grace", directives, single stave
-```
-
-### Basic Notation
+### Stave-Only Document (no header)
 ```
 Input: |1 2 3 4|
-Expected: Four beats separated by spaces
+Expected: stave_only_document with single stave containing four beats
+```
+
+### Stave-Only Document (single note)
+```
+Input: 1
+Expected: stave_only_document with single stave, single beat
+```
+
+### Header and Staves Document (title line)
+```
+Input:
+        Amazing Grace        Bach
+Author: John Newton
+
+|1 2 3 4|
+Expected: header_and_staves_document with title "Amazing Grace", author "Bach", directive "Author: John Newton", single stave
+```
+
+### Header and Staves Document (directive only)
+```
+Input:
+Author: John Newton
+Tempo: 120
+
+|1 2 3 4|
+Expected: header_and_staves_document with directives, single stave
 ```
 
 ### Rhythm Extensions
@@ -246,9 +348,20 @@ Expected: Two separate staves
 ## Implementation Requirements
 
 ### Parser Architecture
-1. **Phase 1**: Parse structural elements (content vs annotation)
-2. **Phase 2**: Classify annotations based on position and content
+
+#### Document-Level Parsing Strategy
+1. **Try `header_and_staves_document` first**: Look for header patterns
+2. **Fall back to `stave_only_document`**: If no header detected
+3. **This resolves ambiguity**: Single notes like "1" are always stave content
+
+#### Stave-Level Classification (existing classifier)
+1. **Phase 1**: Parse structural elements within stave (content vs annotation)
+2. **Phase 2**: Classify annotations as upper/lower based on position relative to content
 3. **Error Handling**: Preserve line/column positions for semantic errors
+4. **Token Indexing**: Every parsed token carries zero-based indexes
+   - `index_in_line`: zero-based character offset from the start of its line
+   - `index_in_doc`: zero-based character offset from the start of the document
+   - Line and column remain 1-based for human readability
 
 ### Grammar Constraints
 - `content_line` must only match lines with musical pitches/beats

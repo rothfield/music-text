@@ -6,32 +6,124 @@ pub mod generator;
 // pub use renderer::*;
 // pub use templates::*;
 pub use generator::*;
+use fraction::Fraction;
+
+/// Convert a fraction to LilyPond duration string
+fn fraction_to_lilypond_duration(duration: Fraction) -> String {
+    // Handle common durations
+    if duration == Fraction::new(1u64, 1u64) {
+        "1".to_string() // whole note
+    } else if duration == Fraction::new(1u64, 2u64) {
+        "2".to_string() // half note
+    } else if duration == Fraction::new(1u64, 4u64) {
+        "4".to_string() // quarter note
+    } else if duration == Fraction::new(1u64, 8u64) {
+        "8".to_string() // eighth note
+    } else if duration == Fraction::new(1u64, 16u64) {
+        "16".to_string() // sixteenth note
+    } else if duration == Fraction::new(1u64, 32u64) {
+        "32".to_string() // thirty-second note
+    } else if duration == Fraction::new(1u64, 64u64) {
+        "64".to_string() // sixty-fourth note
+    } else if duration == Fraction::new(3u64, 8u64) {
+        "4.".to_string() // dotted quarter
+    } else if duration == Fraction::new(3u64, 16u64) {
+        "8.".to_string() // dotted eighth
+    } else if duration == Fraction::new(1u64, 12u64) {
+        "8".to_string() // eighth note triplet (handled by tuplet markup)
+    } else if duration == Fraction::new(1u64, 24u64) {
+        "16".to_string() // sixteenth note triplet
+    } else if duration == Fraction::new(1u64, 48u64) {
+        "32".to_string() // thirty-second note triplet
+    } else {
+        // For unusual durations, try to find the closest standard duration
+        let denom = *duration.denom().unwrap_or(&4u64);
+        if denom >= 64 {
+            "64".to_string()
+        } else if denom >= 32 {
+            "32".to_string()
+        } else if denom >= 16 {
+            "16".to_string()
+        } else if denom >= 8 {
+            "8".to_string()
+        } else if denom >= 4 {
+            "4".to_string()
+        } else if denom >= 2 {
+            "2".to_string()
+        } else {
+            "1".to_string()
+        }
+    }
+}
 
 // Function to render from our Document type using rhythm analysis
 pub fn render_lilypond_from_document(document: &crate::parse::model::Document) -> String {
     let mut output = String::from("\\version \"2.24.0\"\n\\language \"english\"\n\n");
 
     // Add title/author if present
-    for directive in &document.directives {
-        match directive.key.as_str() {
-            "title" => output.push_str(&format!("\\header {{\n  title = \"{}\"\n}}\n\n", directive.value)),
-            "author" => {
-                if !output.contains("\\header") {
-                    output.push_str("\\header {\n");
-                }
-                output = output.replace("}\n\n", &format!("  composer = \"{}\"\n}}\n\n", directive.value));
-            },
-            _ => {}
+    let title = document.title.as_ref().or_else(|| document.directives.get("title"));
+    let author = document.author.as_ref().or_else(|| document.directives.get("author"));
+
+    if title.is_some() || author.is_some() {
+        output.push_str("\\header {\n");
+        if let Some(title_str) = title {
+            output.push_str(&format!("  title = \"{}\"\n", title_str));
         }
+        if let Some(author_str) = author {
+            output.push_str(&format!("  composer = \"{}\"\n", author_str));
+        }
+        output.push_str("}\n\n");
     }
 
     output.push_str("\\score {\n  \\new Staff {\n    \\fixed c' {\n      \\key c \\major\n      \\time 4/4\n      ");
 
-    // Convert each stave using rhythm analysis results
+    // Convert each stave using ContentLine beats directly
     for element in &document.elements {
         if let crate::parse::model::DocumentElement::Stave(stave) = element {
-            if let Some(rhythm_items) = &stave.rhythm_items {
-                output.push_str(&process_rhythm_items_to_lilypond(rhythm_items));
+            for line in &stave.lines {
+                if let crate::parse::model::StaveLine::ContentLine(content_line) = line {
+                    for content_element in &content_line.elements {
+                        match content_element {
+                            crate::parse::model::ContentElement::Beat(beat) => {
+                                // Convert each beat element directly
+                                for beat_element in &beat.elements {
+                                    match beat_element {
+                                        crate::parse::model::BeatElement::Note(note) => {
+                                            // Use proper pitch conversion with accidentals
+                                            let pitch_name = crate::renderers::converters_lilypond::pitch::pitchcode_to_lilypond(
+                                                note.pitch_code,
+                                                note.octave,
+                                                None // No transposition for now
+                                            ).unwrap_or_else(|_| "c'".to_string());
+
+                                            // Get the duration (use rhythm analysis if available, fallback to quarter note)
+                                            let duration_str = if let Some(duration) = note.duration {
+                                                fraction_to_lilypond_duration(duration)
+                                            } else {
+                                                "4".to_string() // Fallback to quarter note
+                                            };
+
+                                            let note_name = format!("{}{}", pitch_name, duration_str);
+                                            output.push_str(&format!("{} ", note_name));
+                                        }
+                                        crate::parse::model::BeatElement::Dash(_) => {
+                                            output.push_str("r4 ");
+                                        }
+                                        crate::parse::model::BeatElement::BreathMark(_) => {
+                                            output.push_str("\\breathe ");
+                                        }
+                                    }
+                                }
+                            }
+                            crate::parse::model::ContentElement::Barline(_) => {
+                                output.push_str("| ");
+                            }
+                            crate::parse::model::ContentElement::Whitespace(_) => {
+                                // Skip whitespace
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -40,64 +132,7 @@ pub fn render_lilypond_from_document(document: &crate::parse::model::Document) -
     output
 }
 
-/// Process rhythm items to LilyPond notation
-fn process_rhythm_items_to_lilypond(rhythm_items: &[crate::rhythm::analyzer::Item]) -> String {
-    let mut output = String::new();
 
-    for item in rhythm_items {
-        match item {
-            crate::rhythm::analyzer::Item::Beat(beat) => {
-                if beat.is_tuplet {
-                    // Handle tuplet: \tuplet 3/2 { c'8 c'8 c'8 }
-                    let tuplet_ratio = beat.tuplet_ratio.unwrap_or((beat.divisions, 2));
-                    output.push_str(&format!("\\tuplet {}/{} {{ ", tuplet_ratio.0, tuplet_ratio.1));
-
-                    for element in &beat.elements {
-                        output.push_str(&convert_beat_element_to_lilypond(element));
-                        output.push(' ');
-                    }
-
-                    output.push_str("} ");
-                } else {
-                    // Regular beat - just output elements
-                    for element in &beat.elements {
-                        output.push_str(&convert_beat_element_to_lilypond(element));
-                        output.push(' ');
-                    }
-                }
-            },
-            crate::rhythm::analyzer::Item::Barline(_, _) => {
-                output.push_str("| ");
-            },
-            crate::rhythm::analyzer::Item::Breathmark => {
-                output.push_str("\\breathe ");
-            },
-            crate::rhythm::analyzer::Item::Tonic(_) => {
-                // Tonic doesn't generate visual elements
-            }
-        }
-    }
-
-    output
-}
-
-/// Convert a BeatElement to LilyPond notation with duration
-fn convert_beat_element_to_lilypond(element: &crate::rhythm::analyzer::BeatElement) -> String {
-    match &element.event {
-        crate::rhythm::analyzer::Event::Note { degree, .. } => {
-            let note_name = degree_to_lilypond(*degree);
-            let duration_suffix = fraction_to_lilypond_duration(element.tuplet_duration);
-            format!("{}{}", note_name, duration_suffix)
-        },
-        crate::rhythm::analyzer::Event::Rest => {
-            let duration_suffix = fraction_to_lilypond_duration(element.tuplet_duration);
-            format!("r{}", duration_suffix)
-        },
-        crate::rhythm::analyzer::Event::Unknown { .. } => {
-            String::new() // Skip unknown elements
-        }
-    }
-}
 
 /// Convert degree to LilyPond note name
 fn degree_to_lilypond(degree: crate::models::pitch::Degree) -> &'static str {
@@ -113,29 +148,4 @@ fn degree_to_lilypond(degree: crate::models::pitch::Degree) -> &'static str {
     }
 }
 
-/// Convert fraction to LilyPond duration suffix
-fn fraction_to_lilypond_duration(duration: fraction::Fraction) -> String {
-    let num = *duration.numer().unwrap() as usize;
-    let den = *duration.denom().unwrap() as usize;
-    match (num, den) {
-        (1, 1) => "1".to_string(),      // whole note
-        (1, 2) => "2".to_string(),      // half note
-        (1, 4) => "4".to_string(),      // quarter note
-        (1, 8) => "8".to_string(),      // eighth note
-        (1, 16) => "16".to_string(),    // sixteenth note
-        (1, 32) => "32".to_string(),    // thirty-second note
-        // Single-dotted durations (3/2 of basic duration)
-        (3, 2) => "1.".to_string(),     // dotted whole
-        (3, 4) => "2.".to_string(),     // dotted half
-        (3, 8) => "4.".to_string(),     // dotted quarter
-        (3, 16) => "8.".to_string(),    // dotted eighth
-        (3, 32) => "16.".to_string(),   // dotted sixteenth
-        // Double-dotted durations (7/4 of basic duration)
-        (7, 4) => "1..".to_string(),    // double-dotted whole
-        (7, 8) => "2..".to_string(),    // double-dotted half
-        (7, 16) => "4..".to_string(),   // double-dotted quarter
-        (7, 32) => "8..".to_string(),   // double-dotted eighth
-        (7, 64) => "16..".to_string(),  // double-dotted sixteenth
-        _ => "4".to_string(),           // default to quarter note
-    }
-}
+
