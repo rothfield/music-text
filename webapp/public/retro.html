@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Music Text - Retro Terminal Interface</title>
+    <link rel="stylesheet" href="/css/retro.css">
+</head>
+<body>
+    <div class="control-bar">
+        <a href="/retro" class="logo">
+            <div class="logo-graphic">
+                <span class="logo-note">♪</span>
+                <span class="logo-text"><span class="abc">ABC</span> <span class="numbers">123</span> <span class="sargam">SRG</span></span>
+            </div>
+        </a>
+        <span class="separator">|</span>
+        <div class="save-load-group">
+            <form method="POST" action="/retro/load" enctype="multipart/form-data" class="load-form" id="loadForm">
+                <input type="file" id="musicfile" name="musicfile" accept=".mt,.txt,.ly,.music-text" style="display: none;" onchange="document.getElementById('loadForm').submit()">
+                <button type="button" onclick="document.getElementById('musicfile').click()">Load</button>
+            </form>
+            <form method="POST" action="/retro" class="save-form" id="saveForm">
+                <input type="hidden" name="input" id="saveInput">
+                <div class="buttons">
+                    <button type="submit" name="action" value="save_pdf">PDF</button>
+                    <button type="submit" name="action" value="save_midi">MIDI</button>
+                    <button type="submit" name="action" value="save_lily">LilyPond</button>
+                    <button type="submit" name="action" value="save_mt">Save</button>
+                </div>
+            </form>
+        </div>
+        <form method="POST" action="/retro" class="main-form" id="mainForm">
+            <div class="buttons">
+                <button type="submit" name="action" value="preview">Preview</button>
+            </div>
+        </form>
+    </div>
+    <textarea name="input" rows="3" cols="80" placeholder="Example: | S R G M |" form="mainForm" onchange="copyToSaveForm()"></textarea>
+
+    <div class="preview-results">
+        <div class="tabs">
+            <button type="button" class="tab-button active" onclick="showTab('staff')">Staff</button>
+            <button type="button" class="tab-button" onclick="showTab('lilypond')">LilyPond</button>
+            <button type="button" class="tab-button" onclick="showTab('learn')">Learn</button>
+        </div>
+        <div id="staff-tab" class="tab-content active">
+            <div class="staff-notation">Preview will appear here after clicking Preview button</div>
+        </div>
+        <div id="lilypond-tab" class="tab-content">
+            <pre class="lilypond-source">\version "2.24.0"
+
+{ c d e f }</pre>
+        </div>
+        <div id="learn-tab" class="tab-content">
+            <pre class="help">
+Notation Systems:
+  Sargam:     | S R G M P D N |
+  Number:     | 1 2 3 4 5 6 7 |
+  Western:    | C D E F G A B |
+  Devanagari: | स र ग म प ध न |
+  Tabla:      | dha ge na ta |
+
+Octave Markers:
+  Higher octaves (above notes):
+    . . .
+  | S R G |  (+1 octave)
+
+    : : :
+  | S R G |  (+2 octaves)
+
+  Lower octaves (below notes):
+  | S R G |
+    . . .   (-1 octave)
+
+  | S R G |
+    : : :   (-2 octaves)
+
+Examples:
+  Twinkle twinkle little star
+  | 1 1 5 5 | 6 6 5 - |
+
+  Mary had a little lamb
+  | 3 2 1 2 | 3 3 3 - |
+
+  Row row row your boat (polyphonic)
+  ###
+  | 1 1 1 2 | 3 - - - |
+
+  | 3 3 2 2 | 1 - - - |
+  ###
+
+Rhythm:
+  Default: Quarter notes
+  Tuplets: | [S R G] |
+  Ties:    | S - R - |
+
+Bar Lines:
+  Single:  | S R | G M |
+  Double:  | S R || G M |
+  Repeat:  |: S R :| G M |
+            </pre>
+        </div>
+    </div>
+
+    <hr>
+    <a href="/index.html">Modern Interface</a> | <a href="/">Home</a>
+
+    <script>
+    function showTab(tabName) {
+        // Hide all tab contents
+        const tabContents = document.querySelectorAll('.tab-content');
+        tabContents.forEach(tab => tab.classList.remove('active'));
+
+        // Remove active class from all tab buttons
+        const tabButtons = document.querySelectorAll('.tab-button');
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+
+        // Show selected tab content
+        document.getElementById(tabName + '-tab').classList.add('active');
+
+        // Add active class to clicked button
+        event.target.classList.add('active');
+    }
+
+    function copyToSaveForm() {
+        const mainInput = document.querySelector('textarea[name="input"]');
+        const saveInput = document.getElementById('saveInput');
+        saveInput.value = mainInput.value;
+    }
+
+    // Copy on page load
+    window.addEventListener('load', copyToSaveForm);
+    </script>
+</body>
+</html>
