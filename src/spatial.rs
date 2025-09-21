@@ -1,6 +1,6 @@
 use crate::parse::model::{
     Document, DocumentElement, Stave, StaveLine, UpperLine, LowerLine, LyricsLine,
-    UpperElement, LowerElement, Syllable, Source, Position, ContentLine, ContentElement, Beat, BeatElement, Note, SpatialAssignment
+    UpperElement, LowerElement, Syllable, Source, Position, ContentLine, ContentElement, Beat, BeatElement, Note, SpatialAssignment, ConsumedElement
 };
 use crate::rhythm::types::{ParsedElement, Position as RhythmPosition, ParsedChild};
 
@@ -116,15 +116,14 @@ impl PositionTracker {
 /// Convert octave marker to numeric value
 fn octave_marker_to_number(marker: &str, is_upper: bool) -> i8 {
     let base_value = match marker {
-        "." => 1,
-        ":" => 2,
-        "*" => 3,
-        "'" => 4,
+        "." => 1,  // single octave: +1/-1
+        ":" => 2,  // double octave: +2/-2 (highest/lowest)
         _ => 0,
     };
 
     if is_upper { base_value } else { -base_value }
 }
+
 
 /// Consume octave markers from upper and lower lines
 pub fn consume_octave_markers(
@@ -860,8 +859,8 @@ fn process_stave_spatial_unified(stave: &mut Stave) -> Result<(Stave, Vec<String
             // Process spatial assignments for this content line
             let (updated_content_line, line_warnings) = process_content_line_spatial(
                 content_line,
-                &upper_lines,
-                &lower_lines,
+                &mut upper_lines,
+                &mut lower_lines,
                 &lyrics_lines
             )?;
 
@@ -876,8 +875,8 @@ fn process_stave_spatial_unified(stave: &mut Stave) -> Result<(Stave, Vec<String
 /// Process spatial assignments for a single content line
 fn process_content_line_spatial(
     content_line: &mut ContentLine,
-    upper_lines: &[UpperLine],
-    lower_lines: &[LowerLine],
+    upper_lines: &mut [UpperLine],
+    lower_lines: &mut [LowerLine],
     lyrics_lines: &[LyricsLine]
 ) -> Result<(ContentLine, Vec<String>), String> {
     let mut warnings = Vec::new();
@@ -900,56 +899,65 @@ fn process_content_line_spatial(
 /// Apply spatial assignments from annotation lines to a specific note
 fn apply_spatial_assignments_to_note(
     note: &mut Note,
-    upper_lines: &[UpperLine],
-    lower_lines: &[LowerLine],
+    upper_lines: &mut [UpperLine],
+    lower_lines: &mut [LowerLine],
     _lyrics_lines: &[LyricsLine]
 ) {
-    let note_position = note.pitch_string.source.position.column;
+    let note_position = note.source.position.column;
 
-    // Process octave markers from upper and lower lines
+    // Process octave markers from upper lines - use move semantics
     for upper_line in upper_lines {
-        for element in &upper_line.elements {
+        for element in &mut upper_line.elements {
             if let UpperElement::UpperOctaveMarker { marker, source } = element {
                 if source.position.column == note_position {
-                    let octave_value = match marker.as_str() {
-                        "." => 1,
-                        ":" => 2,
-                        "*" => 3,
-                        _ => 0,
-                    };
+                    // Move the complete element to consumed_elements
+                    if let Some(marker_value) = source.value.take() {
+                        let octave_value = match marker.as_str() {
+                            "." => 1,
+                            ":" => 2,
+                            _ => 0,
+                        };
 
-                    note.spatial_assignments.push(SpatialAssignment::OctaveMarker {
-                        octave_value,
-                        marker_symbol: marker.clone(),
-                        is_upper: true,
-                    });
+                        // Store complete consumed element directly
+                        note.consumed_elements.push(ConsumedElement::UpperOctaveMarker {
+                            source: Source {
+                                value: Some(marker_value),
+                                position: source.position.clone(),
+                            },
+                        });
 
-                    // Apply octave modification
-                    note.octave += octave_value;
+                        // Apply octave modification
+                        note.octave += octave_value;
+                    }
                 }
             }
         }
     }
 
+    // Process octave markers from lower lines - use move semantics
     for lower_line in lower_lines {
-        for element in &lower_line.elements {
+        for element in &mut lower_line.elements {
             if let LowerElement::LowerOctaveMarker { marker, source } = element {
                 if source.position.column == note_position {
-                    let octave_value = match marker.as_str() {
-                        "." => -1,
-                        ":" => -2,
-                        "*" => -3,
-                        _ => 0,
-                    };
+                    // Move the complete element to consumed_elements
+                    if let Some(marker_value) = source.value.take() {
+                        let octave_value = match marker.as_str() {
+                            "." => -1,
+                            ":" => -2,
+                            _ => 0,
+                        };
 
-                    note.spatial_assignments.push(SpatialAssignment::OctaveMarker {
-                        octave_value,
-                        marker_symbol: marker.clone(),
-                        is_upper: false,
-                    });
+                        // Store complete consumed element directly
+                        note.consumed_elements.push(ConsumedElement::LowerOctaveMarker {
+                            source: Source {
+                                value: Some(marker_value),
+                                position: source.position.clone(),
+                            },
+                        });
 
-                    // Apply octave modification
-                    note.octave += octave_value;
+                        // Apply octave modification
+                        note.octave += octave_value;
+                    }
                 }
             }
         }
@@ -1073,20 +1081,20 @@ fn process_stave_spatial_old(stave: &mut Stave) -> Result<(Stave, Vec<String>), 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parse::model::{PitchString, PitchCode, NotationSystem};
+    use crate::parse::model::{PitchCode, NotationSystem};
 
     fn create_test_note(pitch: &str, column: usize) -> Note {
         Note {
-            pitch_string: PitchString {
-                source: Source {
-                    value: Some(pitch.to_string()),
-                    position: Position { line: 1, column, index_in_line: (column.saturating_sub(1)), index_in_doc: 0 },
-                },
+            source: Source {
+                value: Some(pitch.to_string()),
+                position: Position { line: 1, column, index_in_line: (column.saturating_sub(1)), index_in_doc: 0 },
             },
             octave: 0,
             pitch_code: PitchCode::N1,
             notation_system: NotationSystem::Number,
             spatial_assignments: Vec::new(),
+            consumed_elements: Vec::new(),
+            duration: None,
         }
     }
 
@@ -1152,15 +1160,16 @@ mod tests {
 
     #[test]
     fn test_octave_marker_to_number() {
-        assert_eq!(octave_marker_to_number(".", true), 1);
-        assert_eq!(octave_marker_to_number(":", true), 2);
-        assert_eq!(octave_marker_to_number("*", true), 3);
-        assert_eq!(octave_marker_to_number("'", true), 4);
+        // Test new grammar: . = +1/-1, : = +2/-2
+        assert_eq!(octave_marker_to_number(".", true), 1);   // upper_octave_marker
+        assert_eq!(octave_marker_to_number(":", true), 2);   // highest_octave_marker
+        assert_eq!(octave_marker_to_number(".", false), -1); // lower_octave_marker
+        assert_eq!(octave_marker_to_number(":", false), -2); // lowest_octave_marker
 
-        assert_eq!(octave_marker_to_number(".", false), -1);
-        assert_eq!(octave_marker_to_number(":", false), -2);
-        assert_eq!(octave_marker_to_number("*", false), -3);
-        assert_eq!(octave_marker_to_number("'", false), -4);
+        // Test invalid markers (removed from grammar)
+        assert_eq!(octave_marker_to_number("*", true), 0);   // removed from grammar
+        assert_eq!(octave_marker_to_number("'", true), 0);   // removed from grammar
+        assert_eq!(octave_marker_to_number("x", true), 0);   // invalid marker
     }
 
     #[test]
@@ -1221,6 +1230,8 @@ mod tests {
                     value: Some(".".to_string()),
                     position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                 },
+                marker_symbol: ".".to_string(),
+                is_upper: true,
             }),
             (3, ConsumedMarker {
                 octave_value: 2,
@@ -1228,6 +1239,8 @@ mod tests {
                     value: Some(":".to_string()),
                     position: Position { line: 0, column: 3, index_in_line: 2, index_in_doc: 0 },
                 },
+                marker_symbol: ":".to_string(),
+                is_upper: true,
             }),
         ];
 

@@ -1,9 +1,8 @@
-// LilyPond Source Code Generator - Works directly with ParsedElement, no conversion needed
+// LilyPond Source Code Generator - Works directly with analyzed document
 use crate::models::{Metadata}; // Keep using existing metadata
-use crate::models::{Degree};
+use crate::models::pitch::Degree;
 use crate::renderers::lilypond::templates::{TemplateContext, render_lilypond, LilyPondTemplate};
-use crate::parser_v2_fsm::{Item, Beat};
-use crate::structure_preserving_fsm::{ProcessedDocument, ProcessedStave};
+use crate::parse::model::{Document, DocumentElement, Beat, BeatElement, StaveLine, ContentElement};
 // use crate::renderers::transposition::transpose_degree_with_octave; // TODO: Move transposition module
 
 /// Find the index of the last actual note (not barline, breathmark, etc.) in lilypond_notes
@@ -18,77 +17,83 @@ fn find_last_note_index(lilypond_notes: &[String]) -> Option<usize> {
     None
 }
 
-pub fn convert_elements_to_lilypond_src(
-    elements: &Vec<Item>,
-    metadata: &Metadata,
+pub fn convert_document_to_lilypond_src(
+    document: &Document,
     source: Option<&str>
 ) -> Result<String, String> {
-    // Processing FSM output with beats
-    
+    // Processing analyzed document with beats
+
     let mut lilypond_notes: Vec<String> = Vec::new();
     let mut previous_beat_notes: Vec<String> = Vec::new();
     let mut current_tonic: Option<Degree> = None;
-    
-    for (_element_index, item) in elements.iter().enumerate() {
-        match item {
-            Item::Tonic(tonic_degree) => {
-                // Store the tonic for transposition
-                current_tonic = Some(*tonic_degree);
-                // Could optionally add a key signature command here
-            },
-            Item::Beat(beat) => {
-                let beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
-                
-                // Handle ties: if this beat is tied to previous, add tie to last note of previous beat
-                if beat.tied_to_previous && !previous_beat_notes.is_empty() && !beat_notes.is_empty() {
-                    if let Some(last_note_index) = find_last_note_index(&lilypond_notes) {
-                        let last_note = &mut lilypond_notes[last_note_index];
-                        if !last_note.ends_with('~') && !last_note.ends_with(')') {
-                            *last_note = format!("{}~", last_note);
-                        } else if last_note.ends_with(')') {
-                            // Insert tie before the closing slur
-                            let len = last_note.len();
-                            last_note.insert(len - 1, '~');
+
+    // Extract staves from document
+    for element in &document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            for line in &stave.lines {
+                if let StaveLine::ContentLine(content_line) = line {
+                    for content_element in &content_line.elements {
+                        match content_element {
+                            ContentElement::Beat(beat) => {
+                                let beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
+
+                                // TODO: Handle ties from spatial assignments if available
+                                if false && !previous_beat_notes.is_empty() && !beat_notes.is_empty() {
+                                    if let Some(last_note_index) = find_last_note_index(&lilypond_notes) {
+                                        let last_note = &mut lilypond_notes[last_note_index];
+                                        if !last_note.ends_with('~') && !last_note.ends_with(')') {
+                                            *last_note = format!("{}~", last_note);
+                                        } else if last_note.ends_with(')') {
+                                            // Insert tie before the closing slur
+                                            let len = last_note.len();
+                                            last_note.insert(len - 1, '~');
+                                        }
+                                    }
+                                }
+
+                                lilypond_notes.extend(beat_notes.clone());
+                                previous_beat_notes = beat_notes;
+                            },
+                            ContentElement::Barline(barline) => {
+                                let lily_barline = format!("| ");
+                                lilypond_notes.push(lily_barline);
+                            },
+                            ContentElement::Whitespace(_) => {
+                                // Skip whitespace
+                            },
                         }
                     }
                 }
-                
-                lilypond_notes.extend(beat_notes.clone());
-                previous_beat_notes = beat_notes;
-            },
-            Item::Barline(barline_type, tala) => {
-                // Add tala marker to the last note before adding the barline
-                if let Some(tala_num) = tala {
-                    let tala_display = if *tala_num == 255 { "+" } else { &tala_num.to_string() };
-                    let tala_text = &format!(r#"^\markup {{ "{}" }}"#, tala_display);
-                    
-                    // Attach tala markup to the last note
-                    if let Some(last_note) = lilypond_notes.last_mut() {
-                        *last_note = format!("{}{}", last_note, tala_text);
-                    }
-                }
-                
-                let lily_barline = barline_type_to_lilypond(barline_type, _element_index == 0);
-                lilypond_notes.push(lily_barline);
-            },
-            Item::Breathmark => {
-                lilypond_notes.push("\\breathe".to_string());
-            },
+            }
         }
     }
-    
+
     let staves = lilypond_notes.join(" ");
-    
+
     // Extract lyrics from beat elements
     let mut lyrics_parts: Vec<String> = Vec::new();
-    for item in elements.iter() {
-        if let Item::Beat(beat) = item {
-            for beat_element in &beat.elements {
-                if let Some(syllable) = beat_element.syl() {
-                    lyrics_parts.push(syllable);
-                } else if beat_element.is_note() || beat_element.is_rest() {
-                    // Add placeholder for notes/rests without syllables
-                    lyrics_parts.push("_".to_string());
+    for element in &document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            for line in &stave.lines {
+                if let StaveLine::ContentLine(content_line) = line {
+                    for content_element in &content_line.elements {
+                        if let ContentElement::Beat(beat) = content_element {
+                            for beat_element in &beat.elements {
+                                match beat_element {
+                                    BeatElement::Note(_note) => {
+                                        // TODO: Extract syllables from spatial assignments if available
+                                        lyrics_parts.push("_".to_string());
+                                    },
+                                    BeatElement::Dash(_) => {
+                                        lyrics_parts.push("_".to_string());
+                                    },
+                                    BeatElement::BreathMark(_) => {
+                                        // No syllable for breath marks
+                                    },
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -104,18 +109,24 @@ pub fn convert_elements_to_lilypond_src(
         context = context.lyrics(lyrics_string);
     }
     
-    if let Some(title) = &metadata.title {
-        context = context.title(&title.text);
+    if let Some(title) = &document.title {
+        context = context.title(title);
     }
-    
+
     if let Some(source) = source {
         context = context.source_comment(source);
     }
-    
+
     let context = context.build();
-    
-    // Auto-select template based on document complexity
-    let template = crate::renderers::lilypond::templates::auto_select_template_for_metadata(metadata);
+
+    // Auto-select template based on document complexity - create minimal metadata for template selection
+    let minimal_metadata = Metadata {
+        title: document.title.as_ref().map(|t| crate::models::Title { text: t.clone(), row: 0, col: 0 }),
+        attributes: std::collections::HashMap::new(),
+        detected_system: None,
+        directives: Vec::new(),
+    };
+    let template = crate::renderers::lilypond::templates::auto_select_template_for_metadata(&minimal_metadata);
     
     // Render template
     render_lilypond(template, &context)
@@ -124,58 +135,50 @@ pub fn convert_elements_to_lilypond_src(
 
 fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Result<Vec<String>, String> {
     let mut notes = Vec::new();
-    
+
     for beat_element in &beat.elements {
-        // Use FSM-calculated tuplet_duration for notation display
-        let duration_string = fraction_to_lilypond_note(beat_element.tuplet_duration);
-        
-        if beat_element.is_note() {
-            let (degree, octave, _, _) = beat_element.as_note().unwrap();
-            let lily_note = degree_to_lilypond(*degree, octave, current_tonic)?;
-            // Note {} with tuplet_duration {} -> {}{}
-            
-            let mut note_str = format!("{}{}", lily_note, duration_string);
-            
-            // Add slur markers based on note's slur attribute
-            use crate::models::SlurRole;
-            let slur = if let Some((_, _, _, slur_role)) = beat_element.as_note() {
-                slur_role
-            } else {
-                &None
-            };
-            match slur {
-                Some(SlurRole::Start) => note_str.push('('),
-                Some(SlurRole::End) => note_str.push(')'),
-                Some(SlurRole::StartEnd) => note_str.push_str("()"),
-                Some(SlurRole::Middle) => {}, // No marker for middle notes
-                None => {},
-            }
-            
-            // Add ornament markers
-            use crate::models::OrnamentType;
-            for ornament in &beat_element.ornaments() {
-                match ornament {
-                    OrnamentType::Mordent => note_str.push_str("\\mordent"),
-                    OrnamentType::Trill => note_str.push_str("\\trill"),
-                    OrnamentType::Turn => note_str.push_str("\\turn"),
-                    OrnamentType::Grace => {}, // Grace notes handled differently
-                }
-            }
-            
-            notes.push(note_str);
-        } else if beat_element.is_rest() {
-            notes.push(format!("r{}", duration_string));
-        } // Skip other element types within beats
+        match beat_element {
+            BeatElement::Note(note) => {
+                // Use rhythm-analyzed duration if available, fallback to quarter note
+                let duration_string = if let (Some(numer), Some(denom)) = (note.numerator, note.denominator) {
+                    let duration = fraction::Fraction::new(numer, denom);
+                    fraction_to_lilypond_note(duration)
+                } else {
+                    "4".to_string() // fallback to quarter note
+                };
+
+                let lily_note = crate::renderers::converters_lilypond::pitch::pitchcode_to_lilypond(
+                    note.pitch_code,
+                    note.octave,
+                    current_tonic.map(|d| crate::models::pitch_systems::degree_to_pitch_code(d))
+                )?;
+                let mut note_str = format!("{}{}", lily_note, duration_string);
+
+                // TODO: Add slur markers from spatial assignments if available
+
+                notes.push(note_str);
+            },
+            BeatElement::Dash(_dash) => {
+                // Use quarter note for rest - duration comes from beat analysis
+                notes.push("r4".to_string());
+            },
+            BeatElement::BreathMark(_) => {
+                notes.push("\\breathe".to_string());
+            },
+        }
     }
     
     // Add manual beaming for eighth notes and shorter
     add_manual_beaming(&mut notes)?;
-    
-    // Use FSM-provided tuplet information
-    if beat.is_tuplet {
-        let (tuplet_num, tuplet_den) = beat.tuplet_ratio.unwrap();
-        let tuplet_content = notes.join(" ");
-        Ok(vec![format!("\\tuplet {}/{} {{ {} }}", tuplet_num, tuplet_den, tuplet_content)])
+
+    // Use analyzer-provided tuplet information
+    if beat.is_tuplet.unwrap_or(false) {
+        if let Some((tuplet_num, tuplet_den)) = beat.tuplet_ratio {
+            let tuplet_content = notes.join(" ");
+            Ok(vec![format!("\\tuplet {}/{} {{ {} }}", tuplet_num, tuplet_den, tuplet_content)])
+        } else {
+            Ok(notes)
+        }
     } else {
         Ok(notes)
     }
@@ -294,153 +297,115 @@ fn fraction_to_lilypond_note(duration: fraction::Fraction) -> String {
 
 /// Convert ProcessedDocument (multiple staves) to LilyPond source
 pub fn convert_processed_document_to_lilypond_src(
-    processed_doc: &ProcessedDocument,
+    document: &Document,
     metadata: &Metadata,
     source: Option<&str>
 ) -> Result<String, String> {
-    // Count staves with actual musical content
-    let mut staves_with_content: Vec<&ProcessedStave> = Vec::new();
-    
-    for stave in &processed_doc.staves {
-        let mut has_content = false;
-        for item in &stave.items {
-            if let crate::parser_v2_fsm::Item::Beat(beat) = item {
-                if !beat.elements.is_empty() {
-                    has_content = true;
-                    break;
+    // Extract staves from document
+    let mut staves_with_content = Vec::new();
+
+    for element in &document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            // Check if stave has actual musical content
+            let mut has_content = false;
+            for line in &stave.lines {
+                if let StaveLine::ContentLine(content_line) = line {
+                    for content_element in &content_line.elements {
+                        if let ContentElement::Beat(beat) = content_element {
+                            if !beat.elements.is_empty() {
+                                has_content = true;
+                                break;
+                            }
+                        }
+                    }
+                    if has_content { break; }
                 }
             }
-        }
-        if has_content {
-            staves_with_content.push(stave);
+            if has_content {
+                staves_with_content.push(stave);
+            }
         }
     }
     
     if staves_with_content.len() <= 1 {
         // Single stave with content (or no content) - use standard template
-        let items = if let Some(stave) = staves_with_content.first() {
-            &stave.items
+        let stave = if let Some(stave) = staves_with_content.first() {
+            stave
         } else {
-            &processed_doc.staves[0].items // fallback to first stave
+            // fallback to first stave from document
+            if let Some(DocumentElement::Stave(stave)) = document.elements.first() {
+                stave
+            } else {
+                return Err("No staves found in document".to_string());
+            }
         };
-        convert_elements_to_lilypond_src(items, metadata, source)
+        convert_document_to_lilypond_src(&Document {
+            title: document.title.clone(),
+            author: document.author.clone(),
+            directives: document.directives.clone(),
+            source: document.source.clone(),
+            elements: vec![DocumentElement::Stave(stave.clone())],
+        }, source)
     } else {
         // Multiple staves with content - use multi-stave template
-        convert_multistave_to_lilypond_src(processed_doc, metadata, source)
+        convert_multistave_to_lilypond_src(document, source)
     }
 }
 
 /// Convert multiple staves to LilyPond using multi-stave template
 fn convert_multistave_to_lilypond_src(
-    processed_doc: &ProcessedDocument,
-    metadata: &Metadata,
+    document: &Document,
     source: Option<&str>
 ) -> Result<String, String> {
     // Convert each stave to LilyPond content
     let mut stave_contents = Vec::new();
-    
-    for stave in &processed_doc.staves {
-        // Get LilyPond content for this stave (without template wrapper)
-        let stave_lilypond = convert_stave_to_lilypond_content(&stave.items)?;
-        stave_contents.push(format!("\\new Staff {{\n  \\fixed c' {{\n    \\key c \\major\n    \\time 4/4\n    \\autoBeamOff\n    \\set Score.measureBarType = #\"\"\n    \\set Score.startRepeatBarType = #\"\"\n    \\set Score.endRepeatBarType = #\"\"\n    \n    {}\n  }}\n}}", stave_lilypond));
+
+    for element in &document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            // Get LilyPond content for this stave (without template wrapper)
+            let stave_lilypond = convert_stave_to_lilypond_content(stave)?;
+            stave_contents.push(format!("\\new Staff {{\n  \\fixed c' {{\n    \\key c \\major\n    \\time 4/4\n    \\autoBeamOff\n    \\set Score.measureBarType = #\"\"\n    \\set Score.startRepeatBarType = #\"\"\n    \\set Score.endRepeatBarType = #\"\"\n    \n    {}\n  }}\n}}", stave_lilypond));
+        }
     }
-    
+
     // Create template context for multi-stave template
     let mut context = TemplateContext::new();
-    context.set_title(metadata.title.as_ref().map(|t| t.text.clone()));
+    context.set_title(document.title.clone());
     context.set_source_comment(source.map(|s| s.to_string()));
     context.set_staves(stave_contents.join("\n"));
-    
+
     // Render using multi-stave template
     render_lilypond(LilyPondTemplate::MultiStave, &context).map_err(|e| e.to_string())
 }
 
-/// Convert a single stave's items to LilyPond content (without template wrapper)
-fn convert_stave_to_lilypond_content(items: &Vec<Item>) -> Result<String, String> {
+/// Convert a single stave to LilyPond content (without template wrapper)
+fn convert_stave_to_lilypond_content(stave: &crate::parse::model::Stave) -> Result<String, String> {
     let mut lilypond_notes: Vec<String> = Vec::new();
     let mut current_tonic: Option<Degree> = None;
-    
-    for item in items {
-        match item {
-            Item::Tonic(tonic_degree) => {
-                current_tonic = Some(*tonic_degree);
-            },
-            Item::Beat(beat) => {
-                let beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
-                lilypond_notes.extend(beat_notes);
-            },
-            Item::Barline(barline_type, _) => {
-                lilypond_notes.push(barline_type_to_lilypond(barline_type, false));
-            },
-            Item::Breathmark => {
-                lilypond_notes.push("\\breathe".to_string());
-            },
+
+    for line in &stave.lines {
+        if let StaveLine::ContentLine(content_line) = line {
+            for content_element in &content_line.elements {
+                match content_element {
+                    ContentElement::Beat(beat) => {
+                        let beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
+                        lilypond_notes.extend(beat_notes);
+                    },
+                    ContentElement::Barline(_) => {
+                        lilypond_notes.push("| ".to_string());
+                    },
+                    ContentElement::Whitespace(_) => {
+                        // Skip whitespace
+                    },
+                }
+            }
         }
     }
-    
+
     Ok(lilypond_notes.join(" "))
 }
 
-/// Generate minimal LilyPond source (just the notes, no staff boilerplate)
-pub fn convert_processed_document_to_lilypond_minimal(
-    document: &ProcessedDocument,
-    metadata: &Metadata,
-    source: Option<&str>
-) -> Result<String, String> {
-    let mut all_notes = Vec::new();
-    
-    // Convert all staves into a simple note list by processing items directly
-    // Only include staves that have actual musical content
-    for stave in &document.staves {
-        let mut stave_has_notes = false;
-        for item in &stave.items {
-            match item {
-                crate::parser_v2_fsm::Item::Beat(beat) => {
-                    for element in &beat.elements {
-                        match &element.event {
-                            crate::parser_v2_fsm::Event::Note { degree, octave, .. } => {
-                                // Convert note to proper lilypond format with octave (c'4, d'4, etc.)
-                                if let Ok(lily_note) = degree_to_lilypond(*degree, *octave, None) {
-                                    let note_str = format!("{}4", lily_note);
-                                    all_notes.push(note_str);
-                                    stave_has_notes = true;
-                                }
-                            },
-                            crate::parser_v2_fsm::Event::Rest => {
-                                all_notes.push("r4".to_string());
-                                stave_has_notes = true;
-                            },
-                            // Skip other elements for minimal output
-                            _ => {},
-                        }
-                    }
-                },
-                // Skip barlines and breath marks for minimal output
-                _ => {},
-            }
-        }
-        // If this stave had content, break after first stave with content
-        // This ensures minimal output shows only the first stave with actual music
-        if stave_has_notes {
-            break;
-        }
-    }
-    
-    // Use minimal template that only shows notes
-    let template_context = TemplateContext {
-        version: "2.24.0".to_string(),
-        title: None,
-        composer: None,
-        source_comment: None,
-        staves: all_notes.join(" "),
-        time_signature: None,
-        key_signature: None,
-        lyrics: None,
-    };
-
-    render_lilypond(LilyPondTemplate::Minimal, &template_context)
-        .map_err(|e| format!("Template rendering failed: {}", e))
-}
+// Removed old convert_processed_document_to_lilypond_minimal function - not needed with new architecture
 
 /// Simple degree to lilypond note conversion (just note names)
 fn degree_to_lilypond_simple(degree: Degree) -> &'static str {

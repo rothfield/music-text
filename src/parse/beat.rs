@@ -1,4 +1,4 @@
-use crate::parse::model::{Beat, BeatElement, Note, Dash, BreathMark, Source, Position, PitchString, NotationSystem};
+use crate::parse::model::{Beat, BeatElement, Note, Dash, BreathMark, Source, Position, NotationSystem};
 use crate::parse::pitch::{parse_pitch_with_indices, is_pitch_start};
 use crate::parse::ParseError;
 use std::str::CharIndices;
@@ -24,6 +24,7 @@ pub fn parse_beat(
     notation_system: NotationSystem,
     line_num: usize,
     input: &str,
+    line_start_doc_index: usize,
 ) -> Result<Beat, ParseError> {
     let mut elements = Vec::new();
     let beat_start_pos = chars.peek().map(|(pos, _)| *pos).unwrap_or(0);
@@ -39,7 +40,7 @@ pub fn parse_beat(
                         line: line_num,
                         column: column_from_pos(input, pos),
                         index_in_line: index_in_line_from_pos(input, pos, line_num),
-                        index_in_doc: pos,
+                        index_in_doc: line_start_doc_index + pos,
                     },
                 },
             }));
@@ -48,22 +49,22 @@ pub fn parse_beat(
             let (pitch_str, pitch_code) = parse_pitch_with_indices(chars, notation_system, line_num, input)?;
 
             elements.push(BeatElement::Note(Note {
-                pitch_string: PitchString {
-                    source: Source {
-                        value: Some(pitch_str),
-                        position: Position {
-                            line: line_num,
-                            column: column_from_pos(input, pos),
-                            index_in_line: index_in_line_from_pos(input, pos, line_num),
-                            index_in_doc: pos,
-                        },
+                source: Source {
+                    value: Some(pitch_str),
+                    position: Position {
+                        line: line_num,
+                        column: column_from_pos(input, pos),
+                        index_in_line: index_in_line_from_pos(input, pos, line_num),
+                        index_in_doc: line_start_doc_index + pos,
                     },
                 },
                 pitch_code,
                 octave: 0, // Default octave, will be adjusted by spatial annotations
                 notation_system,
                 spatial_assignments: Vec::new(), // Will be populated during spatial analysis
-                duration: None, // Will be populated by rhythm analysis
+                consumed_elements: Vec::new(), // Will be populated during spatial analysis
+                numerator: None, // Will be populated by rhythm analysis
+                denominator: None, // Will be populated by rhythm analysis
             }));
         }
         Some(&(pos, ch)) => {
@@ -98,23 +99,23 @@ pub fn parse_beat(
                             line: line_num,
                             column: column_from_pos(input, pos),
                             index_in_line: index_in_line_from_pos(input, pos, line_num),
-                            index_in_doc: pos,
+                            index_in_doc: line_start_doc_index + pos,
                         },
                     },
                 }));
             }
 
             // Breath mark
-            Some(&(pos, ',')) => {
+            Some(&(pos, '\'')) => {
                 chars.next();
                 elements.push(BeatElement::BreathMark(BreathMark {
                     source: Source {
-                        value: Some(",".to_string()),
+                        value: Some("'".to_string()),
                         position: Position {
                             line: line_num,
                             column: column_from_pos(input, pos),
                             index_in_line: index_in_line_from_pos(input, pos, line_num),
-                            index_in_doc: pos,
+                            index_in_doc: line_start_doc_index + pos,
                         },
                     },
                 }));
@@ -125,22 +126,22 @@ pub fn parse_beat(
                 let (pitch_str, pitch_code) = parse_pitch_with_indices(chars, notation_system, line_num, input)?;
 
                 elements.push(BeatElement::Note(Note {
-                    pitch_string: PitchString {
-                        source: Source {
-                            value: Some(pitch_str),
-                            position: Position {
-                                line: line_num,
-                                column: column_from_pos(input, pos),
-                                index_in_line: index_in_line_from_pos(input, pos, line_num),
-                                index_in_doc: pos,
-                            },
+                    source: Source {
+                        value: Some(pitch_str),
+                        position: Position {
+                            line: line_num,
+                            column: column_from_pos(input, pos),
+                            index_in_line: index_in_line_from_pos(input, pos, line_num),
+                            index_in_doc: line_start_doc_index + pos,
                         },
                     },
                     pitch_code,
                     octave: 0,
                     notation_system,
                     spatial_assignments: Vec::new(), // Will be populated during spatial analysis
-                    duration: None, // Will be populated by rhythm analysis
+                    consumed_elements: Vec::new(), // Will be populated during spatial analysis
+                    numerator: None, // Will be populated by rhythm analysis
+                denominator: None, // Will be populated by rhythm analysis
                 }));
             }
 
@@ -157,11 +158,13 @@ pub fn parse_beat(
                 line: line_num,
                 column: column_from_pos(input, beat_start_pos),
                 index_in_line: index_in_line_from_pos(input, beat_start_pos, line_num),
-                index_in_doc: beat_start_pos,
+                index_in_doc: line_start_doc_index + beat_start_pos,
             },
         },
         divisions: None,        // Will be populated by rhythm analysis
         total_duration: None,   // Will be populated by rhythm analysis
+        is_tuplet: None,        // Will be populated by rhythm analysis
+        tuplet_ratio: None,     // Will be populated by rhythm analysis
     };
 
     Ok(beat)

@@ -133,24 +133,62 @@ export const UI = {
         }
     },
 
-    // Render VexFlow notation
+    // Render VexFlow notation - execute self-generated JavaScript
     async renderVexFlow(vexflowData) {
         const output = document.getElementById('vexflow-output');
         output.innerHTML = ''; // Clear previous content
-        
+
         try {
-            if (window.VexFlowRenderer) {
-                // Use the sophisticated VexFlow renderer
-                const success = await window.VexFlowRenderer.renderVexFlowNotation(vexflowData, 'vexflow-output');
-                if (!success) {
-                    output.innerHTML = `<p>VexFlow rendering failed. Showing raw data:</p><pre>${JSON.stringify(vexflowData, null, 2)}</pre>`;
-                }
+            if (vexflowData.vexflow_js) {
+                // Load VexFlow library if not already loaded
+                await this.ensureVexFlowLoaded();
+
+                // Execute the generated JavaScript
+                console.log('🎵 Executing VexFlow JavaScript:', vexflowData.vexflow_js);
+                eval(vexflowData.vexflow_js);
             } else {
-                output.innerHTML = '<p>VexFlow renderer not loaded. Showing raw data:</p><pre>' + JSON.stringify(vexflowData, null, 2) + '</pre>';
+                // Fallback: show the raw data
+                const pre = document.createElement('pre');
+                pre.style.backgroundColor = '#f8f9fa';
+                pre.style.padding = '1rem';
+                pre.style.border = '1px solid #dee2e6';
+                pre.style.borderRadius = '0.375rem';
+                pre.style.overflow = 'auto';
+                pre.style.fontSize = '0.875rem';
+                pre.textContent = JSON.stringify(vexflowData, null, 2);
+                output.appendChild(pre);
             }
         } catch (error) {
-            output.innerHTML = `<p>VexFlow rendering error: ${error.message}</p><pre>${JSON.stringify(vexflowData, null, 2)}</pre>`;
+            console.error('🎵 VexFlow execution error:', error);
+            output.innerHTML = `<p style="color: red;">VexFlow rendering error: ${error.message}</p>
+                               <pre style="font-size: 0.8em; background: #f8f9fa; padding: 1rem; margin-top: 1rem;">
+${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
         }
+    },
+
+    // Ensure VexFlow library is loaded
+    async ensureVexFlowLoaded() {
+        if (window.Vex && window.Vex.Flow) {
+            return true; // Already loaded
+        }
+
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'assets/vexflow4.js';
+            script.async = true;
+
+            script.onload = () => {
+                if (window.Vex && window.Vex.Flow) {
+                    console.log('🎵 VexFlow library loaded successfully');
+                    resolve(true);
+                } else {
+                    reject(new Error('VexFlow loaded but not accessible'));
+                }
+            };
+
+            script.onerror = () => reject(new Error('Failed to load VexFlow library'));
+            document.head.appendChild(script);
+        });
     },
 
     // Update SVG output

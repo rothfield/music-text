@@ -1,5 +1,16 @@
 # Music Text Grammar Specification
 
+## Notation System Rules
+
+**Single Notation System Per Document**: Each document can only contain one notation system, determined by the first content line encountered. All subsequent content lines must use the same notation system.
+
+Supported notation systems:
+- **Sargam**: S, R, G, M, P, D, N (with accidentals)
+- **Number**: 1, 2, 3, 4, 5, 6, 7 (with accidentals)
+- **Western**: A, B, C, D, E, F, G (with accidentals)
+- **Bhatkhande**: स, र, ग, म, प, ध, न
+- **Tabla**: dha, dhin, ta, ka, etc.
+
 ## Overview
 
 This specification defines the formal grammar for the music-text notation language, supporting multiple pitch notation systems with spatial rhythm representation and hierarchical document structure.
@@ -9,17 +20,17 @@ This specification defines the formal grammar for the music-text notation langua
 ### Document Structure
 
 ```ebnf
-document = stave_only_document | header_and_staves_document
+document = blank_lines* document_element (blank_lines* document_element)* blank_lines*
 
-stave_only_document = stave (blank_lines stave)*
+document_element = header_block | stave | single_content_line
 
-header_and_staves_document = document_header document_body
-
-document_header = header_content blank_lines+
+header_block = header_content
 
 header_content = header_line (newline header_line)*
 
 header_line = title_line | directive_line | text_line
+
+single_content_line = content_line
 
 directive_line = directive whitespace* (newline | EOI)
 
@@ -60,13 +71,13 @@ content_line = line_number? non-beat-element* beat (non-beat-elemnt | beat)  new
 non-beat-element = barline | whitespace
 beat = spatially-delimited-beat |
       (pitch | dash) beat-element*
-beat-element = pitch | dash | breath-mark
+beat-element = pitch | dash | breath-mark   // breath-marks can appear anywhere within a beat (middle or end)
 
 pitch = note_in_system
 
 note_in_system = sargam_note | number_note | western_note | tabla_note | hindi_note
 dash = "-"
-breath-mark = ","
+breath-mark = "'"   // apostrophe/tick mark indicates a breath or pause, can appear anywhere within a beat
 ```
 
 ## Design Decision: No Measures
@@ -93,28 +104,44 @@ lyrics_line = syllable+ (newline | EOI)
 ### Upper Line Elements
 
 ```ebnf
-upper_line_element = upper_octave_marker | slur_indicator | ornament | chord | mordent | tala | space | unknown_upper
+upper_line_element = octave_marker | slur_indicator | ornament | chord | mordent | tala | space | unknown_upper
 
-upper_octave_marker = "." | "*" | ":"
+octave_marker = "." | ":"   // "." = single, ":" = double (interpretation depends on position)
 slur_indicator = "_" "_"+   // exactly two or more consecutive underscores for slur marking (minimum length: 2)
 ornament = "<" pitch+ ">" | pitch+
 chord = "[" chord_symbol "]"
 mordent = "~"
 tala = "+" | "0" | digit
 space = " "+
-unknown_upper = !upper_octave_marker !("_" "_") !space !ornament !chord !mordent !tala ANY+
+unknown_upper = !octave_marker !("_" "_") !space !ornament !chord !mordent !tala ANY+
 ```
 
 ### Lower Line Elements
 
 ```ebnf
-lower_line_element = lower_octave_marker | beat_group_indicator | syllable | space | unknown_lower
-
-lower_octave_marker = "." | ":"
+lower_line_element = octave_marker | beat_group_indicator | syllable | space | unknown_lower
 beat_group_indicator = "_" "_"+   // exactly two or more consecutive underscores (minimum length: 2)
 syllable = letter+ (letter | digit | "'" | "-")*   // alphanumeric with apostrophes and hyphens
 space = " "+
-unknown_lower = !lower_octave_marker !("_" "_") !space !syllable ANY+
+unknown_lower = !octave_marker !("_" "_") !space !syllable ANY+
+```
+
+### Octave Marker Semantics
+```ebnf
+// Unified octave marker - interpretation determined by spatial assignment rule
+octave_marker = "." | ":"
+
+// Spatial assignment rule determines meaning:
+// assign_octave_marker(source: octave_marker, destination: note, distance: i8)
+//   - distance < 0: upper line (octave increase)
+//     - "." → +1 octave
+//     - ":" → +2 octave
+//   - distance > 0: lower line (octave decrease)
+//     - "." → -1 octave
+//     - ":" → -2 octave
+//
+// Rule-based interpretation eliminates need for separate upper/lower marker types
+// Destination notation: [[ ]] indicates which line receives the modification
 ```
 
 ### Notation Systems
@@ -163,7 +190,7 @@ line_number = digit+ "."
 ### Beat Grouping
 ```ebnf
 spatially-delimited-beat ::=
-    [ (pitch | dash) (space | beat-element)* ]
+    [[ (pitch | dash) (space | beat-element)* ]]
     [ underscores                            ]
 ```
 
@@ -171,18 +198,43 @@ spatially-delimited-beat ::=
 ```ebnf
 spatially-delimited-slur ::=
     [ overscores                             ]
-    [ (pitch | dash) (space | beat-element)* ]
+    [[ (pitch | dash) (space | beat-element)* ]]
+```
+
+### Octave Assignment
+```ebnf
+spatially-delimited-octave ::=
+    [ octave_marker ]
+    [[ content_pitch ]]
+    [ octave_marker ]
 ```
 
 ### Other Spatial Relationships
 
 The grammar has not yet been fully updated to formalize all spatial relationships, but the following spatial aspects exist in the current implementation and should be formalized using similar production rules:
 
-- **Octave Markers**: Dots or colons above/below notes to indicate octave changes
+- **Upper Octave Markers**: Dots and colons above notes to indicate higher octaves
   ```
-  [ .  :     ]  (upper octave markers)
+  [ .  :     ]  (upper octave markers: +1, +2 octaves)
   [ S  R  G  ]  →  spatially-marked-octaves
-  [    .     ]  (lower octave markers)
+  ```
+
+- **Highest Octave Marker**: Colon above notes for maximum octave increase
+  ```
+  [    :     ]  (highest octave marker: +2 octaves)
+  [ S  R  G  ]  →  spatially-marked-octaves
+  ```
+
+- **Lower Octave Marker**: Dot below notes to indicate lower octave
+  ```
+  [ S  R  G  ]  (notes)
+  [ .        ]  (lower octave marker: -1 octave)
+  ```
+
+- **Lowest Octave Marker**: Colon below notes for maximum octave decrease
+  ```
+  [ S  R  G  ]  (notes)
+  [    :     ]  (lowest octave marker: -2 octaves)
   ```
 
 - **Ornaments**: Mordents, trills, and other decorations above notes
@@ -248,11 +300,11 @@ Amazing Grace
 ## Spatial Relationship Rules
 
 ### Octave Markers
-- **Position determines direction**: 
+- **Position determines direction**:
   - Pre-content annotation = raise octave (upper)
   - Post-content annotation = lower octave (lower)
 - **Alignment**: Markers align spatially with content notes
-- **Symbols**: `.` (single octave), `:` (double octave), `*` (alternative)
+- **Symbols**: `.` (single octave), `:` (double octave)
 
 ### Slur Indicators vs Beat Group Indicators
 - **Slur Indicators**: `_____` in upper_line = musical phrasing (slur_indicator)
@@ -312,10 +364,10 @@ Expected: Beat 1: "1--", Beat 2: "2-", Beat 3: "3", Beat 4: "4"
 
 ### Spatial Octaves
 ```
-Input: 
-    •   •
+Input:
+    .   .
 |1 2 3 4|
-    •
+    .
 Expected: Notes 1,3 raised octave, note 4 lowered octave
 ```
 

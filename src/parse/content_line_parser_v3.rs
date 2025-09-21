@@ -143,6 +143,7 @@ pub fn parse_content_line(
                     notation_system,
                     line_num,
                     input,
+                    line_start_doc_index,
                 )?;
 
                 elements.push(ContentElement::Beat(beat));
@@ -155,6 +156,7 @@ pub fn parse_content_line(
                     notation_system,
                     line_num,
                     input,
+                    line_start_doc_index,
                 )?;
 
                 elements.push(ContentElement::Beat(beat));

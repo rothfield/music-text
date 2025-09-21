@@ -1,13 +1,17 @@
 // Web server for live notation parsing
 use axum::{
-    extract::Query,
-    response::IntoResponse,
+    extract::{Query, Multipart, Form},
+    response::{IntoResponse, Html, Response},
     routing::{get, post},
     Json, Router,
+    http::{StatusCode, header},
+    body::Body,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tower_http::{cors::CorsLayer, services::ServeDir};
+use tokio::fs;
+use tokio::io::AsyncReadExt;
 // Removed pest import - using hand-written recursive descent parser
 
 #[derive(Debug, Deserialize)]
@@ -36,16 +40,69 @@ pub struct ParseResponse {
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
     syntax_spans: Option<Vec<crate::renderers::codemirror::Span>>,
-    character_styles: Option<Vec<crate::renderers::codemirror::CharacterStyle>>,
+    character_styles: Option<Vec<crate::renderers::codemirror::SpanStyle>>,
     roundtrip: Option<RoundtripData>,
     error: Option<String>,
 }
 
 // Removed PestDebugRequest and PestDebugResponse - no longer using pest
 
+#[derive(Debug, Deserialize)]
+pub struct RetroParseRequest {
+    input: String,
+    action: String,
+}
+
+// Template rendering helper
+async fn render_retro_template(
+    input: &str,
+    svg_content: Option<&str>,
+    lilypond_content: Option<&str>,
+    error_message: Option<&str>,
+    success_message: Option<&str>,
+) -> String {
+    let template = match fs::read_to_string("webapp/public/retro-template.html").await {
+        Ok(content) => content,
+        Err(_) => {
+            // Fallback template if file can't be read
+            r#"<!DOCTYPE html>
+<html><head><title>Music Text - Retro Mode</title></head>
+<body>
+<h1>Music Text - Retro Mode</h1>
+<form method="POST" action="/retro/parse">
+<textarea name="input">{{preserved_input}}</textarea><br>
+<button type="submit" name="action" value="preview">Preview</button>
+</form>
+{{#if_error}}<div style="color:red">{{error_message}}</div>{{/if_error}}
+{{#if_success}}<div style="color:green">{{success_message}}</div>{{/if_success}}
+</body></html>"#.to_string()
+        }
+    };
+
+    template
+        .replace("{{preserved_input}}", input)
+        .replace("{{#if_results}}", if svg_content.is_some() || lilypond_content.is_some() || error_message.is_some() || success_message.is_some() { "" } else { "<!--" })
+        .replace("{{/if_results}}", if svg_content.is_some() || lilypond_content.is_some() || error_message.is_some() || success_message.is_some() { "" } else { "-->" })
+        .replace("{{#if_svg}}", if svg_content.is_some() { "" } else { "<!--" })
+        .replace("{{/if_svg}}", if svg_content.is_some() { "" } else { "-->" })
+        .replace("{{svg_content}}", svg_content.unwrap_or(""))
+        .replace("{{#if_lilypond}}", if lilypond_content.is_some() { "" } else { "<!--" })
+        .replace("{{/if_lilypond}}", if lilypond_content.is_some() { "" } else { "-->" })
+        .replace("{{lilypond_content}}", lilypond_content.unwrap_or(""))
+        .replace("{{#if_error}}", if error_message.is_some() { "" } else { "<!--" })
+        .replace("{{/if_error}}", if error_message.is_some() { "" } else { "-->" })
+        .replace("{{error_message}}", error_message.unwrap_or(""))
+        .replace("{{#if_success}}", if success_message.is_some() { "" } else { "<!--" })
+        .replace("{{/if_success}}", if success_message.is_some() { "" } else { "-->" })
+        .replace("{{success_message}}", success_message.unwrap_or(""))
+}
+
 pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/api/parse", get(parse_text))
+        .route("/retro/load", post(retro_load))
+        .route("/retro", post(retro_parse).get(serve_retro_page))
+        .route("/retro/", get(serve_retro_page))
         .route("/health", get(health_endpoint))
         .nest_service("/", ServeDir::new("webapp/public"))
         .layer(CorsLayer::permissive());
@@ -156,5 +213,293 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
 
 async fn health_endpoint() -> impl IntoResponse {
     Json(serde_json::json!({"status": "ok"}))
+}
+
+// Serve the retro page at /retro
+async fn serve_retro_page() -> impl IntoResponse {
+    match fs::read_to_string("webapp/public/retro.html").await {
+        Ok(content) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "text/html")
+            .body(Body::from(content))
+            .unwrap(),
+        Err(_) => Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header(header::CONTENT_TYPE, "text/plain")
+            .body(Body::from("Retro page not found"))
+            .unwrap()
+    }
+}
+
+// Retro mode form handling
+async fn retro_parse(Form(form_data): Form<RetroParseRequest>) -> impl IntoResponse {
+    let input = form_data.input;
+    let action = form_data.action;
+
+    println!("Retro parse request: action={}, input_len={}", action, input.len());
+
+    match action.as_str() {
+        "preview" => {
+            // Generate preview with SVG
+            match crate::process_notation(&input) {
+                Ok(result) => {
+                    let lilypond_svg = if !result.lilypond.is_empty() {
+                        let temp_dir = std::env::temp_dir().join("music-text-svg");
+                        let generator = crate::renderers::lilypond::LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
+
+                        match generator.generate_svg(&result.lilypond).await {
+                            svg_result if svg_result.success => svg_result.svg_content,
+                            _ => None
+                        }
+                    } else {
+                        None
+                    };
+
+                    let html = render_retro_template(
+                        &input,
+                        lilypond_svg.as_deref(),
+                        Some(&result.lilypond),
+                        None,
+                        Some("Notation parsed successfully!")
+                    ).await;
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "text/html")
+                        .body(Body::from(html))
+                        .unwrap()
+                }
+                Err(e) => {
+                    let html = render_retro_template(
+                        &input,
+                        None,
+                        None,
+                        Some(&e.to_string()),
+                        None
+                    ).await;
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "text/html")
+                        .body(Body::from(html))
+                        .unwrap()
+                }
+            }
+        }
+        "save_pdf" => {
+            // Generate PDF and return as download
+            match crate::process_notation(&input) {
+                Ok(result) if !result.lilypond.is_empty() => {
+                    let temp_dir = std::env::temp_dir().join("music-text-pdf");
+                    let generator = crate::renderers::lilypond::LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
+
+                    match generator.generate_pdf(&result.lilypond).await {
+                        pdf_result if pdf_result.success => {
+                            if let Some(pdf_data) = pdf_result.pdf_data {
+                                return Response::builder()
+                                    .status(StatusCode::OK)
+                                    .header(header::CONTENT_TYPE, "application/pdf")
+                                    .header(header::CONTENT_DISPOSITION, "attachment; filename=\"score.pdf\"")
+                                    .body(Body::from(pdf_data))
+                                    .unwrap();
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    // If PDF generation failed, show error
+                    let html = render_retro_template(
+                        &input,
+                        None,
+                        None,
+                        Some("PDF generation failed. Please ensure LilyPond is installed and accessible."),
+                        None
+                    ).await;
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "text/html")
+                        .body(Body::from(html))
+                        .unwrap()
+                }
+                Ok(_) => {
+                    let html = render_retro_template(
+                        &input,
+                        None,
+                        None,
+                        Some("No valid notation found for PDF generation."),
+                        None
+                    ).await;
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "text/html")
+                        .body(Body::from(html))
+                        .unwrap()
+                }
+                Err(e) => {
+                    let html = render_retro_template(
+                        &input,
+                        None,
+                        None,
+                        Some(&e.to_string()),
+                        None
+                    ).await;
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "text/html")
+                        .body(Body::from(html))
+                        .unwrap()
+                }
+            }
+        }
+        "save_lily" => {
+            // Return LilyPond source as download
+            match crate::process_notation(&input) {
+                Ok(result) if !result.lilypond.is_empty() => {
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "text/plain")
+                        .header(header::CONTENT_DISPOSITION, "attachment; filename=\"score.ly\"")
+                        .body(Body::from(result.lilypond))
+                        .unwrap()
+                }
+                Ok(_) => {
+                    let html = render_retro_template(
+                        &input,
+                        None,
+                        None,
+                        Some("No valid notation found for LilyPond generation."),
+                        None
+                    ).await;
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "text/html")
+                        .body(Body::from(html))
+                        .unwrap()
+                }
+                Err(e) => {
+                    let html = render_retro_template(
+                        &input,
+                        None,
+                        None,
+                        Some(&e.to_string()),
+                        None
+                    ).await;
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "text/html")
+                        .body(Body::from(html))
+                        .unwrap()
+                }
+            }
+        }
+        "save_mt" => {
+            // Return original input as .mt file
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/plain")
+                .header(header::CONTENT_DISPOSITION, "attachment; filename=\"notation.mt\"")
+                .body(Body::from(input))
+                .unwrap()
+        }
+        _ => {
+            let html = render_retro_template(
+                &input,
+                None,
+                None,
+                Some("Unknown action requested."),
+                None
+            ).await;
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/html")
+                .body(Body::from(html))
+                .unwrap()
+        }
+    }
+}
+
+// Retro mode file upload handling
+async fn retro_load(mut multipart: Multipart) -> impl IntoResponse {
+    println!("🔧 File upload request received");
+
+    match multipart.next_field().await {
+        Ok(Some(field)) => {
+            let name = field.name().unwrap_or("").to_string();
+            println!("🔧 Field name: {}", name);
+
+            if name == "musicfile" {
+                let filename = field.file_name().unwrap_or("unknown").to_string();
+                println!("🔧 Filename: {}", filename);
+
+                match field.bytes().await {
+                    Ok(data) => {
+                        let content = String::from_utf8_lossy(&data);
+                        println!("🔧 Loaded file: {} ({} bytes)", filename, data.len());
+
+                        let html = render_retro_template(
+                            &content,
+                            None,
+                            None,
+                            None,
+                            Some(&format!("File '{}' loaded successfully! ({} characters)", filename, content.len()))
+                        ).await;
+
+                        return Response::builder()
+                            .status(StatusCode::OK)
+                            .header(header::CONTENT_TYPE, "text/html")
+                            .body(Body::from(html))
+                            .unwrap();
+                    },
+                    Err(e) => {
+                        println!("🔧 Error reading file data: {}", e);
+                        let html = render_retro_template(
+                            "",
+                            None,
+                            None,
+                            Some(&format!("Error reading file: {}", e)),
+                            None
+                        ).await;
+                        return Response::builder()
+                            .status(StatusCode::OK)
+                            .header(header::CONTENT_TYPE, "text/html")
+                            .body(Body::from(html))
+                            .unwrap();
+                    }
+                }
+            } else {
+                println!("🔧 Wrong field name, expected 'musicfile', got '{}'", name);
+            }
+        },
+        Ok(None) => {
+            println!("🔧 No fields in multipart");
+        },
+        Err(e) => {
+            println!("🔧 Error processing multipart: {}", e);
+            let html = render_retro_template(
+                "",
+                None,
+                None,
+                Some(&format!("Error processing upload: {}", e)),
+                None
+            ).await;
+            return Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/html")
+                .body(Body::from(html))
+                .unwrap();
+        }
+    }
+
+    println!("🔧 No file found in upload");
+    let html = render_retro_template(
+        "",
+        None,
+        None,
+        Some("No file uploaded or file could not be read."),
+        None
+    ).await;
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/html")
+        .body(Body::from(html))
+        .unwrap()
 }
 

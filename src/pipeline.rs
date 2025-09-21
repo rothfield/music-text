@@ -2,7 +2,7 @@ use crate::parse::{Document, model::{DocumentElement, Stave, StaveLine, ContentL
 use crate::parse::recursive_descent::{parse_document, ParseError};
 use crate::parse::content_line_parser_v3::parse_content_line as parse_content_line_v3;
 use crate::spatial::process_spatial_assignments_unified;
-use crate::renderers::lilypond::render_lilypond_from_document;
+use crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src;
 use crate::renderers::vexflow::VexFlowRenderer;
 use serde::{Deserialize, Serialize};
 /// The complete processing pipeline output
@@ -36,7 +36,13 @@ pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
     let document = spatial_document;
 
     // Stage 4: Render from final document
-    let lilypond = render_lilypond_from_document(&document);
+    let metadata = crate::models::Metadata {
+        title: document.title.as_ref().map(|t| crate::models::Title { text: t.clone(), row: 0, col: 0 }),
+        attributes: std::collections::HashMap::new(),
+        detected_system: None,
+        directives: Vec::new(),
+    };
+    let lilypond = convert_processed_document_to_lilypond_src(&document, &metadata, None)?;
 
     // Stage 5: Render VexFlow from final document
     let vexflow_renderer = VexFlowRenderer::new();

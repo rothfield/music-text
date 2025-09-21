@@ -19,13 +19,13 @@ pub fn get_all_symbols() -> Vec<String> {
         // Tivra (sharpened) sargam
         "M".to_string(),
         // Extended sargam with explicit accidentals (sorted by length)
-        "S##".to_string(), "R##".to_string(), "G##".to_string(), "P##".to_string(),
-        "D##".to_string(), "N##".to_string(), "M#".to_string(),
-        "Sbb".to_string(), "Rbb".to_string(), "Gbb".to_string(), "Pbb".to_string(),
-        "Dbb".to_string(), "Nbb".to_string(), "mbb".to_string(),
-        "S#".to_string(), "R#".to_string(), "G#".to_string(), "P#".to_string(),
-        "D#".to_string(), "N#".to_string(),
-        "Sb".to_string(), "Pb".to_string(), "mb".to_string(),
+        "S##".to_string(), "s##".to_string(), "R##".to_string(), "G##".to_string(),
+        "P##".to_string(), "p##".to_string(), "D##".to_string(), "N##".to_string(), "M#".to_string(),
+        "Sbb".to_string(), "sbb".to_string(), "Rbb".to_string(), "Gbb".to_string(),
+        "Pbb".to_string(), "pbb".to_string(), "Dbb".to_string(), "Nbb".to_string(), "mbb".to_string(),
+        "S#".to_string(), "s#".to_string(), "R#".to_string(), "G#".to_string(),
+        "P#".to_string(), "p#".to_string(), "D#".to_string(), "N#".to_string(),
+        "Sb".to_string(), "sb".to_string(), "Pb".to_string(), "pb".to_string(), "mb".to_string(),
     ];
     // Sort by length (longest first) to ensure proper regex matching
     symbols.sort_by(|a, b| b.len().cmp(&a.len()));
@@ -52,10 +52,10 @@ pub fn lookup(symbol: &str) -> Option<Degree> {
         // Tivra (sharpened) sargam
         "M" => Some(Degree::N4s),   // tivra Ma
         // Extended sargam with explicit accidentals
-        "S#" => Some(Degree::N1s),
-        "S##" => Some(Degree::N1ss),
-        "Sb" => Some(Degree::N1b),
-        "Sbb" => Some(Degree::N1bb),
+        "S#" | "s#" => Some(Degree::N1s),
+        "S##" | "s##" => Some(Degree::N1ss),
+        "Sb" | "sb" => Some(Degree::N1b),
+        "Sbb" | "sbb" => Some(Degree::N1bb),
         "R#" => Some(Degree::N2s),
         "R##" => Some(Degree::N2ss),
         "Rbb" => Some(Degree::N2bb),
@@ -65,10 +65,10 @@ pub fn lookup(symbol: &str) -> Option<Degree> {
         "mb" => Some(Degree::N4b),
         "mbb" => Some(Degree::N4bb),
         "M#" => Some(Degree::N4ss), // M# is 4##
-        "P#" => Some(Degree::N5s),
-        "P##" => Some(Degree::N5ss),
-        "Pb" => Some(Degree::N5b),
-        "Pbb" => Some(Degree::N5bb),
+        "P#" | "p#" => Some(Degree::N5s),
+        "P##" | "p##" => Some(Degree::N5ss),
+        "Pb" | "pb" => Some(Degree::N5b),
+        "Pbb" | "pbb" => Some(Degree::N5bb),
         "D#" => Some(Degree::N6s),
         "D##" => Some(Degree::N6ss),
         "Dbb" => Some(Degree::N6bb),

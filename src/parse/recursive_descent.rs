@@ -39,7 +39,13 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
     // Parse document_body? (remaining lines)
     if line_idx < lines.len() {
         let body_input = lines[line_idx..].join("\n");
-        elements = parse_document_body(&body_input)?;
+
+        // Calculate the starting document index by counting characters in consumed lines
+        let start_doc_index: usize = lines[..line_idx].iter()
+            .map(|line| line.len() + 1) // +1 for newline character
+            .sum();
+
+        elements = parse_document_body(&body_input, start_doc_index)?;
     }
 
     Ok(Document {
@@ -118,9 +124,34 @@ fn parse_blank_lines_element(chars: &mut std::iter::Peekable<std::str::Chars>, l
     })
 }
 
-/// Parse stave from character stream following grammar:
+/// Parse stave from character stream following grammar (backward compatibility):
 /// stave = upper_line* content_line (lower_line | lyrics_line)* (blank_lines | (whitespace* newline)* EOI)
 fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line: &mut usize, column: &mut usize, doc_index: &mut usize) -> Result<Stave, ParseError> {
+    // For backward compatibility, detect notation system from content in the stave
+    let chars_clone = chars.clone();
+    let mut temp_stave_content = String::new();
+    let mut temp_chars = chars_clone;
+
+    // Peek ahead to find the notation system
+    while let Some(&ch) = temp_chars.peek() {
+        if ch == '\n' {
+            temp_chars.next();
+            temp_stave_content.push(ch);
+            if is_blank_lines_start(&mut temp_chars.clone()) {
+                break;
+            }
+        } else {
+            temp_stave_content.push(temp_chars.next().unwrap());
+        }
+    }
+
+    let notation_system = detect_notation_system(&temp_stave_content);
+    parse_stave_from_chars_with_system(chars, line, column, doc_index, notation_system)
+}
+
+/// Parse stave from character stream following grammar (with predetermined notation system):
+/// stave = upper_line* content_line (lower_line | lyrics_line)* (blank_lines | (whitespace* newline)* EOI)
+fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::Chars>, line: &mut usize, column: &mut usize, doc_index: &mut usize, notation_system: NotationSystem) -> Result<Stave, ParseError> {
     let start_line = *line;
     let stave_start_doc_index = *doc_index;
     let mut lines = Vec::new();
@@ -172,8 +203,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
                 lines.push(crate::parse::model::StaveLine::Text(text_line));
             }
         } else if is_content_line(&current_line.trim_end_matches('\n')) {
-            // Detect notation system from the content line
-            let notation_system = detect_notation_system(&current_line);
+            // Use the document notation system instead of detecting per line
             // Parse directly to ContentLine using v3 parser
             let content_line = crate::parse::content_line_parser_v3::parse_content_line(
                 &current_line,
@@ -311,7 +341,7 @@ fn parse_stave_from_chars(chars: &mut std::iter::Peekable<std::str::Chars>, line
 
     Ok(Stave {
         lines,
-        notation_system: detect_notation_system(&stave_content),
+        notation_system,  // Use the document notation system
         source: Source {
             value: Some(stave_content),
             position: ModelPosition { line: start_line, column: 1, index_in_line: 0, index_in_doc: stave_start_doc_index },
@@ -350,13 +380,27 @@ fn detect_notation_system(input: &str) -> NotationSystem {
     }
 }
 
+/// Detect notation system from the first content line in the document
+fn detect_document_notation_system(input: &str) -> NotationSystem {
+    for line in input.lines() {
+        if is_content_line(line) {
+            return detect_notation_system(line);
+        }
+    }
+    // Default to Western if no content lines found
+    NotationSystem::Western
+}
+
 /// Parse document body (reuse existing stave parsing logic)
-fn parse_document_body(input: &str) -> Result<Vec<crate::parse::model::DocumentElement>, ParseError> {
+fn parse_document_body(input: &str, start_doc_index: usize) -> Result<Vec<crate::parse::model::DocumentElement>, ParseError> {
     let mut chars = input.chars().peekable();
     let mut line = 1;
     let mut column = 1;
-    let mut doc_index: usize = 0;
+    let mut doc_index: usize = start_doc_index;
     let mut elements = Vec::new();
+
+    // Detect document notation system from first content line
+    let document_notation_system = detect_document_notation_system(input);
 
     // Parse optional leading blank_lines*
     while is_blank_lines_start(&mut chars.clone()) {
@@ -366,7 +410,7 @@ fn parse_document_body(input: &str) -> Result<Vec<crate::parse::model::DocumentE
 
     // Parse optional (stave (blank_lines stave)*)?
     if chars.peek().is_some() {
-        let first_stave = parse_stave_from_chars(&mut chars, &mut line, &mut column, &mut doc_index)?;
+        let first_stave = parse_stave_from_chars_with_system(&mut chars, &mut line, &mut column, &mut doc_index, document_notation_system)?;
         elements.push(crate::parse::model::DocumentElement::Stave(first_stave));
 
         // Parse (blank_lines stave)*
@@ -377,7 +421,7 @@ fn parse_document_body(input: &str) -> Result<Vec<crate::parse::model::DocumentE
             }
 
             if chars.peek().is_some() {
-                let stave = parse_stave_from_chars(&mut chars, &mut line, &mut column, &mut doc_index)?;
+                let stave = parse_stave_from_chars_with_system(&mut chars, &mut line, &mut column, &mut doc_index, document_notation_system)?;
                 elements.push(crate::parse::model::DocumentElement::Stave(stave));
             }
         }

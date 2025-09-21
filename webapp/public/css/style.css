@@ -58,8 +58,102 @@ button.secondary {
     color: white;
 }
 
-button.secondary:hover { 
-    background: darkslategray; 
+button.secondary:hover {
+    background: darkslategray;
+}
+
+/* MIDI Controls */
+.midi-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 12px;
+    padding-left: 12px;
+    border-left: 1px solid #ddd;
+}
+
+.midi-btn {
+    background: #2e7d32;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    min-width: 28px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.midi-btn:hover {
+    background: #1b5e20;
+}
+
+.midi-btn:disabled {
+    background: #9e9e9e;
+    cursor: not-allowed;
+}
+
+#tempoSlider {
+    width: 80px;
+    margin: 0 4px;
+}
+
+#tempoDisplay {
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+    min-width: 50px;
+}
+
+/* Octave Controls */
+.octave-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 12px;
+    padding-left: 12px;
+    border-left: 1px solid #ddd;
+}
+
+.octave-label {
+    font-size: 11px;
+    color: #666;
+    margin-right: 4px;
+    font-weight: 500;
+}
+
+.octave-btn {
+    background: #f0f0f0;
+    color: #333;
+    border: 1px solid #ccc;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 600;
+    min-width: 24px;
+    height: 22px;
+    line-height: 1;
+}
+
+.octave-btn:hover:not(:disabled) {
+    background: #e0e0e0;
+    border-color: #999;
+}
+
+.octave-btn:active:not(:disabled) {
+    background: #d0d0d0;
+    transform: translateY(1px);
+}
+
+.octave-btn:disabled {
+    background: #f8f8f8;
+    color: #bbb;
+    border-color: #e0e0e0;
+    cursor: not-allowed;
 }
 
 /* Status */
@@ -187,7 +281,83 @@ textarea:focus {
     padding-left: 1em;
 }
 
-/* Octave indicators (dots above/below) */
+/* Pure CSS octave indicators using --octave variable */
+/* Notes need to be relatively positioned for absolute children */
+.cm-music-note {
+    position: relative;
+}
+
+/* Upper octave +1: bullet sits on top of bbox */
+.cm-music-note[style*="--octave: \"1\""]::before,
+.cm-music-note[style*="--octave:\"1\""]::before {
+    content: '•';
+    position: absolute;
+    top: -0.3em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.2em;
+    color: #0066cc;
+    font-weight: bold;
+}
+
+/* Upper octave +2: colon on top of bbox */
+.cm-music-note[style*="--octave: \"2\""]::before,
+.cm-music-note[style*="--octave:\"2\""]::before {
+    content: ':';
+    position: absolute;
+    top: -0.4em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.0em;
+    color: #0066cc;
+    font-weight: bold;
+}
+
+/* Lower octave -1: bullet hanging off bottom of bbox */
+.cm-music-note[style*="--octave: \"-1\""]::after,
+.cm-music-note[style*="--octave:\"-1\""]::after {
+    content: '•';
+    position: absolute;
+    bottom: -0.7em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.2em;
+    color: #cc6600;
+    font-weight: bold;
+}
+
+/* Lower octave -2: colon hanging from bottom of bbox */
+.cm-music-note[style*="--octave: \"-2\""]::after,
+.cm-music-note[style*="--octave:\"-2\""]::after {
+    content: ':';
+    position: absolute;
+    bottom: -0.8em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.0em;
+    color: #cc6600;
+    font-weight: bold;
+}
+
+/* Octave marker type classes */
+.octave-marker-dot {
+    border-bottom: 1px dotted #666;
+}
+
+.octave-marker-colon {
+    border-bottom: 2px dotted #666;
+}
+
+/* Direction-based classes */
+.octave-upper {
+    color: #0066cc;
+}
+
+.octave-lower {
+    color: #cc6600;
+}
+
+/* Legacy classes for backward compatibility */
 .upper-octave::before {
     content: '•';
     position: absolute;
@@ -425,6 +595,18 @@ textarea:focus {
     color: mediumvioletred !important;
     font-weight: bold;
     background: yellow !important;
+    /* Maintain monospace width for bold pitches */
+    font-family: 'SF Mono', Monaco, Consolas, 'Courier New', monospace !important;
+    letter-spacing: 0;
+    font-synthesis: none;
+    text-rendering: optimizeSpeed;
+    /* Ensure consistent character width */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+.CodeMirror .cm-music-note[title] {
+    cursor: help;
 }
 .CodeMirror .cm-music-barline { 
     color: #4b0082 !important; 

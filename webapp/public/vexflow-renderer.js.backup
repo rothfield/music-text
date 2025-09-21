@@ -336,7 +336,9 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
                 
             case 'Tuplet':
                 // Handle sophisticated tuplet processing
+                console.log('🎵 Processing Tuplet:', element);
                 const tupletResult = processTupletAdvanced(element, context);
+                console.log('🎵 Tuplet result:', tupletResult);
                 if (tupletResult.notes.length > 0) {
                     // Check for ties involving tuplet notes before adding them
                     const originalNotesLength = notes.length;
@@ -383,15 +385,17 @@ function processVexFlowElementsAdvanced(elements, context, stave) {
                     
                     // Create tuplet with proper ratio
                     const tupletRatio = element.ratio || [element.divisions, getNextPowerOf2(element.divisions)];
-                    // console.log('🎵 Creating tuplet with ratio:', tupletRatio, 'notes:', tupletResult.notes.length);
-                    
+                    console.log('🎵 Creating tuplet with ratio:', tupletRatio, 'notes:', tupletResult.notes.length);
+
                     const tuplet = new Tuplet(tupletResult.notes, {
                         notes_occupied: tupletRatio[1],  // denominator (space of)
                         num_notes: tupletRatio[0],       // numerator (actual notes)
                         bracketed: true
                     });
+                    console.log('🎵 Created VexFlow Tuplet object:', tuplet);
                     tuplet.setContext(context);
                     tuplets.push(tuplet);
+                    console.log('🎵 Added tuplet to tuplets array, total:', tuplets.length);
                     
                     // Add beaming for tuplet if appropriate
                     if (shouldBeamTupletNotes(tupletResult.notes)) {
@@ -563,9 +567,14 @@ function createAdvancedVexFlowNote(element) {
     
     // Add accidentals
     if (element.accidentals && element.accidentals.length > 0) {
-        element.accidentals.forEach(acc => {
-            if (acc.accidental) {
-                note.addModifier(new Accidental(acc.accidental), acc.index);
+        element.accidentals.forEach((acc, index) => {
+            // Handle both object format {accidental: "#", index: 0} and simple string format "#"
+            if (typeof acc === 'string') {
+                // Simple string format from our backend
+                note.addModifier(new Accidental(acc), 0);
+            } else if (acc.accidental) {
+                // Object format (legacy or other sources)
+                note.addModifier(new Accidental(acc.accidental), acc.index || 0);
             }
         });
     }

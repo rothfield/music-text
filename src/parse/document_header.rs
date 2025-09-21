@@ -51,24 +51,14 @@ pub fn parse(
         *line_idx += 1;
     }
 
-    // Skip blank lines after header (blank_lines+)
-    let mut found_blank = false;
+    // Skip blank lines after header (blank_lines*)
+    // Note: blank lines are optional - we just skip them if present
     while *line_idx < lines.len() && lines[*line_idx].trim().is_empty() {
-        found_blank = true;
         *line_idx += 1;
     }
 
-    // If we parsed header content AND there's more content, we need at least one blank line
-    let has_header_content = title.is_some() || author.is_some() || !directives.is_empty();
-    let has_remaining_content = *line_idx < lines.len();
-
-    if has_header_content && has_remaining_content && !found_blank {
-        return Err(ParseError {
-            message: "Document header must be followed by blank line(s)".to_string(),
-            line: *line_idx + 1,
-            column: 1,
-        });
-    }
+    // No requirement for blank lines after header - the grammar allows
+    // headers to be followed immediately by content
 
     Ok(DocumentHeader {
         title,
@@ -142,7 +132,9 @@ fn is_musical_content_line(line: &str) -> bool {
             if trimmed.chars().count() <= 5 || // Single note like "1", "S", "C#", "1234♯"
                trimmed.contains(' ') || // Sequence like "1 2 3"
                trimmed.contains('-') || // Extended notes like "1--"
-               trimmed.contains('|') {  // Contains barlines
+               trimmed.contains('|') || // Contains barlines
+               trimmed.contains('\\') || // Contains backslash (escape sequences)
+               trimmed.contains('.') && trimmed.len() <= 10 { // Musical notation with octave markers
                 return true;
             }
         }
@@ -153,6 +145,12 @@ fn is_musical_content_line(line: &str) -> bool {
                 return true; // Line number
             }
         }
+    }
+
+    // Check for lines that contain typical musical notation patterns
+    if trimmed.contains('\\') || // Backslash escape sequences
+       (trimmed.contains('.') && trimmed.chars().any(|c| matches!(c, '1'..='7' | 'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N' | 's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n' | 'A'..='G' | 'a'..='g'))) {
+        return true;
     }
 
     false

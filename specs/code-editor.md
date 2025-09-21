@@ -24,6 +24,78 @@ User Types → Editor (Plain Text) → Server Parse → Character Tree → Style
      └─────────────── Round-trip Validation ←─────────────────────────────┘
 ```
 
+## Consumed Elements in the Editor Pipeline
+
+**TODO**: Explain how to figure out the leaf elements of the document.
+
+### The Challenge: 2D to 1D Rendering
+Music-text supports 2D spatial notation where elements on different lines modify the main content:
+```
+  . .            <- upper line (octave markers, ornaments, etc.)
+|1234|           <- content line (notes)
+    .            <- lower line (octave markers, beat groups, syllables, etc.)
+```
+
+The spatial assignment system uses **move semantics** to consume these spatial elements, transferring ownership to the notes they affect.
+
+### Conceptual Model: Pointers in 2D Grammar
+
+Consumed elements can be thought of as having **pointers** connecting them to their owning objects:
+
+```
+Source Text:          Logical Pointers:        Musical Result:
+  . .                [dot@2]──┐ [dot@4]──┐
+|1234|                         ↓        ↓      Note "1": C in upper octave
+    .                        [1+1]    [3+1]    Note "2": D in middle octave
+                                 ↑              Note "3": E in upper octave
+                            [dot@10]──┘         Note "4": F in lower octave
+```
+
+### Implementation Requirements
+
+The renderer must generate spans for **ALL leaf elements** in the document parse tree:
+
+1. **Universal Leaf Element Rendering**:
+   - Generate spans for every leaf element
+   - Apply standard span generation logic uniformly
+   - Add `consumed="true"` attribute only for consumed elements
+
+2. **Unified Span Generation**:
+   ```rust
+   // For ALL leaf elements:
+   Span {
+       start: element.source.position.index_in_doc,
+       end: start + element.source.value.len(),
+       type: element.type,
+       content: element.source.value,
+       consumed: element.is_consumed()  // true for consumed elements only
+   }
+   ```
+
+3. **CSS handles visibility**:
+   ```css
+   /* Consumed elements: invisible but space-preserving */
+   [consumed="true"] {
+       opacity: 0;
+       pointer-events: auto; /* Still editable */
+   }
+
+   /* Toggle to show consumed elements */
+   .show-consumed [consumed="true"] {
+       opacity: 0.3;
+       color: red;
+   }
+   ```
+
+### Key Insight
+
+**Every character in the source gets exactly one span** - whether it's a regular element or a consumed element. The consumed elements are rendered identically to other elements, just marked with `consumed="true"` so CSS can handle their visibility.
+
+### Open Questions
+
+1. **Graceful Fallback**: What renders when spatial elements cannot be consumed?
+2. **Editor Attributes**: Additional attributes needed for editor features?
+
 ### Components
 
 1. **Client Editor**: CodeMirror with plain-text content

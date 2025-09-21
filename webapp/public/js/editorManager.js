@@ -9,6 +9,8 @@ export class EditorManager {
     constructor() {
         this.editor = null;
         this.container = null;
+        this.tooltip = null;
+        this.initTooltip();
     }
 
     // Initialize CodeMirror editor
@@ -64,7 +66,131 @@ export class EditorManager {
         });
 
         console.log('✅ Editor initialized with Sargam key handlers');
+
+        // Set up tooltip event handling after editor is ready
+        setTimeout(() => this.setupTooltipHandlers(), 100);
+
         return this.editor;
+    }
+
+    // Initialize tooltip element
+    initTooltip() {
+        this.tooltip = document.createElement('div');
+        this.tooltip.className = 'music-tooltip';
+        this.tooltip.style.cssText = `
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: normal;
+            white-space: nowrap;
+            z-index: 10000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+        `;
+        document.body.appendChild(this.tooltip);
+    }
+
+    // Set up tooltip event handlers
+    setupTooltipHandlers() {
+        if (!this.editor) return;
+
+        const editorElement = this.editor.getWrapperElement();
+        let tooltipTimeout = null;
+
+        // Mouse enter handler with minimal delay
+        editorElement.addEventListener('mouseenter', (e) => {
+            if (e.target.matches('.cm-music-note[data-tooltip]')) {
+                // Clear any existing timeout
+                if (tooltipTimeout) {
+                    clearTimeout(tooltipTimeout);
+                }
+                // Small delay to avoid interfering with quick cursor movements
+                tooltipTimeout = setTimeout(() => {
+                    this.showTooltip(e.target, e.target.dataset.tooltip, e);
+                }, 150); // Reduced to 150ms
+            }
+        }, true);
+
+        // Mouse leave handler
+        editorElement.addEventListener('mouseleave', (e) => {
+            if (e.target.matches('.cm-music-note[data-tooltip]')) {
+                // Clear timeout if mouse leaves before tooltip shows
+                if (tooltipTimeout) {
+                    clearTimeout(tooltipTimeout);
+                    tooltipTimeout = null;
+                }
+                this.hideTooltip();
+            }
+        }, true);
+
+        // Hide tooltip on any interaction to avoid cursor interference
+        const hideTooltipOnInteraction = () => {
+            if (tooltipTimeout) {
+                clearTimeout(tooltipTimeout);
+                tooltipTimeout = null;
+            }
+            this.hideTooltip();
+        };
+
+        editorElement.addEventListener('click', hideTooltipOnInteraction);
+        editorElement.addEventListener('keydown', hideTooltipOnInteraction);
+        editorElement.addEventListener('focus', hideTooltipOnInteraction);
+        editorElement.addEventListener('scroll', hideTooltipOnInteraction);
+    }
+
+    // Show tooltip
+    showTooltip(element, text, event) {
+        if (!text) return;
+
+        this.tooltip.textContent = text;
+        this.tooltip.style.opacity = '1';
+        this.tooltip.style.display = 'block';
+
+        if (event) {
+            this.positionTooltip(event);
+        }
+    }
+
+    // Hide tooltip
+    hideTooltip() {
+        this.tooltip.style.opacity = '0';
+        setTimeout(() => {
+            if (this.tooltip.style.opacity === '0') {
+                this.tooltip.style.display = 'none';
+            }
+        }, 200);
+    }
+
+    // Position tooltip relative to mouse/element
+    positionTooltip(event) {
+        const rect = event.target.getBoundingClientRect();
+        const tooltipRect = this.tooltip.getBoundingClientRect();
+
+        // Position above the element, centered
+        let left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+        let top = rect.top - tooltipRect.height - 8;
+
+        // Ensure tooltip stays within viewport
+        const margin = 10;
+        if (left < margin) {
+            left = margin;
+        } else if (left + tooltipRect.width > window.innerWidth - margin) {
+            left = window.innerWidth - tooltipRect.width - margin;
+        }
+
+        if (top < margin) {
+            // If no room above, show below
+            top = rect.bottom + 8;
+        }
+
+        this.tooltip.style.left = left + 'px';
+        this.tooltip.style.top = top + 'px';
     }
 
     // Add textarea-compatible methods to container element
@@ -262,7 +388,6 @@ export class EditorManager {
         // Remove visual indicators
         this.container.style.border = '';
         this.container.style.backgroundColor = '';
-        this.container.title = '';
         this.container.style.cursor = '';
         this.container.onclick = null;
         
@@ -291,10 +416,20 @@ export class EditorManager {
                 if (cssString) cssString += '; ';
             }
 
-            this.editor.markText(pos, endPos, {
+            // Build markText options
+            const markOptions = {
                 className: spanSpec.classes.join(' '),
                 css: cssString
-            });
+            };
+
+            // Add tooltip data attribute if title is available
+            if (spanSpec.title) {
+                markOptions.attributes = {
+                    'data-tooltip': spanSpec.title
+                };
+            }
+
+            this.editor.markText(pos, endPos, markOptions);
         });
 
         // Apply beat group styling if parse result available

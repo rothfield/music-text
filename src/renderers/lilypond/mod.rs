@@ -1,10 +1,10 @@
 // Temporarily disable complex renderer modules
-// pub mod renderer;
-// pub mod templates;
+pub mod renderer;
+pub mod templates;
 pub mod generator;
 
-// pub use renderer::*;
-// pub use templates::*;
+pub use renderer::*;
+pub use templates::*;
 pub use generator::*;
 use fraction::Fraction;
 
@@ -97,7 +97,8 @@ pub fn render_lilypond_from_document(document: &crate::parse::model::Document) -
                                             ).unwrap_or_else(|_| "c'".to_string());
 
                                             // Get the duration (use rhythm analysis if available, fallback to quarter note)
-                                            let duration_str = if let Some(duration) = note.duration {
+                                            let duration_str = if let (Some(numer), Some(denom)) = (note.numerator, note.denominator) {
+                                                let duration = fraction::Fraction::new(numer, denom);
                                                 fraction_to_lilypond_duration(duration)
                                             } else {
                                                 "4".to_string() // Fallback to quarter note

@@ -157,7 +157,7 @@
 .cm-music-note[class*="beat-loop-"]::after {
     content: '' !important;
     position: absolute !important;
-    bottom: -0.8em !important;
+    top: calc(100% - 0.1em) !important;  /* Slightly overlap character bounding box */
     left: 0 !important;
     height: 0.6em !important;
     border: 2px solid orange !important;
@@ -193,15 +193,15 @@
 .cm-music-dash.beat-start[style*="--beat-char-loop-length"]::after {
     content: '' !important;
     position: absolute !important;
-    bottom: -0.8em !important;
+    top: calc(100% - 0.1em) !important;  /* Slightly overlap character bounding box */
     left: 0 !important;
     /* Calculate width based on number of characters only */
     width: calc(var(--beat-char-loop-length) * 1ch) !important;
-    height: 0.6em !important;
+    height: 0.25em !important;  /* Much shallower, like a tea saucer */
     border: 2px solid orange !important;  /* orange - beat grouping arcs */
     border-top: none !important;
-    border-bottom-left-radius: 50% !important;
-    border-bottom-right-radius: 50% !important;
+    border-bottom-left-radius: 50% 100% !important;  /* Flatter curve */
+    border-bottom-right-radius: 50% 100% !important;  /* Flatter curve */
     z-index: 10 !important;
     pointer-events: none !important;
 }
@@ -210,14 +210,14 @@
 .cm-music-note[style*="--lower-loop-char-count"]::after {
     content: '' !important;
     position: absolute !important;
-    bottom: -0.8em !important;
+    top: calc(100% - 0.1em) !important;  /* Slightly overlap character bounding box */
     left: 0 !important;
     width: calc(var(--lower-loop-char-count) * 1ch) !important;
-    height: 0.6em !important;
+    height: 0.25em !important;  /* Much shallower, like a tea saucer */
     border: 2px solid orange !important;  /* orange - beat grouping arcs */
     border-top: none !important;
-    border-bottom-left-radius: 50% !important;
-    border-bottom-right-radius: 50% !important;
+    border-bottom-left-radius: 50% 100% !important;  /* Flatter curve */
+    border-bottom-right-radius: 50% 100% !important;  /* Flatter curve */
     z-index: 10 !important;
     pointer-events: none !important;
 }
@@ -630,5 +630,33 @@
     pointer-events: none;
 }
 
+
+/* JavaScript Tooltip Styling */
+.music-tooltip {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.2;
+    max-width: 200px;
+    word-wrap: break-word;
+}
+
+/* Cursor style for elements with tooltips - keep default cursor */
+.cm-music-note[data-tooltip] {
+    cursor: default;
+}
+
+/* Make source octave markers invisible since they're displayed via consumed element CSS */
+.cm-music-upper-octave-marker,
+.cm-music-lower-octave-marker,
+.xml-upper-octave-marker,
+.xml-lower-octave-marker {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* Alternative approach - hide any standalone dots/colons that might be octave markers */
+.octave-marker {
+    opacity: 0;
+    visibility: hidden;
+}
 
 /* Future music-text specific styles can go here */

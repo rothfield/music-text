@@ -4,7 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Music Text</title>
-    <script src="vexflow-renderer.js"></script>
+
+    <!-- Retro mode redirect -->
+    <noscript>
+        <meta http-equiv="refresh" content="0; url=/retro">
+    </noscript>
+    <script>
+        // Check for retro mode query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('retro') === 'true' || urlParams.get('nojs') === 'true') {
+            window.location.href = '/retro';
+        }
+    </script>
+
+    <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/music-text.css">
     <link rel="stylesheet" href="assets/codemirror.min.css">
@@ -17,6 +30,24 @@
                 <button onclick="generateSVG()" class="secondary">LilyPond</button>
                 <button onclick="clearAll()" class="secondary">Clear</button>
                 <button onclick="toggleSlur()" class="secondary">Slur</button>
+
+                <div class="midi-controls">
+                    <button onclick="playMidi()" class="midi-btn" id="playBtn" title="Play MIDI">▶️</button>
+                    <button onclick="pauseMidi()" class="midi-btn" id="pauseBtn" title="Pause MIDI">⏸️</button>
+                    <button onclick="stopMidi()" class="midi-btn" id="stopBtn" title="Stop MIDI">⏹️</button>
+                    <input type="range" id="tempoSlider" min="40" max="208" value="120" onchange="setTempo(this.value)" title="Tempo (BPM)">
+                    <span id="tempoDisplay">120 BPM</span>
+                </div>
+
+                <div class="octave-controls">
+                    <span class="octave-label">Octave:</span>
+                    <button onclick="applyOctaveAdjustment('lowest')" class="octave-btn" title="Lowest (-2 octaves)" disabled id="btn-lowest">↓↓↓</button>
+                    <button onclick="applyOctaveAdjustment('lowish')" class="octave-btn" title="Lowish (-1 octave)" disabled id="btn-lowish">↓↓</button>
+                    <button onclick="applyOctaveAdjustment('lower')" class="octave-btn" title="Lower (-1 octave)" disabled id="btn-lower">↓</button>
+                    <button onclick="applyOctaveAdjustment('higher')" class="octave-btn" title="Higher (+1 octave)" disabled id="btn-higher">↑</button>
+                    <button onclick="applyOctaveAdjustment('highish')" class="octave-btn" title="Highish (+1 octave)" disabled id="btn-highish">↑↑</button>
+                    <button onclick="applyOctaveAdjustment('highest')" class="octave-btn" title="Highest (+3 octaves)" disabled id="btn-highest">↑↑↑</button>
+                </div>
                 <div class="font-selector">
                     <label for="fontSelect">Font:</label>
                     <select id="fontSelect" onchange="changeFontFamily(this.value)">

@@ -25,6 +25,17 @@ pub enum SpatialAssignment {
     Mordent,
 }
 
+// Consumed elements that have been moved to notes (follows ContentElement pattern)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ConsumedElement {
+    UpperOctaveMarker {
+        source: Source,
+    },
+    LowerOctaveMarker {
+        source: Source,
+    },
+}
+
 // Notation system types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum NotationSystem {
@@ -316,15 +327,37 @@ pub struct BreathMark {
     pub source: Source,
 }
 
-// Note object with pitchString attribute
+// Note object - consistent with other elements
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Note {
-    pub pitch_string: PitchString,       // Raw pitch string
+    pub source: Source,                 // Raw pitch string + position (like all other elements)
     pub octave: i8,                     // Octave -4..4
     pub pitch_code: PitchCode,          // Normalized pitch code
     pub notation_system: NotationSystem, // Which notation system this note uses
     pub spatial_assignments: Vec<SpatialAssignment>, // Spatial elements assigned to this note
-    pub duration: Option<Fraction>,     // Duration fraction (1/4, 1/8, etc.) - added by rhythm analysis
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this note via 2D spatial rules
+    pub numerator: Option<u32>,         // Simple duration numerator
+    pub denominator: Option<u32>,       // Simple duration denominator
+}
+
+impl Note {
+    /// Factory function to create a new Note with consistent default values
+    pub fn new(
+        source: Source,
+        pitch_code: PitchCode,
+        notation_system: NotationSystem,
+    ) -> Self {
+        Self {
+            source,
+            octave: 0,                      // Default octave
+            pitch_code,
+            notation_system,
+            spatial_assignments: Vec::new(), // Will be populated during spatial analysis
+            consumed_elements: Vec::new(),   // Will be populated during spatial analysis
+            numerator: None,                // Will be populated by rhythm analysis
+            denominator: None,              // Will be populated by rhythm analysis
+        }
+    }
 }
 
 // Directive structure for key:value pairs
@@ -436,6 +469,8 @@ pub struct Beat {
     pub source: Source,
     pub divisions: Option<usize>,        // Number of divisions in this beat (e.g., 12 for 12 sixteenths)
     pub total_duration: Option<Fraction>, // Total duration of this beat (e.g., 1/4 for quarter note beat)
+    pub is_tuplet: Option<bool>,         // Whether this beat is a tuplet (3, 5, 6, 7, etc. divisions)
+    pub tuplet_ratio: Option<(usize, usize)>, // Tuplet ratio (e.g., (3, 2) for triplet)
 }
 
 // Elements that can appear in a beat

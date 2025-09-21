@@ -47,10 +47,23 @@ fn analyze_beat_rhythm(beat: &mut Beat) -> Result<(), String> {
     beat.divisions = Some(element_count);
     beat.total_duration = Some(beat_total_duration);
 
+    // Determine if this is a tuplet (non-power of 2 divisions)
+    let is_tuplet = is_tuplet_division(element_count);
+    beat.is_tuplet = Some(is_tuplet);
+
+    // Calculate tuplet ratio if applicable
+    if is_tuplet {
+        beat.tuplet_ratio = Some(calculate_tuplet_ratio(element_count));
+    }
+
     // Set duration for each note in the beat
     for beat_element in &mut beat.elements {
         if let BeatElement::Note(note) = beat_element {
-            note.duration = Some(individual_duration);
+            // Convert fraction to simple numerator/denominator
+            let numer = *individual_duration.numer().unwrap() as u32;
+            let denom = *individual_duration.denom().unwrap() as u32;
+            note.numerator = Some(numer);
+            note.denominator = Some(denom);
         }
         // Dashes and breath marks don't get duration - they're handled differently
     }
@@ -60,6 +73,38 @@ fn analyze_beat_rhythm(beat: &mut Beat) -> Result<(), String> {
 
 /// Determine duration based on the number of elements in a beat
 /// Returns (individual_note_duration, total_beat_duration)
+/// Check if a division count represents a tuplet (non-power of 2)
+fn is_tuplet_division(divisions: usize) -> bool {
+    // Powers of 2 (1, 2, 4, 8, 16, etc.) are normal subdivisions
+    // Non-powers of 2 (3, 5, 6, 7, etc.) are tuplets
+    divisions > 0 && (divisions & (divisions - 1)) != 0
+}
+
+/// Calculate tuplet ratio for a given number of divisions
+fn calculate_tuplet_ratio(divisions: usize) -> (usize, usize) {
+    match divisions {
+        3 => (3, 2),   // Triplet: 3 notes in the time of 2
+        5 => (5, 4),   // Quintuplet: 5 notes in the time of 4
+        6 => (6, 4),   // Sextuplet: 6 notes in the time of 4
+        7 => (7, 4),   // Septuplet: 7 notes in the time of 4
+        9 => (9, 8),   // Nonuplet: 9 notes in the time of 8
+        10 => (10, 8), // 10 notes in the time of 8
+        11 => (11, 8), // 11 notes in the time of 8
+        12 => (12, 8), // 12 notes in the time of 8
+        _ => {
+            // For other cases, find the nearest power of 2
+            let mut power_of_two = 1;
+            while power_of_two < divisions {
+                power_of_two *= 2;
+            }
+            if power_of_two > divisions {
+                power_of_two /= 2;
+            }
+            (divisions, power_of_two)
+        }
+    }
+}
+
 fn determine_beat_durations(element_count: usize) -> (Fraction, Fraction) {
     match element_count {
         1 => {
