@@ -47,13 +47,6 @@ pub enum ParsedChild {
 }
 
 /// Role of a note in a slur phrase
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum SlurRole {
-    Start,
-    Middle,
-    End,
-}
-
 /// Role of a note in a beat group
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum BeatGroupRole {
@@ -74,7 +67,6 @@ pub enum ParsedElement {
         position: Position,
         children: Vec<ParsedChild>, // Attached ornaments, octave markers, lyrics
         duration: Option<(usize, usize)>, // Duration fraction (numerator, denominator) from FSM
-        slur: Option<SlurRole>, // Boundary information (Start/Middle/End)
         beat_group: Option<BeatGroupRole>, // Boundary information (Start/Middle/End)  
         in_slur: bool, // Convenience flag: slur.is_some()
         in_beat_group: bool, // Convenience flag: beat_group.is_some()
@@ -147,7 +139,6 @@ impl ParsedElement {
             position,
             children: vec![],
             duration: None,
-            slur: None,
             beat_group: None,
             in_slur: false,
             in_beat_group: false,
