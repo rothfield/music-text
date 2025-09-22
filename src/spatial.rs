@@ -1,6 +1,6 @@
 use crate::parse::model::{
     Document, DocumentElement, Stave, StaveLine, UpperLine, LowerLine, LyricsLine,
-    UpperElement, LowerElement, Syllable, Attributes, Position, ContentLine, ContentElement, Beat, BeatElement, Note, SpatialAssignment, ConsumedElement
+    UpperElement, LowerElement, Syllable, ContentLine, ContentElement, Beat, BeatElement, Note, SpatialAssignment, ConsumedElement
 };
 use crate::rhythm::types::{ParsedElement, Position as RhythmPosition, ParsedChild};
 

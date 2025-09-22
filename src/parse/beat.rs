@@ -1,4 +1,4 @@
-use crate::parse::model::{Beat, BeatElement, Note, Dash, BreathMark, Attributes, Position, NotationSystem};
+use crate::parse::model::{Beat, BeatElement, Note, Dash, BreathMark, NotationSystem};
 use crate::parse::pitch::{parse_pitch_with_indices, is_pitch_start};
 use crate::parse::ParseError;
 use std::str::CharIndices;
@@ -107,7 +107,7 @@ pub fn parse_beat(
                             index_in_line: index_in_line_from_pos(input, pos, line_num),
                             index_in_doc: line_start_doc_index + pos,
                         },
-                    },
+                        },
                 }));
             }
 
@@ -125,7 +125,7 @@ pub fn parse_beat(
                             index_in_line: index_in_line_from_pos(input, pos, line_num),
                             index_in_doc: line_start_doc_index + pos,
                         },
-                    },
+                        },
                 }));
             }
 
@@ -144,7 +144,7 @@ pub fn parse_beat(
                             index_in_line: index_in_line_from_pos(input, pos, line_num),
                             index_in_doc: line_start_doc_index + pos,
                         },
-                    },
+                        },
                     pitch_code,
                     octave: 0,
                     notation_system,

@@ -1,4 +1,4 @@
-use crate::parse::{Document, model::{DocumentElement, Stave, StaveLine, ContentLine, Attributes, Position, NotationSystem}};
+use crate::parse::{Document, model::{DocumentElement, Stave, StaveLine, ContentLine, NotationSystem}};
 use crate::parse::recursive_descent::{parse_document, ParseError};
 use crate::parse::content_line_parser_v3::parse_content_line as parse_content_line_v3;
 use crate::spatial::process_spatial_assignments_unified;

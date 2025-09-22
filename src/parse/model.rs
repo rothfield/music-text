@@ -29,10 +29,18 @@ pub enum SpatialAssignment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConsumedElement {
     UpperOctaveMarker {
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     LowerOctaveMarker {
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
 }
 
@@ -101,38 +109,9 @@ impl NotationSystem {
     }
 }
 
-// Position information for source tracking
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Position {
-    // 1-based line number and column for human-readable diagnostics
-    pub line: usize,
-    pub column: usize,
-    // Zero-based character offsets for precise indexing
-    pub index_in_line: usize, // offset from start of line
-    pub index_in_doc: usize,  // offset from start of document
-}
-
-// Element attributes including source info and rendering metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Attributes {
-    pub value: Option<String>,  // Original source text (None when moved/consumed)
-    pub position: Position,     // Line/column position
-    #[serde(default)]
-    pub slur_start: bool,       // True if this element starts a slur
-    #[serde(default)]
-    pub slur_char_length: Option<usize>, // Length of slur in characters (only set on slur_start elements)
-}
-
-impl Attributes {
-    /// Create new Attributes with default slur values
-    pub fn new(value: Option<String>, position: Position) -> Self {
-        Self {
-            value,
-            position,
-            slur_start: false,
-            slur_char_length: None,
-        }
-    }
+// Common helper functions for creating elements with position info
+pub fn create_position(line: usize, column: usize, index_in_line: usize, index_in_doc: usize) -> (usize, usize, usize, usize) {
+    (line, column, index_in_line, index_in_doc)
 }
 
 // Normalized pitch codes - matches old Degree enum with complete pitch coverage
@@ -307,38 +286,66 @@ impl PitchCode {
 // Raw pitch string object for ContentLine
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PitchString {
-    pub source: Attributes,         // Raw pitch string ("1", "S", "C", etc.) + position
+    pub value: Option<String>,      // Raw pitch string ("1", "S", "C", etc.)
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 // Individual barline types matching grammar productions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SingleBarline {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoubleBarline {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinalBarline {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepeatStartBarline {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepeatEndBarline {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepeatBothBarline {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 // Unified barline enum for ContentElement
@@ -355,33 +362,59 @@ pub enum Barline {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Space {
     pub count: usize,
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dash {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Newline {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EndOfInput {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BreathMark {
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 // Note object - consistent with other elements
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Note {
-    pub source: Attributes,             // Raw pitch string + position (like all other elements)
+    // Common fields
+    pub value: Option<String>,          // Raw pitch string
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
+    // Note-specific fields
     pub octave: i8,                     // Octave -4..4
     pub pitch_code: PitchCode,          // Normalized pitch code
     pub notation_system: NotationSystem, // Which notation system this note uses
@@ -389,17 +422,30 @@ pub struct Note {
     pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this note via 2D spatial rules
     pub numerator: Option<u32>,         // Simple duration numerator
     pub denominator: Option<u32>,       // Simple duration denominator
+    // Slur-specific fields (only notes can start slurs)
+    #[serde(default)]
+    pub slur_start: bool,               // True if this note starts a slur
+    #[serde(default)]
+    pub slur_char_length: Option<usize>, // Length of slur in characters
 }
 
 impl Note {
     /// Factory function to create a new Note with consistent default values
     pub fn new(
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
         pitch_code: PitchCode,
         notation_system: NotationSystem,
     ) -> Self {
         Self {
-            source,
+            value,
+            line,
+            column,
+            index_in_line,
+            index_in_doc,
             octave: 0,                      // Default octave
             pitch_code,
             notation_system,
@@ -407,6 +453,8 @@ impl Note {
             consumed_elements: Vec::new(),   // Will be populated during spatial analysis
             numerator: None,                // Will be populated by rhythm analysis
             denominator: None,              // Will be populated by rhythm analysis
+            slur_start: false,              // Default no slur
+            slur_char_length: None,         // No slur length
         }
     }
 }
@@ -415,8 +463,12 @@ impl Note {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Directive {
     pub key: String,
-    pub value: String,
-    pub source: Attributes,
+    pub directive_value: String,    // Renamed to avoid conflict with common 'value' field
+    pub value: Option<String>,      // Raw source text
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 
@@ -431,7 +483,11 @@ pub enum DocumentElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlankLines {
     pub content: String, // The complete blank lines content
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 // Document structure types
@@ -441,7 +497,11 @@ pub struct Document {
     pub author: Option<String>,
     pub directives: HashMap<String, String>, // key -> value
     pub elements: Vec<DocumentElement>, // Document as sequence of elements
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 impl Document {
@@ -485,13 +545,21 @@ pub enum StaveLine {
 pub struct Stave {
     pub lines: Vec<StaveLine>,  // All lines in order
     pub notation_system: NotationSystem,
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextLine {
     pub content: String,
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -504,20 +572,32 @@ pub enum ContentElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Whitespace {
     pub content: String,
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentLine {
     pub elements: Vec<ContentElement>,  // Mixed elements: barlines, whitespace, beats
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 // Beat structure - a sequence of beat elements
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Beat {
     pub elements: Vec<BeatElement>,
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
     pub divisions: Option<usize>,        // Number of divisions in this beat (e.g., 12 for 12 sixteenths)
     pub total_duration: Option<Fraction>, // Total duration of this beat (e.g., 1/4 for quarter note beat)
     pub is_tuplet: Option<bool>,         // Whether this beat is a tuplet (3, 5, 6, 7, etc. divisions)
@@ -537,25 +617,41 @@ pub enum BeatElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpperLine {
     pub elements: Vec<UpperElement>,
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LowerLine {
     pub elements: Vec<LowerElement>,
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LyricsLine {
     pub syllables: Vec<Syllable>,
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhitespaceLine {
     pub elements: Vec<crate::rhythm::types::ParsedElement>, // Whitespace elements and optional newline
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 
 // UpperLine elements from specification
@@ -563,39 +659,75 @@ pub struct WhitespaceLine {
 pub enum UpperElement {
     UpperOctaveMarker {
         marker: String,  // "." or ":"
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     SlurIndicator {
-        value: String,  // "_____" for slurs
-        source: Attributes,
+        indicator_value: String,  // "_____" for slurs
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     UpperHashes {
-        value: String,  // "###" for multi-stave markers
-        source: Attributes,
+        hash_value: String,  // "###" for multi-stave markers
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     Ornament {
         pitches: Vec<String>,  // 123, <456> grace notes/melismas (🚧 planned)
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     Chord {
         chord: String,  // [Am] chord symbols (🚧 planned)
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     Mordent {
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     Space {
         count: usize,
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     Unknown {
-        value: String,
-        source: Attributes,
+        unknown_value: String,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     /// Newline token - explicit line terminator (upper lines cannot have EOI)
     Newline {
-        value: String,
-        source: Attributes,
+        newline_value: String,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
 }
 
@@ -604,32 +736,60 @@ pub enum UpperElement {
 pub enum LowerElement {
     LowerOctaveMarker {
         marker: String,  // "." or ":"
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     BeatGroupIndicator {
-        value: String,  // "___" for beat grouping
-        source: Attributes,
+        indicator_value: String,  // "___" for beat grouping
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     Syllable {
         content: String,  // syllables like "dha", "he-llo"
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     Space {
         count: usize,
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     Unknown {
-        value: String,
-        source: Attributes,
+        unknown_value: String,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     /// Newline token - explicit line terminator
     Newline {
-        value: String,
-        source: Attributes,
+        newline_value: String,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
     /// End of input token - explicit EOF terminator
     EndOfInput {
-        source: Attributes,
+        value: Option<String>,
+        line: usize,
+        column: usize,
+        index_in_line: usize,
+        index_in_doc: usize,
     },
 }
 
@@ -637,6 +797,10 @@ pub enum LowerElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Syllable {
     pub content: String,  // "he-llo", "world", etc.
-    pub source: Attributes,
+    pub value: Option<String>,
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
 }
 

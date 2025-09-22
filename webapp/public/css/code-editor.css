@@ -1,0 +1,585 @@
+/* CodeMirror Editor Styles */
+
+/* Base CodeMirror Editor */
+.CodeMirror {
+    width: 100%;
+    min-height: 80px;
+    padding: 8px;
+    border: none;
+    border-bottom: 1px solid #e1e5e9;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    resize: vertical;
+    outline: none;
+    background: white;
+}
+
+.CodeMirror-focused {
+    border-bottom-color: royalblue;
+}
+
+.CodeMirror-scroll {
+    min-height: 80px;
+}
+
+/* Enhanced line height for notation lines to prevent collisions */
+.cm-editor .cm-line {
+    line-height: 2.5em;
+}
+
+/* Content line highlighting with doremi font */
+.CodeMirror-linebackground.content-line {
+    background: aliceblue !important;
+    padding-left: 0.5em;
+}
+
+.CodeMirror-line.content-line {
+    font-family: sans-serif !important;
+    font-size: 1.6em !important;
+    line-height: 1.8em !important;
+}
+
+.text-line {
+    background: #fafafa !important;
+}
+
+/* Lyrics styling from doremi */
+.CodeMirror-linebackground.lyrics-line {
+    background: cornsilk !important;
+    padding-left: 0.5em;
+}
+
+.CodeMirror-line.lyrics-line {
+    font-family: serif !important;
+    font-size: 1.4em !important;
+    font-style: italic;
+    color: dimgray;
+    line-height: 1.6em !important;
+}
+
+/* Directive lines (Title, Composer, etc) */
+.CodeMirror-linebackground.directive-line {
+    background: honeydew !important;
+    padding-left: 0.5em;
+}
+
+.CodeMirror-line.directive-line {
+    font-family: sans-serif !important;
+    font-weight: bold;
+    font-size: 1.2em !important;
+    line-height: 1.6em !important;
+}
+
+/* Line spacing for proper music notation */
+.CodeMirror-line.content-line {
+    line-height: 2em;
+    padding-left: 1em;
+}
+
+/* Pure CSS octave indicators using --octave variable */
+/* Notes need to be relatively positioned for absolute children */
+.cm-music-note {
+    position: relative;
+}
+
+/* Upper octave +1: bullet sits on top of bbox */
+.cm-music-note[style*="--octave: \"1\""]::before,
+.cm-music-note[style*="--octave:\"1\""]::before {
+    content: '•';
+    position: absolute;
+    top: -0.3em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.2em;
+    color: #0066cc;
+    font-weight: bold;
+}
+
+/* Upper octave +2: colon on top of bbox */
+.cm-music-note[style*="--octave: \"2\""]::before,
+.cm-music-note[style*="--octave:\"2\""]::before {
+    content: ':';
+    position: absolute;
+    top: -0.4em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.0em;
+    color: #0066cc;
+    font-weight: bold;
+}
+
+/* Lower octave -1: bullet hanging off bottom of bbox */
+.cm-music-note[style*="--octave: \"-1\""]::after,
+.cm-music-note[style*="--octave:\"-1\""]::after {
+    content: '•';
+    position: absolute;
+    bottom: -0.7em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.2em;
+    color: #cc6600;
+    font-weight: bold;
+}
+
+/* Lower octave -2: colon hanging from bottom of bbox */
+.cm-music-note[style*="--octave: \"-2\""]::after,
+.cm-music-note[style*="--octave:\"-2\""]::after {
+    content: ':';
+    position: absolute;
+    bottom: -0.8em;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.0em;
+    color: #cc6600;
+    font-weight: bold;
+}
+
+/* CodeMirror XML Syntax Highlighting */
+.CodeMirror .cm-tag {
+    color: forestgreen !important;
+    font-weight: bold;
+}
+.CodeMirror .cm-attribute {
+    color: mediumorchid !important;
+}
+.CodeMirror .cm-string {
+    color: midnightblue !important;
+}
+.CodeMirror .cm-atom {
+    color: chocolate !important;
+}
+.CodeMirror .cm-bracket {
+    color: crimson !important;
+    font-weight: bold;
+}
+
+/* CodeMirror Music Token Syntax Highlighting */
+.CodeMirror .cm-music-note,
+.CodeMirror .cm-music-dash {
+    color: mediumvioletred !important;
+    font-weight: bold;
+    background: yellow !important;
+    /* Maintain monospace width for bold pitches */
+    font-family: 'SF Mono', Monaco, Consolas, 'Courier New', monospace !important;
+    letter-spacing: 0;
+    font-synthesis: none;
+    text-rendering: optimizeSpeed;
+    /* Ensure consistent character width */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+}
+
+.CodeMirror .cm-music-note[title] {
+    cursor: help;
+}
+.CodeMirror .cm-music-barline {
+    color: #4b0082 !important;
+    font-weight: bold;
+    background: #e6ccff !important;
+}
+/* Dash styling now handled by combined rule above */
+.CodeMirror .cm-music-lyrics {
+    color: #b8860b !important;
+    background: #fff87d !important;
+}
+.CodeMirror .cm-music-whitespace {
+    background: #f0f8ff !important;
+}
+.CodeMirror .cm-music-rest {
+    color: dimgray !important;
+    background: #e0e0e0 !important;
+}
+.CodeMirror .cm-music-breath {
+    color: #008b8b !important;
+    background: #e0ffff !important;
+}
+.CodeMirror .cm-music-unparsed {
+    background: #ff6b6b !important;
+    color: white !important;
+    animation: blink 1.5s linear infinite;
+    font-weight: bold;
+}
+.CodeMirror .cm-music-unknown {
+    background: darkorange !important;
+    color: white !important;
+    font-weight: bold;
+    border: 2px solid orangered !important;
+}
+
+/* Music Text CodeMirror Syntax Highlighting Classes */
+/* These classes are applied by CodeMirror's custom mode */
+
+/* Whitespace tokens - Red background as requested */
+.cm-music-whitespace {
+    background-color: red !important;
+    color: white !important;
+}
+
+/* Other token types can be styled here */
+.cm-music-note,
+.cm-music-dash {
+  position: relative;
+  display: inline;      /* allow natural width instead of forcing 1ch */
+  line-height: 1;
+  color: #22863a;       /* green - main note color */
+  font-weight: bold;
+}
+
+/* Beat and Loop Display - Ultra-Generalized CSS using Custom Properties */
+
+/* Division number display (centered above middle element) */
+.cm-music-note[style*="--display-division"]::before {
+    content: var(--display-division) !important;
+    position: absolute !important;
+    top: -1.4em !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    text-align: center !important;
+    font-family: serif !important;
+    font-size: 0.7em !important;
+    font-style: italic !important;
+    font-weight: normal !important;
+    color: dimgray !important;
+    z-index: 11 !important;
+    pointer-events: none !important;
+}
+
+/* Beat loop arc - attached to first element (note or dash) of beat group */
+.cm-music-note.beat-start[style*="--beat-char-loop-length"]::after,
+.cm-music-dash.beat-start[style*="--beat-char-loop-length"]::after {
+    content: '' !important;
+    position: absolute !important;
+    top: calc(100% - 0.1em) !important;  /* Slightly overlap character bounding box */
+    left: 0 !important;
+    /* Calculate width based on number of characters only */
+    width: calc(var(--beat-char-loop-length) * 1ch) !important;
+    height: 0.25em !important;  /* Much shallower, like a tea saucer */
+    border: 2px solid orange !important;  /* orange - beat grouping arcs */
+    border-top: none !important;
+    border-bottom-left-radius: 50% 100% !important;  /* Flatter curve */
+    border-bottom-right-radius: 50% 100% !important;  /* Flatter curve */
+    z-index: 10 !important;
+    pointer-events: none !important;
+}
+
+/* Legacy support for --lower-loop-char-count */
+.cm-music-note[style*="--lower-loop-char-count"]::after {
+    content: '' !important;
+    position: absolute !important;
+    top: calc(100% - 0.1em) !important;  /* Slightly overlap character bounding box */
+    left: 0 !important;
+    width: calc(var(--lower-loop-char-count) * 1ch) !important;
+    height: 0.25em !important;  /* Much shallower, like a tea saucer */
+    border: 2px solid orange !important;  /* orange - beat grouping arcs */
+    border-top: none !important;
+    border-bottom-left-radius: 50% 100% !important;  /* Flatter curve */
+    border-bottom-right-radius: 50% 100% !important;  /* Flatter curve */
+    z-index: 10 !important;
+    pointer-events: none !important;
+}
+
+/* tuplet number above the note */
+.cm-music-note::before,
+.cm-music-unknown::before{
+  content: var(--tuplet, "");
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: -0.9em;
+  font-size: 0.7em;
+  line-height: 1;
+  opacity: .8;
+  pointer-events: none;
+}
+
+.cm-music-barline {
+    color: mediumorchid;      /* purple - barlines */
+    font-weight: bold;
+}
+
+.cm-music-syllable {
+    color: chocolate;      /* orange - lyrics/syllables */
+    font-weight: bold;
+}
+
+.cm-music-rest {
+    color: dimgray;      /* gray - rests */
+    font-weight: bold;
+}
+
+.cm-music-breath {
+    color: darkcyan;      /* cyan - breath marks */
+    font-weight: bold;
+}
+
+.cm-music-unknown {
+    color: darkorange;                /* bright orange - unknown elements */
+    font-weight: bold;
+    background-color: bisque;     /* light peach background */
+}
+
+/* Beat group indicators - make underscore characters transparent but still present */
+.cm-music-beat_group {
+    color: rgba(0, 0, 0, 0.2); /* 20% opacity - visible but faded */
+    user-select: none;
+}
+
+/* Beat group role-specific styling for notes */
+.cm-music-note-beat-group-start {
+    position: relative;
+    color: forestgreen;
+    font-weight: bold;
+}
+
+.cm-music-note-beat-group-start::after {
+    content: "";
+    position: absolute;
+    bottom: -1.2em;
+    left: 0;
+    right: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-bottom-left-radius: 0.8em;
+    border-left: 1px solid white;
+    padding-bottom: 0.75em;
+}
+
+.cm-music-note-beat-group-middle {
+    position: relative;
+    color: forestgreen;
+    font-weight: bold;
+}
+
+.cm-music-note-beat-group-middle::after {
+    content: "";
+    position: absolute;
+    bottom: -1.2em;
+    left: 0;
+    right: 0;
+    border-bottom: 0.1em solid #0366d6;
+    padding-bottom: 0.75em;
+}
+
+.cm-music-note-beat-group-end {
+    position: relative;
+    color: forestgreen;
+    font-weight: bold;
+}
+
+.cm-music-note-beat-group-end::after {
+    content: "";
+    position: absolute;
+    bottom: -1.2em;
+    left: 0;
+    right: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-bottom-right-radius: 0.8em;
+    border-right: 1px solid white;
+    padding-bottom: 0.75em;
+}
+
+/* Slur indicators - make underscore characters visually disappear */
+.cm-music-slur-indicator {
+    color: transparent;
+    user-select: none;
+}
+
+/* Slur notes - notes that are within slur spans */
+.cm-music-note-slur {
+    color: deepskyblue;
+    font-weight: 500;
+}
+
+/* Collision prevention for descenders (g, j, p, q, y) */
+.cm-music-note.has-descender {
+    padding-bottom: 0.3em;
+}
+
+/* Additional clearance for beat group arcs when descenders are present */
+.cm-music-note.beat-group-start.has-descender::after {
+    bottom: -0.8em;
+}
+
+/* Beat group notes - notes that are part of a beat group */
+.cm-music-note.beat-group-start {
+    position: relative;
+}
+
+/* Slur notes - notes that are part of a slur */
+.cm-music-note.slur-start {
+    position: relative;
+}
+
+/* Create spanning arc from start note across the entire beat group */
+/* Based on DoReMiScript's span.beat.looped pattern */
+.cm-music-note.beat-group-start::after {
+    content: '';
+    position: absolute;
+    bottom: 1.05em;
+    left: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-top: none;
+    border-left: 1px solid white;
+    border-right: 1px solid white;
+    border-bottom-left-radius: 0.8em;
+    border-bottom-right-radius: 0.8em;
+    padding-bottom: 0.75em;
+    width: 1em;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Create spanning arc from start note across the entire slur (upper arc) */
+/* Mirror of beat group pattern but for upper arcs */
+.cm-music-note.slur-start::after {
+    content: '';
+    position: absolute;
+    top: -0.2em;
+    left: 0;
+    border-top: 0.1em solid #d73a49;
+    border-bottom: none;
+    border-left: 1px solid white;
+    border-right: 1px solid white;
+    border-top-left-radius: 0.8em;
+    border-top-right-radius: 0.8em;
+    padding-top: 0.75em;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Beat group dynamic width using CSS custom properties */
+.cm-music-note.beat-group-start::after {
+    width: var(--beat-group-width, 1em);
+}
+
+/* Dynamic loop styling - replaces thousands of redundant classes */
+.cm-music-note-in-loop,
+.cm-music-dash-loop,
+.cm-music-note-loop {
+    position: relative;
+    color: forestgreen;
+    font-weight: bold;
+}
+
+/* Dynamic arc rendering using CSS custom properties */
+.cm-music-dash-loop::after,
+.cm-music-note-loop::after {
+    content: '';
+    position: absolute;
+    top: 0.8em;
+    left: 0;
+    border-bottom: 0.1em solid #0366d6;
+    border-top: none;
+    border-left: 0.1em solid #0366d6;
+    border-right: 0.1em solid #0366d6;
+    border-bottom-left-radius: 0.5em;
+    border-bottom-right-radius: 0.5em;
+    height: 0.25em;
+    width: var(--loop-width, 1em);
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Dynamic slur width using CSS custom properties */
+.cm-music-note.slur-start::after {
+    width: var(--slur-width, 1.5em);
+}
+
+/* Implicit beat group highlighting - for spatially-delimited beats */
+/* Highlight notes in implicit beat groups with subtle background */
+.cm-music-note.in-implicit-beat {
+    background-color: cornsilk;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Start note gets slightly stronger highlight */
+.cm-music-note.implicit-beat-start {
+    position: relative;
+    background-color: papayawhip;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* End note styling */
+.cm-music-note.implicit-beat-end {
+    background-color: moccasin;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Create spanning arc for implicit beats - centered smile under the characters */
+.cm-music-note.implicit-beat-start::after {
+    content: '';
+    position: absolute;
+    bottom: -0.8em;  /* Hang below the text baseline */
+    left: 0;
+    width: var(--implicit-beat-width, 2ch);  /* Width based on character count */
+    height: 0.6em;  /* Height of the arc */
+    border: 2px solid #ff9800;
+    border-top: none;
+    border-bottom-left-radius: 50%;
+    border-bottom-right-radius: 50%;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Highlight notes in slurs with subtle background */
+.cm-music-note.in-slur {
+    background-color: mistyrose;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Start note gets slightly stronger highlight */
+.cm-music-note.slur-start {
+    background-color: pink;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* End note styling */
+.cm-music-note.slur-end {
+    background-color: lightpink;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Mordent styling - based on DoReMiScript patterns */
+.cm-music-mordent {
+    position: absolute;
+    font-size: 1.5em;
+    top: 0.4em;
+    left: 0.13em;
+    z-index: 2;
+    font-family: 'Bravura', serif;
+    font-weight: normal;
+    color: mediumorchid;
+}
+
+/* Enhanced mordent with Bravura symbol */
+.cm-music-mordent::before {
+    content: "\E56C"; /* Bravura mordent symbol */
+    display: inline-block;
+}
+
+/* Alternative mordent symbols */
+.cm-music-mordent.short::before {
+    content: "~";
+}
+
+.cm-music-mordent.inverted::before {
+    content: "⌐";
+}
+
+/* Cursor style for elements with tooltips - keep default cursor */
+.cm-music-note[data-tooltip] {
+    cursor: default;
+}
+
+/* Make source octave markers invisible since they're displayed via consumed element CSS */
+.cm-music-upper-octave-marker,
+.cm-music-lower-octave-marker {
+    opacity: 0;
+    visibility: hidden;
+}

@@ -101,9 +101,9 @@ impl SvgRenderer {
         css.push_str(&self.config.font_strategy.generate_font_face_css());
 
         // Load CSS from external file for development
-        let external_css = std::fs::read_to_string("assets/svg-styles.css")
+        let external_css = std::fs::read_to_string("webapp/public/css/svg-styles.css")
             .unwrap_or_else(|_| {
-                eprintln!("Warning: Could not load assets/svg-styles.css, using fallback CSS");
+                eprintln!("Warning: Could not load webapp/public/css/svg-styles.css, using fallback CSS");
                 self.generate_fallback_css(base_font_size)
             });
 
@@ -373,8 +373,8 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
     };
 
     // Load external CSS for hot reloading
-    let external_css = std::fs::read_to_string("assets/svg-styles.css")
-        .expect("Could not load assets/svg-styles.css - file must exist");
+    let external_css = std::fs::read_to_string("webapp/public/css/svg-styles.css")
+        .expect("Could not load webapp/public/css/svg-styles.css - file must exist");
 
     // SVG header with loaded CSS
     svg.push_str(&format!(r#"<?xml version="1.0" encoding="UTF-8"?>

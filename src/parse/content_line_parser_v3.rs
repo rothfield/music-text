@@ -1,4 +1,4 @@
-use crate::parse::model::{ContentLine, ContentElement, Attributes, Position, NotationSystem, Barline, SingleBarline, DoubleBarline, FinalBarline, RepeatStartBarline, RepeatEndBarline, RepeatBothBarline};
+use crate::parse::model::{ContentLine, ContentElement, NotationSystem, Barline, SingleBarline, DoubleBarline, FinalBarline, RepeatStartBarline, RepeatEndBarline, RepeatBothBarline, Whitespace, Beat};
 use crate::parse::beat::parse_beat;
 use crate::parse::pitch::is_pitch_start;
 use crate::parse::ParseError;
