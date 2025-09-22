@@ -1,3 +1,16 @@
+/* Font Loading */
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/Inter.ttc') format('truetype-collection');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Crimson Text';
+  src: url('fonts/CrimsonText-Regular.woff2') format('woff2');
+  font-display: swap;
+}
+
 /* CSS Custom Properties for positioning constants */
 :root {
   --octave-x-offset: 3.2px;
@@ -8,7 +21,7 @@
 
 /* Typography Hierarchy - font sizes set dynamically by Rust */
 .note {
-  font-family: sans-serif;
+  font-family: 'Inter', sans-serif;
   fill: black;
 }
 
@@ -17,22 +30,22 @@
 }
 
 .unicode-symbol {
-  font-family: serif;
+  font-family: 'Crimson Text', serif;
   fill: black;
 }
 
 .upper-octave {
-  font-family: sans-serif;
+  font-family: 'Inter', sans-serif;
   fill: black;
 }
 
 .lower-octave {
-  font-family: sans-serif;
+  font-family: 'Inter', sans-serif;
   fill: black;
 }
 
 .lyric {
-  font-family: serif;
+  font-family: 'Crimson Text', serif;
   fill: black;
 }
 
@@ -41,7 +54,7 @@
 }
 
 .grace-note {
-  font-family: sans-serif;
+  font-family: 'Inter', sans-serif;
   fill: black;
 }
 
@@ -66,14 +79,14 @@
 }
 
 .title {
-  font-family: sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 24px;
   font-weight: bold;
   fill: black;
 }
 
 .composer {
-  font-family: sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 16px;
   fill: black;
 }

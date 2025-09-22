@@ -1,4 +1,5 @@
 use crate::models::pitch::Degree;
+use crate::parse::model::PitchCode;
 
 /// Get all valid number symbols (for regex pattern generation)
 /// Returns symbols sorted by length (longest first) for proper regex matching
@@ -30,6 +31,103 @@ pub fn get_all_symbols() -> Vec<String> {
     ];
     // Already sorted by length (longest first)
     symbols
+}
+
+/// Convert a Degree back to number notation string
+/// This is the reverse operation of lookup - takes a degree and returns the number string
+pub fn degree_to_string(degree: Degree) -> Option<String> {
+    let result = match degree {
+        // Natural numbers
+        Degree::N1 => "1",
+        Degree::N2 => "2",
+        Degree::N3 => "3",
+        Degree::N4 => "4",
+        Degree::N5 => "5",
+        Degree::N6 => "6",
+        Degree::N7 => "7",
+        // Sharps (using ASCII)
+        Degree::N1s => "1#",
+        Degree::N2s => "2#",
+        Degree::N3s => "3#",
+        Degree::N4s => "4#",
+        Degree::N5s => "5#",
+        Degree::N6s => "6#",
+        Degree::N7s => "7#",
+        // Flats (using ASCII)
+        Degree::N1b => "1b",
+        Degree::N2b => "2b",
+        Degree::N3b => "3b",
+        Degree::N4b => "4b",
+        Degree::N5b => "5b",
+        Degree::N6b => "6b",
+        Degree::N7b => "7b",
+        // Double sharps (using ASCII)
+        Degree::N1ss => "1##",
+        Degree::N2ss => "2##",
+        Degree::N3ss => "3##",
+        Degree::N4ss => "4##",
+        Degree::N5ss => "5##",
+        Degree::N6ss => "6##",
+        Degree::N7ss => "7##",
+        // Double flats (using ASCII)
+        Degree::N1bb => "1bb",
+        Degree::N2bb => "2bb",
+        Degree::N3bb => "3bb",
+        Degree::N4bb => "4bb",
+        Degree::N5bb => "5bb",
+        Degree::N6bb => "6bb",
+        Degree::N7bb => "7bb",
+    };
+    Some(result.to_string())
+}
+
+/// Convert PitchCode directly to number notation string
+/// Direct mapping without going through Degree abstraction
+/// Uses ASCII accidentals (#, b) for simplicity
+pub fn pitchcode_to_string(pitchcode: PitchCode) -> Option<String> {
+    let result = match pitchcode {
+        // Natural numbers
+        PitchCode::N1 => "1",
+        PitchCode::N2 => "2",
+        PitchCode::N3 => "3",
+        PitchCode::N4 => "4",
+        PitchCode::N5 => "5",
+        PitchCode::N6 => "6",
+        PitchCode::N7 => "7",
+        // Sharps
+        PitchCode::N1s => "1#",
+        PitchCode::N2s => "2#",
+        PitchCode::N3s => "3#",
+        PitchCode::N4s => "4#",
+        PitchCode::N5s => "5#",
+        PitchCode::N6s => "6#",
+        PitchCode::N7s => "7#",
+        // Flats
+        PitchCode::N1b => "1b",
+        PitchCode::N2b => "2b",
+        PitchCode::N3b => "3b",
+        PitchCode::N4b => "4b",
+        PitchCode::N5b => "5b",
+        PitchCode::N6b => "6b",
+        PitchCode::N7b => "7b",
+        // Double sharps
+        PitchCode::N1ss => "1##",
+        PitchCode::N2ss => "2##",
+        PitchCode::N3ss => "3##",
+        PitchCode::N4ss => "4##",
+        PitchCode::N5ss => "5##",
+        PitchCode::N6ss => "6##",
+        PitchCode::N7ss => "7##",
+        // Double flats
+        PitchCode::N1bb => "1bb",
+        PitchCode::N2bb => "2bb",
+        PitchCode::N3bb => "3bb",
+        PitchCode::N4bb => "4bb",
+        PitchCode::N5bb => "5bb",
+        PitchCode::N6bb => "6bb",
+        PitchCode::N7bb => "7bb",
+    };
+    Some(result.to_string())
 }
 
 /// Number notation pitch lookup

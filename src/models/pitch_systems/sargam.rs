@@ -1,4 +1,5 @@
 use crate::models::pitch::Degree;
+use crate::parse::model::PitchCode;
 
 // IMPORTANT: SARGAM IS CASE SENSITIVE
 // - s is an alias for S, p is an alias for P
@@ -30,6 +31,102 @@ pub fn get_all_symbols() -> Vec<String> {
     // Sort by length (longest first) to ensure proper regex matching
     symbols.sort_by(|a, b| b.len().cmp(&a.len()));
     symbols
+}
+
+/// Convert a Degree back to sargam notation string
+/// This is the reverse operation of lookup - takes a degree and returns the sargam syllable
+pub fn degree_to_string(degree: Degree) -> Option<String> {
+    let result = match degree {
+        // Natural sargam (using uppercase)
+        Degree::N1 => "S",
+        Degree::N2 => "R",
+        Degree::N3 => "G",
+        Degree::N4 => "M",
+        Degree::N5 => "P",
+        Degree::N6 => "D",
+        Degree::N7 => "N",
+        // Sharps (using # with uppercase)
+        Degree::N1s => "S#",
+        Degree::N2s => "R#",
+        Degree::N3s => "G#",
+        Degree::N4s => "M#",
+        Degree::N5s => "P#",
+        Degree::N6s => "D#",
+        Degree::N7s => "N#",
+        // Flats (using komal/lowercase)
+        Degree::N1b => "s",
+        Degree::N2b => "r",
+        Degree::N3b => "g",
+        Degree::N4b => "m",
+        Degree::N5b => "p",
+        Degree::N6b => "d",
+        Degree::N7b => "n",
+        // Double sharps
+        Degree::N1ss => "S##",
+        Degree::N2ss => "R##",
+        Degree::N3ss => "G##",
+        Degree::N4ss => "M##",
+        Degree::N5ss => "P##",
+        Degree::N6ss => "D##",
+        Degree::N7ss => "N##",
+        // Double flats
+        Degree::N1bb => "sbb",
+        Degree::N2bb => "rbb",
+        Degree::N3bb => "gbb",
+        Degree::N4bb => "mbb",
+        Degree::N5bb => "pbb",
+        Degree::N6bb => "dbb",
+        Degree::N7bb => "nbb",
+    };
+    Some(result.to_string())
+}
+
+/// Convert PitchCode directly to sargam notation string
+/// Direct mapping without going through Degree abstraction
+pub fn pitchcode_to_string(pitchcode: PitchCode) -> Option<String> {
+    let result = match pitchcode {
+        // Natural sargam (using uppercase/lowercase as appropriate)
+        PitchCode::N1 => "S",
+        PitchCode::N2 => "R",
+        PitchCode::N3 => "G",
+        PitchCode::N4 => "m",    // shuddha Ma
+        PitchCode::N5 => "P",
+        PitchCode::N6 => "D",
+        PitchCode::N7 => "N",
+        // Sharps (using # with uppercase)
+        PitchCode::N1s => "S#",
+        PitchCode::N2s => "R#",
+        PitchCode::N3s => "G#",
+        PitchCode::N4s => "M",   // tivra Ma (uppercase M)
+        PitchCode::N5s => "P#",
+        PitchCode::N6s => "D#",
+        PitchCode::N7s => "N#",
+        // Flats (using komal/lowercase)
+        PitchCode::N1b => "s",   // Could also be "Sb" but "s" is simpler
+        PitchCode::N2b => "r",   // komal Re
+        PitchCode::N3b => "g",   // komal Ga
+        PitchCode::N4b => "mb",  // komal Ma (rare, use explicit flat)
+        PitchCode::N5b => "p",   // Could also be "Pb" but "p" is simpler
+        PitchCode::N6b => "d",   // komal Dha
+        PitchCode::N7b => "n",   // komal Ni
+        // Double sharps
+        PitchCode::N1ss => "S##",
+        PitchCode::N2ss => "R##",
+        PitchCode::N3ss => "G##",
+        PitchCode::N4ss => "M##", // Double sharp Ma
+        PitchCode::N5ss => "P##",
+        PitchCode::N6ss => "D##",
+        PitchCode::N7ss => "N##",
+        // Double flats
+        PitchCode::N1bb => "sbb",
+        PitchCode::N2bb => "rbb",
+        PitchCode::N3bb => "gbb",
+        PitchCode::N4bb => "mbb",
+        PitchCode::N5bb => "pbb",
+        PitchCode::N6bb => "dbb",
+        PitchCode::N7bb => "nbb",
+    };
+    Some(result.to_string())
 }
 
 /// Sargam notation pitch lookup

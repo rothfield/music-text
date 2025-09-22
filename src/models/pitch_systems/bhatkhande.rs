@@ -1,4 +1,5 @@
 use crate::models::pitch::Degree;
+use crate::parse::model::PitchCode;
 
 /// Get all valid bhatkhande symbols (for regex pattern generation)
 /// Returns symbols sorted by length (longest first) for proper regex matching
@@ -23,6 +24,101 @@ pub fn get_all_symbols() -> Vec<String> {
     ];
     // Already sorted by length (longest first)
     symbols
+}
+
+/// Convert a Degree back to bhatkhande notation string
+/// This is the reverse operation of lookup - takes a degree and returns the bhatkhande symbol
+pub fn degree_to_string(degree: Degree) -> Option<String> {
+    // Use uppercase romanized form for output
+    let result = match degree {
+        Degree::N1 => "S",
+        Degree::N2 => "R",
+        Degree::N3 => "G",
+        Degree::N4 => "M",
+        Degree::N5 => "P",
+        Degree::N6 => "D",
+        Degree::N7 => "N",
+        // For now, use simple ASCII accidentals
+        Degree::N1s => "S#",
+        Degree::N2s => "R#",
+        Degree::N3s => "G#",
+        Degree::N4s => "M#",
+        Degree::N5s => "P#",
+        Degree::N6s => "D#",
+        Degree::N7s => "N#",
+        Degree::N1b => "Sb",
+        Degree::N2b => "Rb",
+        Degree::N3b => "Gb",
+        Degree::N4b => "Mb",
+        Degree::N5b => "Pb",
+        Degree::N6b => "Db",
+        Degree::N7b => "Nb",
+        // Double accidentals
+        Degree::N1ss => "S##",
+        Degree::N2ss => "R##",
+        Degree::N3ss => "G##",
+        Degree::N4ss => "M##",
+        Degree::N5ss => "P##",
+        Degree::N6ss => "D##",
+        Degree::N7ss => "N##",
+        Degree::N1bb => "Sbb",
+        Degree::N2bb => "Rbb",
+        Degree::N3bb => "Gbb",
+        Degree::N4bb => "Mbb",
+        Degree::N5bb => "Pbb",
+        Degree::N6bb => "Dbb",
+        Degree::N7bb => "Nbb",
+    };
+    Some(result.to_string())
+}
+
+/// Convert PitchCode directly to bhatkhande notation string
+/// Direct mapping without going through Degree abstraction
+/// Uses Roman equivalents for simplicity
+pub fn pitchcode_to_string(pitchcode: PitchCode) -> Option<String> {
+    let result = match pitchcode {
+        // Natural notes (using Roman equivalents)
+        PitchCode::N1 => "S",
+        PitchCode::N2 => "R",
+        PitchCode::N3 => "G",
+        PitchCode::N4 => "M",
+        PitchCode::N5 => "P",
+        PitchCode::N6 => "D",
+        PitchCode::N7 => "N",
+        // Sharps
+        PitchCode::N1s => "S#",
+        PitchCode::N2s => "R#",
+        PitchCode::N3s => "G#",
+        PitchCode::N4s => "M#",
+        PitchCode::N5s => "P#",
+        PitchCode::N6s => "D#",
+        PitchCode::N7s => "N#",
+        // Flats
+        PitchCode::N1b => "Sb",
+        PitchCode::N2b => "Rb",
+        PitchCode::N3b => "Gb",
+        PitchCode::N4b => "Mb",
+        PitchCode::N5b => "Pb",
+        PitchCode::N6b => "Db",
+        PitchCode::N7b => "Nb",
+        // Double sharps
+        PitchCode::N1ss => "S##",
+        PitchCode::N2ss => "R##",
+        PitchCode::N3ss => "G##",
+        PitchCode::N4ss => "M##",
+        PitchCode::N5ss => "P##",
+        PitchCode::N6ss => "D##",
+        PitchCode::N7ss => "N##",
+        // Double flats
+        PitchCode::N1bb => "Sbb",
+        PitchCode::N2bb => "Rbb",
+        PitchCode::N3bb => "Gbb",
+        PitchCode::N4bb => "Mbb",
+        PitchCode::N5bb => "Pbb",
+        PitchCode::N6bb => "Dbb",
+        PitchCode::N7bb => "Nbb",
+    };
+    Some(result.to_string())
 }
 
 /// Bhatkhande notation pitch lookup

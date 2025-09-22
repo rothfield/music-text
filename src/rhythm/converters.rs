@@ -7,11 +7,12 @@ use fraction::Fraction;
 /// Barline type enumeration for document structure
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum BarlineType {
-    Single,
-    Double,
-    RepeatStart,
-    RepeatEnd,
-    RepeatBoth,
+    Single,      // |
+    Double,      // ||
+    Final,       // |.
+    RepeatStart, // |:
+    RepeatEnd,   // :|
+    RepeatBoth,  // :|: or |:|
 }
 
 impl BarlineType {
@@ -19,9 +20,10 @@ impl BarlineType {
         match s {
             "|" => Ok(BarlineType::Single),
             "||" => Ok(BarlineType::Double),
+            "|." => Ok(BarlineType::Final),
             "|:" => Ok(BarlineType::RepeatStart),
             ":|" => Ok(BarlineType::RepeatEnd),
-            "|:|" => Ok(BarlineType::RepeatBoth),
+            "|:|" | ":|:" => Ok(BarlineType::RepeatBoth),
             _ => Err(format!("Unknown barline type: {}", s)),
         }
     }

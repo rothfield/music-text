@@ -1,7 +1,12 @@
+// KEEP MAGIC NUMBERS IN CSS!!!!!!!!!!
+
 use crate::renderers::svg::{Document, Element, FontStrategy, Ornament, SMuFLMapper, SymbolType};
 use crate::models::pitch_systems;
 use crate::models::pitch::Notation;
 use std::fmt::Write;
+
+// Include generated character width measurements
+include!(concat!(env!("OUT_DIR"), "/char_widths.rs"));
 
 /// SVG renderer configuration
 pub struct SvgRendererConfig {
@@ -187,7 +192,7 @@ impl SvgRenderer {
         let base_y = self.current_y;
 
         // Main note with semantic class for descenders
-        let note_class = if value == "g" || value == "p" || value == "q" || value == "y" || value == "j" {
+        let note_class = if value == "g" {
             "note has_descender"
         } else {
             "note"
@@ -202,8 +207,13 @@ impl SvgRenderer {
                     self.current_x + 3.2, base_y - 6.4, value, octave_marker).unwrap();
         } else if octave < 0 {
             let octave_marker = "•".repeat((-octave) as usize);
-            writeln!(svg, r#"    <text x="{}" y="{}" class="lower-octave" data-note="{}">{}</text>"#,
-                    self.current_x + 3.2, base_y + 28.8, value, octave_marker).unwrap();
+            let octave_class = if value == "g" {
+                "lower-octave note-has-descender"
+            } else {
+                "lower-octave"
+            };
+            writeln!(svg, r#"    <text x="{}" y="{}" class="{}" data-note="{}">{}</text>"#,
+                    self.current_x + 3.2, base_y + 28.8, octave_class, value, octave_marker).unwrap();
         }
 
         // Accidentals
@@ -364,16 +374,7 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
 
     // Load external CSS for hot reloading
     let external_css = std::fs::read_to_string("assets/svg-styles.css")
-        .unwrap_or_else(|e| {
-            eprintln!("Warning: Could not load assets/svg-styles.css: {}", e);
-            // Fallback CSS
-            r#"
-.lower-octave { transform: translateY(8px) !important; }
-.note { font-family: sans-serif; fill: black; }
-.dash { font-family: sans-serif; fill: black; }
-.barline { font-family: sans-serif; fill: black; }
-"#.to_string()
-        });
+        .expect("Could not load assets/svg-styles.css - file must exist");
 
     // SVG header with loaded CSS
     svg.push_str(&format!(r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -503,7 +504,16 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
                                         svg.push_str("\n");
                                         x_pos += 3.2; // BARLINE_MARGIN from doremi.css
                                     }
-                                    _ => {} // Skip whitespace etc
+                                    crate::parse::model::ContentElement::Whitespace(whitespace) => {
+                                        // Render each space character with measured width
+                                        for space_char in whitespace.content.chars() {
+                                            if space_char == ' ' {
+                                                svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="note"> </text>"#, x_pos, y_pos));
+                                                svg.push_str("\n");
+                                                x_pos += get_char_width(' ');
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -516,7 +526,47 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
                                         svg.push_str("\n");
                                         x_pos += 10.0;
                                     }
-                                    _ => {} // Skip other upper elements for now
+                                    crate::parse::model::UpperElement::SlurIndicator { value, source: _ } => {
+                                        // TODO: Implement slur rendering
+                                        svg.push_str(&format!(r#"    <!-- TODO: Slur {} -->"#, value));
+                                        svg.push_str("\n");
+                                    }
+                                    crate::parse::model::UpperElement::UpperHashes { value, source: _ } => {
+                                        // TODO: Implement multi-stave markers
+                                        svg.push_str(&format!(r#"    <!-- TODO: Upper hashes {} -->"#, value));
+                                        svg.push_str("\n");
+                                    }
+                                    crate::parse::model::UpperElement::Ornament { pitches, source: _ } => {
+                                        // TODO: Implement ornament rendering
+                                        svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="ornament">~</text>"#, x_pos, y_pos - 10.0));
+                                        svg.push_str("\n");
+                                    }
+                                    crate::parse::model::UpperElement::Chord { chord, source: _ } => {
+                                        // TODO: Implement chord rendering
+                                        svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="chord">{}</text>"#, x_pos, y_pos - 30.0, chord));
+                                        svg.push_str("\n");
+                                    }
+                                    crate::parse::model::UpperElement::Mordent { source: _ } => {
+                                        // TODO: Implement mordent rendering
+                                        svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="ornament">~</text>"#, x_pos, y_pos - 10.0));
+                                        svg.push_str("\n");
+                                    }
+                                    crate::parse::model::UpperElement::Space { count, source: _ } => {
+                                        // Render upper spaces
+                                        for _ in 0..*count {
+                                            x_pos += get_char_width(' ');
+                                        }
+                                    }
+                                    crate::parse::model::UpperElement::Unknown { value, source: _ } => {
+                                        // TODO: Handle unknown upper elements
+                                        svg.push_str(&format!(r#"    <!-- Unknown upper: {} -->"#, value));
+                                        svg.push_str("\n");
+                                    }
+                                    crate::parse::model::UpperElement::Newline { value, source: _ } => {
+                                        // TODO: Handle upper newlines
+                                        svg.push_str(&format!(r#"    <!-- Upper newline -->"#));
+                                        svg.push_str("\n");
+                                    }
                                 }
                             }
                         }
@@ -529,15 +579,73 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
                                         svg.push_str("\n");
                                         x_pos += 10.0;
                                     }
-                                    _ => {} // Skip other lower elements for now
+                                    crate::parse::model::LowerElement::BeatGroupIndicator { value, source: _ } => {
+                                        // TODO: Implement beat group rendering
+                                        svg.push_str(&format!(r#"    <!-- TODO: Beat group {} -->"#, value));
+                                        svg.push_str("\n");
+                                    }
+                                    crate::parse::model::LowerElement::Syllable { content, source: _ } => {
+                                        svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="lyric">{}</text>"#, x_pos, y_pos + 20.0, content));
+                                        svg.push_str("\n");
+                                        x_pos += get_char_width(content.chars().next().unwrap_or(' ')) * content.len() as f32;
+                                    }
+                                    crate::parse::model::LowerElement::Space { count, source: _ } => {
+                                        // Render lower spaces
+                                        for _ in 0..*count {
+                                            x_pos += get_char_width(' ');
+                                        }
+                                    }
+                                    crate::parse::model::LowerElement::Unknown { value, source: _ } => {
+                                        // TODO: Handle unknown lower elements
+                                        svg.push_str(&format!(r#"    <!-- Unknown lower: {} -->"#, value));
+                                        svg.push_str("\n");
+                                    }
+                                    crate::parse::model::LowerElement::Newline { value, source: _ } => {
+                                        // TODO: Handle lower newlines
+                                        svg.push_str(&format!(r#"    <!-- Lower newline -->"#));
+                                        svg.push_str("\n");
+                                    }
+                                    crate::parse::model::LowerElement::EndOfInput { source: _ } => {
+                                        // TODO: Handle end of input
+                                        svg.push_str(&format!(r#"    <!-- End of input -->"#));
+                                        svg.push_str("\n");
+                                    }
                                 }
                             }
                         }
-                        _ => {} // Skip other line types
+                        crate::parse::model::StaveLine::Text(text_line) => {
+                            // TODO: Implement text line rendering
+                            svg.push_str(&format!(r#"    <!-- TODO: Text line -->"#));
+                            svg.push_str("\n");
+                        }
+                        crate::parse::model::StaveLine::Content(_elements) => {
+                            // Legacy content line - TODO: handle if needed
+                            svg.push_str(&format!(r#"    <!-- TODO: Legacy content -->"#));
+                            svg.push_str("\n");
+                        }
+                        crate::parse::model::StaveLine::Lyrics(lyrics_line) => {
+                            // TODO: Implement lyrics line rendering
+                            svg.push_str(&format!(r#"    <!-- TODO: Lyrics line -->"#));
+                            svg.push_str("\n");
+                        }
+                        crate::parse::model::StaveLine::Whitespace(whitespace_line) => {
+                            // TODO: Implement whitespace line rendering
+                            svg.push_str(&format!(r#"    <!-- TODO: Whitespace line -->"#));
+                            svg.push_str("\n");
+                        }
+                        crate::parse::model::StaveLine::BlankLines(blank_lines) => {
+                            // TODO: Implement blank lines rendering
+                            svg.push_str(&format!(r#"    <!-- TODO: Blank lines -->"#));
+                            svg.push_str("\n");
+                        }
                     }
                 }
             }
-            _ => {} // Skip other elements
+            crate::parse::model::DocumentElement::BlankLines(blank_lines) => {
+                // TODO: Implement document-level blank lines rendering
+                svg.push_str(&format!(r#"    <!-- TODO: Document blank lines -->"#));
+                svg.push_str("\n");
+            }
         }
     }
 
@@ -557,32 +665,36 @@ fn render_beat_with_arcs(
 
     // Doremi-script CSS constants (must match CSS :root values)
     const BASE_FONT_SIZE: f32 = 22.4;
-    const CH_WIDTH: f32 = 13.44;
+    const CH_WIDTH: f32 = 13.44;             // Character width for arc calculations
+    const NOTE_SPACING: f32 = 16.8;          // ch-width + note-gap (proper note spacing)
     const OCTAVE_X_OFFSET: f32 = 3.2;        // 0.2em from doremi.css - nudged left
-    const UPPER_OCTAVE_Y_OFFSET: f32 = -6.4;    // top: 0.4em from doremi.css - sits in bbox
-    const LOWER_OCTAVE_Y_OFFSET: f32 = 8.0;     // Above lower loops, below baseline
+    const UPPER_OCTAVE_Y_OFFSET: f32 = -6.4; // top: 0.4em from doremi.css - sits in bbox
+    const LOWER_OCTAVE_Y_OFFSET: f32 = 8.0;  // Above lower loops, below baseline
     const BEAT_MARGIN_RIGHT: f32 = 16.0;     // 1em at 16px base
 
     // Count renderable elements for lower arc calculation
     let renderable_count = beat.elements.iter().filter(|element| {
-        matches!(element, crate::parse::model::BeatElement::Note(_) | crate::parse::model::BeatElement::Dash(_))
+        matches!(element,
+            crate::parse::model::BeatElement::Note(_) |
+            crate::parse::model::BeatElement::Dash(_) |
+            crate::parse::model::BeatElement::BreathMark(_)
+        )
     }).count();
 
     // Render all elements in this beat
     for beat_element in &beat.elements {
         match beat_element {
             crate::parse::model::BeatElement::Note(note) => {
-                // Convert pitch code to notation using existing pitch systems
-                let degree = pitch_systems::pitch_code_to_degree(note.pitch_code);
+                // Convert pitch code directly to notation string
                 let notation = match notation_type {
                     "sargam" => Notation::Sargam,
                     "western" => Notation::Western,
                     _ => Notation::Number,
                 };
-                let note_value = pitch_systems::degree_to_string(degree, notation)
+                let note_value = pitch_systems::pitchcode_to_string(note.pitch_code, notation)
                     .unwrap_or_else(|| "1".to_string());
 
-                svg.push_str(&format!(r#"    <text x="{}" y="{}" class="note">{}</text>"#, x_pos, y_pos, note_value));
+                svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="note">{}</text>"#, x_pos, y_pos, note_value));
                 svg.push_str("\n");
 
                 // Render octave markers based on note.octave value (using CSS constants)
@@ -599,19 +711,29 @@ fn render_beat_with_arcs(
                     for i in 0..(-note.octave) {
                         let marker_x = x_pos + OCTAVE_X_OFFSET;
                         let marker_y = y_pos + LOWER_OCTAVE_Y_OFFSET + (i as f32 * 5.0); // Stack vertically
-                        svg.push_str(&format!(r#"    <text x="{}" y="{}" class="lower-octave">•</text>"#, marker_x, marker_y));
+                        let octave_class = if note_value == "g" {
+                            "lower-octave note-has-descender"
+                        } else {
+                            "lower-octave"
+                        };
+                        svg.push_str(&format!(r#"    <text x="{}" y="{}" class="{}">•</text>"#, marker_x, marker_y, octave_class));
                         svg.push_str("\n");
                     }
                 }
 
-                x_pos += CH_WIDTH; // Notes within beat are just 1ch apart, no spacing
+                x_pos += get_char_width(note_value.chars().next().unwrap_or('S')); // Character-aware spacing
             }
             crate::parse::model::BeatElement::Dash(_) => {
-                svg.push_str(&format!(r#"    <text x="{}" y="{}" class="dash">-</text>"#, x_pos, y_pos));
+                svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="dash">-</text>"#, x_pos, y_pos));
                 svg.push_str("\n");
-                x_pos += CH_WIDTH; // Same spacing as notes - dashes represent rests/silence
+                x_pos += get_char_width('-'); // Character-aware spacing for dashes
             }
-            _ => {} // Skip other elements
+            crate::parse::model::BeatElement::BreathMark(_) => {
+                // TODO: Implement breath mark rendering
+                svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="ornament">ʻ</text>"#, x_pos, y_pos));
+                svg.push_str("\n");
+                x_pos += get_char_width('ʻ');
+            }
         }
     }
 

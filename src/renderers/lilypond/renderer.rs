@@ -336,7 +336,24 @@ pub fn convert_processed_document_to_lilypond_src(
             if let Some(DocumentElement::Stave(stave)) = document.elements.first() {
                 stave
             } else {
-                return Err("No staves found in document".to_string());
+                // No staves in document - create empty LilyPond with just header
+                return Ok(format!(r#"\version "2.24.0"
+
+\header {{
+  title = "{}"
+  composer = "{}"
+}}
+
+% No musical content
+
+\relative c' {{
+  % Empty staff
+  R1
+}}
+"#,
+                    document.title.as_ref().unwrap_or(&String::new()),
+                    document.author.as_ref().unwrap_or(&String::new())
+                ));
             }
         };
         convert_document_to_lilypond_src(&Document {

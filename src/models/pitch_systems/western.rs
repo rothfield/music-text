@@ -1,4 +1,5 @@
 use crate::models::pitch::Degree;
+use crate::parse::model::PitchCode;
 
 /// Get all valid western symbols (for regex pattern generation)
 /// Returns symbols sorted by length (longest first) for proper regex matching
@@ -20,6 +21,102 @@ pub fn get_all_symbols() -> Vec<String> {
     ];
     // Already sorted by length (longest first)
     symbols
+}
+
+/// Convert a Degree back to Western notation string
+/// This is the reverse operation of lookup - takes a degree and returns the Western note name
+pub fn degree_to_string(degree: Degree) -> Option<String> {
+    let result = match degree {
+        // Natural notes
+        Degree::N1 => "C",
+        Degree::N2 => "D",
+        Degree::N3 => "E",
+        Degree::N4 => "F",
+        Degree::N5 => "G",
+        Degree::N6 => "A",
+        Degree::N7 => "B",
+        // Sharps
+        Degree::N1s => "C#",
+        Degree::N2s => "D#",
+        Degree::N3s => "E#",
+        Degree::N4s => "F#",
+        Degree::N5s => "G#",
+        Degree::N6s => "A#",
+        Degree::N7s => "B#",
+        // Flats
+        Degree::N1b => "Cb",
+        Degree::N2b => "Db",
+        Degree::N3b => "Eb",
+        Degree::N4b => "Fb",
+        Degree::N5b => "Gb",
+        Degree::N6b => "Ab",
+        Degree::N7b => "Bb",
+        // Double sharps
+        Degree::N1ss => "C##",
+        Degree::N2ss => "D##",
+        Degree::N3ss => "E##",
+        Degree::N4ss => "F##",
+        Degree::N5ss => "G##",
+        Degree::N6ss => "A##",
+        Degree::N7ss => "B##",
+        // Double flats
+        Degree::N1bb => "Cbb",
+        Degree::N2bb => "Dbb",
+        Degree::N3bb => "Ebb",
+        Degree::N4bb => "Fbb",
+        Degree::N5bb => "Gbb",
+        Degree::N6bb => "Abb",
+        Degree::N7bb => "Bbb",
+    };
+    Some(result.to_string())
+}
+
+/// Convert PitchCode directly to western notation string
+/// Direct mapping without going through Degree abstraction
+pub fn pitchcode_to_string(pitchcode: PitchCode) -> Option<String> {
+    let result = match pitchcode {
+        // Natural notes
+        PitchCode::N1 => "C",
+        PitchCode::N2 => "D",
+        PitchCode::N3 => "E",
+        PitchCode::N4 => "F",
+        PitchCode::N5 => "G",
+        PitchCode::N6 => "A",
+        PitchCode::N7 => "B",
+        // Sharps
+        PitchCode::N1s => "C#",
+        PitchCode::N2s => "D#",
+        PitchCode::N3s => "E#",
+        PitchCode::N4s => "F#",
+        PitchCode::N5s => "G#",
+        PitchCode::N6s => "A#",
+        PitchCode::N7s => "B#",
+        // Flats
+        PitchCode::N1b => "Cb",
+        PitchCode::N2b => "Db",
+        PitchCode::N3b => "Eb",
+        PitchCode::N4b => "Fb",
+        PitchCode::N5b => "Gb",
+        PitchCode::N6b => "Ab",
+        PitchCode::N7b => "Bb",
+        // Double sharps
+        PitchCode::N1ss => "C##",
+        PitchCode::N2ss => "D##",
+        PitchCode::N3ss => "E##",
+        PitchCode::N4ss => "F##",
+        PitchCode::N5ss => "G##",
+        PitchCode::N6ss => "A##",
+        PitchCode::N7ss => "B##",
+        // Double flats
+        PitchCode::N1bb => "Cbb",
+        PitchCode::N2bb => "Dbb",
+        PitchCode::N3bb => "Ebb",
+        PitchCode::N4bb => "Fbb",
+        PitchCode::N5bb => "Gbb",
+        PitchCode::N6bb => "Abb",
+        PitchCode::N7bb => "Bbb",
+    };
+    Some(result.to_string())
 }
 
 /// Western notation pitch lookup

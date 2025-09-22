@@ -20,17 +20,19 @@ This specification defines the formal grammar for the music-text notation langua
 ### Document Structure
 
 ```ebnf
-document = blank_lines* document_element (blank_lines* document_element)* blank_lines*
+document = blank_lines* (multi_stave | stave | single_content_line | header) (blank_lines* stave)*
 
-document_element = header_block | stave | single_content_line
+multi_stave = "###" newline stave+ "###" newline
 
-header_block = header_content
+stave = stave_line+
 
-header_content = header_line (newline header_line)*
-
-header_line = title_line | directive_line | text_line
+stave_line = content_line | annotation_line
 
 single_content_line = content_line
+
+header = header_line+
+
+header_line = title_line | directive_line | text_line
 
 directive_line = directive whitespace* (newline | EOI)
 

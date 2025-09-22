@@ -68,47 +68,17 @@ pub fn parse_content_line(
                 break;
             }
 
-            '|' => {
-                // Parse barline
-                let start_pos = pos;
-                chars.next();
-                let mut barline_str = String::from("|");
-
-                // Check for multi-character barlines (||, |:, :|, |])
-                while let Some(&(_, next_ch)) = chars.peek() {
-                    if matches!(next_ch, '|' | ':' | ']') {
-                        barline_str.push(next_ch);
-                        chars.next();
-                    } else if barline_str == ":" && next_ch == '|' {
-                        // Handle :| barline
-                        barline_str.push(next_ch);
-                        chars.next();
-                        break;
-                    } else {
-                        break;
-                    }
-                }
-
-                // Convert string to BarlineType
-                let barline_type = BarlineType::from_str(&barline_str)
-                    .map_err(|_| ParseError {
-                        message: format!("Invalid barline: {}", barline_str),
-                        line: line_num,
-                        column: column_from_pos(input, start_pos),
-                    })?;
-
-                elements.push(ContentElement::Barline(crate::parse::model::Barline {
-                    barline_type,
-                    source: Source {
-                        value: Some(barline_str.clone()),
-                        position: Position {
-                            line: line_num,
-                            column: column_from_pos(input, start_pos),
-                            index_in_line: index_in_line_from_pos(input, start_pos, line_num),
-                            index_in_doc: line_start_doc_index + start_pos,
-                        },
-                    },
-                }));
+            '|' | ':' => {
+                // Parse barline using tokenization
+                let barline = parse_barline(
+                    &mut chars,
+                    ch,
+                    pos,
+                    line_num,
+                    input,
+                    line_start_doc_index,
+                )?;
+                elements.push(ContentElement::Barline(barline));
             }
 
             ' ' => {
@@ -178,6 +148,96 @@ pub fn parse_content_line(
                 column: 1,
                 index_in_line: 0,
                 index_in_doc: line_start_doc_index,
+            },
+        },
+    })
+}
+
+/// Parse barline using recursive descent tokenization
+/// Grammar: barline = '|' ( '|' | ':' | '.' | ':|' )? | ':' '|' ( ':' )?
+fn parse_barline(
+    chars: &mut Peekable<CharIndices>,
+    first_char: char,
+    start_pos: usize,
+    line_num: usize,
+    input: &str,
+    line_start_doc_index: usize,
+) -> Result<crate::parse::model::Barline, ParseError> {
+    let mut barline_str = String::new();
+
+    // Handle first character
+    if first_char == '|' {
+        chars.next(); // consume '|'
+        barline_str.push('|');
+
+        // Look for second character
+        if let Some(&(_, ch)) = chars.peek() {
+            match ch {
+                '|' => {
+                    // || - double barline
+                    barline_str.push('|');
+                    chars.next();
+                }
+                ':' => {
+                    // |: or |:|
+                    barline_str.push(':');
+                    chars.next();
+                    // Check for |:|
+                    if let Some(&(_, '|')) = chars.peek() {
+                        barline_str.push('|');
+                        chars.next();
+                    }
+                }
+                '.' => {
+                    // |. - final barline
+                    barline_str.push('.');
+                    chars.next();
+                }
+                _ => {
+                    // Just single |
+                }
+            }
+        }
+    } else if first_char == ':' {
+        chars.next(); // consume ':'
+        barline_str.push(':');
+
+        // Must be followed by |
+        if let Some(&(_, '|')) = chars.peek() {
+            barline_str.push('|');
+            chars.next();
+
+            // Check for :|:
+            if let Some(&(_, ':')) = chars.peek() {
+                barline_str.push(':');
+                chars.next();
+            }
+        } else {
+            return Err(ParseError {
+                message: "Expected '|' after ':' in barline".to_string(),
+                line: line_num,
+                column: column_from_pos(input, start_pos + 1),
+            });
+        }
+    }
+
+    // Convert to BarlineType
+    let barline_type = BarlineType::from_str(&barline_str)
+        .map_err(|_| ParseError {
+            message: format!("Invalid barline: {}", barline_str),
+            line: line_num,
+            column: column_from_pos(input, start_pos),
+        })?;
+
+    Ok(crate::parse::model::Barline {
+        barline_type,
+        source: Source {
+            value: Some(barline_str),
+            position: Position {
+                line: line_num,
+                column: column_from_pos(input, start_pos),
+                index_in_line: index_in_line_from_pos(input, start_pos, line_num),
+                index_in_doc: line_start_doc_index + start_pos,
             },
         },
     })

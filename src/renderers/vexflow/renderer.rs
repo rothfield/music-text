@@ -111,6 +111,7 @@ fn process_stave_to_vexflow(stave: &crate::parse::model::Stave) -> Vec<serde_jso
                         let barline_type = match barline.barline_type {
                             crate::rhythm::converters::BarlineType::Single => "single",
                             crate::rhythm::converters::BarlineType::Double => "double",
+                            crate::rhythm::converters::BarlineType::Final => "end",
                             crate::rhythm::converters::BarlineType::RepeatStart => "repeat-start",
                             crate::rhythm::converters::BarlineType::RepeatEnd => "repeat-end",
                             crate::rhythm::converters::BarlineType::RepeatBoth => "repeat-both",

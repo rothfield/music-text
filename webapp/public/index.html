@@ -67,6 +67,7 @@
         <div class="tabs">
             <div class="tab active" onclick="switchTab('vexflow', this)">VexFlow Draft</div>
             <div class="tab" onclick="switchTab('svg', this)">LilyPond SVG</div>
+            <div class="tab" onclick="switchTab('svgpoc', this)">SVG POC</div>
             <div class="tab" onclick="switchTab('lilypond', this)">LilyPond Src</div>
             <div class="tab" onclick="switchTab('document', this)">Document</div>
             <div class="tab" onclick="switchTab('spans', this)">Spans</div>
@@ -80,6 +81,18 @@
         
         <div id="svg-tab" class="tab-content">
             <div id="svg-output">Click "LilyPond" to generate SVG</div>
+        </div>
+
+        <div id="svgpoc-tab" class="tab-content">
+            <div class="svgpoc-controls">
+                <button onclick="generateSVGPOC()" class="primary">Generate SVG POC</button>
+                <select id="notationTypeSelect" onchange="updateNotationType()">
+                    <option value="number">Number (1,2,3...)</option>
+                    <option value="sargam">Sargam (S,R,G...)</option>
+                    <option value="western">Western (C,D,E...)</option>
+                </select>
+            </div>
+            <div id="svgpoc-output">Enter music notation and click "Generate SVG POC" to test the SVG renderer</div>
         </div>
         
         <div id="lilypond-tab" class="tab-content">

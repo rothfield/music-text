@@ -27,37 +27,238 @@ impl From<ParseError> for String {
 
 
 /// Parse document according to formal grammar:
-/// document = document_header? document_body?
+/// document = blank_lines* (multi_stave | stave | single_content_line | header) (blank_lines* stave)*
 pub fn parse_document(input: &str) -> Result<Document, ParseError> {
+    // Handle empty input
+    if input.is_empty() {
+        return Ok(Document {
+            title: None,
+            author: None,
+            directives: HashMap::new(),
+            elements: Vec::new(),
+            source: Source {
+                value: Some(input.to_string()),
+                position: ModelPosition { line: 1, column: 1, index_in_line: 0, index_in_doc: 0 },
+            },
+        });
+    }
+
     let lines: Vec<&str> = input.lines().collect();
     let mut line_idx = 0;
     let mut elements = Vec::new();
 
-    // Parse document_header?
-    let header = document_header::parse(&lines, &mut line_idx)?;
+    let mut title = None;
+    let mut author = None;
+    let mut directives = HashMap::new();
 
-    // Parse document_body? (remaining lines)
+    // Skip leading blank lines (blank_lines*)
+    while line_idx < lines.len() && lines[line_idx].trim().is_empty() {
+        line_idx += 1;
+    }
+
+    // Parse first element: (multi_stave | stave | single_content_line | header)
     if line_idx < lines.len() {
-        let body_input = lines[line_idx..].join("\n");
+        let start_idx = line_idx;
 
-        // Calculate the starting document index by counting characters in consumed lines
-        let start_doc_index: usize = lines[..line_idx].iter()
-            .map(|line| line.len() + 1) // +1 for newline character
-            .sum();
+        // Follow grammar: (multi_stave | stave | single_content_line | header)
 
-        elements = parse_document_body(&body_input, start_doc_index)?;
+        // Try multi_stave first (starts with ###)
+        if lines[line_idx].trim() == "###" {
+            // TODO: implement multi-stave parsing
+            // For now, skip to closing ###
+            line_idx += 1;
+            while line_idx < lines.len() && lines[line_idx].trim() != "###" {
+                line_idx += 1;
+            }
+            if line_idx < lines.len() {
+                line_idx += 1; // skip closing ###
+            }
+        }
+        // Try stave (multiple content lines) OR single_content_line OR header
+        else if let Some(stave_end) = find_stave_end(&lines, line_idx) {
+            if stave_end - line_idx > 1 {
+                // Multiple lines - try stave first, then header (following grammar order)
+                let stave_lines = &lines[line_idx..stave_end];
+                let stave_input = stave_lines.join("\n");
+
+                // Calculate the starting document index
+                let start_doc_index: usize = lines[..line_idx].iter()
+                    .map(|line| line.len() + 1) // +1 for newline character
+                    .sum();
+
+                // First check if this actually looks like musical content
+                let looks_like_musical_stave = stave_lines.iter().any(|line| {
+                    let trimmed = line.trim();
+                    // Must contain barlines or be purely musical notation
+                    trimmed.starts_with('|') ||
+                    trimmed.starts_with(':') ||
+                    trimmed.contains('|') ||
+                    // Musical content should be primarily notes/numbers, not words
+                    (trimmed.len() <= 20 && trimmed.chars().all(|c|
+                        matches!(c, '1'..='7' | 'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N' |
+                                   's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n' |
+                                   'A'..='G' | 'a'..='g' | ' ' | '-' | '#' | 'b' | '\\')))
+                });
+
+                if looks_like_musical_stave {
+                    if let Ok(mut stave_elements) = parse_document_body(&stave_input, start_doc_index) {
+                        elements.append(&mut stave_elements);
+                        line_idx = stave_end;
+                    } else {
+                        // Failed to parse as stave, try as header
+                        line_idx = start_idx;
+                        if let Some(header) = document_header::try_parse(&lines, &mut line_idx) {
+                            if header.title.is_some() {
+                                title = header.title;
+                            }
+                            if header.author.is_some() {
+                                author = header.author;
+                            }
+                            for (key, value) in header.directives {
+                                directives.insert(key, value);
+                            }
+                        }
+                    }
+                } else {
+                    // Doesn't look like musical content, try as header
+                    if let Some(header) = document_header::try_parse(&lines, &mut line_idx) {
+                        if header.title.is_some() {
+                            title = header.title;
+                        }
+                        if header.author.is_some() {
+                            author = header.author;
+                        }
+                        for (key, value) in header.directives {
+                            directives.insert(key, value);
+                        }
+                    }
+                }
+            } else {
+                // Single line - follow grammar order: single_content_line | header
+                let single_line = lines[line_idx];
+                let start_doc_index: usize = lines[..line_idx].iter()
+                    .map(|line| line.len() + 1)
+                    .sum();
+
+                // Check if this single line looks like musical content
+                let trimmed = single_line.trim();
+                let looks_like_musical_content = trimmed.starts_with('|') ||
+                    trimmed.starts_with(':') ||
+                    trimmed.contains('|') ||
+                    // Musical content should be primarily notes/numbers, not words
+                    (trimmed.len() <= 20 && trimmed.chars().all(|c|
+                        matches!(c, '1'..='7' | 'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N' |
+                                   's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n' |
+                                   'A'..='G' | 'a'..='g' | ' ' | '-' | '#' | 'b' | '\\')));
+
+                if looks_like_musical_content {
+                    // Try single_content_line first
+                    if let Ok(mut stave_elements) = parse_document_body(single_line, start_doc_index) {
+                        elements.append(&mut stave_elements);
+                        line_idx += 1;
+                    } else {
+                        // Failed to parse as content, try as header
+                        if let Some(header) = document_header::try_parse(&lines, &mut line_idx) {
+                            if header.title.is_some() {
+                                title = header.title;
+                            }
+                            if header.author.is_some() {
+                                author = header.author;
+                            }
+                            for (key, value) in header.directives {
+                                directives.insert(key, value);
+                            }
+                        }
+                    }
+                } else {
+                    // Doesn't look like musical content, try as header first
+                    if let Some(header) = document_header::try_parse(&lines, &mut line_idx) {
+                        if header.title.is_some() {
+                            title = header.title;
+                        }
+                        if header.author.is_some() {
+                            author = header.author;
+                        }
+                        for (key, value) in header.directives {
+                            directives.insert(key, value);
+                        }
+                    } else {
+                        // Failed as header, try as single_content_line anyway
+                        if let Ok(mut stave_elements) = parse_document_body(single_line, start_doc_index) {
+                            elements.append(&mut stave_elements);
+                            line_idx += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Parse remaining staves: (blank_lines* stave)*
+    while line_idx < lines.len() {
+        // Skip blank lines
+        while line_idx < lines.len() && lines[line_idx].trim().is_empty() {
+            line_idx += 1;
+        }
+
+        if line_idx >= lines.len() {
+            break;
+        }
+
+        // Parse stave
+        if let Some(stave_end) = find_stave_end(&lines, line_idx) {
+            let stave_lines = &lines[line_idx..stave_end];
+            let stave_input = stave_lines.join("\n");
+
+            let start_doc_index: usize = lines[..line_idx].iter()
+                .map(|line| line.len() + 1)
+                .sum();
+
+            if let Ok(mut stave_elements) = parse_document_body(&stave_input, start_doc_index) {
+                elements.append(&mut stave_elements);
+            }
+            line_idx = stave_end;
+        } else {
+            // Single line stave
+            let single_line = lines[line_idx];
+            let start_doc_index: usize = lines[..line_idx].iter()
+                .map(|line| line.len() + 1)
+                .sum();
+
+            if let Ok(mut stave_elements) = parse_document_body(single_line, start_doc_index) {
+                elements.append(&mut stave_elements);
+            }
+            line_idx += 1;
+        }
     }
 
     Ok(Document {
-        title: header.title,
-        author: header.author,
-        directives: header.directives,
+        title,
+        author,
+        directives,
         elements,
         source: Source {
             value: Some(input.to_string()),
             position: ModelPosition { line: 1, column: 1, index_in_line: 0, index_in_doc: 0 },
         },
     })
+}
+
+/// Find the end of a stave (group of non-blank lines)
+fn find_stave_end(lines: &[&str], start: usize) -> Option<usize> {
+    let mut idx = start;
+    let mut found_content = false;
+
+    while idx < lines.len() && !lines[idx].trim().is_empty() {
+        found_content = true;
+        idx += 1;
+    }
+
+    if found_content {
+        Some(idx)
+    } else {
+        None
+    }
 }
 
 /// Check if current position starts blank_lines (newline (whitespace* newline)+)
@@ -302,6 +503,19 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
                 },
             };
             lines.push(crate::parse::model::StaveLine::Whitespace(whitespace_line));
+        } else if is_content_line(&current_line.trim_end_matches('\n')) {
+            // Additional content lines (multiple content lines in a stave are allowed)
+            let content_line = crate::parse::content_line_parser_v3::parse_content_line(
+                &current_line,
+                *line,
+                notation_system,
+                this_line_start_doc_index
+            ).map_err(|e| ParseError {
+                message: format!("Content line parsing failed: {}", e.message),
+                line: e.line,
+                column: e.column,
+            })?;
+            lines.push(crate::parse::model::StaveLine::ContentLine(content_line));
         } else if is_lower_line(&current_line.trim_end_matches('\n')) {
             // Parse as lower line using our lower_line parser (include newline)
             if let Ok(parsed_lower) = crate::parse::lower_line_parser::parse_lower_line(&current_line, *line - 1, this_line_start_doc_index) {
@@ -351,19 +565,104 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
 
 // Helper functions for line classification (used by parse_stave_from_chars)
 
+/// Check if a token is a barline
+fn is_barline_token(token: &str) -> bool {
+    matches!(token, "|" | "||" | "|." | "|:" | ":|" | ":|:")
+}
+
+/// Tokenize a line into basic tokens (split by whitespace and extract barline patterns)
+fn tokenize_line(line: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut chars = line.char_indices().peekable();
+
+    while let Some((i, ch)) = chars.next() {
+        match ch {
+            ' ' => continue, // Skip whitespace
+            '|' => {
+                // Handle barline patterns starting with |
+                let mut barline = String::from("|");
+                while let Some(&(_, next_ch)) = chars.peek() {
+                    if matches!(next_ch, '|' | ':' | '.') {
+                        barline.push(next_ch);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                tokens.push(barline);
+            }
+            ':' => {
+                // Handle barline patterns starting with :
+                let mut barline = String::from(":");
+                if let Some(&(_, '|')) = chars.peek() {
+                    barline.push('|');
+                    chars.next();
+                    // Check for :|:
+                    if let Some(&(_, ':')) = chars.peek() {
+                        barline.push(':');
+                        chars.next();
+                    }
+                    tokens.push(barline);
+                } else {
+                    // Single : (not a barline, could be octave marker)
+                    tokens.push(barline);
+                }
+            }
+            _ => {
+                // Collect other characters into tokens
+                let start = i;
+                while let Some(&(_, next_ch)) = chars.peek() {
+                    if matches!(next_ch, ' ' | '|' | ':') {
+                        break;
+                    }
+                    chars.next();
+                }
+                let end = chars.peek().map(|(i, _)| *i).unwrap_or(line.len());
+                tokens.push(line[start..end].to_string());
+            }
+        }
+    }
+
+    tokens
+}
+
 /// Check if a line is a content line (has barline or musical elements)
 fn is_content_line(line: &str) -> bool {
-    line.contains('|') || line.chars().any(|c| matches!(c, '1'..='7' | 'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N' | 's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n'))
+    let tokens = tokenize_line(line);
+
+    // Check if any token is a barline
+    if tokens.iter().any(|token| is_barline_token(token)) {
+        return true;
+    }
+
+    // Check for musical content
+    line.chars().any(|c| matches!(c, '1'..='7' | 'S' | 'R' | 'G' | 'M' | 'P' | 'D' | 'N' | 's' | 'r' | 'g' | 'm' | 'p' | 'd' | 'n'))
 }
 
 /// Check if a line is an upper line (has upper line elements)
 fn is_upper_line(line: &str) -> bool {
+    // Don't classify lines with barlines as upper lines - they should be content lines
+    let tokens = tokenize_line(line);
+
+    // Don't classify lines with barlines - they should be content lines
+    if tokens.iter().any(|token| is_barline_token(token)) {
+        return false;
+    }
+
     // Contains octave markers, slurs, ornaments, mordents, etc.
     line.contains('.') || line.contains(':') || line.contains('*') || line.contains('_') || line.contains('~')
 }
 
 /// Check if a line is a lower line (has lower line elements)
 fn is_lower_line(line: &str) -> bool {
+    // Don't classify lines with barlines as lower lines - they should be content lines
+    let tokens = tokenize_line(line);
+
+    // Don't classify lines with barlines - they should be content lines
+    if tokens.iter().any(|token| is_barline_token(token)) {
+        return false;
+    }
+
     // Contains lower octave markers, beat groups, or syllables
     line.contains('.') || line.contains(':') || line.contains("__") ||
     line.split_whitespace().any(|word| word.chars().all(|c| c.is_alphabetic() || c == '-' || c == '\''))

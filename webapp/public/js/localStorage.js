@@ -77,6 +77,24 @@ export const LocalStorage = {
         }
     },
 
+    // Notation type management
+    saveNotationType(notationType) {
+        try {
+            localStorage.setItem('musictext_notation_type', notationType);
+        } catch (e) {
+            console.warn('Failed to save notation type to localStorage:', e);
+        }
+    },
+
+    loadNotationType() {
+        try {
+            return localStorage.getItem('musictext_notation_type') || 'number';
+        } catch (e) {
+            console.warn('Failed to load notation type from localStorage:', e);
+            return 'number';
+        }
+    },
+
     // Clear all data
     clearAll() {
         try {
@@ -84,6 +102,7 @@ export const LocalStorage = {
             localStorage.removeItem('musictext_cursor');
             localStorage.removeItem('musictext_active_tab');
             localStorage.removeItem('musictext_font');
+            localStorage.removeItem('musictext_notation_type');
         } catch (e) {
             console.warn('Failed to clear localStorage:', e);
         }

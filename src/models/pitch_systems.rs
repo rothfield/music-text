@@ -156,7 +156,7 @@ pub fn classify_notation_system(input: &str) -> (NotationSystem, f32) {
 }
 
 /// Main dispatcher for pitch lookups across all notation systems
-/// 
+///
 /// This function routes symbol lookups to the appropriate notation system
 /// and maintains backward compatibility with the original lookup_pitch API.
 pub fn lookup_pitch(symbol: &str, notation: Notation) -> Option<Degree> {
@@ -166,6 +166,34 @@ pub fn lookup_pitch(symbol: &str, notation: Notation) -> Option<Degree> {
         Notation::Sargam => sargam::lookup(symbol),
         Notation::Bhatkhande => bhatkhande::lookup(symbol),
         Notation::Tabla => tabla::lookup(symbol),
+    }
+}
+
+/// Convert a Degree (pitch) to its string representation in the given notation system
+///
+/// This is the reverse operation of lookup_pitch - takes a degree and notation system
+/// and returns the string representation of that pitch in that notation.
+pub fn degree_to_string(degree: Degree, notation: Notation) -> Option<String> {
+    match notation {
+        Notation::Western => western::degree_to_string(degree),
+        Notation::Number => number::degree_to_string(degree),
+        Notation::Sargam => sargam::degree_to_string(degree),
+        Notation::Bhatkhande => bhatkhande::degree_to_string(degree),
+        Notation::Tabla => tabla::degree_to_string(degree),
+    }
+}
+
+/// Convert a PitchCode directly to its string representation in the given notation system
+///
+/// This is a direct mapping that bypasses the Degree abstraction for efficiency.
+/// Each pitch system has its own direct PitchCode → String mapping.
+pub fn pitchcode_to_string(pitchcode: PitchCode, notation: Notation) -> Option<String> {
+    match notation {
+        Notation::Western => western::pitchcode_to_string(pitchcode),
+        Notation::Number => number::pitchcode_to_string(pitchcode),
+        Notation::Sargam => sargam::pitchcode_to_string(pitchcode),
+        Notation::Bhatkhande => bhatkhande::pitchcode_to_string(pitchcode),
+        Notation::Tabla => tabla::pitchcode_to_string(pitchcode),
     }
 }
 

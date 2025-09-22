@@ -1,4 +1,0 @@
-Key: G
-Mode: Minor
-
-G

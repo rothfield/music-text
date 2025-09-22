@@ -1,4 +1,5 @@
 use crate::models::pitch::Degree;
+use crate::parse::model::PitchCode;
 
 /// Get all valid tabla symbols (for regex pattern generation)
 /// Returns symbols sorted by length (longest first) for proper regex matching
@@ -16,6 +17,23 @@ pub fn get_all_symbols() -> Vec<String> {
     // Sort by length (longest first) to ensure proper regex matching
     symbols.sort_by(|a, b| b.len().cmp(&a.len()));
     symbols
+}
+
+/// Convert a Degree back to tabla notation string
+/// This is the reverse operation of lookup - takes a degree and returns the tabla bol
+pub fn degree_to_string(_degree: Degree) -> Option<String> {
+    // Tabla notation doesn't have a clear reverse mapping from pitch degrees
+    // This is primarily for percussion, so return None for now
+    None
+}
+
+/// Convert PitchCode directly to tabla notation string
+/// Direct mapping without going through Degree abstraction
+/// Tabla is percussion-based, so we use "dha" as default for all pitch codes
+pub fn pitchcode_to_string(_pitchcode: PitchCode) -> Option<String> {
+    // Tabla is percussion notation, not pitch-based
+    // All pitch codes map to the same default tabla bol
+    Some("dha".to_string())
 }
 
 /// Tabla notation pitch lookup

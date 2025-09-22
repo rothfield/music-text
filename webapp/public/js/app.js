@@ -36,10 +36,17 @@ class MusicTextApp {
     async setupUI() {
         // Initialize editor
         this.editorManager.init('musicInput');
-        
+
         // Initialize font manager
         FontManager.init();
-        
+
+        // Load and set notation type from localStorage
+        const savedNotationType = LocalStorage.loadNotationType();
+        const notationSelect = document.getElementById('notationTypeSelect');
+        if (notationSelect) {
+            notationSelect.value = savedNotationType;
+        }
+
         // Setup initial UI state
         this.setupInitialTabState();
     }
@@ -196,6 +203,7 @@ class MusicTextApp {
             UI.updateStylesOutput(result);
             UI.updateSourceOutput(result);
             await UI.updateVexFlowOutput(result);
+            UI.updateSvgPocOutput(result);
             
             // Update editor highlighting based on parse results
             this.editorManager.highlightFromParseResult(result);
@@ -242,6 +250,7 @@ class MusicTextApp {
             UI.updateTokensOutput(result);
             UI.updateStylesOutput(result);
             UI.updateSourceOutput(result);
+            UI.updateSvgPocOutput(result);
 
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);
@@ -263,6 +272,56 @@ class MusicTextApp {
             UI.restoreFocusAndCursor();
         }
     }
+
+    // Generate SVG POC (triggered by SVG POC button)
+    async generateSVGPOC() {
+        // Save cursor position before processing
+        this.saveCursorPosition();
+
+        const input = document.getElementById('musicInput').value;
+        const notationType = document.getElementById('notationTypeSelect').value;
+
+        // Validate input
+        const validation = API.validateInput(input);
+        if (!validation.valid) {
+            UI.setStatus(validation.error, 'error');
+            UI.restoreFocusAndCursor();
+            return;
+        }
+
+        UI.setStatus('Generating SVG POC...', 'loading');
+
+        try {
+            // Send text and notation type directly to server for SVG POC generation
+            const svgResponse = await fetch('/api/render-svg-poc', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    input: input,
+                    notation_type: notationType
+                })
+            });
+
+            if (!svgResponse.ok) {
+                throw new Error(`SVG POC API error: ${svgResponse.status}`);
+            }
+
+            const svgContent = await svgResponse.text();
+
+            // Display the SVG
+            document.getElementById('svgpoc-output').innerHTML = svgContent;
+            UI.setStatus('SVG POC generated successfully!', 'success');
+            UI.switchTab('svgpoc');
+
+        } catch (error) {
+            document.getElementById('svgpoc-output').innerHTML = `<p>Error: ${error.message}</p>`;
+            UI.setStatus(`Error: ${error.message}`, 'error');
+            UI.restoreFocusAndCursor();
+        }
+    }
+
 
     // Generate SVG (triggered by LilyPond button)
     async generateSVG() {
@@ -629,6 +688,21 @@ window.MusicTextApp = app;
 // Global functions for onclick handlers (to maintain compatibility with existing HTML)
 window.parseMusic = () => app.parseMusic();
 window.generateSVG = () => app.generateSVG();
+window.generateSVGPOC = () => app.generateSVGPOC();
+window.updateNotationType = () => {
+    // Trigger re-parse when notation type changes
+    const notationType = document.getElementById('notationTypeSelect').value;
+    console.log('Notation type changed to:', notationType);
+
+    // Save to localStorage
+    LocalStorage.saveNotationType(notationType);
+
+    // Re-parse with the new notation type if there's content
+    const input = document.getElementById('musicInput').value;
+    if (input && input.trim()) {
+        app.parseAndUpdatePreview();
+    }
+};
 window.clearAll = () => app.clearAll();
 window.switchTab = (tabName, clickedTab) => UI.switchTab(tabName, clickedTab);
 window.changeFontFamily = (fontClass) => FontManager.changeFont(fontClass);

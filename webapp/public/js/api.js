@@ -8,7 +8,7 @@ export const API = {
     baseURL: '/api',
 
     // Parse music notation
-    async parse(input, generateSVG = false) {
+    async parse(input, generateSVG = false, notationType = null) {
         if (!input || !input.trim()) {
             throw new Error('Input text is required');
         }
@@ -18,6 +18,12 @@ export const API = {
         if (generateSVG) {
             url.searchParams.set('generate_svg', 'true');
         }
+        // Get notation type from selector if not passed
+        if (!notationType) {
+            const selector = document.getElementById('notationTypeSelect');
+            notationType = selector ? selector.value : 'number';
+        }
+        url.searchParams.set('notation_type', notationType);
 
         const response = await fetch(url);
         if (!response.ok) {

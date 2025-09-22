@@ -635,9 +635,64 @@ textarea:focus {
     animation: blink 1.5s linear infinite;
     font-weight: bold;
 }
-.CodeMirror .cm-music-unknown { 
+.CodeMirror .cm-music-unknown {
     background: darkorange !important;
     color: white !important;
     font-weight: bold;
     border: 2px solid orangered !important;
+}
+
+/* SVG POC Controls */
+.svgpoc-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e1e5e9;
+    margin-bottom: 12px;
+}
+
+.svgpoc-controls button {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.svgpoc-controls button:hover {
+    background: #218838;
+}
+
+.svgpoc-controls button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.svgpoc-controls select {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    background: white;
+}
+
+#svgpoc-output {
+    padding: 12px;
+    min-height: 300px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    background: #fafafa;
+    border: 1px solid #eee;
+}
+
+#svgpoc-output svg {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #ddd;
+    background: white;
 }

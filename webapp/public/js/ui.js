@@ -87,6 +87,7 @@ export const UI = {
         document.getElementById('lilypond-output').textContent = 'Enter music notation above to see LilyPond source';
         document.getElementById('vexflow-output').innerHTML = '';
         document.getElementById('svg-output').innerHTML = 'Click "LilyPond" to generate SVG';
+        document.getElementById('svgpoc-output').innerHTML = 'Enter music notation and click "Generate SVG POC" to test the SVG renderer';
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('spans-output').textContent = 'Enter music notation to see syntax spans';
         document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';
@@ -130,6 +131,18 @@ export const UI = {
             document.getElementById('vexflow-output').innerHTML = '<p>Parsed successfully, but no VexFlow data available.</p>';
         } else {
             document.getElementById('vexflow-output').innerHTML = `<p>Parse error: ${result.error}</p>`;
+        }
+    },
+
+    // Update SVG POC output
+    updateSvgPocOutput(result) {
+        const output = document.getElementById('svgpoc-output');
+        if (result.success && result.svg_poc) {
+            output.innerHTML = result.svg_poc;
+        } else if (result.success) {
+            output.innerHTML = '<p>Parsed successfully, but no SVG POC data available.</p>';
+        } else {
+            output.innerHTML = `<p>Parse error: ${result.error}</p>`;
         }
     },
 
