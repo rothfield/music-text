@@ -1,4 +1,4 @@
-use crate::parse::model::{ContentLine, ContentElement, Source, Position, NotationSystem};
+use crate::parse::model::{ContentLine, ContentElement, Attributes, Position, NotationSystem};
 use crate::parse::beat::parse_beat;
 use crate::parse::pitch::is_pitch_start;
 use crate::parse::ParseError;
@@ -94,7 +94,9 @@ pub fn parse_content_line(
                 let whitespace_content = " ".repeat(space_count);
                 elements.push(ContentElement::Whitespace(crate::parse::model::Whitespace {
                     content: whitespace_content.clone(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(whitespace_content),
                         position: Position {
                             line: line_num,
@@ -141,7 +143,9 @@ pub fn parse_content_line(
 
     Ok(ContentLine {
         elements,
-        source: Source {
+        source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
             value: Some(input.to_string()),
             position: Position {
                 line: line_num,
@@ -231,7 +235,9 @@ fn parse_barline(
 
     Ok(crate::parse::model::Barline {
         barline_type,
-        source: Source {
+        source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
             value: Some(barline_str),
             position: Position {
                 line: line_num,

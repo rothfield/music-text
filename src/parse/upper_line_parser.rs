@@ -1,4 +1,4 @@
-use crate::parse::model::{UpperLine, UpperElement, Source, Position};
+use crate::parse::model::{UpperLine, UpperElement, Attributes, Position};
 use crate::parse::ParseError;
 
 /// Parse an upper line following the grammar specification
@@ -14,7 +14,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
             '\n' => {
                 elements.push(UpperElement::Newline {
                     value: "\n".to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some("\n".to_string()),
                         position: Position { line: line_num, column, index_in_line, index_in_doc: line_start_doc_index + index_in_line },
                     },
@@ -27,7 +29,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
             '.' | ':' | '*' => {
                 UpperElement::UpperOctaveMarker {
                     marker: ch.to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(ch.to_string()),
                         position: Position { line: line_num, column, index_in_line, index_in_doc: line_start_doc_index + index_in_line },
                     },
@@ -50,7 +54,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 UpperElement::SlurIndicator {
                     value: value.clone(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(value),
                         position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
                     },
@@ -73,7 +79,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 UpperElement::Space {
                     count,
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(" ".repeat(count)),
                         position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
                     },
@@ -100,7 +108,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 UpperElement::Ornament {
                     pitches: vec![content.clone()],
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(content),
                         position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
                     },
@@ -127,7 +137,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 UpperElement::Chord {
                     chord: content.clone(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(content),
                         position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
                     },
@@ -137,7 +149,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
             // Mordent: ~ character
             '~' => {
                 UpperElement::Mordent {
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some("~".to_string()),
                         position: Position { line: line_num, column, index_in_line, index_in_doc: line_start_doc_index + index_in_line },
                     },
@@ -160,7 +174,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 UpperElement::UpperHashes {
                     value: value.clone(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(value),
                         position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
                     },
@@ -188,7 +204,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 UpperElement::Unknown {
                     value: value.clone(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(value),
                         position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
                     },
@@ -203,7 +221,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
     Ok(UpperLine {
         elements,
-        source: Source {
+        source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
             value: Some(input.to_string()),
             position: Position { line: line_num, column: 1, index_in_line: 0, index_in_doc: line_start_doc_index },
         },

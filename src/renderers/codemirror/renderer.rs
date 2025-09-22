@@ -58,7 +58,7 @@ fn render_content_element(content_element: &ContentElement, original_input: &str
     match content_element {
         ContentElement::Beat(beat) => beat.elements.iter()
             .enumerate()
-            .map(|(index, beat_element)| render_beat_element(beat_element, beat, index == 0, original_input))
+            .flat_map(|(index, beat_element)| render_beat_element(beat_element, beat, index == 0, original_input))
             .collect(),
         ContentElement::Barline(barline) => vec![
             render_simple_element("barline", &barline.source, "|", original_input)
@@ -67,38 +67,51 @@ fn render_content_element(content_element: &ContentElement, original_input: &str
     }
 }
 
-fn render_beat_element(beat_element: &BeatElement, beat: &crate::parse::model::Beat, is_first_in_beat: bool, original_input: &str) -> Span {
+fn render_beat_element(beat_element: &BeatElement, beat: &crate::parse::model::Beat, is_first_in_beat: bool, original_input: &str) -> Vec<Span> {
     match beat_element {
         BeatElement::Note(note) => {
             let mut span = render_simple_element("note", &note.source,
                 &note.source.value.as_ref().unwrap_or(&"?".to_string()), original_input);
-            add_note_specific_attributes(&mut span, note);
+            let mut additional_spans = add_note_specific_attributes(&mut span, note);
             add_beat_context_attributes(&mut span, beat, is_first_in_beat);
-            span
+
+            let mut result = vec![span];
+            result.append(&mut additional_spans);
+            result
         },
         BeatElement::Dash(dash) => {
             let mut span = render_simple_element("dash", &dash.source, "-", original_input);
             add_beat_context_attributes(&mut span, beat, is_first_in_beat);
-            span
+            vec![span]
         },
-        BeatElement::BreathMark(breath) => render_simple_element("breath", &breath.source, "'", original_input),
+        BeatElement::BreathMark(breath) => vec![render_simple_element("breath", &breath.source, "'", original_input)],
     }
 }
 
-fn render_simple_element(span_type: &str, source: &crate::parse::model::Source, content: &str, _original_input: &str) -> Span {
+fn render_simple_element(span_type: &str, source: &crate::parse::model::Attributes, content: &str, _original_input: &str) -> Span {
     let start_pos = source.position.index_in_doc;
     let content_len = source.value.as_ref().map(|v| v.len()).unwrap_or(content.len());
-    Span::simple(span_type, start_pos, start_pos + content_len, content.to_string())
+    let span = Span::simple(span_type, start_pos, start_pos + content_len, content.to_string());
+    span
 }
 
 
-fn add_note_specific_attributes(span: &mut Span, note: &crate::parse::model::Note) {
+fn add_note_specific_attributes(span: &mut Span, note: &crate::parse::model::Note) -> Vec<Span> {
+    let mut additional_spans = Vec::new();
+
     // Note-specific semantic data
     span.data_attributes.insert("data-type".to_string(), "note".to_string());
     span.data_attributes.insert("data-pitch-code".to_string(), format!("{:?}", note.pitch_code));
 
     // Octave information
     span.data_attributes.insert("data-octave".to_string(), note.octave.to_string());
+
+    // Process spatial assignments - create spans for each spatial element generically
+    for assignment in &note.spatial_assignments {
+        if let Some(span) = create_spatial_assignment_span(assignment) {
+            additional_spans.push(span);
+        }
+    }
 
     // Consumed elements information - process octave markers using new pattern
     for consumed_element in &note.consumed_elements {
@@ -120,6 +133,7 @@ fn add_note_specific_attributes(span: &mut Span, note: &crate::parse::model::Not
         }
     }
 
+
     // Original pitch information for HTML tooltips
     if let Some(ref pitch_string) = note.source.value {
         span.data_attributes.insert("data-original-pitch".to_string(), pitch_string.clone());
@@ -134,6 +148,84 @@ fn add_note_specific_attributes(span: &mut Span, note: &crate::parse::model::Not
     // Duration information from rhythm analysis
     if let (Some(numer), Some(denom)) = (note.numerator, note.denominator) {
         span.data_attributes.insert("data-duration".to_string(), format!("{}/{}", numer, denom));
+    }
+
+    additional_spans
+}
+
+/// Generic function to create spans for spatial assignments using reflection-like approach
+fn create_spatial_assignment_span(assignment: &crate::parse::model::SpatialAssignment) -> Option<Span> {
+    use crate::parse::model::SpatialAssignment::*;
+
+    match assignment {
+        Slur { start_pos, end_pos } => {
+            let content = "____".to_string();
+            // For now, use start_pos as document index - this needs to be fixed upstream in spatial processing
+            // to use actual document indices instead of column positions
+            let mut span = Span {
+                r#type: "slur-indicator".to_string(),
+                start: 0, // TODO: This should be the actual document index of the slur indicator
+                end: content.len(), // Only span the actual underscore characters
+                content,
+                data_attributes: HashMap::new(),
+            };
+            span.data_attributes.insert("data-slur-start-pos".to_string(), start_pos.to_string());
+            span.data_attributes.insert("data-slur-end-pos".to_string(), end_pos.to_string());
+            Some(span)
+        }
+        BeatGroup { start_pos, end_pos, underscore_count } => {
+            let content = "_".repeat(*underscore_count);
+            let mut span = Span {
+                r#type: "beat-group-indicator".to_string(),
+                start: *start_pos,
+                end: *start_pos + content.len(), // Only span the actual underscore characters
+                content,
+                data_attributes: HashMap::new(),
+            };
+            span.data_attributes.insert("data-beat-group-start-pos".to_string(), start_pos.to_string());
+            span.data_attributes.insert("data-beat-group-end-pos".to_string(), end_pos.to_string());
+            span.data_attributes.insert("data-underscore-count".to_string(), underscore_count.to_string());
+            Some(span)
+        }
+        OctaveMarker { octave_value, marker_symbol, is_upper } => {
+            // Octave markers are usually handled as consumed elements, but could create spans here too
+            let span_type = if *is_upper { "upper-octave-marker" } else { "lower-octave-marker" };
+            let content = marker_symbol.clone();
+            let mut span = Span {
+                r#type: span_type.to_string(),
+                start: 0, // Position would need to be passed in or calculated
+                end: content.len(), // Only span the actual marker characters
+                content,
+                data_attributes: HashMap::new(),
+            };
+            span.data_attributes.insert("data-octave-value".to_string(), octave_value.to_string());
+            span.data_attributes.insert("data-is-upper".to_string(), is_upper.to_string());
+            Some(span)
+        }
+        Syllable { content } => {
+            let content_str = content.clone();
+            let mut span = Span {
+                r#type: "syllable-indicator".to_string(),
+                start: 0, // Position would need to be passed in
+                end: content_str.len(), // Only span the actual syllable characters
+                content: content_str.clone(),
+                data_attributes: HashMap::new(),
+            };
+            span.data_attributes.insert("data-syllable-content".to_string(), content_str);
+            Some(span)
+        }
+        Mordent => {
+            let content = "~".to_string();
+            let mut span = Span {
+                r#type: "mordent-indicator".to_string(),
+                start: 0, // Position would need to be passed in
+                end: content.len(), // Only span the actual ornament character
+                content,
+                data_attributes: HashMap::new(),
+            };
+            span.data_attributes.insert("data-ornament-type".to_string(), "mordent".to_string());
+            Some(span)
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::parse::model::{Beat, BeatElement, Note, Dash, BreathMark, Source, Position, NotationSystem};
+use crate::parse::model::{Beat, BeatElement, Note, Dash, BreathMark, Attributes, Position, NotationSystem};
 use crate::parse::pitch::{parse_pitch_with_indices, is_pitch_start};
 use crate::parse::ParseError;
 use std::str::CharIndices;
@@ -34,7 +34,9 @@ pub fn parse_beat(
         Some(&(pos, '-')) => {
             chars.next();
             elements.push(BeatElement::Dash(Dash {
-                source: Source {
+                source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                     value: Some("-".to_string()),
                     position: Position {
                         line: line_num,
@@ -49,7 +51,9 @@ pub fn parse_beat(
             let (pitch_str, pitch_code) = parse_pitch_with_indices(chars, notation_system, line_num, input)?;
 
             elements.push(BeatElement::Note(Note {
-                source: Source {
+                source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                     value: Some(pitch_str),
                     position: Position {
                         line: line_num,
@@ -93,7 +97,9 @@ pub fn parse_beat(
             Some(&(pos, '-')) => {
                 chars.next();
                 elements.push(BeatElement::Dash(Dash {
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some("-".to_string()),
                         position: Position {
                             line: line_num,
@@ -109,7 +115,9 @@ pub fn parse_beat(
             Some(&(pos, '\'')) => {
                 chars.next();
                 elements.push(BeatElement::BreathMark(BreathMark {
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some("'".to_string()),
                         position: Position {
                             line: line_num,
@@ -126,7 +134,9 @@ pub fn parse_beat(
                 let (pitch_str, pitch_code) = parse_pitch_with_indices(chars, notation_system, line_num, input)?;
 
                 elements.push(BeatElement::Note(Note {
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(pitch_str),
                         position: Position {
                             line: line_num,
@@ -152,7 +162,9 @@ pub fn parse_beat(
 
     let beat = Beat {
         elements,
-        source: Source {
+        source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
             value: None, // Will be filled by caller if needed
             position: Position {
                 line: line_num,

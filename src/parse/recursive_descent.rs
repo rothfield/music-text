@@ -1,4 +1,4 @@
-use crate::parse::model::{Document, Stave, TextLine, WhitespaceLine, Source, NotationSystem, Position as ModelPosition};
+use crate::parse::model::{Document, Stave, TextLine, WhitespaceLine, Attributes, NotationSystem, Position as ModelPosition};
 use crate::parse::document_header;
 use crate::rhythm::types::{ParsedElement, Degree, Position};
 use std::collections::HashMap;
@@ -36,7 +36,9 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
             author: None,
             directives: HashMap::new(),
             elements: Vec::new(),
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some(input.to_string()),
                 position: ModelPosition { line: 1, column: 1, index_in_line: 0, index_in_doc: 0 },
             },
@@ -237,7 +239,9 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
         author,
         directives,
         elements,
-        source: Source {
+        source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
             value: Some(input.to_string()),
             position: ModelPosition { line: 1, column: 1, index_in_line: 0, index_in_doc: 0 },
         },
@@ -318,7 +322,9 @@ fn parse_blank_lines_element(chars: &mut std::iter::Peekable<std::str::Chars>, l
     let source_value = content.clone();
     Ok(crate::parse::model::BlankLines {
         content,
-        source: Source {
+        source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
             value: Some(source_value),
             position: ModelPosition { line: start_line, column: start_column, index_in_line: start_index_in_line, index_in_doc: start_index_in_doc },
         },
@@ -396,7 +402,9 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
                 // Fall back to text line
                 let text_line = TextLine {
                     content: current_line.trim_end_matches('\n').to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(current_line.trim_end_matches('\n').to_string()),
                         position: ModelPosition { line: *line - 1, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                     },
@@ -422,7 +430,9 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             // Treat as text line
             let text_line = TextLine {
                 content: current_line.trim_end_matches('\n').to_string(),
-                source: Source {
+                source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                     value: Some(current_line.trim_end_matches('\n').to_string()),
                     position: ModelPosition { line: *line - 1, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                 },
@@ -497,7 +507,9 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
 
             let whitespace_line = WhitespaceLine {
                 elements,
-                source: Source {
+                source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                     value: Some(current_line.clone()),
                     position: ModelPosition { line: *line, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                 },
@@ -524,7 +536,9 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
                 // Fall back to text line
                 let text_line = TextLine {
                     content: current_line.trim_end_matches('\n').to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(current_line.trim_end_matches('\n').to_string()),
                         position: ModelPosition { line: *line - 1, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                     },
@@ -535,7 +549,9 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             // Treat as lyrics/text line
             let text_line = TextLine {
                 content: current_line.trim_end_matches('\n').to_string(),
-                source: Source {
+                source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                     value: Some(current_line.trim_end_matches('\n').to_string()),
                     position: ModelPosition { line: *line - 1, column: 1, index_in_line: 0, index_in_doc: this_line_start_doc_index },
                 },
@@ -556,7 +572,9 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
     Ok(Stave {
         lines,
         notation_system,  // Use the document notation system
-        source: Source {
+        source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
             value: Some(stave_content),
             position: ModelPosition { line: start_line, column: 1, index_in_line: 0, index_in_doc: stave_start_doc_index },
         },

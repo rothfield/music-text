@@ -20,7 +20,7 @@ pub mod pitch;
 pub mod beat;
 
 // Re-export key types and functions for convenience
-pub use model::{Document, Directive, Stave, ContentLine, ContentElement, TextLine, Position, PitchCode, NotationSystem, Source, LowerLine, LowerElement, UpperLine, UpperElement, WhitespaceLine, Beat, BeatElement, Note, Dash, BreathMark};
+pub use model::{Document, Directive, Stave, ContentLine, ContentElement, TextLine, Position, PitchCode, NotationSystem, Attributes, LowerLine, LowerElement, UpperLine, UpperElement, WhitespaceLine, Beat, BeatElement, Note, Dash, BreathMark};
 pub use recursive_descent::{parse_document, ParseError};
 pub use lower_line_parser::parse_lower_line;
 pub use upper_line_parser::parse_upper_line;

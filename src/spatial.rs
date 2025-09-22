@@ -1,6 +1,6 @@
 use crate::parse::model::{
     Document, DocumentElement, Stave, StaveLine, UpperLine, LowerLine, LyricsLine,
-    UpperElement, LowerElement, Syllable, Source, Position, ContentLine, ContentElement, Beat, BeatElement, Note, SpatialAssignment, ConsumedElement
+    UpperElement, LowerElement, Syllable, Attributes, Position, ContentLine, ContentElement, Beat, BeatElement, Note, SpatialAssignment, ConsumedElement
 };
 use crate::rhythm::types::{ParsedElement, Position as RhythmPosition, ParsedChild};
 
@@ -8,7 +8,7 @@ use crate::rhythm::types::{ParsedElement, Position as RhythmPosition, ParsedChil
 #[derive(Debug, Clone)]
 pub struct ConsumedMarker {
     pub octave_value: i8,
-    pub original_source: Source,  // Source.value is now None
+    pub original_source: Attributes,  // Attributes.value is now None
     pub marker_symbol: String,    // Original marker symbol (".", ":", etc.)
     pub is_upper: bool,          // true = upper line, false = lower line
 }
@@ -18,14 +18,14 @@ pub struct ConsumedMarker {
 pub struct ConsumedSlur {
     pub start_pos: usize,
     pub end_pos: usize,
-    pub original_source: Source,  // Source.value is now None
+    pub original_source: Attributes,  // Attributes.value is now None
 }
 
 /// Consumed syllable with move semantics
 #[derive(Debug, Clone)]
 pub struct ConsumedSyllable {
     pub content: String,
-    pub original_source: Source,  // Source.value is now None
+    pub original_source: Attributes,  // Attributes.value is now None
 }
 
 /// Consumed beat group with move semantics - original source is consumed
@@ -33,14 +33,14 @@ pub struct ConsumedSyllable {
 pub struct ConsumedBeatGroup {
     pub start_pos: usize,
     pub end_pos: usize,
-    pub original_source: Source,  // Source.value is now None
+    pub original_source: Attributes,  // Attributes.value is now None
     pub underscore_count: usize,  // Number of underscores in the group
 }
 
 /// Consumed mordent with move semantics - original source is consumed
 #[derive(Debug, Clone)]
 pub struct ConsumedMordent {
-    pub original_source: Source,  // Source.value is now None
+    pub original_source: Attributes,  // Attributes.value is now None
 }
 
 /// Position tracker for spatial assignment
@@ -142,7 +142,9 @@ pub fn consume_octave_markers(
                 let octave_value = octave_marker_to_number(&marker, true);
                 let consumed = ConsumedMarker {
                     octave_value,
-                    original_source: Source {
+                    original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(value),
                         position: source.position.clone(),
                     },
@@ -166,7 +168,9 @@ pub fn consume_octave_markers(
                 let octave_value = octave_marker_to_number(&marker, false);
                 let consumed = ConsumedMarker {
                     octave_value,
-                    original_source: Source {
+                    original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(value),
                         position: source.position.clone(),
                     },
@@ -195,7 +199,9 @@ pub fn consume_mordents(
         if let UpperElement::Mordent { source } = element {
             if let Some(value) = source.value.take() {
                 let consumed = ConsumedMordent {
-                    original_source: Source {
+                    original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(value),
                         position: source.position.clone(),
                     },
@@ -406,7 +412,9 @@ pub fn consume_and_assign_slurs(
                     let consumed = ConsumedSlur {
                         start_pos: pos,
                         end_pos: pos + value.len() - 1,
-                        original_source: Source {
+                        original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                             value: Some(underscore_value),
                             position: source.position.clone(),
                         },
@@ -462,7 +470,9 @@ pub fn consume_and_assign_syllables(
             if let Some(content) = syllable.source.value.take() {
                 let consumed = ConsumedSyllable {
                     content,
-                    original_source: Source {
+                    original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: None, // Already consumed
                         position: syllable.source.position.clone(),
                     },
@@ -573,7 +583,9 @@ fn consume_beat_groups(mut lower_lines: Vec<LowerLine>) -> (Vec<(usize, Consumed
                         start_pos: pos,
                         end_pos: pos + underscore_value.len() - 1,
                         underscore_count: underscore_value.len(),
-                        original_source: Source {
+                        original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                             value: Some(underscore_value),
                             position: source.position.clone(),
                         },
@@ -906,7 +918,7 @@ fn apply_spatial_assignments_to_note(
     let note_position = note.source.position.column;
 
     // Process octave markers from upper lines - use move semantics
-    for upper_line in upper_lines {
+    for upper_line in &mut *upper_lines {
         for element in &mut upper_line.elements {
             if let UpperElement::UpperOctaveMarker { marker, source } = element {
                 if source.position.column == note_position {
@@ -920,7 +932,9 @@ fn apply_spatial_assignments_to_note(
 
                         // Store complete consumed element directly
                         note.consumed_elements.push(ConsumedElement::UpperOctaveMarker {
-                            source: Source {
+                            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                                 value: Some(marker_value),
                                 position: source.position.clone(),
                             },
@@ -935,7 +949,7 @@ fn apply_spatial_assignments_to_note(
     }
 
     // Process octave markers from lower lines - use move semantics
-    for lower_line in lower_lines {
+    for lower_line in &mut *lower_lines {
         for element in &mut lower_line.elements {
             if let LowerElement::LowerOctaveMarker { marker, source } = element {
                 if source.position.column == note_position {
@@ -949,7 +963,9 @@ fn apply_spatial_assignments_to_note(
 
                         // Store complete consumed element directly
                         note.consumed_elements.push(ConsumedElement::LowerOctaveMarker {
-                            source: Source {
+                            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                                 value: Some(marker_value),
                                 position: source.position.clone(),
                             },
@@ -963,7 +979,35 @@ fn apply_spatial_assignments_to_note(
         }
     }
 
-    // TODO: Add slur, syllable, beat group, and mordent processing
+    // Process slurs from upper lines - check if note is within any slur span
+    for upper_line in &mut *upper_lines {
+        for element in &mut upper_line.elements {
+            if let UpperElement::SlurIndicator { value, source } = element {
+                let slur_start_pos = source.position.column;
+                let slur_end_pos = slur_start_pos + value.len() - 1;
+
+                // Check if this note is within the slur span
+                if note_position >= slur_start_pos && note_position <= slur_end_pos {
+                    // Mark first note as slur start and consume the slur indicator
+                    if source.value.is_some() { // Slur not yet consumed
+                        if let Some(consumed_slur_value) = source.value.take() {
+                            note.source.slur_start = true;
+                            // Store the slur character length for the renderer to calculate visual width
+                            note.source.slur_char_length = Some(consumed_slur_value.len());
+                        }
+                    }
+
+                    // All notes in span get spatial assignment (for other renderers)
+                    note.spatial_assignments.push(SpatialAssignment::Slur {
+                        start_pos: slur_start_pos,
+                        end_pos: slur_end_pos,
+                    });
+                }
+            }
+        }
+    }
+
+    // TODO: Add syllable, beat group, and mordent processing
 }
 
 /// Process spatial assignments for a single stave (OLD VERSION - ParsedElement based)
@@ -1006,7 +1050,9 @@ fn process_stave_spatial_old(stave: &mut Stave) -> Result<(Stave, Vec<String>), 
             let upper_line = if upper_lines.is_empty() {
                 UpperLine {
                     elements: vec![],
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some("".to_string()),
                         position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
@@ -1085,7 +1131,9 @@ mod tests {
 
     fn create_test_note(pitch: &str, column: usize) -> Note {
         Note {
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some(pitch.to_string()),
                 position: Position { line: 1, column, index_in_line: (column.saturating_sub(1)), index_in_doc: 0 },
             },
@@ -1103,27 +1151,35 @@ mod tests {
             elements: vec![
                 UpperElement::UpperOctaveMarker {
                     marker: ".".to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(".".to_string()),
                         position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
                 UpperElement::Space {
                     count: 2,
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some("  ".to_string()),
                         position: Position { line: 0, column: 1, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
                 UpperElement::UpperOctaveMarker {
                     marker: ":".to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(":".to_string()),
                         position: Position { line: 0, column: 3, index_in_line: 2, index_in_doc: 0 },
                     },
                 },
             ],
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some(".  :".to_string()),
                 position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
@@ -1133,7 +1189,9 @@ mod tests {
     fn create_test_lower_line_empty() -> LowerLine {
         LowerLine {
             elements: vec![],
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some("".to_string()),
                 position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
@@ -1145,13 +1203,17 @@ mod tests {
             elements: vec![
                 LowerElement::LowerOctaveMarker {
                     marker: ".".to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(".".to_string()),
                         position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
             ],
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some(".".to_string()),
                 position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
@@ -1178,7 +1240,9 @@ mod tests {
 
         let space_element = UpperElement::Space {
             count: 3,
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some("   ".to_string()),
                 position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
@@ -1226,7 +1290,9 @@ mod tests {
         let consumed_markers = vec![
             (0, ConsumedMarker {
                 octave_value: 1,
-                original_source: Source {
+                original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                     value: Some(".".to_string()),
                     position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                 },
@@ -1235,7 +1301,9 @@ mod tests {
             }),
             (3, ConsumedMarker {
                 octave_value: 2,
-                original_source: Source {
+                original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                     value: Some(":".to_string()),
                     position: Position { line: 0, column: 3, index_in_line: 2, index_in_doc: 0 },
                 },
@@ -1263,7 +1331,9 @@ mod tests {
         let remaining_markers = vec![
             (2, ConsumedMarker {
                 octave_value: 1,
-                original_source: Source {
+                original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                     value: Some(".".to_string()),
                     position: Position { line: 0, column: 2, index_in_line: 1, index_in_doc: 0 },
                 },
@@ -1284,20 +1354,26 @@ mod tests {
             elements: vec![
                 UpperElement::Space {
                     count: 2,
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some("  ".to_string()),
                         position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
                 UpperElement::SlurIndicator {
                     value: "___".to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some("___".to_string()),
                         position: Position { line: 0, column: 2, index_in_line: 1, index_in_doc: 0 },
                     },
                 },
             ],
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some("  ___".to_string()),
                 position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
@@ -1334,13 +1410,17 @@ mod tests {
             elements: vec![
                 UpperElement::UpperOctaveMarker {
                     marker: ".".to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: None, // Consumed
                         position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
             ],
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some(".".to_string()),
                 position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
@@ -1357,13 +1437,17 @@ mod tests {
             elements: vec![
                 UpperElement::UpperOctaveMarker {
                     marker: ".".to_string(),
-                    source: Source {
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                         value: Some(".".to_string()), // Not consumed
                         position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
                     },
                 },
             ],
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some(".".to_string()),
                 position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
@@ -1378,7 +1462,9 @@ mod tests {
     fn test_consume_lower_line_octave_markers() {
         let upper_line = UpperLine {
             elements: vec![],
-            source: Source {
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: Some("".to_string()),
                 position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
             },
@@ -1411,7 +1497,9 @@ mod tests {
         let consumed_markers = vec![
             (0, ConsumedMarker {
                 octave_value: -1,  // Lower line marker
-                original_source: Source {
+                original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                     value: Some(".".to_string()),
                     position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
                 },
@@ -1428,7 +1516,9 @@ mod tests {
 
     #[test]
     fn test_consumed_marker_move_semantics() {
-        let mut original_source = Source {
+        let mut original_source = Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
             value: Some(".".to_string()),
             position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
         };
@@ -1440,7 +1530,9 @@ mod tests {
 
         let consumed_marker = ConsumedMarker {
             octave_value: 1,
-            original_source: Source {
+            original_source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
                 value: consumed_value,
                 position: original_source.position.clone(),
             },

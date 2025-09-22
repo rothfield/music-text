@@ -29,10 +29,10 @@ pub enum SpatialAssignment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConsumedElement {
     UpperOctaveMarker {
-        source: Source,
+        source: Attributes,
     },
     LowerOctaveMarker {
-        source: Source,
+        source: Attributes,
     },
 }
 
@@ -112,11 +112,27 @@ pub struct Position {
     pub index_in_doc: usize,  // offset from start of document
 }
 
-// Source information tracking with move semantics
+// Element attributes including source info and rendering metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Source {
+pub struct Attributes {
     pub value: Option<String>,  // Original source text (None when moved/consumed)
     pub position: Position,     // Line/column position
+    #[serde(default)]
+    pub slur_start: bool,       // True if this element starts a slur
+    #[serde(default)]
+    pub slur_char_length: Option<usize>, // Length of slur in characters (only set on slur_start elements)
+}
+
+impl Attributes {
+    /// Create new Attributes with default slur values
+    pub fn new(value: Option<String>, position: Position) -> Self {
+        Self {
+            value,
+            position,
+            slur_start: false,
+            slur_char_length: None,
+        }
+    }
 }
 
 // Normalized pitch codes - matches old Degree enum with complete pitch coverage
@@ -291,46 +307,46 @@ impl PitchCode {
 // Raw pitch string object for ContentLine
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PitchString {
-    pub source: Source,         // Raw pitch string ("1", "S", "C", etc.) + position
+    pub source: Attributes,         // Raw pitch string ("1", "S", "C", etc.) + position
 }
 
 // ContentElement struct types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Barline {
     pub barline_type: crate::rhythm::converters::BarlineType,
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Space {
     pub count: usize,
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dash {
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Newline {
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EndOfInput {
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BreathMark {
-    pub source: Source,
+    pub source: Attributes,
 }
 
 // Note object - consistent with other elements
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Note {
-    pub source: Source,                 // Raw pitch string + position (like all other elements)
+    pub source: Attributes,             // Raw pitch string + position (like all other elements)
     pub octave: i8,                     // Octave -4..4
     pub pitch_code: PitchCode,          // Normalized pitch code
     pub notation_system: NotationSystem, // Which notation system this note uses
@@ -343,7 +359,7 @@ pub struct Note {
 impl Note {
     /// Factory function to create a new Note with consistent default values
     pub fn new(
-        source: Source,
+        source: Attributes,
         pitch_code: PitchCode,
         notation_system: NotationSystem,
     ) -> Self {
@@ -365,7 +381,7 @@ impl Note {
 pub struct Directive {
     pub key: String,
     pub value: String,
-    pub source: Source,
+    pub source: Attributes,
 }
 
 
@@ -380,7 +396,7 @@ pub enum DocumentElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlankLines {
     pub content: String, // The complete blank lines content
-    pub source: Source,
+    pub source: Attributes,
 }
 
 // Document structure types
@@ -390,7 +406,7 @@ pub struct Document {
     pub author: Option<String>,
     pub directives: HashMap<String, String>, // key -> value
     pub elements: Vec<DocumentElement>, // Document as sequence of elements
-    pub source: Source,
+    pub source: Attributes,
 }
 
 impl Document {
@@ -434,13 +450,13 @@ pub enum StaveLine {
 pub struct Stave {
     pub lines: Vec<StaveLine>,  // All lines in order
     pub notation_system: NotationSystem,
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextLine {
     pub content: String,
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -453,20 +469,20 @@ pub enum ContentElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Whitespace {
     pub content: String,
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentLine {
     pub elements: Vec<ContentElement>,  // Mixed elements: barlines, whitespace, beats
-    pub source: Source,
+    pub source: Attributes,
 }
 
 // Beat structure - a sequence of beat elements
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Beat {
     pub elements: Vec<BeatElement>,
-    pub source: Source,
+    pub source: Attributes,
     pub divisions: Option<usize>,        // Number of divisions in this beat (e.g., 12 for 12 sixteenths)
     pub total_duration: Option<Fraction>, // Total duration of this beat (e.g., 1/4 for quarter note beat)
     pub is_tuplet: Option<bool>,         // Whether this beat is a tuplet (3, 5, 6, 7, etc. divisions)
@@ -486,25 +502,25 @@ pub enum BeatElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpperLine {
     pub elements: Vec<UpperElement>,
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LowerLine {
     pub elements: Vec<LowerElement>,
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LyricsLine {
     pub syllables: Vec<Syllable>,
-    pub source: Source,
+    pub source: Attributes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhitespaceLine {
     pub elements: Vec<crate::rhythm::types::ParsedElement>, // Whitespace elements and optional newline
-    pub source: Source,
+    pub source: Attributes,
 }
 
 // UpperLine elements from specification
@@ -512,39 +528,39 @@ pub struct WhitespaceLine {
 pub enum UpperElement {
     UpperOctaveMarker {
         marker: String,  // "." or ":"
-        source: Source,
+        source: Attributes,
     },
     SlurIndicator {
         value: String,  // "_____" for slurs
-        source: Source,
+        source: Attributes,
     },
     UpperHashes {
         value: String,  // "###" for multi-stave markers
-        source: Source,
+        source: Attributes,
     },
     Ornament {
         pitches: Vec<String>,  // 123, <456> grace notes/melismas (🚧 planned)
-        source: Source,
+        source: Attributes,
     },
     Chord {
         chord: String,  // [Am] chord symbols (🚧 planned)
-        source: Source,
+        source: Attributes,
     },
     Mordent {
-        source: Source,
+        source: Attributes,
     },
     Space {
         count: usize,
-        source: Source,
+        source: Attributes,
     },
     Unknown {
         value: String,
-        source: Source,
+        source: Attributes,
     },
     /// Newline token - explicit line terminator (upper lines cannot have EOI)
     Newline {
         value: String,
-        source: Source,
+        source: Attributes,
     },
 }
 
@@ -553,32 +569,32 @@ pub enum UpperElement {
 pub enum LowerElement {
     LowerOctaveMarker {
         marker: String,  // "." or ":"
-        source: Source,
+        source: Attributes,
     },
     BeatGroupIndicator {
         value: String,  // "___" for beat grouping
-        source: Source,
+        source: Attributes,
     },
     Syllable {
         content: String,  // syllables like "dha", "he-llo"
-        source: Source,
+        source: Attributes,
     },
     Space {
         count: usize,
-        source: Source,
+        source: Attributes,
     },
     Unknown {
         value: String,
-        source: Source,
+        source: Attributes,
     },
     /// Newline token - explicit line terminator
     Newline {
         value: String,
-        source: Source,
+        source: Attributes,
     },
     /// End of input token - explicit EOF terminator
     EndOfInput {
-        source: Source,
+        source: Attributes,
     },
 }
 
@@ -586,6 +602,6 @@ pub enum LowerElement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Syllable {
     pub content: String,  // "he-llo", "world", etc.
-    pub source: Source,
+    pub source: Attributes,
 }
 
