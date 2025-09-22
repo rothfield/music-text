@@ -69,17 +69,25 @@ digit = "0".."9"
 ### Content Lines
 
 ```ebnf
-content_line = line_number? non-beat-element* beat (non-beat-elemnt | beat)  newline
-non-beat-element = barline | whitespace
-beat = spatially-delimited-beat |
-      (pitch | dash) beat-element*
-beat-element = pitch | dash | breath-mark   // breath-marks can appear anywhere within a beat (middle or end)
+content_line = line_number? (beat | structural_element)* newline
 
-pitch = note_in_system
+structural_element = content_element \ {note, dash, line_number}
 
-note_in_system = sargam_note | number_note | western_note | tabla_note | hindi_note
+content_element = note | dash | breath_mark | line_number |
+                 single_barline | double_barline | final_barline |
+                 left_repeat | right_repeat | whitespace
+
+beat = rhythmic_element (rhythmic_element | breath_mark)*
+rhythmic_element = note | dash
+
+line_number = digit+ "."
+
+// Note: parsed notes become Note objects with additional attributes
+// derived from 2D grammar spatial assignments (octave, ornaments, etc.)
+note = sargam_note | number_note | western_note | tabla_note | hindi_note
 dash = "-"
-breath-mark = "'"   // apostrophe/tick mark indicates a breath or pause, can appear anywhere within a beat
+breath_mark = "'"
+whitespace = " "+"
 ```
 
 ## Design Decision: No Measures
@@ -183,9 +191,31 @@ hindi_note = "स" | "र" | "ग" | "म" | "प" | "ध" | "न"
 ### Barlines and Structure
 
 ```ebnf
-barline = "|" | "||" | "|:" | ":|" | "|]"
+barline = single_barline | double_barline | final_barline |
+          repeat_start | repeat_end | repeat_both
+
+single_barline = "|"
+double_barline = "||"
+final_barline = "|."
+repeat_start = "|:"
+repeat_end = ":|"
+repeat_both = "|:|" | ":|:"
+
 line_number = digit+ "."
 ```
+
+#### Barline Unicode Mappings
+
+For visual rendering, barline text representations map to Unicode symbols:
+
+| Text | Type | Unicode | Symbol | Description |
+|------|------|---------|--------|-------------|
+| `\|` | Single | U+1D100 | 𝄀 | Single barline |
+| `\|\|` | Double | U+2016 | ‖ | Double barline |
+| `\|.` | Final | U+1D101 | 𝄁 | Final barline |
+| `\|:` | RepeatStart | U+1D106 | 𝄆 | Repeat start |
+| `:\|` | RepeatEnd | U+1D107 | 𝄇 | Repeat end |
+| `\|:\|` or `:\|:` | RepeatBoth | 𝄆𝄇 | Combined repeat both |
 
 ## Spatial Production Rules
 
