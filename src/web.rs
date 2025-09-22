@@ -39,6 +39,7 @@ pub struct ParseResponse {
     lilypond_svg: Option<String>,
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
+    svg_poc: Option<String>,  // Doremi-script SVG POC
     syntax_spans: Option<Vec<crate::renderers::codemirror::Span>>,
     character_styles: Option<Vec<crate::renderers::codemirror::SpanStyle>>,
     roundtrip: Option<RoundtripData>,
@@ -51,6 +52,12 @@ pub struct ParseResponse {
 pub struct RetroParseRequest {
     input: String,
     action: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SvgPocRequest {
+    input: String,
+    notation_type: String,
 }
 
 // Template rendering helper
@@ -98,12 +105,32 @@ async fn render_retro_template(
 }
 
 pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
+    // Preload and validate CSS file on server startup
+    match std::fs::read_to_string("assets/svg-styles.css") {
+        Ok(css_content) => {
+            println!("✅ Successfully loaded CSS file: {} characters", css_content.len());
+            if css_content.contains(".lower-octave") {
+                println!("✅ CSS contains expected lower-octave styles");
+            } else {
+                println!("⚠️  Warning: CSS doesn't contain expected lower-octave styles");
+            }
+        }
+        Err(e) => {
+            println!("⚠️  Warning: Could not load assets/svg-styles.css: {}", e);
+            println!("   SVG rendering will use fallback CSS");
+        }
+    }
+
+    let svg_router = crate::renderers::svg::create_svg_router();
+
     let app = Router::new()
         .route("/api/parse", get(parse_text))
+        .route("/api/render-svg-poc", post(render_svg_poc))
         .route("/retro/load", post(retro_load))
         .route("/retro", post(retro_parse).get(serve_retro_page))
         .route("/retro/", get(serve_retro_page))
         .route("/health", get(health_endpoint))
+        .merge(svg_router)
         .nest_service("/", ServeDir::new("webapp/public"))
         .layer(CorsLayer::permissive());
 
@@ -122,7 +149,8 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
 async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
     let input = params.get("input").cloned().unwrap_or_default();
     let generate_svg = params.get("generate_svg").map(|s| s == "true").unwrap_or(false);
-    println!("Received input: '{}', generate_svg: {}", input, generate_svg);
+    let notation_type = params.get("notation_type").cloned().unwrap_or_else(|| "number".to_string());
+    println!("Received input: '{}', generate_svg: {}, notation_type: {}", input, generate_svg, notation_type);
 
     if input.trim().is_empty() {
         println!("Input is empty, returning null AST");
@@ -135,6 +163,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
+            svg_poc: None,
             syntax_spans: None,
             character_styles: None,
             roundtrip: None,
@@ -179,6 +208,9 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
                 None
             };
 
+            // Always generate the doremi-script SVG POC (using the requested notation type)
+            let svg_poc = Some(crate::renderers::svg::render_document_tree_to_svg(&result.document, &notation_type));
+
             Json(ParseResponse {
                 success: true,
                 plain_text: Some(input.clone()),
@@ -188,6 +220,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
                 lilypond_svg,
                 vexflow: Some(result.vexflow_data),
                 vexflow_svg: Some(result.vexflow_svg),
+                svg_poc,
                 syntax_spans: Some(syntax_spans),
                 character_styles: Some(character_styles),
                 roundtrip: Some(roundtrip),
@@ -203,6 +236,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
+            svg_poc: None,
             syntax_spans: None,
             character_styles: None,
             roundtrip: None,
@@ -213,6 +247,27 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
 
 async fn health_endpoint() -> impl IntoResponse {
     Json(serde_json::json!({"status": "ok"}))
+}
+
+/// SVG POC rendering endpoint - converts text to SVG via document conversion
+async fn render_svg_poc(Json(request): Json<SvgPocRequest>) -> impl IntoResponse {
+    println!("SVG POC request: input_len={}, notation_type={}",
+             request.input.len(), request.notation_type);
+
+    // Step 1: Parse the input text to get a document
+    match crate::pipeline::process_notation(&request.input) {
+        Ok(result) => {
+            // Step 2: Use the SVG renderer module to generate SVG
+            let svg_content = crate::renderers::svg::render_document_tree_to_svg(&result.document, &request.notation_type);
+
+            println!("✅ SVG POC generation successful, length: {}", svg_content.len());
+            Html(svg_content).into_response()
+        }
+        Err(err) => {
+            println!("❌ Parsing failed: {}", err);
+            (StatusCode::BAD_REQUEST, format!("Parsing failed: {}", err)).into_response()
+        }
+    }
 }
 
 // Serve the retro page at /retro

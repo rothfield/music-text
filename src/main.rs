@@ -90,6 +90,12 @@ enum Commands {
     Roundtrip { input: Option<String> },
     /// Run performance benchmarks
     Perf,
+    /// Test SVG Renderer POC (render test JSON to SVG)
+    #[command(name = "svg-test")]
+    SvgTest,
+    /// Run all SVG renderer test cases
+    #[command(name = "svg-tests")]
+    SvgTests,
 }
 
 #[tokio::main]
@@ -194,6 +200,15 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
         Some(Commands::Perf) => {
             println!("Performance benchmarks not yet implemented");
+            return Ok(());
+        }
+        Some(Commands::SvgTest) => {
+            let test_svg = music_text::renderers::svg::generate_test_svg()?;
+            println!("{}", test_svg);
+            return Ok(());
+        }
+        Some(Commands::SvgTests) => {
+            music_text::renderers::svg::run_all_tests()?;
             return Ok(());
         }
         None => {
