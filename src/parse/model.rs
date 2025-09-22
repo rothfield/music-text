@@ -310,11 +310,46 @@ pub struct PitchString {
     pub source: Attributes,         // Raw pitch string ("1", "S", "C", etc.) + position
 }
 
-// ContentElement struct types
+// Individual barline types matching grammar productions
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Barline {
-    pub barline_type: crate::rhythm::converters::BarlineType,
+pub struct SingleBarline {
     pub source: Attributes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DoubleBarline {
+    pub source: Attributes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FinalBarline {
+    pub source: Attributes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatStartBarline {
+    pub source: Attributes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatEndBarline {
+    pub source: Attributes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatBothBarline {
+    pub source: Attributes,
+}
+
+// Unified barline enum for ContentElement
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Barline {
+    Single(SingleBarline),
+    Double(DoubleBarline),
+    Final(FinalBarline),
+    RepeatStart(RepeatStartBarline),
+    RepeatEnd(RepeatEndBarline),
+    RepeatBoth(RepeatBothBarline),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -60,9 +60,17 @@ fn render_content_element(content_element: &ContentElement, original_input: &str
             .enumerate()
             .flat_map(|(index, beat_element)| render_beat_element(beat_element, beat, index == 0, original_input))
             .collect(),
-        ContentElement::Barline(barline) => vec![
-            render_simple_element("barline", &barline.source, "|", original_input)
-        ],
+        ContentElement::Barline(barline) => {
+            let source = match barline {
+                crate::parse::model::Barline::Single(b) => &b.source,
+                crate::parse::model::Barline::Double(b) => &b.source,
+                crate::parse::model::Barline::Final(b) => &b.source,
+                crate::parse::model::Barline::RepeatStart(b) => &b.source,
+                crate::parse::model::Barline::RepeatEnd(b) => &b.source,
+                crate::parse::model::Barline::RepeatBoth(b) => &b.source,
+            };
+            vec![render_simple_element("barline", source, "|", original_input)]
+        },
         ContentElement::Whitespace(_) => vec![],
     }
 }

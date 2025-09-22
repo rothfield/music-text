@@ -250,19 +250,6 @@ fn degree_to_lilypond(degree: Degree, octave: i8, current_tonic: Option<Degree>)
 }
 
 
-/// Convert barline type to proper LilyPond syntax
-fn barline_type_to_lilypond(barline_type: &crate::models::BarlineType, is_at_beginning: bool) -> String {
-    use crate::models::BarlineType;
-    match (barline_type, is_at_beginning) {
-        (BarlineType::RepeatStart, true) => "\\bar \".|:\"".to_string(),
-        (BarlineType::RepeatStart, false) => "\\bar \"|:\"".to_string(),
-        (BarlineType::RepeatEnd, _) => "\\bar \":|.\"".to_string(),
-        (BarlineType::Double, _) => "\\bar \"||\"".to_string(),
-        (BarlineType::Final, _) => "\\bar \"|.\"".to_string(),
-        (BarlineType::RepeatBoth, _) => "\\bar \":|:\"".to_string(),
-        (BarlineType::Single, _) => "\\bar \"|\"".to_string(),
-    }
-}
 
 // Transposition functions moved to shared module: src/converters/transposition.rs
 

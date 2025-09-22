@@ -16,7 +16,6 @@ pub struct ProcessingResult {
 }
 use crate::models::pitch_systems::{sargam, western, number};
 use crate::models::pitch::Degree;
-use crate::rhythm::converters::BarlineType;
 use std::str::FromStr;
 
 /// New pipeline using direct beat parsing (no separate rhythm analysis)

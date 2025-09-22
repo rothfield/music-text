@@ -4,30 +4,6 @@
 use serde::{Deserialize, Serialize};
 use fraction::Fraction;
 
-/// Barline type enumeration for document structure
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum BarlineType {
-    Single,      // |
-    Double,      // ||
-    Final,       // |.
-    RepeatStart, // |:
-    RepeatEnd,   // :|
-    RepeatBoth,  // :|: or |:|
-}
-
-impl BarlineType {
-    pub fn from_str(s: &str) -> Result<Self, String> {
-        match s {
-            "|" => Ok(BarlineType::Single),
-            "||" => Ok(BarlineType::Double),
-            "|." => Ok(BarlineType::Final),
-            "|:" => Ok(BarlineType::RepeatStart),
-            ":|" => Ok(BarlineType::RepeatEnd),
-            "|:|" | ":|:" => Ok(BarlineType::RepeatBoth),
-            _ => Err(format!("Unknown barline type: {}", s)),
-        }
-    }
-}
 
 /// Converter for rhythm-related operations
 #[derive(Debug, Clone)]

@@ -1,8 +1,7 @@
-use crate::parse::model::{ContentLine, ContentElement, Attributes, Position, NotationSystem};
+use crate::parse::model::{ContentLine, ContentElement, Attributes, Position, NotationSystem, Barline, SingleBarline, DoubleBarline, FinalBarline, RepeatStartBarline, RepeatEndBarline, RepeatBothBarline};
 use crate::parse::beat::parse_beat;
 use crate::parse::pitch::is_pitch_start;
 use crate::parse::ParseError;
-use crate::rhythm::converters::BarlineType;
 use std::str::{FromStr, CharIndices};
 use std::iter::Peekable;
 
@@ -166,7 +165,7 @@ fn parse_barline(
     line_num: usize,
     input: &str,
     line_start_doc_index: usize,
-) -> Result<crate::parse::model::Barline, ParseError> {
+) -> Result<Barline, ParseError> {
     let mut barline_str = String::new();
 
     // Handle first character
@@ -225,26 +224,35 @@ fn parse_barline(
         }
     }
 
-    // Convert to BarlineType
-    let barline_type = BarlineType::from_str(&barline_str)
-        .map_err(|_| ParseError {
-            message: format!("Invalid barline: {}", barline_str),
+    // Create Attributes for all barline types
+    let attributes = Attributes {
+        slur_start: false,
+        slur_char_length: None,
+        value: Some(barline_str.clone()),
+        position: Position {
             line: line_num,
             column: column_from_pos(input, start_pos),
-        })?;
+            index_in_line: index_in_line_from_pos(input, start_pos, line_num),
+            index_in_doc: line_start_doc_index + start_pos,
+        },
+    };
 
-    Ok(crate::parse::model::Barline {
-        barline_type,
-        source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-            value: Some(barline_str),
-            position: Position {
+    // Create specific barline object based on pattern
+    let barline = match barline_str.as_str() {
+        "|" => Barline::Single(SingleBarline { source: attributes }),
+        "||" => Barline::Double(DoubleBarline { source: attributes }),
+        "|." => Barline::Final(FinalBarline { source: attributes }),
+        "|:" => Barline::RepeatStart(RepeatStartBarline { source: attributes }),
+        ":|" => Barline::RepeatEnd(RepeatEndBarline { source: attributes }),
+        "|:|" | ":|:" => Barline::RepeatBoth(RepeatBothBarline { source: attributes }),
+        _ => {
+            return Err(ParseError {
+                message: format!("Invalid barline pattern: {}", barline_str),
                 line: line_num,
                 column: column_from_pos(input, start_pos),
-                index_in_line: index_in_line_from_pos(input, start_pos, line_num),
-                index_in_doc: line_start_doc_index + start_pos,
-            },
-        },
-    })
+            });
+        }
+    };
+
+    Ok(barline)
 }

@@ -108,13 +108,13 @@ fn process_stave_to_vexflow(stave: &crate::parse::model::Stave) -> Vec<serde_jso
                         }
                     }
                     crate::parse::model::ContentElement::Barline(barline) => {
-                        let barline_type = match barline.barline_type {
-                            crate::rhythm::converters::BarlineType::Single => "single",
-                            crate::rhythm::converters::BarlineType::Double => "double",
-                            crate::rhythm::converters::BarlineType::Final => "end",
-                            crate::rhythm::converters::BarlineType::RepeatStart => "repeat-start",
-                            crate::rhythm::converters::BarlineType::RepeatEnd => "repeat-end",
-                            crate::rhythm::converters::BarlineType::RepeatBoth => "repeat-both",
+                        let barline_type = match barline {
+                            crate::parse::model::Barline::Single(_) => "single",
+                            crate::parse::model::Barline::Double(_) => "double",
+                            crate::parse::model::Barline::Final(_) => "end",
+                            crate::parse::model::Barline::RepeatStart(_) => "repeat-start",
+                            crate::parse::model::Barline::RepeatEnd(_) => "repeat-end",
+                            crate::parse::model::Barline::RepeatBoth(_) => "repeat-both",
                         };
                         notes.push(serde_json::json!({
                             "type": "BarLine",

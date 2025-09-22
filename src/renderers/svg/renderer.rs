@@ -492,13 +492,13 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
                                         x_pos = render_beat_with_arcs(&mut svg, beat, notation_type, x_pos, y_pos);
                                     }
                                     crate::parse::model::ContentElement::Barline(barline) => {
-                                        let barline_symbol = match barline.barline_type {
-                                            crate::rhythm::converters::BarlineType::Single => "𝄀", // Unicode single barline
-                                            crate::rhythm::converters::BarlineType::Double => "‖", // Unicode double barline
-                                            crate::rhythm::converters::BarlineType::Final => "𝄁", // Unicode final barline
-                                            crate::rhythm::converters::BarlineType::RepeatStart => "𝄆", // Unicode repeat start
-                                            crate::rhythm::converters::BarlineType::RepeatEnd => "𝄇", // Unicode repeat end
-                                            crate::rhythm::converters::BarlineType::RepeatBoth => "𝄆𝄇", // Unicode repeat both
+                                        let barline_symbol = match barline {
+                                            crate::parse::model::Barline::Single(_) => "𝄀", // Unicode single barline
+                                            crate::parse::model::Barline::Double(_) => "‖", // Unicode double barline
+                                            crate::parse::model::Barline::Final(_) => "𝄁", // Unicode final barline
+                                            crate::parse::model::Barline::RepeatStart(_) => "𝄆", // Unicode repeat start
+                                            crate::parse::model::Barline::RepeatEnd(_) => "𝄇", // Unicode repeat end
+                                            crate::parse::model::Barline::RepeatBoth(_) => "𝄆𝄇", // Unicode repeat both
                                         };
                                         svg.push_str(&format!(r#"    <text x="{}" y="{}" class="barline">{}</text>"#, x_pos, y_pos, barline_symbol));
                                         svg.push_str("\n");
