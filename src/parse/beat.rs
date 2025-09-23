@@ -125,6 +125,7 @@ pub fn parse_beat(
         total_duration: None,   // Will be populated by rhythm analysis
         is_tuplet: None,        // Will be populated by rhythm analysis
         tuplet_ratio: None,     // Will be populated by rhythm analysis
+        tied_to_previous: None, // Will be populated by rhythm analysis
     };
 
     Ok(beat)
