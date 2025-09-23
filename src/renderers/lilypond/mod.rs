@@ -113,6 +113,9 @@ pub fn render_lilypond_from_document(document: &crate::parse::model::Document) -
                                         crate::parse::model::BeatElement::BreathMark(_) => {
                                             output.push_str("\\breathe ");
                                         }
+                                        crate::parse::model::BeatElement::Rest(_) => {
+                                            output.push_str("r4 ");
+                                        }
                                     }
                                 }
                             }

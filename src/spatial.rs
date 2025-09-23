@@ -1002,6 +1002,14 @@ fn calculate_content_element_columns(content_line: &ContentLine) -> Vec<(usize, 
                                 current_column += 1; // Default single character
                             }
                         },
+                        BeatElement::Rest(rest) => {
+                            column_positions.push((element_idx, current_column));
+                            if let Some(ref value) = rest.value {
+                                current_column += value.len();
+                            } else {
+                                current_column += 1; // Default single character
+                            }
+                        },
                     }
                 }
             },
@@ -1249,6 +1257,10 @@ fn apply_slur_to_span(span: &SpatialSpan, element_columns: &[(usize, usize)], co
                                 breath.consumed_elements.push(span.consumed_element.clone());
                                 first_element_found = true;
                             },
+                            BeatElement::Rest(rest) => {
+                                rest.consumed_elements.push(span.consumed_element.clone());
+                                first_element_found = true;
+                            },
                         }
                     } else {
                         // Advance column for this beat element
@@ -1262,6 +1274,7 @@ fn apply_slur_to_span(span: &SpatialSpan, element_columns: &[(usize, usize)], co
                             },
                             BeatElement::Dash(_) => current_column += 1,
                             BeatElement::BreathMark(_) => current_column += 1,
+                            BeatElement::Rest(_) => current_column += 1,
                         }
                     }
                 }
@@ -1308,6 +1321,12 @@ fn add_consumed_element_to_content(
 
                     // Phase 2: Semantic processing
                     apply_semantic_effects_to_breath(breath, &consumed_element);
+                    return;
+                },
+                BeatElement::Rest(rest) => {
+                    // Phase 1: Generic consumption
+                    rest.consumed_elements.push(consumed_element.clone());
+                    // Phase 2: No special semantic processing needed for rests
                     return;
                 },
             }

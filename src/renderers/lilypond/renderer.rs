@@ -3,18 +3,32 @@ use crate::models::{Metadata}; // Keep using existing metadata
 use crate::models::pitch::Degree;
 use crate::renderers::lilypond::templates::{TemplateContext, render_lilypond, LilyPondTemplate};
 use crate::parse::model::{Document, DocumentElement, Beat, BeatElement, StaveLine, ContentElement};
+use fraction::Fraction;
 // use crate::renderers::transposition::transpose_degree_with_octave; // TODO: Move transposition module
 
 /// Find the index of the last actual note (not barline, breathmark, etc.) in lilypond_notes
 fn find_last_note_index(lilypond_notes: &[String]) -> Option<usize> {
     // Search backwards for the last actual note (not barline, breathmark, etc.)
     for (i, note) in lilypond_notes.iter().enumerate().rev() {
-        if !note.starts_with("\\bar") && !note.starts_with("\\breathe") {
+        if !note.starts_with("\\bar") && !note.starts_with("\\breathe") && !note.trim().starts_with("|") {
             // Include tuplets and regular notes
             return Some(i);
         }
     }
     None
+}
+
+/// Extract pitch from a LilyPond note string (e.g., "c'8~" -> "c'")
+fn extract_pitch_from_lilypond_note(note: &str) -> String {
+    // Remove duration numbers, ties, and other markings to get just the pitch
+    let mut pitch = String::new();
+    for ch in note.chars() {
+        if ch.is_ascii_digit() || ch == '~' || ch == '(' || ch == ')' {
+            break;
+        }
+        pitch.push(ch);
+    }
+    pitch
 }
 
 pub fn convert_document_to_lilypond_src(
@@ -35,11 +49,12 @@ pub fn convert_document_to_lilypond_src(
                     for content_element in &content_line.elements {
                         match content_element {
                             ContentElement::Beat(beat) => {
-                                let beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
+                                let mut beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
 
-                                // TODO: Handle ties from spatial assignments if available
-                                if false && !previous_beat_notes.is_empty() && !beat_notes.is_empty() {
+                                // Handle ties from tied_to_previous field
+                                if beat.tied_to_previous.unwrap_or(false) {
                                     if let Some(last_note_index) = find_last_note_index(&lilypond_notes) {
+                                        // There's a previous note to tie from
                                         let last_note = &mut lilypond_notes[last_note_index];
                                         if !last_note.ends_with('~') && !last_note.ends_with(')') {
                                             *last_note = format!("{}~", last_note);
@@ -47,6 +62,44 @@ pub fn convert_document_to_lilypond_src(
                                             // Insert tie before the closing slur
                                             let len = last_note.len();
                                             last_note.insert(len - 1, '~');
+                                        }
+
+                                        // Add continuation note for the tied duration (leading dashes)
+                                        let mut leading_dash_count = 0;
+                                        for element in &beat.elements {
+                                            match element {
+                                                BeatElement::Dash(_) => leading_dash_count += 1,
+                                                BeatElement::Note(_) => break,
+                                                _ => continue,
+                                            }
+                                        }
+
+                                        if leading_dash_count > 0 && beat.divisions.is_some() {
+                                            let total_divisions = beat.divisions.unwrap();
+                                            let tied_duration = Fraction::new(leading_dash_count as u64, total_divisions as u64) * Fraction::new(1u64, 4u64);
+                                            let duration_string = fraction_to_lilypond_note(tied_duration);
+
+                                            // Extract pitch from the previous note to create continuation
+                                            let prev_note_pitch = extract_pitch_from_lilypond_note(&lilypond_notes[last_note_index]);
+                                            let continuation_note = format!("{}{}", prev_note_pitch, duration_string);
+                                            beat_notes.insert(0, continuation_note);
+                                        }
+                                    } else {
+                                        // No previous note - add rest for leading dashes
+                                        let mut leading_dash_count = 0;
+                                        for element in &beat.elements {
+                                            match element {
+                                                BeatElement::Dash(_) => leading_dash_count += 1,
+                                                BeatElement::Note(_) => break,
+                                                _ => continue,
+                                            }
+                                        }
+
+                                        if leading_dash_count > 0 && beat.divisions.is_some() {
+                                            let total_divisions = beat.divisions.unwrap();
+                                            let rest_duration = Fraction::new(leading_dash_count as u64, total_divisions as u64) * Fraction::new(1u64, 4u64);
+                                            let duration_string = fraction_to_lilypond_note(rest_duration);
+                                            beat_notes.insert(0, format!("r{}", duration_string));
                                         }
                                     }
                                 }
@@ -85,10 +138,13 @@ pub fn convert_document_to_lilypond_src(
                                         lyrics_parts.push("_".to_string());
                                     },
                                     BeatElement::Dash(_) => {
-                                        lyrics_parts.push("_".to_string());
+                                        // Skip dashes - they are duration extenders, not separate syllables
                                     },
                                     BeatElement::BreathMark(_) => {
                                         // No syllable for breath marks
+                                    },
+                                    BeatElement::Rest(_) => {
+                                        // No syllable for rests
                                     },
                                 }
                             }
@@ -133,9 +189,85 @@ pub fn convert_document_to_lilypond_src(
         .map_err(|e| format!("Template render error: {}", e))
 }
 
-fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Result<Vec<String>, String> {
+fn convert_beat_with_leading_rest(beat: &Beat, current_tonic: Option<Degree>) -> Result<Vec<String>, String> {
     let mut notes = Vec::new();
 
+    // Count leading dashes to convert to rest
+    let mut leading_dash_count = 0;
+    for element in &beat.elements {
+        match element {
+            BeatElement::Dash(_) => {
+                leading_dash_count += 1;
+            }
+            BeatElement::Note(_) => break,
+            BeatElement::BreathMark(_) => continue,
+            BeatElement::Rest(_) => break,
+        }
+    }
+
+    // Calculate rest duration based on subdivisions
+    if leading_dash_count > 0 && beat.divisions.is_some() {
+        let total_divisions = beat.divisions.unwrap();
+        let rest_duration = Fraction::new(leading_dash_count as u64, total_divisions as u64) * Fraction::new(1u64, 4u64);
+        let duration_string = fraction_to_lilypond_note(rest_duration);
+        notes.push(format!("r{}", duration_string));
+    }
+
+    // Process remaining elements normally
+    let mut past_leading_dashes = false;
+    for beat_element in &beat.elements {
+        match beat_element {
+            BeatElement::Note(note) => {
+                past_leading_dashes = true;
+                let duration_string = if let (Some(numer), Some(denom)) = (note.numerator, note.denominator) {
+                    let duration = fraction::Fraction::new(numer, denom);
+                    fraction_to_lilypond_note(duration)
+                } else {
+                    "4".to_string()
+                };
+
+                let lily_note = crate::renderers::converters_lilypond::pitch::pitchcode_to_lilypond(
+                    note.pitch_code,
+                    note.octave,
+                    current_tonic.map(|d| crate::models::pitch_systems::degree_to_pitch_code(d))
+                )?;
+                notes.push(format!("{}{}", lily_note, duration_string));
+            },
+            BeatElement::Dash(_) => {
+                if past_leading_dashes {
+                    // These dashes extend the previous note, already handled by rhythm analyzer
+                }
+            },
+            BeatElement::BreathMark(_) => {
+                notes.push("\\breathe".to_string());
+            },
+            BeatElement::Rest(rest) => {
+                let duration_string = if let (Some(numer), Some(denom)) = (rest.numerator, rest.denominator) {
+                    let duration = fraction::Fraction::new(numer, denom);
+                    fraction_to_lilypond_note(duration)
+                } else {
+                    "4".to_string()
+                };
+                notes.push(format!("r{}", duration_string));
+            },
+        }
+    }
+
+    // Handle tuplets if needed
+    if beat.is_tuplet.unwrap_or(false) {
+        if let Some((tuplet_num, tuplet_den)) = beat.tuplet_ratio {
+            let tuplet_content = notes.join(" ");
+            Ok(vec![format!("\\tuplet {}/{} {{ {} }}", tuplet_num, tuplet_den, tuplet_content)])
+        } else {
+            Ok(notes)
+        }
+    } else {
+        Ok(notes)
+    }
+}
+
+fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Result<Vec<String>, String> {
+    let mut notes = Vec::new();
     for beat_element in &beat.elements {
         match beat_element {
             BeatElement::Note(note) => {
@@ -159,17 +291,27 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
                 notes.push(note_str);
             },
             BeatElement::Dash(_dash) => {
-                // Use quarter note for rest - duration comes from beat analysis
-                notes.push("r4".to_string());
+                // Skip dashes - they are duration extenders handled by rhythm analyzer
+                // The preceding note already has the extended duration
             },
             BeatElement::BreathMark(_) => {
                 notes.push("\\breathe".to_string());
+            },
+            BeatElement::Rest(rest) => {
+                // Use rhythm-analyzed duration if available, fallback to quarter note
+                let duration_string = if let (Some(numer), Some(denom)) = (rest.numerator, rest.denominator) {
+                    let duration = fraction::Fraction::new(numer, denom);
+                    fraction_to_lilypond_note(duration)
+                } else {
+                    "4".to_string() // fallback to quarter note
+                };
+                notes.push(format!("r{}", duration_string));
             },
         }
     }
     
     // Add manual beaming for eighth notes and shorter
-    add_manual_beaming(&mut notes)?;
+    // add_manual_beaming(&mut notes)?;
 
     // Use analyzer-provided tuplet information
     if beat.is_tuplet.unwrap_or(false) {
@@ -369,7 +511,7 @@ fn convert_multistave_to_lilypond_src(
         if let DocumentElement::Stave(stave) = element {
             // Get LilyPond content for this stave (without template wrapper)
             let stave_lilypond = convert_stave_to_lilypond_content(stave)?;
-            stave_contents.push(format!("\\new Staff {{\n  \\fixed c' {{\n    \\key c \\major\n    \\time 4/4\n    \\autoBeamOff\n    \\set Score.measureBarType = #\"\"\n    \\set Score.startRepeatBarType = #\"\"\n    \\set Score.endRepeatBarType = #\"\"\n    \n    {}\n  }}\n}}", stave_lilypond));
+            stave_contents.push(format!("\\new Staff {{\n  \\fixed c' {{\n    \\key c \\major\n    \\time 4/4\n    % \\autoBeamOff\n    % \\set Score.measureBarType = #\"\"\n    % \\set Score.startRepeatBarType = #\"\"\n    % \\set Score.endRepeatBarType = #\"\"\n    \n    {}\n  }}\n}}", stave_lilypond));
         }
     }
 
@@ -393,7 +535,61 @@ fn convert_stave_to_lilypond_content(stave: &crate::parse::model::Stave) -> Resu
             for content_element in &content_line.elements {
                 match content_element {
                     ContentElement::Beat(beat) => {
-                        let beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
+                        let mut beat_notes = convert_beat_to_lilypond(beat, current_tonic)?;
+
+                        // Handle ties from tied_to_previous field
+                        if beat.tied_to_previous.unwrap_or(false) {
+                            if let Some(last_note_index) = find_last_note_index(&lilypond_notes) {
+                                // There's a previous note to tie from
+                                let last_note = &mut lilypond_notes[last_note_index];
+                                if !last_note.ends_with('~') && !last_note.ends_with(')') {
+                                    *last_note = format!("{}~", last_note);
+                                } else if last_note.ends_with(')') {
+                                    // Insert tie before the closing slur
+                                    let len = last_note.len();
+                                    last_note.insert(len - 1, '~');
+                                }
+
+                                // Add continuation note for the tied duration (leading dashes)
+                                let mut leading_dash_count = 0;
+                                for element in &beat.elements {
+                                    match element {
+                                        BeatElement::Dash(_) => leading_dash_count += 1,
+                                        BeatElement::Note(_) => break,
+                                        _ => continue,
+                                    }
+                                }
+
+                                if leading_dash_count > 0 && beat.divisions.is_some() {
+                                    let total_divisions = beat.divisions.unwrap();
+                                    let tied_duration = Fraction::new(leading_dash_count as u64, total_divisions as u64) * Fraction::new(1u64, 4u64);
+                                    let duration_string = fraction_to_lilypond_note(tied_duration);
+
+                                    // Extract pitch from the previous note to create continuation
+                                    let prev_note_pitch = extract_pitch_from_lilypond_note(&lilypond_notes[last_note_index]);
+                                    let continuation_note = format!("{}{}", prev_note_pitch, duration_string);
+                                    beat_notes.insert(0, continuation_note);
+                                }
+                            } else {
+                                // No previous note - add rest for leading dashes
+                                let mut leading_dash_count = 0;
+                                for element in &beat.elements {
+                                    match element {
+                                        BeatElement::Dash(_) => leading_dash_count += 1,
+                                        BeatElement::Note(_) => break,
+                                        _ => continue,
+                                    }
+                                }
+
+                                if leading_dash_count > 0 && beat.divisions.is_some() {
+                                    let total_divisions = beat.divisions.unwrap();
+                                    let rest_duration = Fraction::new(leading_dash_count as u64, total_divisions as u64) * Fraction::new(1u64, 4u64);
+                                    let duration_string = fraction_to_lilypond_note(rest_duration);
+                                    beat_notes.insert(0, format!("r{}", duration_string));
+                                }
+                            }
+                        }
+
                         lilypond_notes.extend(beat_notes);
                     },
                     ContentElement::Barline(_) => {
@@ -451,4 +647,42 @@ fn degree_to_lilypond_simple(degree: Degree) -> &'static str {
         Degree::N7s => "bs",
         Degree::N7ss => "bss",
     }
+}
+
+/// Convert ProcessedDocument to minimal LilyPond source using minimal template
+pub fn convert_processed_document_to_minimal_lilypond_src(
+    document: &Document,
+    _metadata: &Metadata,
+    source: Option<&str>
+) -> Result<String, String> {
+    // Extract just the musical content without headers/layout
+    let mut stave_content = String::new();
+
+    for element in &document.elements {
+        if let DocumentElement::Stave(stave) = element {
+            let stave_lilypond = convert_stave_to_lilypond_content(stave)?;
+            if !stave_lilypond.trim().is_empty() {
+                stave_content = stave_lilypond;
+                break; // Just use the first stave for minimal output
+            }
+        }
+    }
+
+    if stave_content.trim().is_empty() {
+        return Ok("% No musical content".to_string());
+    }
+
+    // Build minimal template context
+    let mut context_builder = TemplateContext::builder()
+        .staves(stave_content);
+
+    if let Some(src) = source {
+        context_builder = context_builder.source_comment(src.to_string());
+    }
+
+    let context = context_builder.build();
+
+    // Use minimal template
+    render_lilypond(LilyPondTemplate::Minimal, &context)
+        .map_err(|e| format!("Minimal template render error: {}", e))
 }

@@ -734,6 +734,12 @@ fn render_beat_with_arcs(
                 svg.push_str("\n");
                 x_pos += get_char_width('ʻ');
             }
+            crate::parse::model::BeatElement::Rest(_) => {
+                // TODO: Implement rest rendering
+                svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="rest">R</text>"#, x_pos, y_pos));
+                svg.push_str("\n");
+                x_pos += get_char_width('R');
+            }
         }
     }
 

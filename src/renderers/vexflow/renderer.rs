@@ -210,6 +210,9 @@ fn process_beat_to_vexflow(beat: &crate::parse::model::Beat) -> Vec<serde_json::
                     "symbol": "breathmark"
                 }));
             }
+            crate::parse::model::BeatElement::Rest(_) => {
+                // TODO: Handle Rest elements
+            }
         }
     }
 
