@@ -59,17 +59,12 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
         let start_idx = line_idx;
 
         // Follow grammar: (multi_stave | stave | single_content_line | header)
+        // Multi-stave takes precedence over header/title
 
         // Try multi_stave first (starts with ###)
         if lines[line_idx].trim() == "###" {
-            // TODO: implement multi-stave parsing
-            // For now, skip to closing ###
-            line_idx += 1;
-            while line_idx < lines.len() && lines[line_idx].trim() != "###" {
-                line_idx += 1;
-            }
-            if line_idx < lines.len() {
-                line_idx += 1; // skip closing ###
+            if let Ok(mut multi_stave_elements) = parse_multi_stave(&lines, &mut line_idx) {
+                elements.append(&mut multi_stave_elements);
             }
         }
         // Try stave (multiple content lines) OR single_content_line OR header
@@ -713,6 +708,52 @@ fn parse_document_body(input: &str, start_doc_index: usize) -> Result<Vec<crate:
             }
         }
     }
+
+    Ok(elements)
+}
+
+/// Parse multi-stave block following grammar: multi_stave = "###" newline stave+ "###" newline
+fn parse_multi_stave(
+    lines: &[&str],
+    line_idx: &mut usize
+) -> Result<Vec<crate::parse::model::DocumentElement>, ParseError> {
+    if *line_idx >= lines.len() || lines[*line_idx].trim() != "###" {
+        return Err(ParseError {
+            message: "Expected '###' to start multi-stave block".to_string(),
+            line: *line_idx + 1,
+            column: 1,
+        });
+    }
+
+    *line_idx += 1; // consume opening ###
+
+    let stave_start_idx = *line_idx;
+    let mut stave_end_idx = *line_idx;
+
+    // Find closing ###
+    while stave_end_idx < lines.len() && lines[stave_end_idx].trim() != "###" {
+        stave_end_idx += 1;
+    }
+
+    if stave_end_idx >= lines.len() {
+        return Err(ParseError {
+            message: "Expected closing '###' for multi-stave block".to_string(),
+            line: stave_start_idx + 1,
+            column: 1,
+        });
+    }
+
+    // Parse content between ### markers as document body
+    let multi_stave_lines = &lines[stave_start_idx..stave_end_idx];
+    let multi_stave_input = multi_stave_lines.join("\n");
+
+    let start_doc_index: usize = lines[..stave_start_idx].iter()
+        .map(|line| line.len() + 1) // +1 for newline character
+        .sum();
+
+    let elements = parse_document_body(&multi_stave_input, start_doc_index)?;
+
+    *line_idx = stave_end_idx + 1; // consume closing ###
 
     Ok(elements)
 }
