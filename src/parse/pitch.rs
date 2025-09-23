@@ -87,13 +87,13 @@ pub fn parse_pitch_with_indices(
 }
 
 /// Helper function to convert NotationSystem to Notation
-fn system_to_notation(system: NotationSystem) -> crate::models::pitch::Notation {
+fn system_to_notation(system: NotationSystem) -> crate::models::Notation {
     match system {
-        NotationSystem::Western => crate::models::pitch::Notation::Western,
-        NotationSystem::Number => crate::models::pitch::Notation::Number,
-        NotationSystem::Sargam => crate::models::pitch::Notation::Sargam,
-        NotationSystem::Bhatkhande => crate::models::pitch::Notation::Bhatkhande,
-        NotationSystem::Tabla => crate::models::pitch::Notation::Tabla,
+        NotationSystem::Western => crate::models::Notation::Western,
+        NotationSystem::Number => crate::models::Notation::Number,
+        NotationSystem::Sargam => crate::models::Notation::Sargam,
+        NotationSystem::Bhatkhande => crate::models::Notation::Bhatkhande,
+        NotationSystem::Tabla => crate::models::Notation::Tabla,
     }
 }
 

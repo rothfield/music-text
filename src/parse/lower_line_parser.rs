@@ -173,7 +173,7 @@ mod tests {
         assert_eq!(result.elements.len(), 1);
 
         match &result.elements[0] {
-            LowerElement::BeatGroupIndicator { value, .. } => assert_eq!(value, "___"),
+            LowerElement::BeatGroupIndicator { value, .. } => assert_eq!(value.as_ref().unwrap(), "___"),
             _ => panic!("Expected BeatGroupIndicator"),
         }
     }
@@ -205,7 +205,7 @@ mod tests {
             (LowerElement::LowerOctaveMarker { marker, .. },
              LowerElement::BeatGroupIndicator { value, .. }) => {
                 assert_eq!(marker, ".");
-                assert_eq!(value, "___");
+                assert_eq!(value.as_ref().unwrap(), "___");
             },
             _ => panic!("Unexpected element types"),
         }

@@ -308,8 +308,8 @@ fn parse_blank_lines_element(chars: &mut std::iter::Peekable<std::str::Chars>, l
 
     let source_value = content.clone();
     Ok(crate::parse::model::BlankLines {
-        content,
-        value: Some(source_value),
+        value: Some(content), // Use content as the value
+        char_index: start_index_in_doc,
         line: start_line,
         column: start_column,
         index_in_line: start_index_in_line,
@@ -387,7 +387,6 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             } else {
                 // Fall back to text line
                 let text_line = TextLine {
-                    content: current_line.trim_end_matches('\n').to_string(),
                     value: Some(current_line.trim_end_matches('\n').to_string()),
                     char_index: this_line_start_doc_index, // was: line, column, index_in_line, index_in_doc
                 };
@@ -411,7 +410,6 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
         } else {
             // Treat as text line
             let text_line = TextLine {
-                content: current_line.trim_end_matches('\n').to_string(),
                 value: Some(current_line.trim_end_matches('\n').to_string()),
                 char_index: this_line_start_doc_index, // was: line, column, index_in_line, index_in_doc
             };
@@ -509,7 +507,6 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             } else {
                 // Fall back to text line
                 let text_line = TextLine {
-                    content: current_line.trim_end_matches('\n').to_string(),
                     value: Some(current_line.trim_end_matches('\n').to_string()),
                     char_index: this_line_start_doc_index, // was: line, column, index_in_line, index_in_doc
                 };
@@ -518,7 +515,6 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
         } else {
             // Treat as lyrics/text line
             let text_line = TextLine {
-                content: current_line.trim_end_matches('\n').to_string(),
                 value: Some(current_line.trim_end_matches('\n').to_string()),
                 char_index: this_line_start_doc_index, // was: line, column, index_in_line, index_in_doc
             };
@@ -536,13 +532,14 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
     }
 
     Ok(Stave {
-        lines,
-        notation_system,  // Use the document notation system
         value: Some(stave_content),
-       line: start_line,
-       column: 1,
-       index_in_line: 0,
-       index_in_doc: stave_start_doc_index,
+        char_index: stave_start_doc_index,
+        notation_system,  // Use the document notation system
+        line: start_line,
+        column: 1,
+        index_in_line: 0,
+        index_in_doc: stave_start_doc_index,
+        lines,
     })
 }
 

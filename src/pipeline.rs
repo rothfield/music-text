@@ -15,7 +15,7 @@ pub struct ProcessingResult {
     pub vexflow_data: serde_json::Value,
 }
 use crate::models::pitch_systems::{sargam, western, number};
-use crate::models::pitch::Degree;
+use crate::models::Degree;
 use std::str::FromStr;
 
 /// New pipeline using direct beat parsing (no separate rhythm analysis)
@@ -35,13 +35,7 @@ pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
     let document = spatial_document;
 
     // Stage 4: Render from final document
-    let metadata = crate::models::Metadata {
-        title: document.title.as_ref().map(|t| crate::models::Title { text: t.clone(), row: 0, col: 0 }),
-        attributes: std::collections::HashMap::new(),
-        detected_system: None,
-        directives: Vec::new(),
-    };
-    let lilypond = convert_processed_document_to_lilypond_src(&document, &metadata, None)?;
+    let lilypond = convert_processed_document_to_lilypond_src(&document, None)?;
 
     // Stage 5: Render VexFlow from final document
     let vexflow_renderer = VexFlowRenderer::new();

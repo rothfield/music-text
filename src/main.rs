@@ -132,13 +132,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let notation = get_input_from_option_or_stdin(input)?;
             let result = pipeline::process_notation(&notation)?;
             // Generate minimal lilypond using minimal template
-            let metadata = music_text::models::Metadata {
-                title: result.document.title.as_ref().map(|t| music_text::models::Title { text: t.clone(), row: 0, col: 0 }),
-                attributes: std::collections::HashMap::new(),
-                detected_system: None,
-                directives: Vec::new(),
-            };
-            let minimal_lilypond = music_text::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, &metadata, Some(&notation))?;
+            let minimal_lilypond = music_text::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, Some(&notation))?;
             println!("{}", minimal_lilypond);
             return Ok(());
         }
@@ -432,13 +426,7 @@ impl App {
                 self.scroll_offset = 0; // Reset scroll when content changes
                 self.output = match format {
                     OutputFormat::LilyPond => {
-                        let metadata = music_text::models::Metadata {
-                            title: processing_result.document.title.as_ref().map(|t| music_text::models::Title { text: t.clone(), row: 0, col: 0 }),
-                            attributes: std::collections::HashMap::new(),
-                            detected_system: None,
-                            directives: Vec::new(),
-                        };
-                        music_text::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&processing_result.document, &metadata, Some(&self.input))
+                        music_text::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&processing_result.document, Some(&self.input))
                             .unwrap_or_else(|e| format!("Error generating minimal lilypond: {}", e))
                     },
                     OutputFormat::LilyPondFull => {

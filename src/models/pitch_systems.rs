@@ -1,5 +1,4 @@
-use crate::models::pitch::{Degree, Notation};
-use crate::parse::model::{NotationSystem, PitchCode};
+use crate::models::{Degree, Notation, NotationSystem, PitchCode};
 use once_cell::sync::Lazy;
 use regex::Regex;
 

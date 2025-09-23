@@ -49,7 +49,9 @@ pub fn try_parse(
             }
             header_line::HeaderLine::Text(text) => {
                 // Check if this looks like musical content
-                let trimmed = text.content.trim();
+                let empty_string = String::new();
+                let text_content = text.value.as_ref().unwrap_or(&empty_string);
+                let trimmed = text_content.trim();
 
                 // Musical content indicators:
                 // - Starts with barline |
@@ -71,14 +73,14 @@ pub fn try_parse(
                 // Only accept text lines if we've already parsed header content
                 // Otherwise, it might be musical content
                 if parsed_any {
-                    if title.is_none() && !text.content.trim().is_empty() {
-                        title = Some(text.content.trim().to_string());
+                    if title.is_none() && !text_content.trim().is_empty() {
+                        title = Some(text_content.trim().to_string());
                     }
                 } else {
                     // First line that's not obviously musical - could be a title
                     // But be conservative - if it doesn't look like a title, reject it
                     if trimmed.len() > 2 && !trimmed.chars().all(|c| c.is_ascii_digit()) {
-                        title = Some(text.content.trim().to_string());
+                        title = Some(text_content.trim().to_string());
                         parsed_any = true;
                     } else {
                         *line_idx = start_idx;

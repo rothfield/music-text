@@ -216,9 +216,9 @@ impl VexFlowJSGenerator {
         self.degree_to_vexflow_key(degree, note.octave)
     }
 
-    fn pitch_code_to_degree(&self, pitch_code: crate::parse::model::PitchCode) -> crate::models::pitch::Degree {
-        use crate::parse::model::PitchCode::*;
-        use crate::models::pitch::Degree;
+    fn pitch_code_to_degree(&self, pitch_code: crate::models::PitchCode) -> crate::models::Degree {
+        use crate::models::PitchCode::*;
+        use crate::models::Degree;
 
         match pitch_code {
             N1bb => Degree::N1bb, N1b => Degree::N1b, N1 => Degree::N1, N1s => Degree::N1s, N1ss => Degree::N1ss,
@@ -231,8 +231,8 @@ impl VexFlowJSGenerator {
         }
     }
 
-    fn degree_to_vexflow_key(&self, degree: crate::models::pitch::Degree, octave: i8) -> (String, Vec<String>) {
-        use crate::models::pitch::Degree::*;
+    fn degree_to_vexflow_key(&self, degree: crate::models::Degree, octave: i8) -> (String, Vec<String>) {
+        use crate::models::Degree::*;
 
         let (base_note, accidental) = match degree {
             N1bb => ("C", Some("bb")),  N1b => ("C", Some("b")),   N1 => ("C", None),

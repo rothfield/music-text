@@ -92,7 +92,6 @@ pub fn parse_content_line(
 
                 let whitespace_content = " ".repeat(space_count);
                 elements.push(ContentElement::Whitespace(crate::parse::model::Whitespace {
-                    content: whitespace_content.clone(),
                     value: Some(whitespace_content),
                     char_index: line_start_doc_index + start_pos,
                     consumed_elements: Vec::new(),

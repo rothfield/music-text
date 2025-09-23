@@ -1,12 +1,12 @@
 /// Grammar rule: header_line = title_line | directive_line | text_line
 
-use crate::parse::{title_line, directive_line, text_line};
+use crate::parse::{title_line, directive_line, text_line, model::TextLine};
 
 #[derive(Debug, Clone)]
 pub enum HeaderLine {
     Title(title_line::TitleLine),
     Directive(directive_line::DirectiveLine),
-    Text(text_line::TextLine),
+    Text(TextLine),
 }
 
 pub fn parse(line: &str) -> HeaderLine {
@@ -56,7 +56,7 @@ mod tests {
         let result = parse("Just some title text");
         match result {
             HeaderLine::Text(text) => {
-                assert_eq!(text.content, "Just some title text");
+                assert_eq!(text.value.as_ref().unwrap(), "Just some title text");
             }
             _ => panic!("Expected text line"),
         }

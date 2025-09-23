@@ -1,5 +1,5 @@
 /// Shared transposition utilities for tonic-based movable-do system
-use crate::parse::model::PitchCode;
+use crate::models::PitchCode;
 
 /// Transpose a PitchCode and octave based on the tonic (movable-do system)
 /// Returns (transposed_pitchcode, adjusted_octave)

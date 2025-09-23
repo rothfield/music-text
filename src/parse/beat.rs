@@ -37,6 +37,8 @@ pub fn parse_beat(
                 value: Some("-".to_string()),
                 char_index: line_start_doc_index + pos,
                 consumed_elements: Vec::new(),
+                numerator: None,
+                denominator: None,
             }));
         }
         Some(&(pos, ch)) if is_pitch_start(ch, notation_system) => {
@@ -82,6 +84,8 @@ pub fn parse_beat(
                     value: Some("-".to_string()),
                     char_index: line_start_doc_index + pos,
                     consumed_elements: Vec::new(),
+                    numerator: None,
+                    denominator: None,
                 }));
             }
 

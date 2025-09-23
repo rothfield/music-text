@@ -1,6 +1,5 @@
 // LilyPond Source Code Generator - Works directly with analyzed document
-use crate::models::{Metadata}; // Keep using existing metadata
-use crate::models::pitch::Degree;
+use crate::models::Degree;
 use crate::renderers::lilypond::templates::{TemplateContext, render_lilypond, LilyPondTemplate};
 use crate::parse::model::{Document, DocumentElement, Beat, BeatElement, StaveLine, ContentElement};
 use fraction::Fraction;
@@ -175,14 +174,12 @@ pub fn convert_document_to_lilypond_src(
 
     let context = context.build();
 
-    // Auto-select template based on document complexity - create minimal metadata for template selection
-    let minimal_metadata = Metadata {
-        title: document.title.as_ref().map(|t| crate::models::Title { text: t.clone(), row: 0, col: 0 }),
-        attributes: std::collections::HashMap::new(),
-        detected_system: None,
-        directives: Vec::new(),
+    // Auto-select template based on document complexity
+    let template = if document.title.is_some() {
+        LilyPondTemplate::Standard
+    } else {
+        LilyPondTemplate::Minimal
     };
-    let template = crate::renderers::lilypond::templates::auto_select_template_for_metadata(&minimal_metadata);
     
     // Render template
     render_lilypond(template, &context)
@@ -290,9 +287,19 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
 
                 notes.push(note_str);
             },
-            BeatElement::Dash(_dash) => {
-                // Skip dashes - they are duration extenders handled by rhythm analyzer
-                // The preceding note already has the extended duration
+            BeatElement::Dash(dash) => {
+                // Check if dash has rhythm data - if so, treat as rest or tied note
+                if let (Some(numer), Some(denom)) = (dash.numerator, dash.denominator) {
+                    use fraction::Fraction;
+                    let duration = Fraction::new(numer, denom);
+                    let duration_string = fraction_to_lilypond_note(duration);
+
+                    // For now, treat as rest. Could be extended to detect tied notes based on context
+                    notes.push(format!("r{}", duration_string));
+                } else {
+                    // Skip dashes without rhythm data - they are duration extenders handled by rhythm analyzer
+                    // The preceding note already has the extended duration
+                }
             },
             BeatElement::BreathMark(_) => {
                 notes.push("\\breathe".to_string());
@@ -427,7 +434,6 @@ fn fraction_to_lilypond_note(duration: fraction::Fraction) -> String {
 /// Convert ProcessedDocument (multiple staves) to LilyPond source
 pub fn convert_processed_document_to_lilypond_src(
     document: &Document,
-    metadata: &Metadata,
     source: Option<&str>
 ) -> Result<String, String> {
     // Extract staves from document
@@ -652,7 +658,6 @@ fn degree_to_lilypond_simple(degree: Degree) -> &'static str {
 /// Convert ProcessedDocument to minimal LilyPond source using minimal template
 pub fn convert_processed_document_to_minimal_lilypond_src(
     document: &Document,
-    _metadata: &Metadata,
     source: Option<&str>
 ) -> Result<String, String> {
     // Extract just the musical content without headers/layout

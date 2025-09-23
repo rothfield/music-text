@@ -54,56 +54,71 @@ fn generate_inter_estimates() -> Vec<(char, f32)> {
     let mut measurements = Vec::new();
 
     // Inter font measurements at 22.4px (proportional widths)
-    // ASCII printable characters with realistic Inter proportions
+    // More accurate measurements based on Inter font metrics
     for i in 32..=126 {
         let ch = char::from(i as u8);
         let width = match ch {
-            // Very narrow characters
-            'i' | 'l' | 'I' | 'j' | 't' | 'f' | '!' | '|' => 5.5,
-            'r' => 7.8,   // Special handling for skinny 'r'
-            '.' | ',' | ':' | ';' => 5.0,
-            ' ' => 6.7,
+            // Very narrow characters (Inter is quite condensed)
+            'i' | 'l' => 6.2,
+            'I' => 7.4,
+            'j' | 't' | 'f' => 7.8,
+            '!' | '|' | '\'' | '`' => 6.4,
+            'r' => 8.1,   // r is narrower in Inter
+            '.' | ',' => 6.2,
+            ':' | ';' => 6.7,
+            ' ' => 6.0,  // Inter has tight spacing
 
             // Wide characters
-            'M' | 'W' => 17.9,
-            'm' | 'w' => 16.8,
-            'G' | 'O' | 'Q' | 'D' => 15.2,
+            'M' | 'W' => 18.4,
+            'm' | 'w' => 17.1,
+            '@' => 19.2,
+            'G' | 'O' | 'Q' | 'D' => 15.7,
 
-            // Sargam characters (key ones)
-            'S' => 13.1,
-            'R' => 13.8,
-            'g' => 11.2,
-            'G' => 15.2,
-            'P' => 12.9,
-            'd' => 11.5,
-            'D' => 15.2,
-            'n' => 11.2,
-            'N' => 15.4,
+            // Numbers (Inter numbers are quite uniform)
+            '0' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => 12.3,
+            '1' => 10.8,  // 1 is narrower
 
-            // Medium characters
-            'A' | 'B' | 'C' | 'E' | 'F' | 'H' | 'K' | 'L' | 'N' | 'P' | 'R' | 'S' | 'T' | 'U' | 'V' | 'X' | 'Y' | 'Z' => 12.8,
-            'a' | 'b' | 'c' | 'd' | 'e' | 'g' | 'h' | 'k' | 'n' | 'o' | 'p' | 'q' | 's' | 'u' | 'v' | 'x' | 'y' | 'z' => 11.2,
+            // Uppercase letters
+            'A' | 'H' | 'K' | 'N' | 'R' | 'T' | 'U' | 'V' | 'X' | 'Y' | 'Z' => 13.9,
+            'B' | 'E' | 'F' | 'L' | 'P' | 'S' => 12.8,
+            'C' => 13.5,
+            'J' => 11.0,
 
-            // Numbers (Inter has proportional numbers)
-            '1' => 6.7,
-            '0' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => 11.2,
+            // Lowercase letters
+            'a' | 'e' | 'o' | 's' => 11.4,
+            'b' | 'd' | 'g' | 'h' | 'k' | 'n' | 'p' | 'q' | 'u' => 12.1,
+            'c' => 11.0,
+            'v' | 'x' | 'y' | 'z' => 10.8,
+
+            // Special characters
+            '-' | '–' => 9.2,  // Dash widths
+            '(' | ')' | '[' | ']' | '{' | '}' => 7.6,
+            '/' | '\\' => 8.8,
+            '+' | '=' => 12.6,
+            '*' => 10.2,
+            '#' => 13.7,
 
             // Default for other characters
-            _ => 11.0,
+            _ => 11.5,
         };
         measurements.push((ch, width));
     }
 
-    // Musical symbols (might be different width in music fonts)
+    // Musical symbols and special characters
     let musical_symbols = [
-        ('𝄀', 8.0),   // Single barline
-        ('𝄁', 12.0),  // Final barline
-        ('𝄆', 14.0),  // Repeat start
-        ('𝄇', 14.0),  // Repeat end
-        ('♯', 10.0),  // Sharp
-        ('♭', 10.0),  // Flat
-        ('♮', 10.0),  // Natural
-        ('•', 6.0),   // Octave dot
+        ('𝄀', 3.2),   // Single barline (very thin)
+        ('𝄁', 8.5),   // Final barline (thick+thin)
+        ('𝄆', 12.0),  // Repeat start
+        ('𝄇', 12.0),  // Repeat end
+        ('‖', 6.4),   // Double barline
+        ('♯', 8.8),   // Sharp
+        ('♭', 8.2),   // Flat
+        ('♮', 8.0),   // Natural
+        ('•', 5.8),   // Octave dot (bullet)
+        ('ʻ', 4.5),   // Breath mark
+        ('⌐', 10.2),  // Rest symbol
+        ('~', 12.1),  // Trill
+        ('∿', 11.8),  // Mordent
     ];
 
     measurements.extend(musical_symbols.iter().cloned());

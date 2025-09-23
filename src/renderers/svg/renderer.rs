@@ -2,7 +2,7 @@
 
 use crate::renderers::svg::{Document, Element, FontStrategy, Ornament, SMuFLMapper, SymbolType};
 use crate::models::pitch_systems;
-use crate::models::pitch::Notation;
+use crate::models::Notation;
 use std::fmt::Write;
 
 // Include generated character width measurements
@@ -346,7 +346,7 @@ impl Default for SvgRenderer {
 /// Walk the document tree directly and render SVG - no converters, no adapters
 pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_type: &str) -> String {
     use crate::models::pitch_systems;
-    use crate::models::pitch::Notation;
+    use crate::models::Notation;
 
     let mut svg = String::new();
 
@@ -500,16 +500,14 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
                                             crate::parse::model::Barline::RepeatEnd(_) => "𝄇", // Unicode repeat end
                                             crate::parse::model::Barline::RepeatBoth(_) => "𝄆𝄇", // Unicode repeat both
                                         };
-                                        svg.push_str(&format!(r#"    <text x="{}" y="{}" class="barline">{}</text>"#, x_pos, y_pos, barline_symbol));
+                                        svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="barline">{}</text>"#, x_pos, y_pos, barline_symbol));
                                         svg.push_str("\n");
-                                        x_pos += 3.2; // BARLINE_MARGIN from doremi.css
+                                        x_pos += get_char_width('𝄀') + 8.0; // Barline width plus margin
                                     }
                                     crate::parse::model::ContentElement::Whitespace(whitespace) => {
-                                        // Render each space character with measured width
-                                        for space_char in whitespace.content.chars() {
-                                            if space_char == ' ' {
-                                                svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="note"> </text>"#, x_pos, y_pos));
-                                                svg.push_str("\n");
+                                        // Advance x position based on whitespace width
+                                        if let Some(content) = &whitespace.value {
+                                            for _space_char in content.chars() {
                                                 x_pos += get_char_width(' ');
                                             }
                                         }
@@ -518,13 +516,11 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
                             }
                         }
                         crate::parse::model::StaveLine::Upper(upper_line) => {
-                            // Render upper line elements (octave markers, ornaments, etc.)
+                            // Skip upper line rendering for now - octave markers should be handled with notes
                             for upper_element in &upper_line.elements {
                                 match upper_element {
                                     crate::parse::model::UpperElement::UpperOctaveMarker { marker, .. } => {
-                                        svg.push_str(&format!(r#"    <text x="{}" y="{}" class="octave-marker" font-size="14">{}</text>"#, x_pos, y_pos - 15.0, marker));
-                                        svg.push_str("\n");
-                                        x_pos += 10.0;
+                                        // Skip - octave markers are rendered with notes
                                     }
                                     crate::parse::model::UpperElement::SlurIndicator { value, .. } => {
                                         // TODO: Implement slur rendering
@@ -571,13 +567,11 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
                             }
                         }
                         crate::parse::model::StaveLine::Lower(lower_line) => {
-                            // Render lower line elements (lower octave markers, syllables, etc.)
+                            // Skip lower line rendering for now - octave markers should be handled with notes
                             for lower_element in &lower_line.elements {
                                 match lower_element {
                                     crate::parse::model::LowerElement::LowerOctaveMarker { marker, .. } => {
-                                        svg.push_str(&format!(r#"    <text x="{}" y="{}" class="octave-marker" font-size="14">{}</text>"#, x_pos, y_pos + 25.0, marker));
-                                        svg.push_str("\n");
-                                        x_pos += 10.0;
+                                        // Skip - octave markers are rendered with notes
                                     }
                                     crate::parse::model::LowerElement::BeatGroupIndicator { value, .. } => {
                                         // TODO: Implement beat group rendering
@@ -662,24 +656,17 @@ fn render_beat_with_arcs(
     y_pos: f32
 ) -> f32 {
     let beat_start_x = x_pos;
+    let mut element_positions = Vec::new();
 
     // Doremi-script CSS constants (must match CSS :root values)
     const BASE_FONT_SIZE: f32 = 22.4;
-    const CH_WIDTH: f32 = 13.44;             // Character width for arc calculations
-    const NOTE_SPACING: f32 = 16.8;          // ch-width + note-gap (proper note spacing)
     const OCTAVE_X_OFFSET: f32 = 3.2;        // 0.2em from doremi.css - nudged left
     const UPPER_OCTAVE_Y_OFFSET: f32 = -6.4; // top: 0.4em from doremi.css - sits in bbox
-    const LOWER_OCTAVE_Y_OFFSET: f32 = 8.0;  // Above lower loops, below baseline
+    const LOWER_OCTAVE_Y_OFFSET: f32 = 18.0; // Below baseline for better visibility
     const BEAT_MARGIN_RIGHT: f32 = 16.0;     // 1em at 16px base
 
-    // Count renderable elements for lower arc calculation
-    let renderable_count = beat.elements.iter().filter(|element| {
-        matches!(element,
-            crate::parse::model::BeatElement::Note(_) |
-            crate::parse::model::BeatElement::Dash(_) |
-            crate::parse::model::BeatElement::BreathMark(_)
-        )
-    }).count();
+    // Track element positions for arc calculation
+    let mut renderable_elements = Vec::new();
 
     // Render all elements in this beat
     for beat_element in &beat.elements {
@@ -694,39 +681,42 @@ fn render_beat_with_arcs(
                 let note_value = pitch_systems::pitchcode_to_string(note.pitch_code, notation)
                     .unwrap_or_else(|| "1".to_string());
 
+                // Record position for arc calculation
+                element_positions.push((x_pos, note_value.clone()));
+                renderable_elements.push(x_pos);
+
                 svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="note">{}</text>"#, x_pos, y_pos, note_value));
                 svg.push_str("\n");
 
-                // Render octave markers based on note.octave value (using CSS constants)
+                // Render octave markers based on note.octave value
                 if note.octave > 0 {
                     // Upper octave markers (dots above the note)
-                    for i in 0..note.octave {
-                        let marker_x = x_pos + OCTAVE_X_OFFSET;
-                        let marker_y = y_pos + UPPER_OCTAVE_Y_OFFSET - (i as f32 * 5.0); // Stack vertically
-                        svg.push_str(&format!(r#"    <text x="{}" y="{}" class="upper-octave">•</text>"#, marker_x, marker_y));
-                        svg.push_str("\n");
-                    }
+                    let dots = "•".repeat(note.octave as usize);
+                    let marker_x = x_pos + OCTAVE_X_OFFSET;
+                    let marker_y = y_pos + UPPER_OCTAVE_Y_OFFSET;
+                    svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="upper-octave">{}</text>"#, marker_x, marker_y, dots));
+                    svg.push_str("\n");
                 } else if note.octave < 0 {
                     // Lower octave markers (dots below the note)
-                    for i in 0..(-note.octave) {
-                        let marker_x = x_pos + OCTAVE_X_OFFSET;
-                        let marker_y = y_pos + LOWER_OCTAVE_Y_OFFSET + (i as f32 * 5.0); // Stack vertically
-                        let octave_class = if note_value == "g" {
-                            "lower-octave note-has-descender"
-                        } else {
-                            "lower-octave"
-                        };
-                        svg.push_str(&format!(r#"    <text x="{}" y="{}" class="{}">•</text>"#, marker_x, marker_y, octave_class));
-                        svg.push_str("\n");
-                    }
+                    let dots = "•".repeat((-note.octave) as usize);
+                    let marker_x = x_pos + OCTAVE_X_OFFSET;
+                    let marker_y = y_pos + LOWER_OCTAVE_Y_OFFSET;
+                    let octave_class = if note_value == "g" || note_value == "p" || note_value == "q" || note_value == "y" {
+                        "lower-octave note-has-descender"
+                    } else {
+                        "lower-octave"
+                    };
+                    svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="{}">{}</text>"#, marker_x, marker_y, octave_class, dots));
+                    svg.push_str("\n");
                 }
 
-                x_pos += get_char_width(note_value.chars().next().unwrap_or('S')); // Character-aware spacing
+                x_pos += get_char_width(note_value.chars().next().unwrap_or('1'));
             }
             crate::parse::model::BeatElement::Dash(_) => {
+                renderable_elements.push(x_pos);
                 svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="dash">-</text>"#, x_pos, y_pos));
                 svg.push_str("\n");
-                x_pos += get_char_width('-'); // Character-aware spacing for dashes
+                x_pos += get_char_width('-');
             }
             crate::parse::model::BeatElement::BreathMark(_) => {
                 // TODO: Implement breath mark rendering
@@ -743,29 +733,25 @@ fn render_beat_with_arcs(
         }
     }
 
-    // Add lower arc if beat has multiple renderable elements (DOREMI-SCRIPT LOWER LOOPS!)
-    if renderable_count > 1 {
-        let n_chars = renderable_count as f32;
+    // Add lower arc if beat has multiple renderable elements
+    if renderable_elements.len() > 1 {
+        // Calculate arc dimensions based on actual element positions
+        let arc_start_x = *renderable_elements.first().unwrap();
+        let arc_end_x = *renderable_elements.last().unwrap() + 8.0; // Add width of last char
+        let arc_width = arc_end_x - arc_start_x;
 
-        // Doremi-script measurements:
-        // bottom: -0.42em below text
-        // width: N characters (no gaps in doremi-script) = N * 1ch
-        // height: 0.75em for arc depth (padding-bottom from doremi.css)
-        let arc_bottom_offset = BASE_FONT_SIZE * 0.42; // 0.42em below baseline
-        let arc_height = BASE_FONT_SIZE * 0.75; // 0.75em arc depth (from doremi.css)
-        let arc_width = n_chars * CH_WIDTH; // Just character widths, no gaps
-
-        let arc_start_x = beat_start_x;
-        let arc_y = y_pos + arc_bottom_offset;
+        // Arc positioning below baseline
+        let arc_y = y_pos + BASE_FONT_SIZE * 0.42; // 0.42em below baseline
+        let arc_height = BASE_FONT_SIZE * 0.65; // Slightly shallower arc
         let arc_center_x = arc_start_x + arc_width / 2.0;
         let arc_control_y = arc_y + arc_height;
 
-        // Create elliptical arc matching doremi-script border-radius: 0 0 9999px 9999px
+        // Create smooth quadratic arc
         svg.push_str(&format!(
-            r#"    <path d="M {} {} Q {} {} {} {}" class="lower-arc"/>"#,
+            r#"    <path d="M {:.1} {:.1} Q {:.1} {:.1} {:.1} {:.1}" class="lower-arc"/>"#,
             arc_start_x, arc_y,
             arc_center_x, arc_control_y,
-            arc_start_x + arc_width, arc_y
+            arc_end_x, arc_y
         ));
         svg.push_str("\n");
     }

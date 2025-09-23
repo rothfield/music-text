@@ -1,8 +1,16 @@
 ###
-  |1 1 1-2 3|3-2 3-4 5 -|
-row row row your boat, gent-ly down the stream
+ |1 1 1-2 3|
+row row row your boat,
 
-  |5 5 5-5 5|5-5 5-5 5 -|
+   
+  3-2 3-4 5 -567|
+   gent-ly down the stream 
+   
+   ...
+ | 111 555 333 111 |
+    merrily merrily merrily merrily
 
-  |1 1 1-1 1|1-1 1-1 1 -|
+  | 5-4 3-2 1 - |
+    life is but a dream
 ###
+

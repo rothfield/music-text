@@ -223,7 +223,7 @@ mod tests {
         assert_eq!(result.elements.len(), 1);
 
         match &result.elements[0] {
-            UpperElement::SlurIndicator { value, .. } => assert_eq!(value, "___"),
+            UpperElement::SlurIndicator { value, .. } => assert_eq!(value.as_ref().unwrap(), "___"),
             _ => panic!("Expected SlurIndicator"),
         }
     }
@@ -276,7 +276,7 @@ mod tests {
              UpperElement::Ornament { pitches, .. },
              UpperElement::Mordent { .. }) => {
                 assert_eq!(marker, ".");
-                assert_eq!(value, "___");
+                assert_eq!(value.as_ref().unwrap(), "___");
                 assert_eq!(pitches[0], "<S>");
             },
             _ => panic!("Unexpected element types"),

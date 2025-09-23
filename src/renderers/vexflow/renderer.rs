@@ -1,6 +1,6 @@
 // VexFlow renderer - generates self-executing JavaScript
 use crate::parse::model::{Document, DocumentElement};
-use crate::models::pitch::Degree;
+use crate::models::Degree;
 use super::js_generator::VexFlowJSGenerator;
 
 #[derive(Debug, Clone)]
@@ -324,7 +324,7 @@ fn convert_fraction_to_vexflow(duration: fraction::Fraction) -> (String, u8) {
 
 /// Convert degree to VexFlow key with octave
 fn degree_to_vexflow_key(degree: Degree, octave: i8) -> (String, Vec<serde_json::Value>) {
-    use crate::models::pitch::Degree::*;
+    use crate::models::Degree::*;
 
     let (base_note, accidental) = match degree {
         // Scale degree 1 (Do/Sa/C)
@@ -363,9 +363,9 @@ fn degree_to_vexflow_key(degree: Degree, octave: i8) -> (String, Vec<serde_json:
 }
 
 /// Convert PitchCode to Degree (they have identical variants)
-fn pitch_code_to_degree(pitch_code: crate::parse::model::PitchCode) -> crate::models::pitch::Degree {
-    use crate::parse::model::PitchCode::*;
-    use crate::models::pitch::Degree;
+fn pitch_code_to_degree(pitch_code: crate::models::PitchCode) -> crate::models::Degree {
+    use crate::models::PitchCode::*;
+    use crate::models::Degree;
 
     match pitch_code {
         N1bb => Degree::N1bb, N1b => Degree::N1b, N1 => Degree::N1, N1s => Degree::N1s, N1ss => Degree::N1ss,

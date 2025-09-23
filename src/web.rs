@@ -213,16 +213,8 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             // Always generate the doremi-script SVG POC (using the requested notation type)
             let svg_poc = Some(crate::renderers::svg::render_document_tree_to_svg(&result.document, &notation_type));
 
-            // Create minimal metadata for minimal lilypond rendering
-            let minimal_metadata = crate::models::Metadata {
-                title: result.document.title.as_ref().map(|t| crate::models::Title { text: t.clone(), row: 0, col: 0 }),
-                attributes: std::collections::HashMap::new(),
-                detected_system: None,
-                directives: Vec::new(),
-            };
-
             // Generate minimal lilypond before moving document
-            let lilypond_minimal = crate::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, &minimal_metadata, Some(&input)).ok();
+            let lilypond_minimal = crate::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, Some(&input)).ok();
 
             Json(ParseResponse {
                 success: true,

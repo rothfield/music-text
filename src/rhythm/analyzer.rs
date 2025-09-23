@@ -20,10 +20,34 @@ pub fn analyze_rhythm_into_document(document: &mut Document) -> Result<(), Strin
 }
 
 /// Analyze rhythm for a content line (sequence of beats and other elements)
-fn analyze_content_line_rhythm(elements: &mut Vec<ContentElement>) -> Result<(), String> {
-    for element in elements {
+pub fn analyze_content_line_rhythm(elements: &mut Vec<ContentElement>) -> Result<(), String> {
+    // First pass: determine which beats should be tied
+    let mut tie_flags = Vec::new();
+    for (i, element) in elements.iter().enumerate() {
         if let ContentElement::Beat(beat) = element {
-            analyze_beat_rhythm_fsm(beat)?;
+            let should_tie = should_tie_to_previous(beat, elements, i);
+            tie_flags.push((i, should_tie)); // Store both index and tie decision
+        }
+    }
+
+    // Second pass: apply rhythm analysis with tie information
+    for element in elements.iter_mut() {
+        if let ContentElement::Beat(beat) = element {
+            // Find the tie decision for this beat by matching position
+            let beat_char_index = beat.char_index;
+            let should_tie = tie_flags.iter()
+                .find(|(_, _)| {
+                    // Match by the beat's char_index or just use order
+                    true // For now, just use order
+                })
+                .map(|(_, tie)| *tie)
+                .unwrap_or(false);
+
+            // Remove the first entry since we're processing in order
+            if !tie_flags.is_empty() {
+                let (_, should_tie) = tie_flags.remove(0);
+                analyze_beat_rhythm_fsm(beat, should_tie)?;
+            }
         }
     }
     Ok(())
@@ -35,47 +59,62 @@ enum State {
     InNote { note_index: usize },
 }
 
+/// Check if a beat starting with dashes should be tied to a previous note/rest
+fn should_tie_to_previous(beat: &Beat, all_elements: &[ContentElement], current_index: usize) -> bool {
+    // Check if this beat starts with dashes
+    let starts_with_dash = beat.elements.first()
+        .map(|e| matches!(e, BeatElement::Dash(_)))
+        .unwrap_or(false);
+
+
+    if !starts_with_dash {
+        return false;
+    }
+
+    // Look backwards through previous elements to find a note or rest
+    for i in (0..current_index).rev() {
+        match &all_elements[i] {
+            ContentElement::Beat(prev_beat) => {
+                // Check the last element of this beat
+                if let Some(last_element) = prev_beat.elements.last() {
+                    match last_element {
+                        BeatElement::Note(_) => {
+                            return true;
+                        }
+                        BeatElement::Rest(_) => {
+                            return true;
+                        }
+                        BeatElement::BreathMark(_) => {
+                            return false;
+                        }
+                        BeatElement::Dash(_) => {
+                            continue;
+                        }
+                    }
+                }
+            }
+            ContentElement::Barline(_) => {
+                return false;
+            }
+            ContentElement::Whitespace(_) => {
+                continue;
+            }
+        }
+    }
+
+    false
+}
+
 /// FSM-based rhythm analyzer for a single beat
-fn analyze_beat_rhythm_fsm(beat: &mut Beat) -> Result<(), String> {
+fn analyze_beat_rhythm_fsm(beat: &mut Beat, should_tie: bool) -> Result<(), String> {
     let element_count = beat.elements.len();
 
     if element_count == 0 {
         return Ok(());
     }
 
-    // Check for leading dashes before any note
-    let mut leading_dash_count = 0;
-    let mut first_dash_index = None;
-    for (i, element) in beat.elements.iter().enumerate() {
-        match element {
-            BeatElement::Dash(_) => {
-                if first_dash_index.is_none() {
-                    first_dash_index = Some(i);
-                }
-                leading_dash_count += 1;
-            }
-            BeatElement::Note(_) => {
-                // Found a note, stop checking
-                break;
-            }
-            BeatElement::BreathMark(_) => {
-                // Continue checking past breath marks
-            }
-            BeatElement::Rest(_) => {
-                // Shouldn't happen in initial parsing, but handle gracefully
-                break;
-            }
-        }
-    }
-
-    // If we have leading dashes, set tied_to_previous
-    // The renderer will decide whether to create a tie (if previous note exists) or rest
-    if leading_dash_count > 0 {
-        beat.tied_to_previous = Some(true);
-
-        // Convert leading dashes to a Rest element if needed
-        // This will be handled by checking tied_to_previous in context
-    }
+    // Set tied_to_previous based on the analysis
+    beat.tied_to_previous = Some(should_tie);
 
     // Track subdivision counts for each note
     let mut note_subdivisions = Vec::new();
@@ -141,23 +180,46 @@ fn analyze_beat_rhythm_fsm(beat: &mut Beat) -> Result<(), String> {
         beat.tuplet_ratio = Some(calculate_tuplet_ratio(total_subdivisions));
     }
 
-    // Apply calculated durations to notes
+    // Check if first element is a dash that should be treated as a rest
+    let first_dash_is_rest = beat.elements.first()
+        .map(|first| matches!(first, BeatElement::Dash(_)))
+        .unwrap_or(false) && !should_tie;
+
+    // Apply calculated durations to notes and dashes
     let mut note_index = 0;
+    let mut is_first_element = true;
     for beat_element in &mut beat.elements {
-        if let BeatElement::Note(note) = beat_element {
-            if note_index < note_subdivisions.len() {
-                let subdivisions = note_subdivisions[note_index];
+        match beat_element {
+            BeatElement::Note(note) => {
+                if note_index < note_subdivisions.len() {
+                    let subdivisions = note_subdivisions[note_index];
 
-                // Calculate duration as fraction of beat
-                let duration = Fraction::new(subdivisions as u64, total_subdivisions as u64) * Fraction::new(1u64, 4u64);
+                    // Calculate duration as fraction of beat
+                    let duration = Fraction::new(subdivisions as u64, total_subdivisions as u64) * Fraction::new(1u64, 4u64);
 
-                // Convert to numerator/denominator
-                let numer = *duration.numer().unwrap() as u32;
-                let denom = *duration.denom().unwrap() as u32;
-                note.numerator = Some(numer);
-                note.denominator = Some(denom);
+                    // Convert to numerator/denominator
+                    let numer = *duration.numer().unwrap() as u32;
+                    let denom = *duration.denom().unwrap() as u32;
+                    note.numerator = Some(numer);
+                    note.denominator = Some(denom);
 
-                note_index += 1;
+                    note_index += 1;
+                }
+                is_first_element = false;
+            }
+            BeatElement::Dash(dash) => {
+                // If this is the first dash and not tied, it represents a rest
+                if is_first_element && first_dash_is_rest {
+                    let duration = Fraction::new(1u64, total_subdivisions as u64) * Fraction::new(1u64, 4u64);
+                    let numer = *duration.numer().unwrap() as u32;
+                    let denom = *duration.denom().unwrap() as u32;
+                    dash.numerator = Some(numer);
+                    dash.denominator = Some(denom);
+                }
+                is_first_element = false;
+            }
+            _ => {
+                is_first_element = false;
             }
         }
     }
@@ -208,8 +270,8 @@ mod tests {
         let mut beat = Beat {
             elements: vec![
                 BeatElement::Note(Note::new(Some("1".to_string()), 0, PitchCode::N1, NotationSystem::Number)),
-                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 1, consumed_elements: vec![] }),
-                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 2, consumed_elements: vec![] }),
+                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 1, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 2, consumed_elements: vec![], numerator: None, denominator: None }),
                 BeatElement::Note(Note::new(Some("2".to_string()), 3, PitchCode::N2, NotationSystem::Number)),
             ],
             value: Some("1--2".to_string()),
@@ -222,7 +284,7 @@ mod tests {
             tied_to_previous: None,
         };
 
-        analyze_beat_rhythm_fsm(&mut beat).unwrap();
+        analyze_beat_rhythm_fsm(&mut beat, false).unwrap(); // Not tied for this test
 
         // Check that first note gets 3/4 of beat (3 subdivisions out of 4)
         if let BeatElement::Note(note1) = &beat.elements[0] {

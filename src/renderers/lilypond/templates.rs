@@ -195,10 +195,13 @@ pub fn auto_select_template(document: &Document) -> LilyPondTemplate {
 */
 
 
-pub fn auto_select_template_for_metadata(_metadata: &crate::models::Metadata) -> LilyPondTemplate {
-    // Always use Standard template for CLI output to get compact paper settings
-    // The Standard template has proper paper size constraints for web UI display
-    LilyPondTemplate::Standard
+pub fn auto_select_template_for_document(document: &crate::parse::model::Document) -> LilyPondTemplate {
+    // Use Standard if there's a title, otherwise Minimal
+    if document.title.is_some() {
+        LilyPondTemplate::Standard
+    } else {
+        LilyPondTemplate::Minimal
+    }
 }
 
 #[cfg(test)]

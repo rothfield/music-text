@@ -1,5 +1,4 @@
-use crate::models::pitch::Degree;
-use crate::parse::model::PitchCode;
+use crate::models::{Degree, PitchCode};
 
 // IMPORTANT: SARGAM IS CASE SENSITIVE
 // - s is an alias for S, p is an alias for P

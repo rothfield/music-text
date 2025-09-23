@@ -2,7 +2,7 @@
 // These types are used by the rhythm FSM for processing musical elements
 
 use serde::{Deserialize, Serialize};
-pub use crate::models::pitch::Degree;
+pub use crate::models::Degree;
 
 /// Position information for parsed elements
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]

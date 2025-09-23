@@ -1,5 +1,4 @@
-use crate::models::pitch::Degree;
-use crate::parse::model::PitchCode;
+use crate::models::{Degree, PitchCode};
 
 /// Get all valid tabla symbols (for regex pattern generation)
 /// Returns symbols sorted by length (longest first) for proper regex matching
