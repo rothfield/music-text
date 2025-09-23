@@ -68,7 +68,8 @@
             <div class="tab active" onclick="switchTab('vexflow', this)">VexFlow Draft</div>
             <div class="tab" onclick="switchTab('svg', this)">LilyPond SVG</div>
             <div class="tab" onclick="switchTab('svgpoc', this)">SVG POC</div>
-            <div class="tab" onclick="switchTab('lilypond', this)">LilyPond Src</div>
+            <div class="tab" onclick="switchTab('lilypond', this)">LilyPond Src (minimal)</div>
+            <div class="tab" onclick="switchTab('lilypond-full', this)">LilyPond Src</div>
             <div class="tab" onclick="switchTab('document', this)">Document</div>
             <div class="tab" onclick="switchTab('spans', this)">Spans</div>
             <div class="tab" onclick="switchTab('styles', this)">Span Classes</div>
@@ -96,7 +97,11 @@
         </div>
         
         <div id="lilypond-tab" class="tab-content">
-            <div id="lilypond-output">Enter music notation above to see LilyPond source</div>
+            <div id="lilypond-output">Enter music notation above to see minimal LilyPond source</div>
+        </div>
+
+        <div id="lilypond-full-tab" class="tab-content">
+            <div id="lilypond-full-output">Enter music notation above to see full LilyPond source</div>
         </div>
         
         <div id="document-tab" class="tab-content">

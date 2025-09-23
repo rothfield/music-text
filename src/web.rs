@@ -36,6 +36,7 @@ pub struct ParseResponse {
     document: Option<crate::parse::Document>,
     detected_notation_systems: Option<Vec<String>>,
     lilypond: Option<String>,
+    lilypond_minimal: Option<String>,
     lilypond_svg: Option<String>,
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
@@ -160,6 +161,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             document: None,
             detected_notation_systems: None,
             lilypond: None,
+            lilypond_minimal: None,
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
@@ -211,12 +213,24 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             // Always generate the doremi-script SVG POC (using the requested notation type)
             let svg_poc = Some(crate::renderers::svg::render_document_tree_to_svg(&result.document, &notation_type));
 
+            // Create minimal metadata for minimal lilypond rendering
+            let minimal_metadata = crate::models::Metadata {
+                title: result.document.title.as_ref().map(|t| crate::models::Title { text: t.clone(), row: 0, col: 0 }),
+                attributes: std::collections::HashMap::new(),
+                detected_system: None,
+                directives: Vec::new(),
+            };
+
+            // Generate minimal lilypond before moving document
+            let lilypond_minimal = crate::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, &minimal_metadata, Some(&input)).ok();
+
             Json(ParseResponse {
                 success: true,
                 plain_text: Some(input.clone()),
                 document: Some(result.document),
                 detected_notation_systems: None,
-                lilypond: Some(result.lilypond),
+                lilypond: Some(result.lilypond.clone()),
+                lilypond_minimal,
                 lilypond_svg,
                 vexflow: Some(result.vexflow_data),
                 vexflow_svg: Some(result.vexflow_svg),
@@ -233,6 +247,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             document: None,
             detected_notation_systems: None,
             lilypond: None,
+            lilypond_minimal: None,
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,

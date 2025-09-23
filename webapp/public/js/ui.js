@@ -114,12 +114,24 @@ export const UI = {
 
     // Update LilyPond output
     updateLilyPondOutput(result) {
-        if (result.success && result.lilypond) {
-            document.getElementById('lilypond-output').textContent = result.lilypond;
+        // Update minimal LilyPond output
+        const minimalOutput = document.getElementById('lilypond-output');
+        if (result.success && result.lilypond_minimal) {
+            minimalOutput.innerHTML = `<pre class="lilypond-source">${this.escapeHTML(result.lilypond_minimal)}</pre>`;
         } else if (result.success) {
-            document.getElementById('lilypond-output').textContent = 'No LilyPond source available';
+            minimalOutput.innerHTML = '<pre class="lilypond-source">No LilyPond source available</pre>';
         } else {
-            document.getElementById('lilypond-output').textContent = `Parse error: ${result.error}`;
+            minimalOutput.innerHTML = `<pre class="lilypond-source">Parse error: ${this.escapeHTML(result.error)}</pre>`;
+        }
+
+        // Update full LilyPond output
+        const fullOutput = document.getElementById('lilypond-full-output');
+        if (result.success && result.lilypond) {
+            fullOutput.innerHTML = `<pre class="lilypond-source">${this.escapeHTML(result.lilypond)}</pre>`;
+        } else if (result.success) {
+            fullOutput.innerHTML = '<pre class="lilypond-source">No LilyPond source available</pre>';
+        } else {
+            fullOutput.innerHTML = `<pre class="lilypond-source">Parse error: ${this.escapeHTML(result.error)}</pre>`;
         }
     },
 
@@ -274,7 +286,8 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
     // Clear empty inputs
     clearEmptyInputs() {
         document.getElementById('vexflow-output').innerHTML = '';
-        document.getElementById('lilypond-output').textContent = 'Enter music notation above to see LilyPond source';
+        document.getElementById('lilypond-output').innerHTML = '<pre class="lilypond-source">Enter music notation above to see minimal LilyPond source</pre>';
+        document.getElementById('lilypond-full-output').innerHTML = '<pre class="lilypond-source">Enter music notation above to see full LilyPond source</pre>';
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
         document.getElementById('spans-output').textContent = 'Enter music notation to see syntax spans';
         document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';

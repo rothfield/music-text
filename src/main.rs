@@ -56,9 +56,11 @@ enum Commands {
     Document {
         input: Option<String>,
     },
-    /// Show full LilyPond score
+    /// Show full LilyPond source
     #[command(name = "full-lily")]
     FullLily { input: Option<String> },
+    /// Show minimal LilyPond source (notes only)
+    Lilypond { input: Option<String> },
     /// Generate syntax spans for editor integration
     Tokens { input: Option<String> },
     /// Generate character styles for editor highlighting
@@ -124,6 +126,20 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let notation = get_input_from_option_or_stdin(input)?;
             let result = pipeline::process_notation(&notation)?;
             println!("{}", result.lilypond);
+            return Ok(());
+        }
+        Some(Commands::Lilypond { input }) => {
+            let notation = get_input_from_option_or_stdin(input)?;
+            let result = pipeline::process_notation(&notation)?;
+            // Generate minimal lilypond using minimal template
+            let metadata = music_text::models::Metadata {
+                title: result.document.title.as_ref().map(|t| music_text::models::Title { text: t.clone(), row: 0, col: 0 }),
+                attributes: std::collections::HashMap::new(),
+                detected_system: None,
+                directives: Vec::new(),
+            };
+            let minimal_lilypond = music_text::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, &metadata, Some(&notation))?;
+            println!("{}", minimal_lilypond);
             return Ok(());
         }
         Some(Commands::Tokens { input }) => {
@@ -339,6 +355,7 @@ fn run_repl() -> std::result::Result<(), Box<dyn std::error::Error>> {
 #[derive(Clone, Copy, PartialEq)]
 enum OutputFormat {
     LilyPond,
+    LilyPondFull,
     JSON,
     Debug,
     SVG,
@@ -350,7 +367,8 @@ enum OutputFormat {
 impl OutputFormat {
     fn as_str(&self) -> &'static str {
         match self {
-            OutputFormat::LilyPond => "LilyPond",
+            OutputFormat::LilyPond => "LilyPond Src (minimal)",
+            OutputFormat::LilyPondFull => "LilyPond Src",
             OutputFormat::JSON => "JSON",
             OutputFormat::Debug => "Debug",
             OutputFormat::SVG => "SVG",
@@ -363,6 +381,7 @@ impl OutputFormat {
     fn all() -> Vec<OutputFormat> {
         vec![
             OutputFormat::LilyPond,
+            OutputFormat::LilyPondFull,
             OutputFormat::JSON,
             OutputFormat::Debug,
             OutputFormat::SVG,
@@ -413,6 +432,16 @@ impl App {
                 self.scroll_offset = 0; // Reset scroll when content changes
                 self.output = match format {
                     OutputFormat::LilyPond => {
+                        let metadata = music_text::models::Metadata {
+                            title: processing_result.document.title.as_ref().map(|t| music_text::models::Title { text: t.clone(), row: 0, col: 0 }),
+                            attributes: std::collections::HashMap::new(),
+                            detected_system: None,
+                            directives: Vec::new(),
+                        };
+                        music_text::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&processing_result.document, &metadata, Some(&self.input))
+                            .unwrap_or_else(|e| format!("Error generating minimal lilypond: {}", e))
+                    },
+                    OutputFormat::LilyPondFull => {
                         processing_result.lilypond
                     },
                     OutputFormat::JSON => {
@@ -663,3 +692,4 @@ async fn run_tui_repl() -> std::result::Result<(), Box<dyn std::error::Error>> {
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     Ok(())
 }
+

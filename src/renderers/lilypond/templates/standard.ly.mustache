@@ -39,9 +39,9 @@
     \fixed c' {
       \key c \major
       {{#time_signature}}{{{time_signature}}}{{/time_signature}}{{^time_signature}}\time 4/4{{/time_signature}}
-      \set Score.measureBarType = #""
-      \set Score.startRepeatBarType = #""
-      \set Score.endRepeatBarType = #""
+      % \set Score.measureBarType = #""
+      % \set Score.startRepeatBarType = #""
+      % \set Score.endRepeatBarType = #""
       {{#key_signature}}{{{key_signature}}}{{/key_signature}}
       {{{staves}}}
     }
@@ -60,7 +60,7 @@
       \Score
       \override SpacingSpanner.base-shortest-duration = #(ly:make-moment 1/32)
       \override SpacingSpanner.shortest-duration-space = #0.8
-      \remove "Bar_number_engraver"
+      % \remove "Bar_number_engraver"
     }
   }
 }
