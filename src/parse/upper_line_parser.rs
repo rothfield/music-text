@@ -1,4 +1,4 @@
-use crate::parse::model::{UpperLine, UpperElement};
+use crate::parse::model::{UpperLine, UpperElement, Attributes, Position};
 use crate::parse::ParseError;
 
 /// Parse an upper line following the grammar specification
@@ -13,13 +13,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
             // Newline: upper_line ends in newline or EOI - include newline as part of upper_line
             '\n' => {
                 elements.push(UpperElement::Newline {
-                    value: "\n".to_string(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some("\n".to_string()),
-                        position: Position { line: line_num, column, index_in_line, index_in_doc: line_start_doc_index + index_in_line },
-                    },
+                    newline_value: "\n".to_string(),
+                    value: Some("\n".to_string()),
+                    char_index: line_start_doc_index + index_in_line, // was: position fields in Attributes
                 });
                 column += 1;
                 index_in_line += 1;
@@ -29,12 +25,8 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
             '.' | ':' | '*' => {
                 UpperElement::UpperOctaveMarker {
                     marker: ch.to_string(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(ch.to_string()),
-                        position: Position { line: line_num, column, index_in_line, index_in_doc: line_start_doc_index + index_in_line },
-                    },
+                    value: Some(ch.to_string()),
+                    char_index: line_start_doc_index + index_in_line,
                 }
             },
 
@@ -53,13 +45,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
                 }
 
                 UpperElement::SlurIndicator {
-                    value: value.clone(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(value),
-                        position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                    },
+                    indicator_value: value.clone(),
+                    value: Some(value),
+                    char_index: line_start_doc_index + start_index_in_line,
                 }
             },
 
@@ -79,12 +67,8 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 UpperElement::Space {
                     count,
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(" ".repeat(count)),
-                        position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                    },
+                    value: Some(" ".repeat(count)),
+                    char_index: line_start_doc_index + start_index_in_line,
                 }
             },
 
@@ -108,12 +92,8 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 UpperElement::Ornament {
                     pitches: vec![content.clone()],
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(content),
-                        position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                    },
+                    value: Some(content),
+                    char_index: line_start_doc_index + start_index_in_line,
                 }
             },
 
@@ -137,24 +117,16 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 UpperElement::Chord {
                     chord: content.clone(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(content),
-                        position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                    },
+                    value: Some(content),
+                    char_index: line_start_doc_index + start_index_in_line,
                 }
             },
 
             // Mordent: ~ character
             '~' => {
                 UpperElement::Mordent {
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some("~".to_string()),
-                        position: Position { line: line_num, column, index_in_line, index_in_doc: line_start_doc_index + index_in_line },
-                    },
+                    value: Some("~".to_string()),
+                    char_index: line_start_doc_index + index_in_line,
                 }
             },
 
@@ -173,13 +145,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
                 }
 
                 UpperElement::UpperHashes {
-                    value: value.clone(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(value),
-                        position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                    },
+                    hash_value: value.clone(),
+                    value: Some(value),
+                    char_index: line_start_doc_index + start_index_in_line,
                 }
             },
 
@@ -203,13 +171,9 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
                 }
 
                 UpperElement::Unknown {
-                    value: value.clone(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(value),
-                        position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                    },
+                    unknown_value: value.clone(),
+                    value: Some(value),
+                    char_index: line_start_doc_index + start_index_in_line,
                 }
             }
         };
@@ -221,12 +185,8 @@ pub fn parse_upper_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
     Ok(UpperLine {
         elements,
-        source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-            value: Some(input.to_string()),
-            position: Position { line: line_num, column: 1, index_in_line: 0, index_in_doc: line_start_doc_index },
-        },
+        value: Some(input.to_string()),
+        char_index: line_start_doc_index,
     })
 }
 

@@ -1,4 +1,4 @@
-use crate::parse::model::{ContentLine, ContentElement, NotationSystem, Barline, SingleBarline, DoubleBarline, FinalBarline, RepeatStartBarline, RepeatEndBarline, RepeatBothBarline, Whitespace, Beat};
+use crate::parse::model::{ContentLine, ContentElement, NotationSystem, Barline, SingleBarline, DoubleBarline, FinalBarline, RepeatStartBarline, RepeatEndBarline, RepeatBothBarline, Whitespace, Beat, Attributes, Position};
 use crate::parse::beat::parse_beat;
 use crate::parse::pitch::is_pitch_start;
 use crate::parse::ParseError;
@@ -93,17 +93,9 @@ pub fn parse_content_line(
                 let whitespace_content = " ".repeat(space_count);
                 elements.push(ContentElement::Whitespace(crate::parse::model::Whitespace {
                     content: whitespace_content.clone(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(whitespace_content),
-                        position: Position {
-                            line: line_num,
-                            column: column_from_pos(input, start_pos),
-                            index_in_line: index_in_line_from_pos(input, start_pos, line_num),
-                            index_in_doc: line_start_doc_index + start_pos,
-                        },
-                    },
+                    value: Some(whitespace_content),
+                    char_index: line_start_doc_index + start_pos,
+                    consumed_elements: Vec::new(),
                 }));
             }
 
@@ -142,17 +134,9 @@ pub fn parse_content_line(
 
     Ok(ContentLine {
         elements,
-        source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-            value: Some(input.to_string()),
-            position: Position {
-                line: line_num,
-                column: 1,
-                index_in_line: 0,
-                index_in_doc: line_start_doc_index,
-            },
-        },
+        value: Some(input.to_string()),
+        char_index: line_start_doc_index,
+        consumed_elements: Vec::new(),
     })
 }
 
@@ -224,27 +208,17 @@ fn parse_barline(
         }
     }
 
-    // Create Attributes for all barline types
-    let attributes = Attributes {
-        slur_start: false,
-        slur_char_length: None,
-        value: Some(barline_str.clone()),
-        position: Position {
-            line: line_num,
-            column: column_from_pos(input, start_pos),
-            index_in_line: index_in_line_from_pos(input, start_pos, line_num),
-            index_in_doc: line_start_doc_index + start_pos,
-        },
-    };
+    let char_index = line_start_doc_index + start_pos;
+    let value = Some(barline_str.clone());
 
     // Create specific barline object based on pattern
     let barline = match barline_str.as_str() {
-        "|" => Barline::Single(SingleBarline { source: attributes }),
-        "||" => Barline::Double(DoubleBarline { source: attributes }),
-        "|." => Barline::Final(FinalBarline { source: attributes }),
-        "|:" => Barline::RepeatStart(RepeatStartBarline { source: attributes }),
-        ":|" => Barline::RepeatEnd(RepeatEndBarline { source: attributes }),
-        "|:|" | ":|:" => Barline::RepeatBoth(RepeatBothBarline { source: attributes }),
+        "|" => Barline::Single(SingleBarline { value: value.clone(), char_index, consumed_elements: Vec::new() }),
+        "||" => Barline::Double(DoubleBarline { value: value.clone(), char_index, consumed_elements: Vec::new() }),
+        "|." => Barline::Final(FinalBarline { value: value.clone(), char_index, consumed_elements: Vec::new() }),
+        "|:" => Barline::RepeatStart(RepeatStartBarline { value: value.clone(), char_index, consumed_elements: Vec::new() }),
+        ":|" => Barline::RepeatEnd(RepeatEndBarline { value: value.clone(), char_index, consumed_elements: Vec::new() }),
+        "|:|" | ":|:" => Barline::RepeatBoth(RepeatBothBarline { value: value.clone(), char_index, consumed_elements: Vec::new() }),
         _ => {
             return Err(ParseError {
                 message: format!("Invalid barline pattern: {}", barline_str),

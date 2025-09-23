@@ -1,4 +1,4 @@
-use crate::parse::model::{LowerLine, LowerElement};
+use crate::parse::model::{LowerLine, LowerElement, Attributes, Position};
 use crate::parse::ParseError;
 
 /// Parse a lower line following the grammar specification
@@ -13,13 +13,9 @@ pub fn parse_lower_line(input: &str, line_num: usize, line_start_doc_index: usiz
             // Newline: lower_line ends in newline or EOI - include newline as part of lower_line
             '\n' => {
                 elements.push(LowerElement::Newline {
-                    value: "\n".to_string(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some("\n".to_string()),
-                        position: Position { line: line_num, column, index_in_line, index_in_doc: line_start_doc_index + index_in_line },
-                    },
+                    newline_value: "\n".to_string(),
+                    value: Some("\n".to_string()),
+                    char_index: line_start_doc_index + index_in_line, // was: position fields in Attributes
                 });
                 column += 1;
                 index_in_line += 1;
@@ -29,12 +25,8 @@ pub fn parse_lower_line(input: &str, line_num: usize, line_start_doc_index: usiz
             '.' | ':' => {
                 LowerElement::LowerOctaveMarker {
                     marker: ch.to_string(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(ch.to_string()),
-                        position: Position { line: line_num, column, index_in_line, index_in_doc: line_start_doc_index + index_in_line },
-                    },
+                    value: Some(ch.to_string()),
+                    char_index: line_start_doc_index + index_in_line, // was: position fields in Attributes
                 }
             },
 
@@ -54,24 +46,16 @@ pub fn parse_lower_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 if value.len() >= 2 {
                     LowerElement::BeatGroupIndicator {
-                        value: value.clone(),
-                        source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                            value: Some(value),
-                            position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                        },
+                        indicator_value: value.clone(),
+                        value: Some(value),
+                        char_index: line_start_doc_index + start_index_in_line, // was: position fields in Attributes
                     }
                 } else {
                     // Single underscore becomes Unknown
                     LowerElement::Unknown {
-                        value: value.clone(),
-                        source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                            value: Some(value),
-                            position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                        },
+                        unknown_value: value.clone(),
+                        value: Some(value),
+                        char_index: line_start_doc_index + start_index_in_line, // was: position fields in Attributes
                     }
                 }
             },
@@ -92,12 +76,8 @@ pub fn parse_lower_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 LowerElement::Space {
                     count,
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(" ".repeat(count)),
-                        position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                    },
+                    value: Some(" ".repeat(count)),
+                    char_index: line_start_doc_index + start_index_in_line, // was: position fields in Attributes
                 }
             },
 
@@ -121,12 +101,8 @@ pub fn parse_lower_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
                 LowerElement::Syllable {
                     content: content.clone(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(content),
-                        position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                    },
+                    value: Some(content),
+                    char_index: line_start_doc_index + start_index_in_line, // was: position fields in Attributes
                 }
             },
 
@@ -149,13 +125,9 @@ pub fn parse_lower_line(input: &str, line_num: usize, line_start_doc_index: usiz
                 }
 
                 LowerElement::Unknown {
-                    value: value.clone(),
-                    source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-                        value: Some(value),
-                        position: Position { line: line_num, column: start_col, index_in_line: start_index_in_line, index_in_doc: line_start_doc_index + start_index_in_line },
-                    },
+                    unknown_value: value.clone(),
+                    value: Some(value),
+                    char_index: line_start_doc_index + start_index_in_line, // was: position fields in Attributes
                 }
             }
         };
@@ -168,12 +140,8 @@ pub fn parse_lower_line(input: &str, line_num: usize, line_start_doc_index: usiz
 
     Ok(LowerLine {
         elements,
-        source: Attributes {
-                            slur_start: false,
-                            slur_char_length: None,
-            value: Some(input.to_string()),
-            position: Position { line: line_num, column: 1, index_in_line: 0, index_in_doc: line_start_doc_index },
-        },
+        value: Some(input.to_string()),
+        char_index: line_start_doc_index, // was: position fields in Attributes
     })
 }
 

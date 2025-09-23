@@ -521,48 +521,48 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
                             // Render upper line elements (octave markers, ornaments, etc.)
                             for upper_element in &upper_line.elements {
                                 match upper_element {
-                                    crate::parse::model::UpperElement::UpperOctaveMarker { marker, source: _ } => {
+                                    crate::parse::model::UpperElement::UpperOctaveMarker { marker, .. } => {
                                         svg.push_str(&format!(r#"    <text x="{}" y="{}" class="octave-marker" font-size="14">{}</text>"#, x_pos, y_pos - 15.0, marker));
                                         svg.push_str("\n");
                                         x_pos += 10.0;
                                     }
-                                    crate::parse::model::UpperElement::SlurIndicator { value, source: _ } => {
+                                    crate::parse::model::UpperElement::SlurIndicator { value, .. } => {
                                         // TODO: Implement slur rendering
-                                        svg.push_str(&format!(r#"    <!-- TODO: Slur {} -->"#, value));
+                                        svg.push_str(&format!(r#"    <!-- TODO: Slur {:?} -->"#, value));
                                         svg.push_str("\n");
                                     }
-                                    crate::parse::model::UpperElement::UpperHashes { value, source: _ } => {
+                                    crate::parse::model::UpperElement::UpperHashes { value, .. } => {
                                         // TODO: Implement multi-stave markers
-                                        svg.push_str(&format!(r#"    <!-- TODO: Upper hashes {} -->"#, value));
+                                        svg.push_str(&format!(r#"    <!-- TODO: Upper hashes {:?} -->"#, value));
                                         svg.push_str("\n");
                                     }
-                                    crate::parse::model::UpperElement::Ornament { pitches, source: _ } => {
+                                    crate::parse::model::UpperElement::Ornament { pitches, .. } => {
                                         // TODO: Implement ornament rendering
                                         svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="ornament">~</text>"#, x_pos, y_pos - 10.0));
                                         svg.push_str("\n");
                                     }
-                                    crate::parse::model::UpperElement::Chord { chord, source: _ } => {
+                                    crate::parse::model::UpperElement::Chord { chord, .. } => {
                                         // TODO: Implement chord rendering
                                         svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="chord">{}</text>"#, x_pos, y_pos - 30.0, chord));
                                         svg.push_str("\n");
                                     }
-                                    crate::parse::model::UpperElement::Mordent { source: _ } => {
+                                    crate::parse::model::UpperElement::Mordent { .. } => {
                                         // TODO: Implement mordent rendering
                                         svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="ornament">~</text>"#, x_pos, y_pos - 10.0));
                                         svg.push_str("\n");
                                     }
-                                    crate::parse::model::UpperElement::Space { count, source: _ } => {
+                                    crate::parse::model::UpperElement::Space { count, .. } => {
                                         // Render upper spaces
                                         for _ in 0..*count {
                                             x_pos += get_char_width(' ');
                                         }
                                     }
-                                    crate::parse::model::UpperElement::Unknown { value, source: _ } => {
+                                    crate::parse::model::UpperElement::Unknown { value, .. } => {
                                         // TODO: Handle unknown upper elements
-                                        svg.push_str(&format!(r#"    <!-- Unknown upper: {} -->"#, value));
+                                        svg.push_str(&format!(r#"    <!-- Unknown upper: {:?} -->"#, value));
                                         svg.push_str("\n");
                                     }
-                                    crate::parse::model::UpperElement::Newline { value, source: _ } => {
+                                    crate::parse::model::UpperElement::Newline { .. } => {
                                         // TODO: Handle upper newlines
                                         svg.push_str(&format!(r#"    <!-- Upper newline -->"#));
                                         svg.push_str("\n");
@@ -574,38 +574,38 @@ pub fn render_document_tree_to_svg(document: &crate::parse::Document, notation_t
                             // Render lower line elements (lower octave markers, syllables, etc.)
                             for lower_element in &lower_line.elements {
                                 match lower_element {
-                                    crate::parse::model::LowerElement::LowerOctaveMarker { marker, source: _ } => {
+                                    crate::parse::model::LowerElement::LowerOctaveMarker { marker, .. } => {
                                         svg.push_str(&format!(r#"    <text x="{}" y="{}" class="octave-marker" font-size="14">{}</text>"#, x_pos, y_pos + 25.0, marker));
                                         svg.push_str("\n");
                                         x_pos += 10.0;
                                     }
-                                    crate::parse::model::LowerElement::BeatGroupIndicator { value, source: _ } => {
+                                    crate::parse::model::LowerElement::BeatGroupIndicator { value, .. } => {
                                         // TODO: Implement beat group rendering
-                                        svg.push_str(&format!(r#"    <!-- TODO: Beat group {} -->"#, value));
+                                        svg.push_str(&format!(r#"    <!-- TODO: Beat group {:?} -->"#, value));
                                         svg.push_str("\n");
                                     }
-                                    crate::parse::model::LowerElement::Syllable { content, source: _ } => {
+                                    crate::parse::model::LowerElement::Syllable { content, .. } => {
                                         svg.push_str(&format!(r#"    <text x="{:.1}" y="{}" class="lyric">{}</text>"#, x_pos, y_pos + 20.0, content));
                                         svg.push_str("\n");
                                         x_pos += get_char_width(content.chars().next().unwrap_or(' ')) * content.len() as f32;
                                     }
-                                    crate::parse::model::LowerElement::Space { count, source: _ } => {
+                                    crate::parse::model::LowerElement::Space { count, .. } => {
                                         // Render lower spaces
                                         for _ in 0..*count {
                                             x_pos += get_char_width(' ');
                                         }
                                     }
-                                    crate::parse::model::LowerElement::Unknown { value, source: _ } => {
+                                    crate::parse::model::LowerElement::Unknown { value, .. } => {
                                         // TODO: Handle unknown lower elements
-                                        svg.push_str(&format!(r#"    <!-- Unknown lower: {} -->"#, value));
+                                        svg.push_str(&format!(r#"    <!-- Unknown lower: {:?} -->"#, value));
                                         svg.push_str("\n");
                                     }
-                                    crate::parse::model::LowerElement::Newline { value, source: _ } => {
+                                    crate::parse::model::LowerElement::Newline { .. } => {
                                         // TODO: Handle lower newlines
                                         svg.push_str(&format!(r#"    <!-- Lower newline -->"#));
                                         svg.push_str("\n");
                                     }
-                                    crate::parse::model::LowerElement::EndOfInput { source: _ } => {
+                                    crate::parse::model::LowerElement::EndOfInput { .. } => {
                                         // TODO: Handle end of input
                                         svg.push_str(&format!(r#"    <!-- End of input -->"#));
                                         svg.push_str("\n");

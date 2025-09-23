@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::collections::HashMap;
-use crate::parse::model::{Document, DocumentElement, StaveLine, ContentElement, BeatElement};
+use crate::parse::model::{Document, DocumentElement, StaveLine, ContentLine, ContentElement, BeatElement};
 
 #[derive(Debug, Serialize, Clone)]
 pub struct Span {
@@ -43,8 +43,12 @@ pub fn render_codemirror_spans(document: &Document, original_input: &str) -> Vec
         if let DocumentElement::Stave(stave) = element {
             for line in &stave.lines {
                 if let StaveLine::ContentLine(content_line) = line {
+                    // First, create spans for content line consumed elements
+                    spans.extend(render_content_line_consumed_elements(content_line, original_input));
+
+                    // Then, create spans for the actual content elements
                     for content_element in &content_line.elements {
-                        spans.extend(render_content_element(content_element, original_input));
+                        spans.extend(render_content_element(content_element, content_line, original_input));
                     }
                 }
             }
@@ -54,22 +58,101 @@ pub fn render_codemirror_spans(document: &Document, original_input: &str) -> Vec
     spans
 }
 
-fn render_content_element(content_element: &ContentElement, original_input: &str) -> Vec<Span> {
+/// Create spans for elements consumed by the content line itself
+fn render_content_line_consumed_elements(content_line: &ContentLine, original_input: &str) -> Vec<Span> {
+    let mut spans = Vec::new();
+
+    for consumed_element in &content_line.consumed_elements {
+        match consumed_element {
+            crate::parse::model::ConsumedElement::SlurIndicator { value, char_index } => {
+                if let Some(ref slur_value) = value {
+                    let mut span = Span::simple(
+                        "consumed-slur",
+                        *char_index,
+                        *char_index + slur_value.len(),
+                        slur_value.clone()
+                    );
+                    // Add data attributes for consumed slur styling
+                    span.data_attributes.insert("data-consumed".to_string(), "true".to_string());
+                    span.data_attributes.insert("data-consumed-type".to_string(), "slur".to_string());
+                    span.data_attributes.insert("data-original-value".to_string(), slur_value.clone());
+                    spans.push(span);
+                }
+            },
+            crate::parse::model::ConsumedElement::UpperOctaveMarker { value, char_index } => {
+                if let Some(ref marker_value) = value {
+                    let mut span = Span::simple(
+                        "consumed-upper-octave",
+                        *char_index,
+                        *char_index + marker_value.len(),
+                        marker_value.clone()
+                    );
+                    // Add data attributes for consumed octave marker styling
+                    span.data_attributes.insert("data-consumed".to_string(), "true".to_string());
+                    span.data_attributes.insert("data-consumed-type".to_string(), "upper-octave".to_string());
+                    span.data_attributes.insert("data-original-value".to_string(), marker_value.clone());
+                    spans.push(span);
+                }
+            },
+            crate::parse::model::ConsumedElement::LowerOctaveMarker { value, char_index } => {
+                if let Some(ref marker_value) = value {
+                    let mut span = Span::simple(
+                        "consumed-lower-octave",
+                        *char_index,
+                        *char_index + marker_value.len(),
+                        marker_value.clone()
+                    );
+                    // Add data attributes for consumed octave marker styling
+                    span.data_attributes.insert("data-consumed".to_string(), "true".to_string());
+                    span.data_attributes.insert("data-consumed-type".to_string(), "lower-octave".to_string());
+                    span.data_attributes.insert("data-original-value".to_string(), marker_value.clone());
+                    spans.push(span);
+                }
+            },
+        }
+    }
+
+    spans
+}
+
+fn render_content_element(content_element: &ContentElement, content_line: &ContentLine, original_input: &str) -> Vec<Span> {
     match content_element {
-        ContentElement::Beat(beat) => beat.elements.iter()
-            .enumerate()
-            .flat_map(|(index, beat_element)| render_beat_element(beat_element, beat, index == 0, original_input))
-            .collect(),
+        ContentElement::Beat(beat) => {
+            let mut spans: Vec<Span> = beat.elements.iter()
+                .enumerate()
+                .flat_map(|(index, beat_element)| render_beat_element(beat_element, beat, index == 0, original_input))
+                .collect();
+
+            // Add content line consumed elements to all spans from this beat
+            for span in &mut spans {
+                add_content_line_consumed_elements(span, content_line);
+            }
+
+            spans
+        },
         ContentElement::Barline(barline) => {
-            let source = match barline {
-                crate::parse::model::Barline::Single(b) => &b.source,
-                crate::parse::model::Barline::Double(b) => &b.source,
-                crate::parse::model::Barline::Final(b) => &b.source,
-                crate::parse::model::Barline::RepeatStart(b) => &b.source,
-                crate::parse::model::Barline::RepeatEnd(b) => &b.source,
-                crate::parse::model::Barline::RepeatBoth(b) => &b.source,
+            let (value, char_index) = match barline {
+                crate::parse::model::Barline::Single(b) => (&b.value, b.char_index),
+                crate::parse::model::Barline::Double(b) => (&b.value, b.char_index),
+                crate::parse::model::Barline::Final(b) => (&b.value, b.char_index),
+                crate::parse::model::Barline::RepeatStart(b) => (&b.value, b.char_index),
+                crate::parse::model::Barline::RepeatEnd(b) => (&b.value, b.char_index),
+                crate::parse::model::Barline::RepeatBoth(b) => (&b.value, b.char_index),
             };
-            vec![render_simple_element("barline", source, "|", original_input)]
+            // Create temporary Attributes for compatibility
+            let temp_attrs = crate::parse::model::Attributes {
+                slur_position: crate::parse::model::SlurPosition::None,
+                value: value.clone(),
+                position: crate::parse::model::Position {
+                    line: 0,
+                    column: 0,
+                    index_in_line: 0,
+                    index_in_doc: char_index,
+                },
+            };
+            let mut span = render_simple_element("barline", &temp_attrs, "|", original_input);
+            add_content_line_consumed_elements(&mut span, content_line);
+            vec![span]
         },
         ContentElement::Whitespace(_) => vec![],
     }
@@ -78,8 +161,19 @@ fn render_content_element(content_element: &ContentElement, original_input: &str
 fn render_beat_element(beat_element: &BeatElement, beat: &crate::parse::model::Beat, is_first_in_beat: bool, original_input: &str) -> Vec<Span> {
     match beat_element {
         BeatElement::Note(note) => {
-            let mut span = render_simple_element("note", &note.source,
-                &note.source.value.as_ref().unwrap_or(&"?".to_string()), original_input);
+            // Create temporary Attributes for compatibility
+            let temp_attrs = crate::parse::model::Attributes {
+                slur_position: crate::parse::model::SlurPosition::None,
+                value: note.value.clone(),
+                position: crate::parse::model::Position {
+                    line: 0,
+                    column: 0,
+                    index_in_line: 0,
+                    index_in_doc: note.char_index,
+                },
+            };
+            let mut span = render_simple_element("note", &temp_attrs,
+                &note.value.as_ref().unwrap_or(&"?".to_string()), original_input);
             let mut additional_spans = add_note_specific_attributes(&mut span, note);
             add_beat_context_attributes(&mut span, beat, is_first_in_beat);
 
@@ -88,11 +182,38 @@ fn render_beat_element(beat_element: &BeatElement, beat: &crate::parse::model::B
             result
         },
         BeatElement::Dash(dash) => {
-            let mut span = render_simple_element("dash", &dash.source, "-", original_input);
+            // Create temporary Attributes for compatibility
+            let temp_attrs = crate::parse::model::Attributes {
+                slur_position: crate::parse::model::SlurPosition::None,
+                value: dash.value.clone(),
+                position: crate::parse::model::Position {
+                    line: 0,
+                    column: 0,
+                    index_in_line: 0,
+                    index_in_doc: dash.char_index,
+                },
+            };
+            let mut span = render_simple_element("dash", &temp_attrs, "-", original_input);
+            add_dash_specific_attributes(&mut span, dash);
             add_beat_context_attributes(&mut span, beat, is_first_in_beat);
             vec![span]
         },
-        BeatElement::BreathMark(breath) => vec![render_simple_element("breath", &breath.source, "'", original_input)],
+        BeatElement::BreathMark(breath) => {
+            // Create temporary Attributes for compatibility
+            let temp_attrs = crate::parse::model::Attributes {
+                slur_position: crate::parse::model::SlurPosition::None,
+                value: breath.value.clone(),
+                position: crate::parse::model::Position {
+                    line: 0,
+                    column: 0,
+                    index_in_line: 0,
+                    index_in_doc: breath.char_index,
+                },
+            };
+            let mut span = render_simple_element("breath", &temp_attrs, "'", original_input);
+            add_breath_specific_attributes(&mut span, breath);
+            vec![span]
+        },
     }
 }
 
@@ -114,36 +235,42 @@ fn add_note_specific_attributes(span: &mut Span, note: &crate::parse::model::Not
     // Octave information
     span.data_attributes.insert("data-octave".to_string(), note.octave.to_string());
 
-    // Process spatial assignments - create spans for each spatial element generically
-    for assignment in &note.spatial_assignments {
-        if let Some(span) = create_spatial_assignment_span(assignment) {
-            additional_spans.push(span);
-        }
-    }
 
     // Consumed elements information - process octave markers using new pattern
     for consumed_element in &note.consumed_elements {
         match consumed_element {
-            crate::parse::model::ConsumedElement::UpperOctaveMarker { source } => {
-                if let Some(ref marker) = source.value {
+            crate::parse::model::ConsumedElement::UpperOctaveMarker { value, char_index } => {
+                if let Some(ref marker) = value {
                     span.data_attributes.insert("data-consumed-octave-marker".to_string(), marker.clone());
                 }
                 span.data_attributes.insert("data-consumed-octave-direction".to_string(), "upper".to_string());
-                span.data_attributes.insert("data-consumed-source-position".to_string(), source.position.index_in_doc.to_string());
+                span.data_attributes.insert("data-consumed-source-position".to_string(), char_index.to_string());
             },
-            crate::parse::model::ConsumedElement::LowerOctaveMarker { source } => {
-                if let Some(ref marker) = source.value {
+            crate::parse::model::ConsumedElement::LowerOctaveMarker { value, char_index } => {
+                if let Some(ref marker) = value {
                     span.data_attributes.insert("data-consumed-octave-marker".to_string(), marker.clone());
                 }
                 span.data_attributes.insert("data-consumed-octave-direction".to_string(), "lower".to_string());
-                span.data_attributes.insert("data-consumed-source-position".to_string(), source.position.index_in_doc.to_string());
+                span.data_attributes.insert("data-consumed-source-position".to_string(), char_index.to_string());
+            },
+            crate::parse::model::ConsumedElement::SlurIndicator { value, char_index } => {
+                if let Some(ref slur) = value {
+                    span.data_attributes.insert("data-consumed-slur-indicator".to_string(), slur.clone());
+                    // Add slur character loop length for the first element (to draw arc)
+                    let slur_length = slur.chars().filter(|c| *c == '_').count();
+                    if slur_length > 0 {
+                        span.data_attributes.insert("data-slur-char-loop-length".to_string(), slur_length.to_string());
+                    }
+                }
+                span.data_attributes.insert("data-consumed-slur-position".to_string(), char_index.to_string());
+                span.data_attributes.insert("data-consumed-element-type".to_string(), "slur".to_string());
             },
         }
     }
 
 
     // Original pitch information for HTML tooltips
-    if let Some(ref pitch_string) = note.source.value {
+    if let Some(ref pitch_string) = note.value {
         span.data_attributes.insert("data-original-pitch".to_string(), pitch_string.clone());
 
         // Create HTML data-title attribute for browser tooltips
@@ -161,78 +288,100 @@ fn add_note_specific_attributes(span: &mut Span, note: &crate::parse::model::Not
     additional_spans
 }
 
-/// Generic function to create spans for spatial assignments using reflection-like approach
-fn create_spatial_assignment_span(assignment: &crate::parse::model::SpatialAssignment) -> Option<Span> {
-    use crate::parse::model::SpatialAssignment::*;
+fn add_dash_specific_attributes(span: &mut Span, dash: &crate::parse::model::Dash) -> Vec<Span> {
+    let mut additional_spans = Vec::new();
 
-    match assignment {
-        Slur { start_pos, end_pos } => {
-            let content = "____".to_string();
-            // For now, use start_pos as document index - this needs to be fixed upstream in spatial processing
-            // to use actual document indices instead of column positions
-            let mut span = Span {
-                r#type: "slur-indicator".to_string(),
-                start: 0, // TODO: This should be the actual document index of the slur indicator
-                end: content.len(), // Only span the actual underscore characters
-                content,
-                data_attributes: HashMap::new(),
-            };
-            span.data_attributes.insert("data-slur-start-pos".to_string(), start_pos.to_string());
-            span.data_attributes.insert("data-slur-end-pos".to_string(), end_pos.to_string());
-            Some(span)
+    // Dash-specific semantic data
+    span.data_attributes.insert("data-type".to_string(), "dash".to_string());
+
+    // Slur position information (handled via consumed elements)
+
+    // Consumed elements information
+    for consumed_element in &dash.consumed_elements {
+        match consumed_element {
+            crate::parse::model::ConsumedElement::SlurIndicator { value, char_index } => {
+                if let Some(ref slur) = value {
+                    span.data_attributes.insert("data-consumed-slur-indicator".to_string(), slur.clone());
+                    // Add slur character loop length for the first element (to draw arc)
+                    let slur_length = slur.chars().filter(|c| *c == '_').count();
+                    if slur_length > 0 {
+                        span.data_attributes.insert("data-slur-char-loop-length".to_string(), slur_length.to_string());
+                    }
+                }
+                span.data_attributes.insert("data-consumed-slur-position".to_string(), char_index.to_string());
+                span.data_attributes.insert("data-consumed-element-type".to_string(), "slur".to_string());
+            },
+            _ => {
+                // Other consumed element types can be added here
+            }
         }
-        BeatGroup { start_pos, end_pos, underscore_count } => {
-            let content = "_".repeat(*underscore_count);
-            let mut span = Span {
-                r#type: "beat-group-indicator".to_string(),
-                start: *start_pos,
-                end: *start_pos + content.len(), // Only span the actual underscore characters
-                content,
-                data_attributes: HashMap::new(),
-            };
-            span.data_attributes.insert("data-beat-group-start-pos".to_string(), start_pos.to_string());
-            span.data_attributes.insert("data-beat-group-end-pos".to_string(), end_pos.to_string());
-            span.data_attributes.insert("data-underscore-count".to_string(), underscore_count.to_string());
-            Some(span)
+    }
+
+    additional_spans
+}
+
+fn add_breath_specific_attributes(span: &mut Span, breath: &crate::parse::model::BreathMark) -> Vec<Span> {
+    let mut additional_spans = Vec::new();
+
+    // Breath mark-specific semantic data
+    span.data_attributes.insert("data-type".to_string(), "breath".to_string());
+
+    // Slur position information (handled via consumed elements)
+
+    // Consumed elements information
+    for consumed_element in &breath.consumed_elements {
+        match consumed_element {
+            crate::parse::model::ConsumedElement::SlurIndicator { value, char_index } => {
+                if let Some(ref slur) = value {
+                    span.data_attributes.insert("data-consumed-slur-indicator".to_string(), slur.clone());
+                    // Add slur character loop length for the first element (to draw arc)
+                    let slur_length = slur.chars().filter(|c| *c == '_').count();
+                    if slur_length > 0 {
+                        span.data_attributes.insert("data-slur-char-loop-length".to_string(), slur_length.to_string());
+                    }
+                }
+                span.data_attributes.insert("data-consumed-slur-position".to_string(), char_index.to_string());
+                span.data_attributes.insert("data-consumed-element-type".to_string(), "slur".to_string());
+            },
+            _ => {
+                // Other consumed element types can be added here
+            }
         }
-        OctaveMarker { octave_value, marker_symbol, is_upper } => {
-            // Octave markers are usually handled as consumed elements, but could create spans here too
-            let span_type = if *is_upper { "upper-octave-marker" } else { "lower-octave-marker" };
-            let content = marker_symbol.clone();
-            let mut span = Span {
-                r#type: span_type.to_string(),
-                start: 0, // Position would need to be passed in or calculated
-                end: content.len(), // Only span the actual marker characters
-                content,
-                data_attributes: HashMap::new(),
-            };
-            span.data_attributes.insert("data-octave-value".to_string(), octave_value.to_string());
-            span.data_attributes.insert("data-is-upper".to_string(), is_upper.to_string());
-            Some(span)
-        }
-        Syllable { content } => {
-            let content_str = content.clone();
-            let mut span = Span {
-                r#type: "syllable-indicator".to_string(),
-                start: 0, // Position would need to be passed in
-                end: content_str.len(), // Only span the actual syllable characters
-                content: content_str.clone(),
-                data_attributes: HashMap::new(),
-            };
-            span.data_attributes.insert("data-syllable-content".to_string(), content_str);
-            Some(span)
-        }
-        Mordent => {
-            let content = "~".to_string();
-            let mut span = Span {
-                r#type: "mordent-indicator".to_string(),
-                start: 0, // Position would need to be passed in
-                end: content.len(), // Only span the actual ornament character
-                content,
-                data_attributes: HashMap::new(),
-            };
-            span.data_attributes.insert("data-ornament-type".to_string(), "mordent".to_string());
-            Some(span)
+    }
+
+    additional_spans
+}
+
+fn add_content_line_consumed_elements(span: &mut Span, content_line: &ContentLine) {
+    // Add information about elements consumed by the content line itself
+    for consumed_element in &content_line.consumed_elements {
+        match consumed_element {
+            crate::parse::model::ConsumedElement::SlurIndicator { value, char_index } => {
+                if let Some(ref slur) = value {
+                    span.data_attributes.insert("data-line-consumed-slur-indicator".to_string(), slur.clone());
+                    // Add slur character loop length (number of underscores = number of notes in slur)
+                    let slur_length = slur.chars().filter(|c| *c == '_').count();
+                    if slur_length > 0 {
+                        span.data_attributes.insert("data-slur-char-loop-length".to_string(), slur_length.to_string());
+                    }
+                }
+                span.data_attributes.insert("data-line-consumed-slur-position".to_string(), char_index.to_string());
+                span.data_attributes.insert("data-line-consumed-element-type".to_string(), "slur".to_string());
+            },
+            crate::parse::model::ConsumedElement::UpperOctaveMarker { value, char_index } => {
+                if let Some(ref marker) = value {
+                    span.data_attributes.insert("data-line-consumed-octave-marker".to_string(), marker.clone());
+                }
+                span.data_attributes.insert("data-line-consumed-octave-position".to_string(), char_index.to_string());
+                span.data_attributes.insert("data-line-consumed-element-type".to_string(), "upper-octave".to_string());
+            },
+            crate::parse::model::ConsumedElement::LowerOctaveMarker { value, char_index } => {
+                if let Some(ref marker) = value {
+                    span.data_attributes.insert("data-line-consumed-octave-marker".to_string(), marker.clone());
+                }
+                span.data_attributes.insert("data-line-consumed-octave-position".to_string(), char_index.to_string());
+                span.data_attributes.insert("data-line-consumed-element-type".to_string(), "lower-octave".to_string());
+            },
         }
     }
 }
@@ -266,13 +415,13 @@ fn add_beat_context_attributes(span: &mut Span, beat: &crate::parse::model::Beat
             let beat_char_length: usize = beat.elements.iter().map(|element| {
                 match element {
                     crate::parse::model::BeatElement::Note(n) => {
-                        n.source.value.as_ref().map(|v| v.chars().count()).unwrap_or(1)
+                        n.value.as_ref().map(|v| v.chars().count()).unwrap_or(1)
                     },
                     crate::parse::model::BeatElement::Dash(d) => {
-                        d.source.value.as_ref().map(|v| v.chars().count()).unwrap_or(1)
+                        d.value.as_ref().map(|v| v.chars().count()).unwrap_or(1)
                     },
                     crate::parse::model::BeatElement::BreathMark(b) => {
-                        b.source.value.as_ref().map(|v| v.chars().count()).unwrap_or(1)
+                        b.value.as_ref().map(|v| v.chars().count()).unwrap_or(1)
                     },
                 }
             }).sum();
@@ -367,6 +516,51 @@ pub fn render_codemirror_styles(spans: &[Span], original_input: &str) -> Vec<Spa
                 "data-consumed-source-position" => {
                     styles.insert("--consumed-source-position".to_string(), value.clone());
                 }
+                "data-slur-position" => {
+                    styles.insert("--slur-position".to_string(), format!("\"{}\"", value));
+                    classes.push(format!("slur-{}", value.to_lowercase()));
+                }
+                "data-consumed-slur-indicator" => {
+                    styles.insert("--consumed-slur-indicator".to_string(), format!("\"{}\"", value));
+                    classes.push("consumed-slur".to_string());
+                }
+                "data-consumed-slur-position" => {
+                    styles.insert("--consumed-slur-position".to_string(), value.clone());
+                }
+                "data-line-consumed-slur-indicator" => {
+                    styles.insert("--line-consumed-slur-indicator".to_string(), format!("\"{}\"", value));
+                    classes.push("line-consumed-slur".to_string());
+                }
+                "data-line-consumed-slur-position" => {
+                    styles.insert("--line-consumed-slur-position".to_string(), value.clone());
+                }
+                "data-slur-char-loop-length" => {
+                    styles.insert("--slur-char-loop-length".to_string(), value.clone());
+                }
+                "data-line-consumed-octave-marker" => {
+                    styles.insert("--line-consumed-octave-marker".to_string(), format!("\"{}\"", value));
+                    classes.push("line-consumed-octave".to_string());
+                }
+                "data-line-consumed-octave-position" => {
+                    styles.insert("--line-consumed-octave-position".to_string(), value.clone());
+                }
+                "data-line-consumed-element-type" => {
+                    styles.insert("--line-consumed-element-type".to_string(), format!("\"{}\"", value));
+                    classes.push(format!("line-consumed-{}", value));
+                }
+                "data-consumed" => {
+                    if value == "true" {
+                        classes.push("consumed".to_string());
+                        classes.push("greyed-out".to_string());
+                    }
+                }
+                "data-consumed-type" => {
+                    styles.insert("--consumed-type".to_string(), format!("\"{}\"", value));
+                    classes.push(format!("consumed-{}", value));
+                }
+                "data-original-value" => {
+                    styles.insert("--original-value".to_string(), format!("\"{}\"", value));
+                }
                 _ => {
                     // Convert other data attributes to CSS custom properties
                     let css_prop = key.replace("data-", "--");
@@ -374,6 +568,10 @@ pub fn render_codemirror_styles(spans: &[Span], original_input: &str) -> Vec<Spa
                 }
             }
         }
+
+        // Deduplicate classes
+        classes.sort();
+        classes.dedup();
 
         SpanStyle {
             pos: byte_pos_to_char_pos(original_input, span.start),

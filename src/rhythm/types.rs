@@ -67,8 +67,8 @@ pub enum ParsedElement {
         position: Position,
         children: Vec<ParsedChild>, // Attached ornaments, octave markers, lyrics
         duration: Option<(usize, usize)>, // Duration fraction (numerator, denominator) from FSM
-        beat_group: Option<BeatGroupRole>, // Boundary information (Start/Middle/End)  
-        in_slur: bool, // Convenience flag: slur.is_some()
+        beat_group: Option<BeatGroupRole>, // Boundary information (Start/Middle/End)
+        slur_position: crate::parse::model::SlurPosition, // Position within slurs
         in_beat_group: bool, // Convenience flag: beat_group.is_some()
     },
     
@@ -140,8 +140,9 @@ impl ParsedElement {
             children: vec![],
             duration: None,
             beat_group: None,
-            in_slur: false,
+            slur_position: crate::parse::model::SlurPosition::None,
             in_beat_group: false,
         }
     }
+
 }

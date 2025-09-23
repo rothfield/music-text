@@ -347,7 +347,8 @@ pub fn convert_processed_document_to_lilypond_src(
             title: document.title.clone(),
             author: document.author.clone(),
             directives: document.directives.clone(),
-            source: document.source.clone(),
+            value: document.value.clone(),
+            char_index: document.char_index,
             elements: vec![DocumentElement::Stave(stave.clone())],
         }, source)
     } else {

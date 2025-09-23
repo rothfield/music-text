@@ -9,8 +9,9 @@ use crate::models::Degree;
 /// Shared position information for all parsed elements
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Position {
-    pub row: usize,
-    pub col: usize,
+    pub row: usize,     // was: row for display
+    pub col: usize,     // was: col for display
+    pub char_index: usize, // document position
 }
 
 
@@ -162,8 +163,8 @@ impl ParsedElement {
 }
 
 impl Position {
-    pub fn new(row: usize, col: usize) -> Self {
-        Self { row, col }
+    pub fn new(row: usize, col: usize, char_index: usize) -> Self {
+        Self { row, col, char_index }
     }
 }
 

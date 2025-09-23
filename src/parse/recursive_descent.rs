@@ -37,10 +37,7 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
             directives: HashMap::new(),
             elements: Vec::new(),
             value: Some(input.to_string()),
-            line: 1,
-            column: 1,
-            index_in_line: 0,
-            index_in_doc: 0,
+            char_index: 0, // was: line, column, index_in_line, index_in_doc
         });
     }
 
@@ -239,10 +236,7 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
         directives,
         elements,
         value: Some(input.to_string()),
-        line: 1,
-        column: 1,
-        index_in_line: 0,
-        index_in_doc: 0,
+        char_index: 0, // was: line, column, index_in_line, index_in_doc
     })
 }
 
@@ -400,10 +394,7 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
                 let text_line = TextLine {
                     content: current_line.trim_end_matches('\n').to_string(),
                     value: Some(current_line.trim_end_matches('\n').to_string()),
-                    line: *line - 1,
-                    column: 1,
-                    index_in_line: 0,
-                    index_in_doc: this_line_start_doc_index,
+                    char_index: this_line_start_doc_index, // was: line, column, index_in_line, index_in_doc
                 };
                 lines.push(crate::parse::model::StaveLine::Text(text_line));
             }
@@ -427,10 +418,7 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             let text_line = TextLine {
                 content: current_line.trim_end_matches('\n').to_string(),
                 value: Some(current_line.trim_end_matches('\n').to_string()),
-                line: *line - 1,
-                column: 1,
-                index_in_line: 0,
-                index_in_doc: this_line_start_doc_index,
+                char_index: this_line_start_doc_index, // was: line, column, index_in_line, index_in_doc
             };
             lines.push(crate::parse::model::StaveLine::Text(text_line));
         }
@@ -503,10 +491,7 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             let whitespace_line = WhitespaceLine {
                 elements,
                 value: Some(current_line.clone()),
-                line: *line,
-                column: 1,
-                index_in_line: 0,
-                index_in_doc: this_line_start_doc_index,
+                char_index: this_line_start_doc_index, // was: line, column, index_in_line, index_in_doc
             };
             lines.push(crate::parse::model::StaveLine::Whitespace(whitespace_line));
         } else if is_content_line(&current_line.trim_end_matches('\n')) {
@@ -531,10 +516,7 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
                 let text_line = TextLine {
                     content: current_line.trim_end_matches('\n').to_string(),
                     value: Some(current_line.trim_end_matches('\n').to_string()),
-                    line: *line - 1,
-                    column: 1,
-                    index_in_line: 0,
-                    index_in_doc: this_line_start_doc_index,
+                    char_index: this_line_start_doc_index, // was: line, column, index_in_line, index_in_doc
                 };
                 lines.push(crate::parse::model::StaveLine::Text(text_line));
             }
@@ -543,10 +525,7 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             let text_line = TextLine {
                 content: current_line.trim_end_matches('\n').to_string(),
                 value: Some(current_line.trim_end_matches('\n').to_string()),
-                line: *line - 1,
-                column: 1,
-                index_in_line: 0,
-                index_in_doc: this_line_start_doc_index,
+                char_index: this_line_start_doc_index, // was: line, column, index_in_line, index_in_doc
             };
             lines.push(crate::parse::model::StaveLine::Text(text_line));
         }

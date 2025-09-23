@@ -2,45 +2,54 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use fraction::Fraction;
 
-// Spatial assignment types that can be applied to notes
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SpatialAssignment {
-    OctaveMarker {
-        octave_value: i8,
-        marker_symbol: String,
-        is_upper: bool,
-    },
-    Slur {
-        start_pos: usize,
-        end_pos: usize,
-    },
-    Syllable {
-        content: String,
-    },
-    BeatGroup {
-        start_pos: usize,
-        end_pos: usize,
-        underscore_count: usize,
-    },
-    Mordent,
+/// Position of a note within slur markings
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SlurPosition {
+    None,       // Not part of any slur
+    Start,      // Starts a slur
+    Middle,     // Inside a slur (not start or end)
+    End,        // Ends a slur
+    StartEnd,   // Both starts and ends a slur (single-note slur)
 }
+
+impl Default for SlurPosition {
+    fn default() -> Self {
+        SlurPosition::None
+    }
+}
+
+/// Position information with old field structure (transitional)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Position {
+    pub line: usize,
+    pub column: usize,
+    pub index_in_line: usize,
+    pub index_in_doc: usize,
+}
+
+/// Attributes structure for parser elements
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Attributes {
+    pub slur_position: SlurPosition,
+    pub value: Option<String>,
+    pub position: Position,
+}
+
 
 // Consumed elements that have been moved to notes (follows ContentElement pattern)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConsumedElement {
     UpperOctaveMarker {
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     LowerOctaveMarker {
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
+    },
+    SlurIndicator {
+        value: Option<String>,
+        char_index: usize, // Position of the slur indicator in the document
     },
 }
 
@@ -297,55 +306,43 @@ pub struct PitchString {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SingleBarline {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this barline via 2D spatial rules
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DoubleBarline {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this barline via 2D spatial rules
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinalBarline {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this barline via 2D spatial rules
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepeatStartBarline {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this barline via 2D spatial rules
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepeatEndBarline {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this barline via 2D spatial rules
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepeatBothBarline {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this barline via 2D spatial rules
 }
 
 // Unified barline enum for ContentElement
@@ -363,46 +360,34 @@ pub enum Barline {
 pub struct Space {
     pub count: usize,
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this space via 2D spatial rules
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dash {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this dash via 2D spatial rules
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Newline {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EndOfInput {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BreathMark {
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this breath mark via 2D spatial rules
 }
 
 // Note object - consistent with other elements
@@ -410,51 +395,33 @@ pub struct BreathMark {
 pub struct Note {
     // Common fields
     pub value: Option<String>,          // Raw pitch string
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize,              // was: line, column, index_in_line, index_in_doc
     // Note-specific fields
     pub octave: i8,                     // Octave -4..4
     pub pitch_code: PitchCode,          // Normalized pitch code
     pub notation_system: NotationSystem, // Which notation system this note uses
-    pub spatial_assignments: Vec<SpatialAssignment>, // Spatial elements assigned to this note
     pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this note via 2D spatial rules
     pub numerator: Option<u32>,         // Simple duration numerator
-    pub denominator: Option<u32>,       // Simple duration denominator
-    // Slur-specific fields (only notes can start slurs)
-    #[serde(default)]
-    pub slur_start: bool,               // True if this note starts a slur
-    #[serde(default)]
-    pub slur_char_length: Option<usize>, // Length of slur in characters
+    pub denominator: Option<u32>        // Simple duration denominator
 }
 
 impl Note {
     /// Factory function to create a new Note with consistent default values
     pub fn new(
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize,
         pitch_code: PitchCode,
         notation_system: NotationSystem,
     ) -> Self {
         Self {
             value,
-            line,
-            column,
-            index_in_line,
-            index_in_doc,
+            char_index,
             octave: 0,                      // Default octave
             pitch_code,
             notation_system,
-            spatial_assignments: Vec::new(), // Will be populated during spatial analysis
             consumed_elements: Vec::new(),   // Will be populated during spatial analysis
             numerator: None,                // Will be populated by rhythm analysis
-            denominator: None,              // Will be populated by rhythm analysis
-            slur_start: false,              // Default no slur
-            slur_char_length: None,         // No slur length
+            denominator: None              // Will be populated by rhythm analysis
         }
     }
 }
@@ -498,10 +465,7 @@ pub struct Document {
     pub directives: HashMap<String, String>, // key -> value
     pub elements: Vec<DocumentElement>, // Document as sequence of elements
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
 }
 
 impl Document {
@@ -556,10 +520,7 @@ pub struct Stave {
 pub struct TextLine {
     pub content: String,
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -573,20 +534,16 @@ pub enum ContentElement {
 pub struct Whitespace {
     pub content: String,
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this whitespace via 2D spatial rules
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentLine {
     pub elements: Vec<ContentElement>,  // Mixed elements: barlines, whitespace, beats
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this content line via 2D spatial rules
 }
 
 // Beat structure - a sequence of beat elements
@@ -594,10 +551,8 @@ pub struct ContentLine {
 pub struct Beat {
     pub elements: Vec<BeatElement>,
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
+    pub consumed_elements: Vec<ConsumedElement>, // Elements consumed by this beat via 2D spatial rules
     pub divisions: Option<usize>,        // Number of divisions in this beat (e.g., 12 for 12 sixteenths)
     pub total_duration: Option<Fraction>, // Total duration of this beat (e.g., 1/4 for quarter note beat)
     pub is_tuplet: Option<bool>,         // Whether this beat is a tuplet (3, 5, 6, 7, etc. divisions)
@@ -618,40 +573,28 @@ pub enum BeatElement {
 pub struct UpperLine {
     pub elements: Vec<UpperElement>,
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LowerLine {
     pub elements: Vec<LowerElement>,
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LyricsLine {
     pub syllables: Vec<Syllable>,
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhitespaceLine {
     pub elements: Vec<crate::rhythm::types::ParsedElement>, // Whitespace elements and optional newline
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
 }
 
 // UpperLine elements from specification
@@ -660,74 +603,47 @@ pub enum UpperElement {
     UpperOctaveMarker {
         marker: String,  // "." or ":"
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     SlurIndicator {
         indicator_value: String,  // "_____" for slurs
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     UpperHashes {
         hash_value: String,  // "###" for multi-stave markers
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     Ornament {
         pitches: Vec<String>,  // 123, <456> grace notes/melismas (🚧 planned)
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     Chord {
         chord: String,  // [Am] chord symbols (🚧 planned)
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     Mordent {
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     Space {
         count: usize,
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     Unknown {
         unknown_value: String,
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     /// Newline token - explicit line terminator (upper lines cannot have EOI)
     Newline {
         newline_value: String,
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
 }
 
@@ -737,59 +653,38 @@ pub enum LowerElement {
     LowerOctaveMarker {
         marker: String,  // "." or ":"
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     BeatGroupIndicator {
         indicator_value: String,  // "___" for beat grouping
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     Syllable {
         content: String,  // syllables like "dha", "he-llo"
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     Space {
         count: usize,
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     Unknown {
         unknown_value: String,
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     /// Newline token - explicit line terminator
     Newline {
         newline_value: String,
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
     /// End of input token - explicit EOF terminator
     EndOfInput {
         value: Option<String>,
-        line: usize,
-        column: usize,
-        index_in_line: usize,
-        index_in_doc: usize,
+        char_index: usize, // was: line, column, index_in_line, index_in_doc
     },
 }
 
@@ -798,9 +693,6 @@ pub enum LowerElement {
 pub struct Syllable {
     pub content: String,  // "he-llo", "world", etc.
     pub value: Option<String>,
-    pub line: usize,
-    pub column: usize,
-    pub index_in_line: usize,
-    pub index_in_doc: usize,
+    pub char_index: usize, // was: line, column, index_in_line, index_in_doc
 }
 
