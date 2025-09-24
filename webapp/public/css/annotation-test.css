@@ -1,0 +1,137 @@
+/*************************************************
+ * MINIMAL CSS FOR SLUR AND ANNOTATION TESTING
+ *
+ * Clean, simple approach bypassing spatial analysis
+ * Uses CSS classes directly from HTML annotations
+ **************************************************/
+
+/* Basic positioning for notes */
+.cm-note {
+    position: relative;
+    display: inline-block;
+}
+
+/* Slur CSS Classes - New simplified approach */
+.slur-start {
+    position: relative !important;
+    border: 2px solid red !important;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+.slur-end {
+    border: 2px solid green !important;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Blue background for the entire slur segment */
+.slur-segment {
+    background-color: rgba(0, 100, 255, 0.1) !important;
+    border-radius: 3px;
+    padding: 1px 0px;
+}
+
+/* Old slur classes - kept for compatibility */
+.begin-slur {
+    position: relative !important;
+    background-color: pink !important;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+.end-slur {
+    background-color: lightcoral !important;
+    border-radius: 3px;
+    padding: 1px 2px;
+}
+
+/* Slur arc - simple approach, always visible on begin-slur */
+.begin-slur::after {
+    content: '';
+    position: absolute;
+    top: -0.5em;
+    left: 0;
+    width: var(--slur-width, 3ch); /* Default 3 characters wide */
+    height: 0.3em;
+    border: 2px solid #d73a49; /* Red slur arc */
+    border-bottom: none;
+    border-top-left-radius: 50% 100%;
+    border-top-right-radius: 50% 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Octave indicators */
+.octave-up-1 {
+    position: relative;
+}
+
+.octave-up-1::before {
+    content: '•';
+    position: absolute;
+    top: -0.5em;
+    left: 50%;
+    transform: translateX(-50%);
+    color: blue;
+    font-weight: bold;
+    font-size: 1.2em;
+    pointer-events: none;
+}
+
+.octave-up-2::before {
+    content: '••';
+}
+
+.octave-down-1 {
+    position: relative;
+}
+
+.octave-down-1::after {
+    content: '•';
+    position: absolute;
+    bottom: -0.7em;
+    left: 50%;
+    transform: translateX(-50%);
+    color: orange;
+    font-weight: bold;
+    font-size: 1.2em;
+    pointer-events: none;
+}
+
+.octave-down-2::after {
+    content: '••';
+}
+
+/* Beat delimiters */
+.begin-delimited-beat {
+    border-left: 2px solid green;
+    padding-left: 2px;
+}
+
+.end-delimited-beat {
+    border-right: 2px solid green;
+    padding-right: 2px;
+}
+
+/* Dynamics */
+.forte {
+    font-weight: bold;
+    color: red;
+}
+
+.piano {
+    font-weight: normal;
+    color: gray;
+}
+
+/* Ornaments */
+.mordent::before {
+    content: '~';
+    position: absolute;
+    top: -0.3em;
+    left: 50%;
+    transform: translateX(-50%);
+    color: purple;
+    font-size: 0.8em;
+}

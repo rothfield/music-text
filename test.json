@@ -1,0 +1,196 @@
+{
+  "value": "1 2 3 4\n",
+  "char_index": 0,
+  "title": null,
+  "author": null,
+  "directives": {},
+  "elements": [
+    {
+      "Stave": {
+        "value": "1 2 3 4",
+        "char_index": 0,
+        "notation_system": "Number",
+        "line": 1,
+        "column": 1,
+        "index_in_line": 0,
+        "index_in_doc": 0,
+        "lines": [
+          {
+            "ContentLine": {
+              "elements": [
+                {
+                  "Beat": {
+                    "value": null,
+                    "char_index": 0,
+                    "divisions": 1,
+                    "is_tuplet": false,
+                    "tuplet_ratio": null,
+                    "tied_to_previous": false,
+                    "total_duration": {
+                      "Rational": [
+                        "Plus",
+                        [
+                          1,
+                          4
+                        ]
+                      ]
+                    },
+                    "elements": [
+                      {
+                        "Note": {
+                          "value": "1",
+                          "char_index": 0,
+                          "octave": 0,
+                          "pitch_code": "N1",
+                          "notation_system": "Number",
+                          "numerator": 1,
+                          "denominator": 4,
+                          "consumed_elements": [],
+                          "css_classes": []
+                        }
+                      }
+                    ],
+                    "consumed_elements": [],
+                    "css_classes": []
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "value": " ",
+                    "char_index": 1,
+                    "consumed_elements": []
+                  }
+                },
+                {
+                  "Beat": {
+                    "value": null,
+                    "char_index": 2,
+                    "divisions": 1,
+                    "is_tuplet": false,
+                    "tuplet_ratio": null,
+                    "tied_to_previous": false,
+                    "total_duration": {
+                      "Rational": [
+                        "Plus",
+                        [
+                          1,
+                          4
+                        ]
+                      ]
+                    },
+                    "elements": [
+                      {
+                        "Note": {
+                          "value": "2",
+                          "char_index": 2,
+                          "octave": 0,
+                          "pitch_code": "N2",
+                          "notation_system": "Number",
+                          "numerator": 1,
+                          "denominator": 4,
+                          "consumed_elements": [],
+                          "css_classes": []
+                        }
+                      }
+                    ],
+                    "consumed_elements": [],
+                    "css_classes": []
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "value": " ",
+                    "char_index": 3,
+                    "consumed_elements": []
+                  }
+                },
+                {
+                  "Beat": {
+                    "value": null,
+                    "char_index": 4,
+                    "divisions": 1,
+                    "is_tuplet": false,
+                    "tuplet_ratio": null,
+                    "tied_to_previous": false,
+                    "total_duration": {
+                      "Rational": [
+                        "Plus",
+                        [
+                          1,
+                          4
+                        ]
+                      ]
+                    },
+                    "elements": [
+                      {
+                        "Note": {
+                          "value": "3",
+                          "char_index": 4,
+                          "octave": 0,
+                          "pitch_code": "N3",
+                          "notation_system": "Number",
+                          "numerator": 1,
+                          "denominator": 4,
+                          "consumed_elements": [],
+                          "css_classes": []
+                        }
+                      }
+                    ],
+                    "consumed_elements": [],
+                    "css_classes": []
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "value": " ",
+                    "char_index": 5,
+                    "consumed_elements": []
+                  }
+                },
+                {
+                  "Beat": {
+                    "value": null,
+                    "char_index": 6,
+                    "divisions": 1,
+                    "is_tuplet": false,
+                    "tuplet_ratio": null,
+                    "tied_to_previous": false,
+                    "total_duration": {
+                      "Rational": [
+                        "Plus",
+                        [
+                          1,
+                          4
+                        ]
+                      ]
+                    },
+                    "elements": [
+                      {
+                        "Note": {
+                          "value": "4",
+                          "char_index": 6,
+                          "octave": 0,
+                          "pitch_code": "N4",
+                          "notation_system": "Number",
+                          "numerator": 1,
+                          "denominator": 4,
+                          "consumed_elements": [],
+                          "css_classes": []
+                        }
+                      }
+                    ],
+                    "consumed_elements": [],
+                    "css_classes": []
+                  }
+                }
+              ],
+              "value": "1 2 3 4",
+              "char_index": 0,
+              "consumed_elements": []
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -41,8 +41,6 @@ pub struct ParseResponse {
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
     svg_poc: Option<String>,  // Doremi-script SVG POC
-    syntax_spans: Option<Vec<crate::renderers::codemirror::Span>>,
-    character_styles: Option<Vec<crate::renderers::codemirror::SpanStyle>>,
     roundtrip: Option<RoundtripData>,
     error: Option<String>,
 }
