@@ -207,7 +207,6 @@ pub fn render_codemirror_styles(spans: &[Span], original_input: &str) -> Vec<Spa
         // Add consumed class
         if span.data_attributes.get("consumed") == Some(&"true".to_string()) {
             classes.push("consumed".to_string());
-            classes.push("greyed-out".to_string());
         }
 
         // Add beat loop styling
@@ -219,9 +218,11 @@ pub fn render_codemirror_styles(spans: &[Span], original_input: &str) -> Vec<Spa
         // Add octave styling
         if let Some(octave) = span.data_attributes.get("octave") {
             styles.insert("--octave".to_string(), octave.clone());
+            classes.push(format!("octave-{}", octave));
         }
         if let Some(octave_negative) = span.data_attributes.get("octave-negative") {
             styles.insert("--octave-negative".to_string(), octave_negative.clone());
+            classes.push(format!("octave-neg-{}", octave_negative));
         }
 
         SpanStyle {

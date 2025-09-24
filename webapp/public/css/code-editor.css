@@ -605,13 +605,52 @@
 
 /* Consumed elements - slightly greyish, no border */
 .cm-consumed-slur-indicator,
-.cm-consumed-upper-octave-marker,
-.cm-consumed-lower-octave-marker {
+.cm-consumed-upper-octave-marker {
     opacity: 0.4 !important;
     color: #ccc !important;
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
+}
+
+/* Consumed lower octave marker - separate styling */
+.cm-consumed-lower-octave-marker {
+    opacity: 0.4 !important;
+    color: #ccc !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+/* Red box border for consumed lower octave marker */
+.cm-consumed-lower-octave-marker.consumed.cm-lower-octave-marker {
+    border: 2px solid red !important;
+}
+
+/* Octave-specific styling using CSS classes */
+/* Lower octave styling */
+.octave-neg-1 {
+    border: 2px solid orange !important;
+}
+
+.octave-neg-2 {
+    border: 2px solid red !important;
+}
+
+.octave-neg-3 {
+    border: 2px solid darkred !important;
+}
+
+/* Upper octave styling */
+.octave-1 {
+    border: 2px solid lightblue !important;
+}
+
+.octave-2 {
+    border: 2px solid blue !important;
+}
+
+.octave-3 {
+    border: 2px solid darkblue !important;
 }
 
 /* Slur arc - drawn on first element with slur consumed element and slur-char-loop-length */
