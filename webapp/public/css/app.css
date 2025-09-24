@@ -62,51 +62,7 @@ button.secondary:hover {
     background: darkslategray;
 }
 
-/* MIDI Controls */
-.midi-controls {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-left: 12px;
-    padding-left: 12px;
-    border-left: 1px solid #ddd;
-}
 
-.midi-btn {
-    background: #2e7d32;
-    color: white;
-    border: none;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-    min-width: 28px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.midi-btn:hover {
-    background: #1b5e20;
-}
-
-.midi-btn:disabled {
-    background: #9e9e9e;
-    cursor: not-allowed;
-}
-
-#tempoSlider {
-    width: 80px;
-    margin: 0 4px;
-}
-
-#tempoDisplay {
-    font-size: 11px;
-    color: #666;
-    font-weight: 500;
-    min-width: 50px;
-}
 
 /* Octave Controls */
 .octave-controls {
@@ -174,7 +130,6 @@ button.secondary:hover {
     color: dimgray; 
 }
 
-/* Textarea and CodeMirror */
 textarea {
     width: 100%;
     height: 80px;
@@ -191,81 +146,6 @@ textarea:focus {
     border-bottom-color: royalblue;
 }
 
-/* CodeMirror Editor Styles */
-.CodeMirror {
-    width: 100%;
-    min-height: 80px;
-    padding: 8px;
-    border: none;
-    border-bottom: 1px solid #e1e5e9;
-    font-family: 'SF Mono', Monaco, Consolas, monospace;
-    font-size: 14px;
-    line-height: 1.4;
-    resize: vertical;
-    outline: none;
-    background: white;
-}
-
-.CodeMirror-focused {
-    border-bottom-color: royalblue;
-}
-
-.CodeMirror-scroll {
-    min-height: 80px;
-}
-
-/* Content line highlighting with doremi font */
-.CodeMirror-linebackground.content-line {
-    background: aliceblue !important;
-    padding-left: 0.5em;
-}
-
-.CodeMirror-line.content-line {
-    font-family: sans-serif !important;
-    font-size: 1.6em !important;
-    line-height: 1.8em !important;
-}
-
-.text-line {
-    background: #fafafa !important;
-}
-
-/* Doremi-inspired styling for music notation */
-.sargam-note, .note {
-    font-family: sans-serif;
-    font-size: 1.6em;
-    position: relative;
-    margin-right: 0.0em;
-    margin-left: 0.0em;
-    display: inline-block;
-}
-
-/* Lyrics styling from doremi */
-.CodeMirror-linebackground.lyrics-line {
-    background: cornsilk !important;
-    padding-left: 0.5em;
-}
-
-.CodeMirror-line.lyrics-line {
-    font-family: serif !important;
-    font-size: 1.4em !important;
-    font-style: italic;
-    color: dimgray;
-    line-height: 1.6em !important;
-}
-
-/* Directive lines (Title, Composer, etc) */
-.CodeMirror-linebackground.directive-line {
-    background: honeydew !important;
-    padding-left: 0.5em;
-}
-
-.CodeMirror-line.directive-line {
-    font-family: sans-serif !important;
-    font-weight: bold;
-    font-size: 1.2em !important;
-    line-height: 1.6em !important;
-}
 
 /* Barline styling */
 .barline {
@@ -273,70 +153,6 @@ textarea:focus {
     margin-right: .2em;
     margin-left: .2em;
     padding: .2em;
-}
-
-/* Line spacing for proper music notation */
-.CodeMirror-line.content-line {
-    line-height: 2em;
-    padding-left: 1em;
-}
-
-/* Pure CSS octave indicators using --octave variable */
-/* Notes need to be relatively positioned for absolute children */
-.cm-music-note {
-    position: relative;
-}
-
-/* Upper octave +1: bullet sits on top of bbox */
-.cm-music-note[style*="--octave: \"1\""]::before,
-.cm-music-note[style*="--octave:\"1\""]::before {
-    content: '•';
-    position: absolute;
-    top: -0.3em;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 1.2em;
-    color: #0066cc;
-    font-weight: bold;
-}
-
-/* Upper octave +2: colon on top of bbox */
-.cm-music-note[style*="--octave: \"2\""]::before,
-.cm-music-note[style*="--octave:\"2\""]::before {
-    content: ':';
-    position: absolute;
-    top: -0.4em;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 1.0em;
-    color: #0066cc;
-    font-weight: bold;
-}
-
-/* Lower octave -1: bullet hanging off bottom of bbox */
-.cm-music-note[style*="--octave: \"-1\""]::after,
-.cm-music-note[style*="--octave:\"-1\""]::after {
-    content: '•';
-    position: absolute;
-    bottom: -0.7em;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 1.2em;
-    color: #cc6600;
-    font-weight: bold;
-}
-
-/* Lower octave -2: colon hanging from bottom of bbox */
-.cm-music-note[style*="--octave: \"-2\""]::after,
-.cm-music-note[style*="--octave:\"-2\""]::after {
-    content: ':';
-    position: absolute;
-    bottom: -0.8em;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 1.0em;
-    color: #cc6600;
-    font-weight: bold;
 }
 
 /* Octave marker type classes */
@@ -578,77 +394,6 @@ textarea:focus {
     color: chocolate;
 }
 
-/* CodeMirror XML Syntax Highlighting */
-.CodeMirror .cm-tag { 
-    color: forestgreen !important; 
-    font-weight: bold; 
-}
-.CodeMirror .cm-attribute { 
-    color: mediumorchid !important; 
-}
-.CodeMirror .cm-string { 
-    color: midnightblue !important; 
-}
-.CodeMirror .cm-atom { 
-    color: chocolate !important; 
-}
-.CodeMirror .cm-bracket { 
-    color: crimson !important; 
-    font-weight: bold; 
-}
-
-/* CodeMirror Music Token Syntax Highlighting */
-.CodeMirror .cm-music-note,
-.CodeMirror .cm-music-dash {
-    color: mediumvioletred !important;
-    font-weight: bold;
-    background: yellow !important;
-    /* Maintain monospace width for bold pitches */
-    font-family: 'SF Mono', Monaco, Consolas, 'Courier New', monospace !important;
-    letter-spacing: 0;
-    font-synthesis: none;
-    text-rendering: optimizeSpeed;
-    /* Ensure consistent character width */
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum";
-}
-
-.CodeMirror .cm-music-note[title] {
-    cursor: help;
-}
-.CodeMirror .cm-music-barline { 
-    color: #4b0082 !important; 
-    font-weight: bold; 
-    background: #e6ccff !important;
-}
-/* Dash styling now handled by combined rule above */
-.CodeMirror .cm-music-lyrics { 
-    color: #b8860b !important; 
-    background: #fff87d !important;
-}
-.CodeMirror .cm-music-whitespace { 
-    background: #f0f8ff !important;
-}
-.CodeMirror .cm-music-rest { 
-    color: dimgray !important; 
-    background: #e0e0e0 !important;
-}
-.CodeMirror .cm-music-breath { 
-    color: #008b8b !important; 
-    background: #e0ffff !important;
-}
-.CodeMirror .cm-music-unparsed { 
-    background: #ff6b6b !important;
-    color: white !important;
-    animation: blink 1.5s linear infinite;
-    font-weight: bold;
-}
-.CodeMirror .cm-music-unknown {
-    background: darkorange !important;
-    color: white !important;
-    font-weight: bold;
-    border: 2px solid orangered !important;
-}
 
 /* SVG POC Controls */
 .svgpoc-controls {
@@ -703,4 +448,317 @@ textarea:focus {
     height: auto;
     border: 1px solid #ddd;
     background: white;
+}
+
+/* Canvas Editor Styles */
+.canvas-editor {
+    position: relative;
+    padding: 12px;
+    background: white;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+#musicCanvas {
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    display: block;
+    margin: 0 auto 12px;
+    cursor: text;
+}
+
+#musicCanvas:focus {
+    outline: none;
+    border-color: #007acc;
+    box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+.canvas-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.toolbar-btn {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.toolbar-btn:hover {
+    background: #5a6268;
+}
+
+.toolbar-btn.active {
+    background: #007acc;
+}
+
+.toolbar-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.toolbar-separator {
+    width: 1px;
+    height: 20px;
+    background: #ccc;
+    margin: 0 4px;
+}
+
+.canvas-text-input {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-family: 'Courier New', Consolas, 'Liberation Mono', monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.canvas-text-input:focus {
+    border-color: #007acc;
+    box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+.canvas-text-input::placeholder {
+    color: #999;
+    font-style: italic;
+}
+
+/* Canvas editor modes */
+.canvas-editor.visual-mode #textInput {
+    display: none;
+}
+
+.canvas-editor.text-mode #musicCanvas {
+    opacity: 1.0;
+    /* pointer-events: none; -- Removed to allow canvas interaction in text mode */
+}
+
+.canvas-editor.text-mode #musicCanvas:focus {
+    outline: 2px solid #007acc;
+    outline-offset: -2px;
+}
+
+/* MIDI Tab Styles */
+.midi-tab-container {
+    padding: 20px;
+    background: white;
+}
+
+.midi-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.midi-playback {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.midi-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 80px;
+    justify-content: center;
+}
+
+.play-btn {
+    background: #28a745;
+    color: white;
+}
+
+.play-btn:hover {
+    background: #218838;
+    transform: translateY(-1px);
+}
+
+.pause-btn {
+    background: #ffc107;
+    color: #212529;
+}
+
+.pause-btn:hover {
+    background: #e0a800;
+    transform: translateY(-1px);
+}
+
+.stop-btn {
+    background: #dc3545;
+    color: white;
+}
+
+.stop-btn:hover {
+    background: #c82333;
+    transform: translateY(-1px);
+}
+
+.midi-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.midi-icon {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.midi-label {
+    font-size: 13px;
+}
+
+.midi-tempo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.midi-tempo label {
+    font-weight: 500;
+    color: #495057;
+    min-width: 50px;
+}
+
+.midi-tempo input[type="range"] {
+    flex: 1;
+    max-width: 200px;
+    height: 6px;
+    background: #dee2e6;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.midi-tempo input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #007acc;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.midi-tempo input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: #007acc;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+#tempoDisplay {
+    font-weight: 500;
+    color: #495057;
+    min-width: 60px;
+    text-align: right;
+}
+
+.midi-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+.midi-status {
+    font-weight: 500;
+    color: #28a745;
+}
+
+.midi-position {
+    font-family: 'Courier New', monospace;
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.midi-visualization {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+}
+
+#midiCanvas {
+    display: block;
+    border-bottom: 1px solid #e9ecef;
+    background: #fafafa;
+}
+
+.midi-output {
+    padding: 20px;
+    min-height: 100px;
+    color: #6c757d;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+/* Responsive design for MIDI tab */
+@media (max-width: 768px) {
+    .midi-controls {
+        padding: 15px;
+        gap: 15px;
+    }
+
+    .midi-playback {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .midi-btn {
+        min-width: 70px;
+        padding: 10px 12px;
+    }
+
+    .midi-tempo {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .midi-tempo input[type="range"] {
+        max-width: 100%;
+    }
+
+    .midi-info {
+        flex-direction: column;
+        gap: 8px;
+        text-align: center;
+    }
 }

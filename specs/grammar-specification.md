@@ -75,7 +75,7 @@ structural_element = content_element \ {note, dash, line_number}
 
 content_element = note | dash | breath_mark | line_number |
                  single_barline | double_barline | final_barline |
-                 left_repeat | right_repeat | whitespace
+                 left_repeat | right_repeat | whitespace | unknown_token
 
 beat = rhythmic_element (rhythmic_element | breath_mark)*
 rhythmic_element = note | dash
@@ -87,7 +87,8 @@ line_number = digit+ "."
 note = sargam_note | number_note | western_note | tabla_note | hindi_note
 dash = "-"
 breath_mark = "'"
-whitespace = " "+"
+whitespace = " "+
+unknown_token = (!whitespace !barline !newline ANY)+  // Invalid/unrecognized tokens"
 ```
 
 ## Design Decision: No Measures
@@ -96,6 +97,20 @@ We decided not to support measure grouping for simplicity (KISS principle). Cont
 - End of line (EOL)
 - End of input (EOI)
 - Non-beat elements (spaces, barlines, etc.)
+
+## Design Decision: Unknown Token Handling
+
+Unknown tokens (sequences of characters that don't match any valid notation system) are gracefully handled as separate content elements rather than causing parse failures. This design choice ensures:
+
+- **Robustness**: Parser doesn't fail on typos or unsupported notation
+- **Beat Separation**: Unknown tokens behave like whitespace, separating valid musical beats
+- **Error Preservation**: Invalid tokens are preserved in the AST for error reporting or correction
+- **Graceful Degradation**: Valid portions of a line continue to parse correctly
+
+**Examples**:
+- `"1 2 3 xxx"` → Three beats ("1", "2", "3") + one unknown token ("xxx")
+- `"S R invalid G"` → Three beats ("S", "R", "G") + one unknown token ("invalid")
+- `"|1 2 typo 3|"` → Barline + two beats ("1", "2") + unknown token ("typo") + beat ("3") + barline
 
 ## Design Decision: Atomic Pitches
 

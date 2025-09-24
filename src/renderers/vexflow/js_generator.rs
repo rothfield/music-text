@@ -85,6 +85,9 @@ impl VexFlowJSGenerator {
                         ContentElement::Whitespace(_) => {
                             // Skip whitespace
                         }
+                        ContentElement::UnknownToken(_) => {
+                            // Skip unknown tokens (behave like whitespace)
+                        }
                     }
                 }
             }

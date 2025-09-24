@@ -1,6 +1,6 @@
 use crate::parse::model::{Document, Stave, TextLine, WhitespaceLine, NotationSystem};
 use crate::parse::document_header;
-use crate::rhythm::types::{ParsedElement, Degree, Position};
+use crate::rhythm::types::{ParsedElement, Position};
 use std::collections::HashMap;
 
 /// Parse error for recursive descent parser

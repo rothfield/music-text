@@ -16,56 +16,14 @@ export const UI = {
         }
     },
 
-    // Cursor and focus management
-    restoreFocusAndCursor() {
-        const musicInput = document.getElementById('musicInput');
-        
-        // Always focus first
-        musicInput.focus();
-        
-        // Multiple attempts to ensure cursor restoration works
-        const restoreCursor = () => {
-            const {start, end} = LocalStorage.loadCursorPosition();
-            const textLength = musicInput.value.length;
-            
-            // Ensure cursor positions are valid for current text
-            const safeStart = Math.min(Math.max(0, start), textLength);
-            const safeEnd = Math.min(Math.max(0, end), textLength);
-            
-            console.log('🔄 Restoring cursor position:', {start, end, safeStart, safeEnd, textLength});
-            
-            // Force the selection range
-            try {
-                musicInput.setSelectionRange(safeStart, safeEnd);
-                // Verify the position was actually set
-                const actualStart = musicInput.selectionStart;
-                const actualEnd = musicInput.selectionEnd;
-                console.log('✅ Cursor restored - requested:', safeStart, safeEnd, 'actual:', actualStart, actualEnd);
-            } catch (e) {
-                console.warn('Failed to set cursor position:', e);
-            }
-        };
-        
-        // Try multiple times to ensure it works
-        requestAnimationFrame(restoreCursor);
-        setTimeout(restoreCursor, 10);
-        setTimeout(restoreCursor, 50);
-    },
 
     // Tab management
     switchTab(tabName, clickedTab) {
-        // Save cursor position BEFORE switching tabs
-        const musicInput = document.getElementById('musicInput');
-        const currentStart = musicInput.selectionStart;
-        const currentEnd = musicInput.selectionEnd;
-        if (currentStart !== undefined && currentEnd !== undefined && currentStart >= 0 && currentEnd >= 0) {
-            LocalStorage.saveCursorPosition(currentStart, currentEnd);
-        }
-        
+
         // Remove active class from all tabs and content
         document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-        
+
         // Add active class to clicked tab and corresponding content
         if (clickedTab) {
             clickedTab.classList.add('active');
@@ -73,12 +31,25 @@ export const UI = {
             document.querySelector(`[onclick*="${tabName}"]`)?.classList.add('active');
         }
         document.getElementById(`${tabName}-tab`)?.classList.add('active');
-        
+
+        // Initialize MIDI player on first access to MIDI tab
+        if (tabName === 'midi' && window.musicApp && !window.musicApp.midiInitialized) {
+            console.log('🎵 Initializing MIDI player on first access...');
+            window.musicApp.setupMIDI().then(() => {
+                window.musicApp.midiInitialized = true;
+                console.log('✅ MIDI player initialized successfully');
+            }).catch(error => {
+                console.error('❌ Failed to initialize MIDI player:', error);
+            });
+        }
+
         // Save active tab to localStorage
         LocalStorage.saveActiveTab(tabName);
-        
-        // ALWAYS restore focus and cursor to textarea
-        this.restoreFocusAndCursor();
+
+        // Focus the canvas editor
+        if (window.canvasEditor) {
+            window.canvasEditor.focus();
+        }
     },
 
     // Clear all UI content
@@ -89,8 +60,6 @@ export const UI = {
         document.getElementById('svg-output').innerHTML = 'Click "LilyPond" to generate SVG';
         document.getElementById('svgpoc-output').innerHTML = 'Enter music notation and click "Generate SVG POC" to test the SVG renderer';
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
-        document.getElementById('spans-output').textContent = 'Enter music notation to see syntax spans';
-        document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';
         document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
         document.getElementById('status').textContent = '';
     },
@@ -147,16 +116,6 @@ export const UI = {
     },
 
     // Update SVG POC output
-    updateSvgPocOutput(result) {
-        const output = document.getElementById('svgpoc-output');
-        if (result.success && result.svg_poc) {
-            output.innerHTML = result.svg_poc;
-        } else if (result.success) {
-            output.innerHTML = '<p>Parsed successfully, but no SVG POC data available.</p>';
-        } else {
-            output.innerHTML = `<p>Parse error: ${result.error}</p>`;
-        }
-    },
 
     // Render VexFlow notation - execute self-generated JavaScript
     async renderVexFlow(vexflowData) {
@@ -235,31 +194,6 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
     },
 
 
-    // Update syntax spans output
-    updateTokensOutput(result) {
-        const tokensOutput = document.getElementById('spans-output');
-
-        if (result.success && result.syntax_spans) {
-            tokensOutput.textContent = JSON.stringify(result.syntax_spans, null, 2);
-        } else if (result.success) {
-            tokensOutput.textContent = 'Parse successful but no syntax spans available';
-        } else {
-            tokensOutput.textContent = `Parse error: ${result.error}`;
-        }
-    },
-
-    // Update character styles output
-    updateStylesOutput(result) {
-        const stylesOutput = document.getElementById('styles-output');
-
-        if (result.success && result.character_styles) {
-            stylesOutput.textContent = JSON.stringify(result.character_styles, null, 2);
-        } else if (result.success) {
-            stylesOutput.textContent = 'Parse successful but no character styles available';
-        } else {
-            stylesOutput.textContent = `Parse error: ${result.error}`;
-        }
-    },
 
     // Update source output
     updateSourceOutput(result) {
@@ -289,9 +223,18 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
         document.getElementById('lilypond-output').innerHTML = '<pre class="lilypond-source">Enter music notation above to see minimal LilyPond source</pre>';
         document.getElementById('lilypond-full-output').innerHTML = '<pre class="lilypond-source">Enter music notation above to see full LilyPond source</pre>';
         document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
-        document.getElementById('spans-output').textContent = 'Enter music notation to see syntax spans';
-        document.getElementById('styles-output').textContent = 'Enter music notation to see character styles';
         document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
+    },
+
+    // Update SVG source output
+    updateSVGSourceOutput(result) {
+        const svgSourceOutput = document.getElementById('svg-source-output');
+
+        if (result.success && result.canvas_svg) {
+            svgSourceOutput.innerHTML = `<pre>${this.escapeHTML(result.canvas_svg)}</pre>`;
+        } else {
+            svgSourceOutput.innerHTML = '<p>No SVG source available</p>';
+        }
     },
 
 };

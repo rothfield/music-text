@@ -7,14 +7,14 @@ import { LocalStorage } from './localStorage.js';
 import { UI } from './ui.js';
 import { API } from './api.js';
 import { FontManager } from './fontManager.js';
-import { EditorManager } from './editorManager.js';
+import { CanvasEditor } from './canvasEditor.js';
 import { MusicTextPlayer } from './midiPlayer.js';
 
 class MusicTextApp {
     constructor() {
         this.currentParseResult = null;
         this.inputTimer = null;
-        this.editorManager = new EditorManager();
+        this.canvasEditor = new CanvasEditor();
         this.midiPlayer = null;
     }
 
@@ -22,9 +22,10 @@ class MusicTextApp {
     async init() {
         try {
             await this.setupUI();
-            await this.setupMIDI();
+            // Don't initialize MIDI until needed
+            this.midiInitialized = false;
             this.setupEventListeners();
-            this.restoreState();
+            // this.restoreState(); // Disabled localStorage restoration
             console.log('✅ Music Text App initialized with modular architecture');
         } catch (error) {
             console.error('Failed to initialize app:', error);
@@ -34,13 +35,13 @@ class MusicTextApp {
 
     // Setup UI components
     async setupUI() {
-        // Initialize editor
-        this.editorManager.init('musicInput');
+        // Initialize canvas editor
+        this.canvasEditor.init('canvasEditor');
 
         // Initialize font manager
         FontManager.init();
 
-        // Load and set notation type from localStorage
+        // Load and set notation type from localStorage (if dropdown exists)
         const savedNotationType = LocalStorage.loadNotationType();
         const notationSelect = document.getElementById('notationTypeSelect');
         if (notationSelect) {
@@ -102,26 +103,24 @@ class MusicTextApp {
 
     // Setup event listeners
     setupEventListeners() {
-        // Get the musicInput container (CodeMirror is attached to this)
-        const musicInput = document.getElementById('musicInput');
-        if (!musicInput) {
-            throw new Error('Music input element not found');
-        }
+        // Set up canvas editor event listeners
+        this.canvasEditor.onContentChange = (content) => {
+            // Save input text
+            LocalStorage.saveInputText(content);
 
-        // Set up CodeMirror-specific event listeners
-        const editor = this.editorManager.editor;
-        if (editor) {
-            // Input events
-            editor.on('change', () => {
-                this.handleInput({ target: musicInput });
-            });
+            // Debounced parsing for real-time updates
+            clearTimeout(this.inputTimer);
+            this.inputTimer = setTimeout(() => {
+                if (content.trim()) {
+                    this.parseAndUpdatePreview();
+                }
+            }, 300);
+        };
 
-            // Selection and cursor events for octave buttons
-            editor.on('cursorActivity', () => {
-                this.saveCursorPosition();
-                this.updateOctaveButtonStates();
-            });
-        }
+        this.canvasEditor.onSelectionChange = (selection) => {
+            this.saveCursorPosition();
+            this.updateOctaveButtonStates();
+        };
     }
 
     // Handle input events
@@ -145,22 +144,19 @@ class MusicTextApp {
 
     // Save current cursor position
     saveCursorPosition() {
-        const musicInput = document.getElementById('musicInput');
-        const start = musicInput.selectionStart;
-        const end = musicInput.selectionEnd;
-        if (start !== undefined && end !== undefined && start >= 0 && end >= 0) {
-            LocalStorage.saveCursorPosition(start, end);
+        const cursorPos = this.canvasEditor.getCursorPosition();
+        if (cursorPos.start >= 0 && cursorPos.end >= 0) {
+            LocalStorage.saveCursorPosition(cursorPos.start, cursorPos.end);
         }
     }
 
     // Restore application state from localStorage
     restoreState() {
-        const musicInput = document.getElementById('musicInput');
         
         // Restore saved input text
         const savedText = LocalStorage.loadInputText();
         if (savedText) {
-            musicInput.value = savedText;
+            this.canvasEditor.setValue(savedText);
             // Trigger parsing for restored content
             if (savedText.trim()) {
                 this.parseAndUpdatePreview();
@@ -171,7 +167,7 @@ class MusicTextApp {
         const cursorPos = LocalStorage.loadCursorPosition();
         if (cursorPos.start >= 0 && cursorPos.end >= 0) {
             setTimeout(() => {
-                musicInput.setSelectionRange(cursorPos.start, cursorPos.end);
+                this.canvasEditor.setSelection(cursorPos.start, cursorPos.end);
             }, 100);
         }
         
@@ -186,7 +182,7 @@ class MusicTextApp {
 
     // Parse and update preview (real-time, no status messages)
     async parseAndUpdatePreview() {
-        const input = document.getElementById('musicInput').value;
+        const input = this.canvasEditor.getValue();
         
         if (!input.trim()) {
             return;
@@ -199,22 +195,13 @@ class MusicTextApp {
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
-            UI.updateTokensOutput(result);
-            UI.updateStylesOutput(result);
             UI.updateSourceOutput(result);
             await UI.updateVexFlowOutput(result);
-            UI.updateSvgPocOutput(result);
+            UI.updateSVGSourceOutput(result);
             
-            // Update editor highlighting based on parse results
-            this.editorManager.highlightFromParseResult(result);
-
-            // Apply span styles using server-generated span styles (preferred)
-            if (result.success && result.character_styles) {
-                this.editorManager.applySpanStyles(result.character_styles);
-            }
-            // Fallback to span-based highlighting if character styles not available
-            else if (result.success && result.syntax_spans) {
-                this.editorManager.applySyntaxSpans(result.syntax_spans);
+            // Update canvas editor with parse results
+            if (result.success) {
+                this.canvasEditor.updateParseResult(result);
             }
             
         } catch (error) {
@@ -228,7 +215,7 @@ class MusicTextApp {
         // Save cursor position before processing
         this.saveCursorPosition();
         
-        const input = document.getElementById('musicInput').value;
+        const input = this.canvasEditor.getValue();
         
         // Validate input
         const validation = API.validateInput(input);
@@ -247,10 +234,8 @@ class MusicTextApp {
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
-            UI.updateTokensOutput(result);
-            UI.updateStylesOutput(result);
             UI.updateSourceOutput(result);
-            UI.updateSvgPocOutput(result);
+            UI.updateSVGSourceOutput(result);
 
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);
@@ -278,8 +263,8 @@ class MusicTextApp {
         // Save cursor position before processing
         this.saveCursorPosition();
 
-        const input = document.getElementById('musicInput').value;
-        const notationType = document.getElementById('notationTypeSelect').value;
+        const input = this.canvasEditor.getValue();
+        const notationType = document.getElementById('notationTypeSelect')?.value || 'auto';
 
         // Validate input
         const validation = API.validateInput(input);
@@ -328,7 +313,7 @@ class MusicTextApp {
         // Save cursor position before processing
         this.saveCursorPosition();
         
-        const input = document.getElementById('musicInput').value;
+        const input = this.canvasEditor.getValue();
         
         // Validate input
         const validation = API.validateInput(input);
@@ -347,9 +332,8 @@ class MusicTextApp {
             // Update all outputs
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
-            UI.updateTokensOutput(result);
-            UI.updateStylesOutput(result);
             UI.updateSourceOutput(result);
+            UI.updateSVGSourceOutput(result);
 
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);
@@ -375,6 +359,7 @@ class MusicTextApp {
     // Clear all content and localStorage
     clearAll() {
         UI.clearAllContent();
+        this.canvasEditor.setValue('');
         this.currentParseResult = null;
 
         // Clear localStorage
@@ -387,9 +372,8 @@ class MusicTextApp {
 
     // Update octave button states based on text selection
     updateOctaveButtonStates() {
-        const musicInput = document.getElementById('musicInput');
-        // The editorManager adds compatibility methods to musicInput
-        const hasSelection = musicInput.selectionStart !== musicInput.selectionEnd;
+        const cursorPos = this.canvasEditor.getCursorPosition();
+        const hasSelection = cursorPos.start !== cursorPos.end;
 
         const octaveButtons = [
             'btn-lowest', 'btn-lowish', 'btn-lower',
@@ -406,9 +390,9 @@ class MusicTextApp {
 
     // Apply octave adjustment to selected text
     applyOctaveAdjustment(octaveType) {
-        const musicInput = document.getElementById('musicInput');
-        const selectionStart = musicInput.selectionStart;
-        const selectionEnd = musicInput.selectionEnd;
+        const cursorPos = this.canvasEditor.getCursorPosition();
+        const selectionStart = cursorPos.start;
+        const selectionEnd = cursorPos.end;
 
         // Check if there's a selection
         if (selectionStart === selectionEnd) {
@@ -416,7 +400,7 @@ class MusicTextApp {
             return;
         }
 
-        const fullText = musicInput.value;
+        const fullText = this.canvasEditor.getValue();
         const selectedText = fullText.substring(selectionStart, selectionEnd);
 
         // Check if selection contains musical notes
@@ -430,14 +414,16 @@ class MusicTextApp {
             const modifiedText = this.processOctaveAdjustmentWithColumns(fullText, selectionStart, selectionEnd, octaveType);
 
             // Replace entire text
-            musicInput.value = modifiedText;
+            this.canvasEditor.setValue(modifiedText);
 
             // Restore focus and selection (adjust for potential line additions)
-            musicInput.focus();
-            musicInput.setSelectionRange(selectionStart, selectionStart + (modifiedText.length - fullText.length) + (selectionEnd - selectionStart));
+            this.canvasEditor.focus();
+            this.canvasEditor.setSelection(selectionStart, selectionStart + (modifiedText.length - fullText.length) + (selectionEnd - selectionStart));
 
             // Trigger re-parsing
-            this.handleInput({ target: musicInput });
+            if (this.canvasEditor.onContentChange) {
+                this.canvasEditor.onContentChange(modifiedText);
+            }
 
             UI.setStatus(`Applied ${octaveType} octave adjustment`, 'success');
 
@@ -684,21 +670,25 @@ class MusicTextApp {
 // Create global app instance
 const app = new MusicTextApp();
 window.MusicTextApp = app;
+window.musicApp = app; // For UI access
 
 // Global functions for onclick handlers (to maintain compatibility with existing HTML)
 window.parseMusic = () => app.parseMusic();
 window.generateSVG = () => app.generateSVG();
 window.generateSVGPOC = () => app.generateSVGPOC();
 window.updateNotationType = () => {
-    // Trigger re-parse when notation type changes
-    const notationType = document.getElementById('notationTypeSelect').value;
+    // Handle notation type change (if dropdown exists)
+    const notationSelect = document.getElementById('notationTypeSelect');
+    if (!notationSelect) return;
+
+    const notationType = notationSelect.value;
     console.log('Notation type changed to:', notationType);
 
     // Save to localStorage
     LocalStorage.saveNotationType(notationType);
 
     // Re-parse with the new notation type if there's content
-    const input = document.getElementById('musicInput').value;
+    const input = app.canvasEditor.getValue();
     if (input && input.trim()) {
         app.parseAndUpdatePreview();
     }
@@ -706,7 +696,10 @@ window.updateNotationType = () => {
 window.clearAll = () => app.clearAll();
 window.switchTab = (tabName, clickedTab) => UI.switchTab(tabName, clickedTab);
 window.changeFontFamily = (fontClass) => FontManager.changeFont(fontClass);
-window.toggleSlur = () => app.editorManager.toggleSlur();
+window.toggleSlur = () => {
+    // Note: Slur functionality would need to be implemented in canvas editor
+    console.log('Slur toggle not yet implemented in canvas editor');
+};
 window.applyOctaveAdjustment = (octaveType) => app.applyOctaveAdjustment(octaveType);
 
 // MIDI control functions

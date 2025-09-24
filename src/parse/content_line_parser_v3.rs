@@ -125,8 +125,30 @@ pub fn parse_content_line(
             }
 
             _ => {
-                // Unknown character - skip it
-                chars.next();
+                // Unknown character or token - collect as UnknownToken (behaves like whitespace, separates beats)
+                let start_pos = pos;
+                let mut token = String::new();
+
+                // Collect contiguous non-space, non-barline characters
+                while let Some(&(_, ch)) = chars.peek() {
+                    if ch == ' ' || ch == '|' || ch == ':' || ch == '\n' {
+                        break;
+                    }
+                    token.push(ch);
+                    chars.next();
+                }
+
+                if !token.is_empty() {
+                    // Create an UnknownToken element - like whitespace, it separates beats
+                    let unknown_token = crate::parse::model::UnknownToken {
+                        value: Some(token.clone()),
+                        char_index: line_start_doc_index + start_pos,
+                        token_value: token,
+                        consumed_elements: Vec::new(),
+                    };
+
+                    elements.push(ContentElement::UnknownToken(unknown_token));
+                }
             }
         }
     }

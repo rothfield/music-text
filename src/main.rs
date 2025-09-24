@@ -46,11 +46,6 @@ enum Commands {
     FullLily { input: Option<String> },
     /// Show minimal LilyPond source (notes only)
     Lilypond { input: Option<String> },
-    /// Generate syntax spans for editor integration
-    Tokens { input: Option<String> },
-    /// Generate character styles for editor highlighting
-    #[command(name = "character-styles")]
-    CharacterStyles { input: Option<String> },
     /// Generate VexFlow JSON data
     Vexflow { input: Option<String> },
     /// Parse with advanced options
@@ -180,12 +175,11 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
         Some(Commands::SvgTest) => {
-            let test_svg = music_text::renderers::svg::generate_test_svg()?;
-            println!("{}", test_svg);
+            println!("SVG test functionality removed");
             return Ok(());
         }
         Some(Commands::SvgTests) => {
-            music_text::renderers::svg::run_all_tests()?;
+            println!("SVG test functionality removed");
             return Ok(());
         }
         None => {

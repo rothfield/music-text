@@ -100,6 +100,10 @@ fn should_tie_to_previous(beat: &Beat, all_elements: &[ContentElement], current_
             ContentElement::Whitespace(_) => {
                 continue;
             }
+            ContentElement::UnknownToken(_) => {
+                // Unknown tokens behave like whitespace
+                continue;
+            }
         }
     }
 

@@ -6,7 +6,7 @@
  **************************************************/
 
 /* Basic positioning for notes */
-.cm-note {
+.music-note {
     position: relative;
     display: inline-block;
 }

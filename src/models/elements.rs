@@ -116,10 +116,19 @@ pub struct Beat {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnknownToken {
+    pub value: Option<String>,
+    pub char_index: usize,
+    pub token_value: String,
+    pub consumed_elements: Vec<super::position::ConsumedElement>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ContentElement {
     Barline(super::barlines::Barline),
     Whitespace(Whitespace),
     Beat(Beat),
+    UnknownToken(UnknownToken),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

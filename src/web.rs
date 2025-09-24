@@ -40,8 +40,7 @@ pub struct ParseResponse {
     lilypond_svg: Option<String>,
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
-    svg_poc: Option<String>,  // Doremi-script SVG POC
-    roundtrip: Option<RoundtripData>,
+    canvas_svg: Option<String>,  // Canvas WYSIWYG SVG
     error: Option<String>,
 }
 
@@ -57,6 +56,15 @@ pub struct RetroParseRequest {
 pub struct SvgPocRequest {
     input: String,
     notation_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CanvasSvgRequest {
+    input_text: String,
+    notation_type: String,
+    cursor_position: Option<usize>,
+    selection_start: Option<usize>,
+    selection_end: Option<usize>,
 }
 
 // Template rendering helper
@@ -120,16 +128,17 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let svg_router = crate::renderers::svg::create_svg_router();
+    // SVG router removed - using canvas SVG instead
 
     let app = Router::new()
         .route("/api/parse", get(parse_text))
         .route("/api/render-svg-poc", post(render_svg_poc))
+        .route("/api/canvas-svg", post(render_canvas_svg))
         .route("/retro/load", post(retro_load))
         .route("/retro", post(retro_parse).get(serve_retro_page))
         .route("/retro/", get(serve_retro_page))
         .route("/health", get(health_endpoint))
-        .merge(svg_router)
+        .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/", ServeDir::new("webapp/public"))
         .layer(CorsLayer::permissive());
 
@@ -163,10 +172,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
-            svg_poc: None,
-            syntax_spans: None,
-            character_styles: None,
-            roundtrip: None,
+            canvas_svg: None,
             error: None,
         });
     }
@@ -174,18 +180,8 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
     // Use the complete pipeline like the working version
     match crate::process_notation(&input) {
         Ok(result) => {
-            // Simple roundtrip test - just return the original input as reconstructed
-            let roundtrip = RoundtripData {
-                works: true,
-                original_length: input.len(),
-                reconstructed_length: input.len(),
-                reconstructed_text: input.clone(),
-                differences: None,
-            };
 
 
-            // Generate spans and character styles directly from document in single tree walk
-            let (syntax_spans, character_styles) = crate::renderers::codemirror::render_codemirror(&result.document, &input);
 
             // Extract beats from all ContentLine elements in staves
 
@@ -208,8 +204,9 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
                 None
             };
 
-            // Always generate the doremi-script SVG POC (using the requested notation type)
-            let svg_poc = Some(crate::renderers::svg::render_document_tree_to_svg(&result.document, &notation_type));
+
+            // Generate canvas SVG for WYSIWYG editor using editor SVG renderer
+            let canvas_svg = crate::renderers::editor::render_canvas_svg(&result.document, &notation_type, &input, None, None, None).ok();
 
             // Generate minimal lilypond before moving document
             let lilypond_minimal = crate::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, Some(&input)).ok();
@@ -224,10 +221,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
                 lilypond_svg,
                 vexflow: Some(result.vexflow_data),
                 vexflow_svg: Some(result.vexflow_svg),
-                svg_poc,
-                syntax_spans: Some(syntax_spans),
-                character_styles: Some(character_styles),
-                roundtrip: Some(roundtrip),
+                canvas_svg,
                 error: None,
             })
         },
@@ -241,10 +235,7 @@ async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoR
             lilypond_svg: None,
             vexflow: None,
             vexflow_svg: None,
-            svg_poc: None,
-            syntax_spans: None,
-            character_styles: None,
-            roundtrip: None,
+            canvas_svg: None,
             error: Some(e.to_string()),
         }),
     }
@@ -263,9 +254,42 @@ async fn render_svg_poc(Json(request): Json<SvgPocRequest>) -> impl IntoResponse
     match crate::pipeline::process_notation(&request.input) {
         Ok(result) => {
             // Step 2: Use the SVG renderer module to generate SVG
-            let svg_content = crate::renderers::svg::render_document_tree_to_svg(&result.document, &request.notation_type);
+            let svg_content = match crate::renderers::editor::render_canvas_svg(&result.document, &request.notation_type, &request.input, None, None, None) {
+                Ok(svg) => svg,
+                Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("SVG generation failed: {}", err)).into_response()
+            };
 
             println!("✅ SVG POC generation successful, length: {}", svg_content.len());
+            Html(svg_content).into_response()
+        }
+        Err(err) => {
+            println!("❌ Parsing failed: {}", err);
+            (StatusCode::BAD_REQUEST, format!("Parsing failed: {}", err)).into_response()
+        }
+    }
+}
+
+// New API endpoint for canvas SVG with cursor position support
+async fn render_canvas_svg(Json(request): Json<CanvasSvgRequest>) -> impl IntoResponse {
+    println!("Canvas SVG request: input_len={}, notation_type={}, cursor_position={:?}",
+             request.input_text.len(), request.notation_type, request.cursor_position);
+
+    // Parse the input text to get a document
+    match crate::pipeline::process_notation(&request.input_text) {
+        Ok(result) => {
+            // Use the SVG renderer with cursor position and selection
+            let svg_content = match crate::renderers::editor::render_canvas_svg(
+                &result.document,
+                &request.notation_type,
+                &request.input_text,
+                request.cursor_position,
+                request.selection_start,
+                request.selection_end
+            ) {
+                Ok(svg) => svg,
+                Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Canvas SVG generation failed: {}", err)).into_response()
+            };
+            println!("✅ Canvas SVG generation successful, length: {}", svg_content.len());
             Html(svg_content).into_response()
         }
         Err(err) => {

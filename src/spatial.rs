@@ -824,6 +824,10 @@ fn process_content_line_spatial(
             },
             ContentElement::Barline(_) => {
                 current_column += 1; // Barlines are typically 1 char
+            },
+            ContentElement::UnknownToken(unknown) => {
+                // Unknown tokens behave like whitespace, advance column by token length
+                current_column += unknown.token_value.len();
             }
         }
     }
@@ -963,6 +967,10 @@ fn calculate_content_element_columns(content_line: &ContentLine) -> Vec<(usize, 
             ContentElement::Barline(_) => {
                 column_positions.push((element_idx, current_column));
                 current_column += 1; // Barlines are typically single character
+            },
+            ContentElement::UnknownToken(unknown) => {
+                // Unknown tokens behave like whitespace - they don't have column positions themselves
+                current_column += unknown.token_value.len();
             },
         }
     }
@@ -1231,6 +1239,15 @@ fn apply_slur_to_span(span: &SpatialSpan, element_columns: &[(usize, usize)], co
                     // Barlines don't have consumed_elements, skip to next element
                 }
                 current_column += 1;
+            },
+            ContentElement::UnknownToken(unknown) => {
+                if current_column >= span.start_column && current_column <= span.end_column {
+                    // Add slur to unknown token (they behave like whitespace)
+                    unknown.consumed_elements.push(span.consumed_element.clone());
+                    first_element_found = true;
+                } else {
+                    current_column += unknown.token_value.len();
+                }
             },
         }
     }

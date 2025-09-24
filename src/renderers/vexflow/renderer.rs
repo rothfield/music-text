@@ -124,6 +124,9 @@ fn process_stave_to_vexflow(stave: &crate::parse::model::Stave) -> Vec<serde_jso
                     crate::parse::model::ContentElement::Whitespace(_) => {
                         // Skip whitespace
                     }
+                    crate::parse::model::ContentElement::UnknownToken(_) => {
+                        // Skip unknown tokens (behave like whitespace)
+                    }
                 }
             }
         }

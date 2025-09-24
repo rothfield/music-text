@@ -113,6 +113,9 @@ pub fn convert_document_to_lilypond_src(
                             ContentElement::Whitespace(_) => {
                                 // Skip whitespace
                             },
+                            ContentElement::UnknownToken(_) => {
+                                // Skip unknown tokens (behave like whitespace)
+                            },
                         }
                     }
                 }
@@ -644,6 +647,9 @@ fn convert_stave_to_lilypond_content(stave: &crate::parse::model::Stave) -> Resu
                     },
                     ContentElement::Whitespace(_) => {
                         // Skip whitespace
+                    },
+                    ContentElement::UnknownToken(_) => {
+                        // Skip unknown tokens (behave like whitespace)
                     },
                 }
             }

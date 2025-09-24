@@ -29,13 +29,6 @@
                 <button onclick="clearAll()" class="secondary">Clear</button>
                 <button onclick="toggleSlur()" class="secondary">Slur</button>
 
-                <div class="midi-controls">
-                    <button onclick="playMidi()" class="midi-btn" id="playBtn" title="Play MIDI">▶️</button>
-                    <button onclick="pauseMidi()" class="midi-btn" id="pauseBtn" title="Pause MIDI">⏸️</button>
-                    <button onclick="stopMidi()" class="midi-btn" id="stopBtn" title="Stop MIDI">⏹️</button>
-                    <input type="range" id="tempoSlider" min="40" max="208" value="120" onchange="setTempo(this.value)" title="Tempo (BPM)">
-                    <span id="tempoDisplay">120 BPM</span>
-                </div>
 
                 <div class="octave-controls">
                     <span class="octave-label">Octave:</span>
@@ -60,38 +53,35 @@
             <div id="status" class="status"></div>
         </div>
         
-        <div id="musicInput"></div>
+        <div id="canvasEditor" class="canvas-editor">
+            <canvas id="musicCanvas" width="800" height="400"></canvas>
+            <div id="canvasToolbar" class="canvas-toolbar">
+                <button id="textMode" class="toolbar-btn active">Text Mode</button>
+                <button id="visualMode" class="toolbar-btn">Visual Mode</button>
+                <div class="toolbar-separator"></div>
+                <button id="insertNote" class="toolbar-btn">Insert Note</button>
+                <button id="insertBarline" class="toolbar-btn">Insert Barline</button>
+                <button id="insertGraceNote" class="toolbar-btn">Grace Note</button>
+            </div>
+        </div>
         
         <div class="tabs">
             <div class="tab active" onclick="switchTab('vexflow', this)">VexFlow Draft</div>
             <div class="tab" onclick="switchTab('svg', this)">LilyPond SVG</div>
-            <div class="tab" onclick="switchTab('svgpoc', this)">SVG POC</div>
             <div class="tab" onclick="switchTab('lilypond', this)">LilyPond Src (minimal)</div>
             <div class="tab" onclick="switchTab('lilypond-full', this)">LilyPond Src</div>
             <div class="tab" onclick="switchTab('document', this)">Document</div>
-            <div class="tab" onclick="switchTab('spans', this)">Spans</div>
-            <div class="tab" onclick="switchTab('styles', this)">Span Classes</div>
+            <div class="tab" onclick="switchTab('midi', this)">MIDI</div>
             <div class="tab" onclick="switchTab('source', this)">Source</div>
+            <div class="tab" onclick="switchTab('svg-source', this)">Canvas SVG Source</div>
         </div>
         
         <div id="vexflow-tab" class="tab-content active">
             <div id="vexflow-output"></div>
         </div>
-        
+
         <div id="svg-tab" class="tab-content">
             <div id="svg-output">Click "LilyPond" to generate SVG</div>
-        </div>
-
-        <div id="svgpoc-tab" class="tab-content">
-            <div class="svgpoc-controls">
-                <button onclick="generateSVGPOC()" class="primary">Generate SVG POC</button>
-                <select id="notationTypeSelect" onchange="updateNotationType()">
-                    <option value="number">Number (1,2,3...)</option>
-                    <option value="sargam">Sargam (S,R,G...)</option>
-                    <option value="western">Western (C,D,E...)</option>
-                </select>
-            </div>
-            <div id="svgpoc-output">Enter music notation and click "Generate SVG POC" to test the SVG renderer</div>
         </div>
         
         <div id="lilypond-tab" class="tab-content">
@@ -105,22 +95,55 @@
         <div id="document-tab" class="tab-content">
             <div id="document-output" class="pipeline-section">Enter music notation to see parsed document output</div>
         </div>
-        
 
-        <div id="spans-tab" class="tab-content">
-            <div id="spans-output" class="pipeline-section">Enter music notation to see spans</div>
-        </div>
+        <div id="midi-tab" class="tab-content">
+            <div class="midi-tab-container">
+                <div class="midi-controls">
+                    <div class="midi-playback">
+                        <button onclick="playMidi()" class="midi-btn play-btn" id="playBtn" title="Play MIDI">
+                            <span class="midi-icon">▶️</span>
+                            <span class="midi-label">Play</span>
+                        </button>
+                        <button onclick="pauseMidi()" class="midi-btn pause-btn" id="pauseBtn" title="Pause MIDI">
+                            <span class="midi-icon">⏸️</span>
+                            <span class="midi-label">Pause</span>
+                        </button>
+                        <button onclick="stopMidi()" class="midi-btn stop-btn" id="stopBtn" title="Stop MIDI">
+                            <span class="midi-icon">⏹️</span>
+                            <span class="midi-label">Stop</span>
+                        </button>
+                    </div>
 
-        <div id="styles-tab" class="tab-content">
-            <div id="styles-output" class="pipeline-section">Enter music notation to see span classes</div>
+                    <div class="midi-tempo">
+                        <label for="tempoSlider">Tempo:</label>
+                        <input type="range" id="tempoSlider" min="40" max="208" value="120" onchange="setTempo(this.value)" title="Tempo (BPM)">
+                        <span id="tempoDisplay">120 BPM</span>
+                    </div>
+
+                    <div class="midi-info">
+                        <div id="midiStatus" class="midi-status">Ready</div>
+                        <div id="midiPosition" class="midi-position">0:00 / 0:00</div>
+                    </div>
+                </div>
+
+                <div class="midi-visualization">
+                    <canvas id="midiCanvas" width="800" height="200"></canvas>
+                    <div id="midiOutput" class="midi-output">
+                        Enter music notation to see MIDI representation and enable playback
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div id="source-tab" class="tab-content">
             <div id="source-output" class="pipeline-section">Plain text will appear here after parsing</div>
         </div>
+
+        <div id="svg-source-tab" class="tab-content">
+            <div id="svg-source-output" class="pipeline-section">SVG source code will appear here</div>
+        </div>
     </div></body>
 
-    <script src="assets/xml-mode.js"></script>
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
