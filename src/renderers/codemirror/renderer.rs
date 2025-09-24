@@ -129,6 +129,16 @@ fn collect_content_element(element: &ContentElement, spans: &mut Vec<Span>) {
                             span.data_attributes.insert("beat-loop-length".to_string(), beat_char_length.to_string());
                         }
                     }
+
+                    // Add octave data for notes
+                    if let crate::models::elements::BeatElement::Note(note) = beat_el {
+                        if note.octave > 0 {
+                            span.data_attributes.insert("octave".to_string(), note.octave.to_string());
+                        } else if note.octave < 0 {
+                            span.data_attributes.insert("octave-negative".to_string(), (-note.octave).to_string());
+                        }
+                    }
+
                     spans.push(span);
                 }
             }
@@ -204,6 +214,14 @@ pub fn render_codemirror_styles(spans: &[Span], original_input: &str) -> Vec<Spa
         if let Some(beat_loop_len) = span.data_attributes.get("beat-loop-length") {
             styles.insert("--beat-loop-length".to_string(), beat_loop_len.clone());
             classes.push("beat-start".to_string());
+        }
+
+        // Add octave styling
+        if let Some(octave) = span.data_attributes.get("octave") {
+            styles.insert("--octave".to_string(), octave.clone());
+        }
+        if let Some(octave_negative) = span.data_attributes.get("octave-negative") {
+            styles.insert("--octave-negative".to_string(), octave_negative.clone());
         }
 
         SpanStyle {

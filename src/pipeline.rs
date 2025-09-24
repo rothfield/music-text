@@ -23,16 +23,17 @@ pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
     // Stage 1: Parse with direct beat creation
     let mut parsed_document = parse_document_with_direct_beats(input)?;
 
-    // Stage 2: Analyze rhythm - add duration information to notes and beats
-    crate::rhythm::analyzer::analyze_rhythm_into_document(&mut parsed_document)
-        .map_err(|e| format!("Rhythm analysis failed: {}", e))?;
-
-    // Stage 3: Process spatial assignments (octave markers, slurs, syllables)
+    // Stage 2: Process spatial assignments (octave markers, slurs, syllables) BEFORE rhythm analysis
     let (spatial_document, _spatial_warnings) = process_spatial_assignments_unified(parsed_document.clone())
         .map_err(|e| format!("Spatial assignment failed: {}", e))?;
 
+    // Stage 3: Analyze rhythm - add duration information to notes and beats
+    let mut final_document = spatial_document;
+    crate::rhythm::analyzer::analyze_rhythm_into_document(&mut final_document)
+        .map_err(|e| format!("Rhythm analysis failed: {}", e))?;
+
     // Final document now has rhythm and spatial information
-    let document = spatial_document;
+    let document = final_document;
 
     // Stage 4: Render from final document
     let lilypond = convert_processed_document_to_lilypond_src(&document, None)?;

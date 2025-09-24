@@ -68,10 +68,12 @@ impl VexFlowJSGenerator {
                                 if let Some(tuplet_name) = tuplet_obj {
                                     tuplets.push(tuplet_name);
                                 }
+                                // Tuplets handle their own beaming/bracketing, no additional beams needed
                                 all_notes.extend(tuplet_note_names);
                             } else {
                                 let beat_notes = self.generate_beat_notes(beat);
-                                if self.should_beam_notes(&beat_notes) {
+                                // Beam all notes in a beat (VexFlow will ignore rests automatically)
+                                if beat_notes.len() >= 2 {
                                     beams.push(beat_notes.clone());
                                 }
                                 all_notes.extend(beat_notes);
@@ -146,17 +148,42 @@ impl VexFlowJSGenerator {
     fn generate_tuplet(&mut self, beat: &Beat) -> (Vec<String>, Option<String>) {
         let mut note_names = Vec::new();
 
-        // Generate individual notes
+        // Generate individual notes with their actual durations
         for element in &beat.elements {
-            if let BeatElement::Note(note) = element {
-                let note_name = self.next_note_name();
-                let (key, _accidentals) = self.note_to_vexflow_key(note);
+            match element {
+                BeatElement::Note(note) => {
+                    let note_name = self.next_note_name();
+                    let (key, _accidentals) = self.note_to_vexflow_key(note);
 
-                self.add_line(&format!(
-                    "  const {} = new StaveNote({{ keys: ['{}'], duration: '8' }});",
-                    note_name, key
-                ));
-                note_names.push(note_name.clone());
+                    // Use actual note duration (like in generate_beat_notes)
+                    let duration = self.duration_to_vexflow_duration(
+                        note.numerator.unwrap_or(1),
+                        note.denominator.unwrap_or(4)
+                    );
+
+                    self.add_line(&format!(
+                        "  const {} = new StaveNote({{ keys: ['{}'], duration: '{}' }});",
+                        note_name, key, duration
+                    ));
+                    note_names.push(note_name.clone());
+                }
+                BeatElement::Dash(dash) => {
+                    // Only process dashes that have rhythm data (starting dashes)
+                    if let (Some(numer), Some(denom)) = (dash.numerator, dash.denominator) {
+                        let rest_name = self.next_note_name();
+                        let duration = self.duration_to_vexflow_duration(numer, denom);
+
+                        self.add_line(&format!(
+                            "  const {} = new StaveNote({{ keys: ['b/4'], duration: '{}r' }});",
+                            rest_name, duration
+                        ));
+                        note_names.push(rest_name.clone());
+                    }
+                    // Skip dashes without rhythm data (extenders)
+                }
+                _ => {
+                    // Skip other elements
+                }
             }
         }
 
@@ -185,31 +212,46 @@ impl VexFlowJSGenerator {
         let mut note_names = Vec::new();
 
         for element in &beat.elements {
-            if let BeatElement::Note(note) = element {
-                let note_name = self.next_note_name();
-                let (key, _accidentals) = self.note_to_vexflow_key(note);
+            match element {
+                BeatElement::Note(note) => {
+                    let note_name = self.next_note_name();
+                    let (key, _accidentals) = self.note_to_vexflow_key(note);
 
-                // Use simple numerator/denominator duration
-                let duration = self.duration_to_vexflow_duration(
-                    note.numerator.unwrap_or(1),
-                    note.denominator.unwrap_or(4)
-                );
+                    // Use simple numerator/denominator duration
+                    let duration = self.duration_to_vexflow_duration(
+                        note.numerator.unwrap_or(1),
+                        note.denominator.unwrap_or(4)
+                    );
 
-                self.add_line(&format!(
-                    "  const {} = new StaveNote({{ keys: ['{}'], duration: '{}' }});",
-                    note_name, key, duration
-                ));
-                note_names.push(note_name);
+                    self.add_line(&format!(
+                        "  const {} = new StaveNote({{ keys: ['{}'], duration: '{}' }});",
+                        note_name, key, duration
+                    ));
+                    note_names.push(note_name);
+                }
+                BeatElement::Dash(dash) => {
+                    // Only process dashes that have rhythm data (starting dashes)
+                    if let (Some(numer), Some(denom)) = (dash.numerator, dash.denominator) {
+                        let rest_name = self.next_note_name();
+                        let duration = self.duration_to_vexflow_duration(numer, denom);
+
+                        self.add_line(&format!(
+                            "  const {} = new StaveNote({{ keys: ['b/4'], duration: '{}r' }});",
+                            rest_name, duration
+                        ));
+                        note_names.push(rest_name);
+                    }
+                    // Skip dashes without rhythm data (extenders)
+                }
+                _ => {
+                    // Skip other elements
+                }
             }
         }
 
         note_names
     }
 
-    fn should_beam_notes(&self, note_names: &[String]) -> bool {
-        // For now, beam if we have multiple eighth notes or smaller
-        note_names.len() >= 2
-    }
 
     fn note_to_vexflow_key(&self, note: &Note) -> (String, Vec<String>) {
         let degree = self.pitch_code_to_degree(note.pitch_code);

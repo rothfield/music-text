@@ -190,19 +190,23 @@ fn process_beat_to_vexflow(beat: &crate::parse::model::Beat) -> Vec<serde_json::
 
                 elements.push(note_obj);
             }
-            crate::parse::model::BeatElement::Dash(_) => {
-                let duration = beat.total_duration.clone()
-                    .unwrap_or_else(|| fraction::Fraction::from(1) / fraction::Fraction::from(4));
-                let (vexflow_duration, dots) = convert_fraction_to_vexflow(duration);
+            crate::parse::model::BeatElement::Dash(dash) => {
+                // Only process dashes that have rhythm data (starting dashes)
+                // Extending dashes have no rhythm data and should be skipped
+                if let (Some(numer), Some(denom)) = (dash.numerator, dash.denominator) {
+                    let note_duration = fraction::Fraction::new(numer, denom);
+                    let (vexflow_duration, dots) = convert_fraction_to_vexflow(note_duration);
 
-                let mut rest = serde_json::json!({
-                    "type": "Rest",
-                    "duration": vexflow_duration
-                });
-                if dots > 0 {
-                    rest["dots"] = dots.into();
+                    let mut rest = serde_json::json!({
+                        "type": "Rest",
+                        "duration": vexflow_duration
+                    });
+                    if dots > 0 {
+                        rest["dots"] = dots.into();
+                    }
+                    elements.push(rest);
                 }
-                elements.push(rest);
+                // Skip dashes without rhythm data (extenders)
             }
             crate::parse::model::BeatElement::BreathMark(_) => {
                 elements.push(serde_json::json!({
@@ -250,75 +254,18 @@ fn process_beat_to_vexflow(beat: &crate::parse::model::Beat) -> Vec<serde_json::
     elements
 }
 
-/// Convert Fraction to VexFlow duration using shared function
+/// Convert Fraction to VexFlow duration using shared RhythmConverter
 fn convert_fraction_to_vexflow(duration: fraction::Fraction) -> (String, u8) {
-    let num = *duration.numer().unwrap() as usize;
-    let den = *duration.denom().unwrap() as usize;
-    
-    // Use shared fraction conversion logic (same as LilyPond)
-    match (num, den) {
-        // Basic durations
-        (1, 1) => ("w".to_string(), 0),     // whole
-        (1, 2) => ("h".to_string(), 0),     // half
-        (1, 4) => ("q".to_string(), 0),     // quarter
-        (1, 8) => ("8".to_string(), 0),     // eighth
-        (1, 16) => ("16".to_string(), 0),   // sixteenth
-        (1, 32) => ("32".to_string(), 0),   // thirty-second
-        (1, 64) => ("64".to_string(), 0),   // sixty-fourth
-        
-        // Single-dotted durations (3/2 of basic duration)
-        (3, 2) => ("w".to_string(), 1),     // dotted whole
-        (3, 4) => ("h".to_string(), 1),     // dotted half
-        (3, 8) => ("q".to_string(), 1),     // dotted quarter
-        (3, 16) => ("8".to_string(), 1),    // dotted eighth
-        (3, 32) => ("16".to_string(), 1),   // dotted sixteenth
-        (3, 64) => ("32".to_string(), 1),   // dotted thirty-second
-        
-        // Double-dotted durations (7/4 of basic duration)
-        (7, 4) => ("w".to_string(), 2),     // double-dotted whole
-        (7, 8) => ("h".to_string(), 2),     // double-dotted half  
-        (7, 16) => ("q".to_string(), 2),    // double-dotted quarter
-        (7, 32) => ("8".to_string(), 2),    // double-dotted eighth
-        (7, 64) => ("16".to_string(), 2),   // double-dotted sixteenth
-        
-        // Tuplet durations - render as appropriate visual note values
-        (1, 12) => ("8".to_string(), 0),    // triplet eighth (3 in time of 2)
-        (1, 20) => ("16".to_string(), 0),   // quintuplet sixteenth (5 in time of 4)
-        (1, 24) => ("16".to_string(), 0),   // sextuplet sixteenth (6 in time of 4)
-        (1, 28) => ("16".to_string(), 0),   // septuplet sixteenth (7 in time of 4)
-        (1, 36) => ("32".to_string(), 0),   // nonuplet thirty-second (9 in time of 8)
-        (1, 40) => ("32".to_string(), 0),   // 10-tuplet thirty-second
-        (1, 44) => ("32".to_string(), 0),   // 11-tuplet thirty-second
-        (1, 48) => ("32".to_string(), 0),   // triplet thirty-second (12 in time of 8)
-        (1, 52) => ("32".to_string(), 0),   // 13-tuplet thirty-second
-        (1, 56) => ("32".to_string(), 0),   // 14-tuplet thirty-second
-        (1, 60) => ("32".to_string(), 0),   // 15-tuplet thirty-second
-        (1, 68) => ("64".to_string(), 0),   // 17-tuplet sixty-fourth
-        (1, 72) => ("64".to_string(), 0),   // 18-tuplet sixty-fourth
-        (1, 76) => ("64".to_string(), 0),   // 19-tuplet sixty-fourth
-        (1, 80) => ("64".to_string(), 0),   // 20-tuplet sixty-fourth
-        (1, 84) => ("64".to_string(), 0),   // 21-tuplet sixty-fourth
-        (1, 88) => ("64".to_string(), 0),   // 22-tuplet sixty-fourth
-        (1, 92) => ("64".to_string(), 0),   // 23-tuplet sixty-fourth
-        (1, 96) => ("64".to_string(), 0),   // 24-tuplet sixty-fourth
-        (1, 100) => ("64".to_string(), 0),  // 25-tuplet sixty-fourth
-        (1, 104) => ("64".to_string(), 0),  // 26-tuplet sixty-fourth
-        (1, 108) => ("64".to_string(), 0),  // 27-tuplet sixty-fourth
-        (1, 112) => ("64".to_string(), 0),  // 28-tuplet sixty-fourth
-        (1, 116) => ("64".to_string(), 0),  // 29-tuplet sixty-fourth
-        (1, 120) => ("64".to_string(), 0),  // 30-tuplet sixty-fourth
-        (1, 124) => ("64".to_string(), 0),  // 31-tuplet sixty-fourth
-        (1, 128) => ("64".to_string(), 0),  // 32-tuplet sixty-fourth
+    use crate::models::RhythmConverter;
 
-        // Fallback for any other tuplet durations using algorithmic approach
-        _ => {
-            // For very large denominators, map to appropriate note value
-            if den >= 96 { ("64".to_string(), 0) }    // 64th notes for very dense tuplets
-            else if den >= 48 { ("32".to_string(), 0) }  // 32nd notes
-            else if den >= 24 { ("16".to_string(), 0) }  // 16th notes
-            else if den >= 12 { ("8".to_string(), 0) }   // 8th notes
-            else { ("32".to_string(), 0) }               // thirty-second notes (default)
-        }
+    // Use the existing rhythm converter to get VexFlow durations
+    let vexflow_durations = RhythmConverter::fraction_to_vexflow(duration);
+
+    if let Some((vexflow_duration, dots)) = vexflow_durations.first() {
+        (vexflow_duration.clone(), *dots)
+    } else {
+        // Fallback to quarter note
+        ("q".to_string(), 0)
     }
 }
 

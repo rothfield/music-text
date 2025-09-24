@@ -1,4 +1,4 @@
-use crate::models::{
+use crate::parse::model::{
     Document, DocumentElement, Stave, StaveLine, UpperLine, LowerLine, LyricsLine,
     UpperElement, LowerElement, Syllable, ContentLine, ContentElement, Beat, BeatElement, Note, ConsumedElement, Attributes, Position
 };
@@ -126,6 +126,54 @@ fn octave_marker_to_number(marker: &str, is_upper: bool) -> i8 {
 
 
 /// Consume octave markers from upper and lower lines
+pub fn consume_octave_markers(
+    mut upper_line: UpperLine,
+    mut lower_line: LowerLine
+) -> (Vec<(usize, ConsumedMarker)>, UpperLine, LowerLine) {
+    let mut consumed_markers = Vec::new();
+    let mut tracker = PositionTracker::new();
+
+    // Consume markers from upper line
+    for element in &mut upper_line.elements {
+        let pos = tracker.advance_for_upper_element(element);
+
+        if let UpperElement::UpperOctaveMarker { marker, value, char_index, .. } = element {
+            if let Some(marker_value) = value.take() {
+                let octave_value = octave_marker_to_number(&marker, true);
+                let consumed = ConsumedMarker {
+                    octave_value,
+                    char_index: *char_index, // was: original_source
+                    marker_symbol: marker.clone(),
+                    is_upper: true,
+                };
+                consumed_markers.push((pos, consumed));
+            }
+        }
+    }
+
+    // Reset tracker for lower line
+    tracker = PositionTracker::new();
+
+    // Consume markers from lower line
+    for element in &mut lower_line.elements {
+        let pos = tracker.advance_for_lower_element(element);
+
+        if let LowerElement::LowerOctaveMarker { marker, value, char_index, .. } = element {
+            if let Some(marker_value) = value.take() {
+                let octave_value = octave_marker_to_number(&marker, false);
+                let consumed = ConsumedMarker {
+                    octave_value,
+                    char_index: *char_index, // was: original_source
+                    marker_symbol: marker.clone(),
+                    is_upper: false,
+                };
+                consumed_markers.push((pos, consumed));
+            }
+        }
+    }
+
+    (consumed_markers, upper_line, lower_line)
+}
 
 /// Consume mordents from upper line with move semantics
 pub fn consume_mordents(
@@ -151,6 +199,53 @@ pub fn consume_mordents(
     (consumed_mordents, upper_line)
 }
 
+/// Assign consumed markers to content elements at exact positions
+pub fn assign_markers_direct(
+    mut content_elements: Vec<ParsedElement>,
+    consumed_markers: Vec<(usize, ConsumedMarker)>
+) -> (Vec<ParsedElement>, Vec<(usize, ConsumedMarker)>) {
+    let mut remaining_markers = Vec::new();
+
+    // Extract note positions (already 0-based)
+    let note_positions: Vec<(usize, usize)> = content_elements.iter()
+        .enumerate()
+        .filter_map(|(idx, element)| {
+            match element {
+                ParsedElement::Note { position, .. } => Some((position.char_index, idx)),
+                _ => None,
+            }
+        })
+        .collect();
+
+    // Direct assignment pass
+    for (marker_pos, consumed_marker) in consumed_markers {
+        let mut assigned = false;
+
+        for (note_pos, note_idx) in &note_positions {
+            if marker_pos == *note_pos {
+                // Transfer ownership of marker to note
+                if let ParsedElement::Note { octave, children, .. } = &mut content_elements[*note_idx] {
+                    *octave = consumed_marker.octave_value;
+
+                    // Add octave marker to note children
+                    let distance = if consumed_marker.is_upper { -1 } else { 1 };
+                    children.push(ParsedChild::OctaveMarker {
+                        symbol: consumed_marker.marker_symbol.clone(),
+                        distance,
+                    });
+                }
+                assigned = true;
+                break;
+            }
+        }
+
+        if !assigned {
+            remaining_markers.push((marker_pos, consumed_marker));
+        }
+    }
+
+    (content_elements, remaining_markers)
+}
 
 /// Assign consumed mordents to content elements at exact positions
 pub fn assign_mordents_direct(
@@ -210,7 +305,7 @@ pub fn assign_markers_nearest(
             if let ParsedElement::Note { octave, position, .. } = element {
                 // Only assign to notes with default octave (unassigned)
                 if *octave == 0 {
-                    let note_pos = position.col;  // Use column position for alignment
+                    let note_pos = position.char_index;
                     let distance = if marker_pos > note_pos {
                         marker_pos - note_pos
                     } else {
@@ -780,111 +875,18 @@ fn process_content_line_spatial(
 ) -> Result<(ContentLine, Vec<String>), String> {
     let mut warnings = Vec::new();
 
-    // Get the starting char_index of the content line to calculate columns
-    let content_line_start = content_line.char_index;
-
-    // DISABLED: Old spatial consumption system - now using direct marker processing
-    // for upper_line in upper_lines.iter_mut() {
-    //     process_spatial_consumption(upper_line, content_line);
-    // }
-
-    // STANDARD APPROACH: Build position map first, then use it
-
-    // First pass: Build column-to-note mapping with direct access paths
-    let mut column_to_note_path = std::collections::HashMap::new();
-    let mut current_column = 0;
-
-    for (element_idx, element) in content_line.elements.iter().enumerate() {
-        match element {
-            ContentElement::Whitespace(ws) => {
-                current_column += ws.value.as_ref().map_or(1, |s| s.len());
-            },
-            ContentElement::Beat(beat) => {
-                for (beat_element_idx, beat_element) in beat.elements.iter().enumerate() {
-                    match beat_element {
-                        BeatElement::Note(note) => {
-                            column_to_note_path.insert(current_column, (element_idx, beat_element_idx));
-                            eprintln!("DEBUG: Note '{}' at column {} (char_index {})",
-                                     note.value.as_ref().unwrap_or(&"?".to_string()),
-                                     current_column,
-                                     note.char_index);
-                            current_column += 1; // Each note is 1 character
-                        },
-                        BeatElement::Dash(_dash) => {
-                            current_column += 1; // Each dash is 1 character
-                        },
-                        BeatElement::Rest(_rest) => {
-                            current_column += 1; // Each rest is 1 character
-                        },
-                        BeatElement::BreathMark(_breath) => {
-                            current_column += 1; // Each breath mark is 1 character
-                        }
-                    }
-                }
-            },
-            ContentElement::Barline(_) => {
-                current_column += 1; // Barlines are typically 1 char
-            }
-        }
-    }
-
-    // Second pass: Process upper octave markers using direct access
-    eprintln!("DEBUG: Processing upper octave markers");
+    // Process spatial consumption from upper lines that affect this content line
     for upper_line in upper_lines.iter_mut() {
-        let upper_line_start = upper_line.char_index;
-        eprintln!("DEBUG: Upper line starts at char_index {}", upper_line_start);
-        for element in &mut upper_line.elements {
-            if let UpperElement::UpperOctaveMarker { marker, value, char_index, .. } = element {
-                eprintln!("DEBUG: Found marker '{}' at char_index {}, value present: {}",
-                         marker, char_index, value.is_some());
-                if let Some(marker_value) = value.take() {
-                    let marker_column = char_index.saturating_sub(upper_line_start);
-                    eprintln!("DEBUG: Marker at column {}, looking for note", marker_column);
-                    if let Some(&(element_idx, beat_element_idx)) = column_to_note_path.get(&marker_column) {
-                        eprintln!("DEBUG: Found note at element_idx {}, beat_element_idx {}", element_idx, beat_element_idx);
-                        if let ContentElement::Beat(beat) = &mut content_line.elements[element_idx] {
-                            if let BeatElement::Note(note) = &mut beat.elements[beat_element_idx] {
-                                let octave_value = match marker.as_str() {
-                                    "." => 1,
-                                    ":" => 2,
-                                    _ => 0,
-                                };
-                                note.consumed_elements.push(ConsumedElement::UpperOctaveMarker {
-                                    value: Some(marker_value),
-                                    char_index: *char_index,
-                                });
-                                note.octave += octave_value;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        process_spatial_consumption(upper_line, content_line);
     }
 
-    // Process lower octave markers using direct access
-    for lower_line in lower_lines.iter_mut() {
-        let lower_line_start = lower_line.char_index;
-        for element in &mut lower_line.elements {
-            if let LowerElement::LowerOctaveMarker { marker, value, char_index, .. } = element {
-                if let Some(marker_value) = value.take() {
-                    let marker_column = char_index.saturating_sub(lower_line_start);
-                    if let Some(&(element_idx, beat_element_idx)) = column_to_note_path.get(&marker_column) {
-                        if let ContentElement::Beat(beat) = &mut content_line.elements[element_idx] {
-                            if let BeatElement::Note(note) = &mut beat.elements[beat_element_idx] {
-                                let octave_value = match marker.as_str() {
-                                    "." => -1,
-                                    ":" => -2,
-                                    _ => 0,
-                                };
-                                note.consumed_elements.push(ConsumedElement::LowerOctaveMarker {
-                                    value: Some(marker_value),
-                                    char_index: *char_index,
-                                });
-                                note.octave += octave_value;
-                            }
-                        }
-                    }
+    // For each beat in the content line, find notes and apply spatial assignments
+    for element in &mut content_line.elements {
+        if let ContentElement::Beat(beat) = element {
+            for beat_element in &mut beat.elements {
+                if let BeatElement::Note(note) = beat_element {
+                    // Apply spatial assignments to this note
+                    apply_spatial_assignments_to_note(note, upper_lines, lower_lines, lyrics_lines);
                 }
             }
         }
@@ -893,23 +895,74 @@ fn process_content_line_spatial(
     Ok((content_line.clone(), warnings))
 }
 
-/// Find a note at the specified column in the content line
-fn find_note_at_column(content_line: &mut ContentLine, content_line_start: usize, target_column: usize) -> Option<&mut Note> {
-    for element in &mut content_line.elements {
-        if let ContentElement::Beat(beat) = element {
-            for beat_element in &mut beat.elements {
-                if let BeatElement::Note(note) = beat_element {
-                    let note_column = note.char_index - content_line_start;
-                    if note_column == target_column {
-                        return Some(note);
+/// Apply spatial assignments from annotation lines to a specific note
+fn apply_spatial_assignments_to_note(
+    note: &mut Note,
+    upper_lines: &mut [UpperLine],
+    lower_lines: &mut [LowerLine],
+    _lyrics_lines: &[LyricsLine]
+) {
+    let note_position = note.char_index;
+
+    // Process octave markers from upper lines - use move semantics
+    for upper_line in &mut *upper_lines {
+        for element in &mut upper_line.elements {
+            if let UpperElement::UpperOctaveMarker { marker, value, char_index, .. } = element {
+                if *char_index == note_position {
+                    // Move the complete element to consumed_elements
+                    if let Some(marker_value) = value.take() {
+                        let octave_value = match marker.as_str() {
+                            "." => 1,
+                            ":" => 2,
+                            _ => 0,
+                        };
+
+                        // Store complete consumed element directly
+                        note.consumed_elements.push(ConsumedElement::UpperOctaveMarker {
+                            value: Some(marker_value),
+                            char_index: *char_index, // was: source
+                        });
+
+                        // Apply octave modification
+                        note.octave += octave_value;
                     }
                 }
             }
         }
     }
-    None
-}
 
+    // Process octave markers from lower lines - use move semantics
+    for lower_line in &mut *lower_lines {
+        for element in &mut lower_line.elements {
+            if let LowerElement::LowerOctaveMarker { marker, value, char_index, .. } = element {
+                if *char_index == note_position {
+                    // Move the complete element to consumed_elements
+                    if let Some(marker_value) = value.take() {
+                        let octave_value = match marker.as_str() {
+                            "." => -1,
+                            ":" => -2,
+                            _ => 0,
+                        };
+
+                        // Store complete consumed element directly
+                        note.consumed_elements.push(ConsumedElement::LowerOctaveMarker {
+                            value: Some(marker_value),
+                            char_index: *char_index, // was: source
+                        });
+
+                        // Apply octave modification
+                        note.octave += octave_value;
+                    }
+                }
+            }
+        }
+    }
+
+    // Note: Slur processing should be done at content line level, not per-note
+    // This function only handles individual note octave marker consumption
+
+    // TODO: Add syllable, beat group, and mordent processing
+}
 
 /// Helper function to calculate column positions for all content elements
 fn calculate_content_element_columns(content_line: &ContentLine) -> Vec<(usize, usize)> {
@@ -919,7 +972,7 @@ fn calculate_content_element_columns(content_line: &ContentLine) -> Vec<(usize, 
     for (element_idx, element) in content_line.elements.iter().enumerate() {
         match element {
             ContentElement::Whitespace(whitespace) => {
-                current_column += whitespace.value.as_ref().map_or(0, |s| s.len());
+                current_column += whitespace.content.len();
             },
             ContentElement::Beat(beat) => {
                 let beat_start_column = current_column;
@@ -946,17 +999,12 @@ fn calculate_content_element_columns(content_line: &ContentLine) -> Vec<(usize, 
                             if let Some(ref value) = breath.value {
                                 current_column += value.len();
                             } else {
+                                        BeatElement::Rest(_) => { /* TODO: Handle Rest */ },
                                 current_column += 1; // Default single character
                             }
+                                        BeatElement::Rest(_) => { /* TODO: Handle Rest */ },
                         },
-                        BeatElement::Rest(rest) => {
-                            column_positions.push((element_idx, current_column));
-                            if let Some(ref value) = rest.value {
-                                current_column += value.len();
-                            } else {
-                                current_column += 1; // Default single character
-                            }
-                        },
+                                        BeatElement::Rest(_) => { /* TODO: Handle Rest */ },
                     }
                 }
             },
@@ -1179,7 +1227,7 @@ fn apply_slur_to_span(span: &SpatialSpan, element_columns: &[(usize, usize)], co
                     whitespace.consumed_elements.push(span.consumed_element.clone());
                     first_element_found = true;
                 } else {
-                    current_column += whitespace.value.as_ref().map_or(0, |s| s.len());
+                    current_column += whitespace.content.len();
                 }
             },
             ContentElement::Beat(beat) => {
@@ -1204,10 +1252,7 @@ fn apply_slur_to_span(span: &SpatialSpan, element_columns: &[(usize, usize)], co
                                 breath.consumed_elements.push(span.consumed_element.clone());
                                 first_element_found = true;
                             },
-                            BeatElement::Rest(rest) => {
-                                rest.consumed_elements.push(span.consumed_element.clone());
-                                first_element_found = true;
-                            },
+                                        BeatElement::Rest(_) => { /* TODO: Handle Rest */ },
                         }
                     } else {
                         // Advance column for this beat element
@@ -1221,11 +1266,14 @@ fn apply_slur_to_span(span: &SpatialSpan, element_columns: &[(usize, usize)], co
                             },
                             BeatElement::Dash(_) => current_column += 1,
                             BeatElement::BreathMark(_) => current_column += 1,
-                            BeatElement::Rest(_) => current_column += 1,
                         }
+                                        BeatElement::Rest(_) => { /* TODO: Handle Rest */ },
                     }
+                                        BeatElement::Rest(_) => { /* TODO: Handle Rest */ },
                 }
+                                        BeatElement::Rest(_) => { /* TODO: Handle Rest */ },
             },
+                                        BeatElement::Rest(_) => { /* TODO: Handle Rest */ },
             ContentElement::Barline(_) => {
                 if current_column >= span.start_column && current_column <= span.end_column {
                     // Barlines don't have consumed_elements, skip to next element
@@ -1270,12 +1318,7 @@ fn add_consumed_element_to_content(
                     apply_semantic_effects_to_breath(breath, &consumed_element);
                     return;
                 },
-                BeatElement::Rest(rest) => {
-                    // Phase 1: Generic consumption
-                    rest.consumed_elements.push(consumed_element.clone());
-                    // Phase 2: No special semantic processing needed for rests
-                    return;
-                },
+                                        BeatElement::Rest(_) => { /* TODO: Handle Rest */ },
             }
         }
     }
@@ -1375,25 +1418,27 @@ fn process_stave_spatial_old(stave: &mut Stave) -> Result<(Stave, Vec<String>), 
 
             let lower_line = lower_lines[0].clone();
 
-            // 1. DISABLED: Old octave marker system - now using apply_spatial_assignments_to_note
-            // let (consumed_markers, updated_upper, updated_lower) =
-            //     consume_octave_markers(upper_line, lower_line);
-            let updated_upper = upper_line;
-            let updated_lower = lower_line;
+            // 1. Consume octave markers
+            let (consumed_markers, updated_upper, updated_lower) =
+                consume_octave_markers(upper_line, lower_line);
 
-            // 2. DISABLED: Old marker assignment system
-            // let (content_with_octaves, remaining_markers) =
-            //     assign_markers_direct(content_elements.clone(), consumed_markers);
-            let content_with_octaves_and_markers = content_elements.clone();
 
-            // 4-6. DISABLED: Old beat group processing system
-            // let (consumed_beat_groups, final_updated_lower_lines) = consume_beat_groups(vec![updated_lower]);
-            // let (content_with_beat_groups, remaining_beat_groups) =
-            //     assign_beat_groups_direct(content_with_octaves_and_markers, consumed_beat_groups);
-            // let (final_content, still_remaining_beat_groups) = assign_beat_groups_nearest(content_with_beat_groups, remaining_beat_groups);
-            let final_content = content_with_octaves_and_markers;
-            let still_remaining_beat_groups = Vec::new();
-            let final_updated_lower_lines = vec![updated_lower];
+            // 2. Assign markers to content elements
+            let (content_with_octaves, remaining_markers) =
+                assign_markers_direct(content_elements.clone(), consumed_markers);
+
+            // 3. Assign remaining markers to nearest notes
+            let content_with_octaves_and_markers = assign_markers_nearest(content_with_octaves, remaining_markers);
+
+            // 4. Consume beat groups from lower lines (use already updated lower line)
+            let (consumed_beat_groups, final_updated_lower_lines) = consume_beat_groups(vec![updated_lower]);
+
+            // 5. Assign beat groups to content elements with two-phase approach
+            let (content_with_beat_groups, remaining_beat_groups) =
+                assign_beat_groups_direct(content_with_octaves_and_markers, consumed_beat_groups);
+
+            // 6. Assign remaining beat groups to nearest notes
+            let (final_content, still_remaining_beat_groups) = assign_beat_groups_nearest(content_with_beat_groups, remaining_beat_groups);
 
             // 7. Validate beat group processing and collect warnings
             let beat_group_warnings = validate_beat_group_processing(&still_remaining_beat_groups);
@@ -1437,18 +1482,22 @@ fn process_stave_spatial_old(stave: &mut Stave) -> Result<(Stave, Vec<String>), 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{PitchCode, NotationSystem};
+    use crate::parse::model::{PitchCode, NotationSystem};
 
     fn create_test_note(pitch: &str, column: usize) -> Note {
         Note {
-            value: Some(pitch.to_string()),
-            char_index: column,
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                value: Some(pitch.to_string()),
+                position: Position { line: 1, column, index_in_line: (column.saturating_sub(1)), index_in_doc: 0 },
+            },
             octave: 0,
             pitch_code: PitchCode::N1,
             notation_system: NotationSystem::Number,
-            numerator: None,
-            denominator: None,
+            spatial_assignments: Vec::new(),
             consumed_elements: Vec::new(),
+            duration: None,
         }
     }
 
@@ -1457,30 +1506,50 @@ mod tests {
             elements: vec![
                 UpperElement::UpperOctaveMarker {
                     marker: ".".to_string(),
-                    value: Some(".".to_string()),
-                    char_index: 0,
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                        value: Some(".".to_string()),
+                        position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+                    },
                 },
                 UpperElement::Space {
                     count: 2,
-                    value: Some("  ".to_string()),
-                    char_index: 1,
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                        value: Some("  ".to_string()),
+                        position: Position { line: 0, column: 1, index_in_line: 0, index_in_doc: 0 },
+                    },
                 },
                 UpperElement::UpperOctaveMarker {
                     marker: ":".to_string(),
-                    value: Some(":".to_string()),
-                    char_index: 3,
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                        value: Some(":".to_string()),
+                        position: Position { line: 0, column: 3, index_in_line: 2, index_in_doc: 0 },
+                    },
                 },
             ],
-            value: Some(".  :".to_string()),
-            char_index: 0,
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                value: Some(".  :".to_string()),
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+            },
         }
     }
 
     fn create_test_lower_line_empty() -> LowerLine {
         LowerLine {
             elements: vec![],
-            value: Some("".to_string()),
-            char_index: 0,
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                value: Some("".to_string()),
+                position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
+            },
         }
     }
 
@@ -1489,12 +1558,20 @@ mod tests {
             elements: vec![
                 LowerElement::LowerOctaveMarker {
                     marker: ".".to_string(),
-                    value: Some(".".to_string()),
-                    char_index: 0,
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                        value: Some(".".to_string()),
+                        position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
+                    },
                 },
             ],
-            value: Some(".".to_string()),
-            char_index: 0,
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                value: Some(".".to_string()),
+                position: Position { line: 2, column: 0, index_in_line: 0, index_in_doc: 0 },
+            },
         }
     }
 
@@ -1518,8 +1595,12 @@ mod tests {
 
         let space_element = UpperElement::Space {
             count: 3,
-            value: Some("   ".to_string()),
-            char_index: 0,
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                value: Some("   ".to_string()),
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+            },
         };
 
         let start_pos = tracker.advance_for_upper_element(&space_element);
@@ -1546,28 +1627,120 @@ mod tests {
         assert_eq!(consumed_markers[1].0, 3);
         assert_eq!(consumed_markers[1].1.octave_value, 2);
 
-        // Original values should be consumed (None)
+        // Original sources should be consumed (None)
         for element in &updated_upper.elements {
-            if let UpperElement::UpperOctaveMarker { value, .. } = element {
-                assert!(value.is_none(), "Marker value should be consumed");
+            if let UpperElement::UpperOctaveMarker { source, .. } = element {
+                assert!(source.value.is_none(), "Marker source should be consumed");
             }
         }
     }
 
-    // #[test]
-    // fn test_assign_markers_direct() {
-    //     // TODO: This function has been removed/refactored - test may no longer be needed
-    // }
+    #[test]
+    fn test_assign_markers_direct() {
+        let notes = vec![
+            create_test_note("1", 0),
+            create_test_note("2", 3),
+        ];
 
-    // #[test]
-    // fn test_assign_markers_nearest() {
-    //     // TODO: This function has been removed/refactored - test may no longer be needed
-    // }
+        let consumed_markers = vec![
+            (0, ConsumedMarker {
+                octave_value: 1,
+                char_index: 0, // was: original_source
+                marker_symbol: ".".to_string(),
+                is_upper: true,
+            }),
+            (3, ConsumedMarker {
+                octave_value: 2,
+                char_index: 3, // was: original_source
+                marker_symbol: ":".to_string(),
+                is_upper: true,
+            }),
+        ];
 
-    // #[test]
-    // fn test_consume_and_assign_slurs() {
-    //     // TODO: This function has been removed/refactored - test may no longer be needed
-    // }
+        let (updated_notes, remaining_markers) =
+            assign_markers_direct(notes, consumed_markers);
+
+        // Both markers should be assigned
+        assert_eq!(remaining_markers.len(), 0);
+        assert_eq!(updated_notes[0].octave, 1);
+        assert_eq!(updated_notes[1].octave, 2);
+    }
+
+    #[test]
+    fn test_assign_markers_nearest() {
+        let notes = vec![
+            create_test_note("1", 0),
+            create_test_note("2", 5),
+        ];
+
+        let remaining_markers = vec![
+            (2, ConsumedMarker {
+                octave_value: 1,
+                char_index: 2, // was: original_source
+                marker_symbol: ".".to_string(),
+                is_upper: true,
+            }),
+        ];
+
+        let updated_notes = assign_markers_nearest(notes, remaining_markers);
+
+        // Marker at position 2 should be assigned to note at position 0 (distance 2)
+        // rather than note at position 5 (distance 3)
+        assert_eq!(updated_notes[0].octave, 1);
+        assert_eq!(updated_notes[1].octave, 0); // Unchanged
+    }
+
+    #[test]
+    fn test_consume_and_assign_slurs() {
+        let mut upper_line = UpperLine {
+            elements: vec![
+                UpperElement::Space {
+                    count: 2,
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                        value: Some("  ".to_string()),
+                        position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+                    },
+                },
+                UpperElement::SlurIndicator {
+                    value: "___".to_string(),
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                        value: Some("___".to_string()),
+                        position: Position { line: 0, column: 2, index_in_line: 1, index_in_doc: 0 },
+                    },
+                },
+            ],
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                value: Some("  ___".to_string()),
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+            },
+        };
+
+        let notes = vec![
+            create_test_note("1", 1),
+            create_test_note("2", 2),
+            create_test_note("3", 3),
+            create_test_note("4", 4),
+            create_test_note("5", 5),
+        ];
+
+        let (updated_upper, updated_notes) = consume_and_assign_slurs(upper_line, notes);
+
+        // Slur should be consumed
+        for element in &updated_upper.elements {
+            if let UpperElement::SlurIndicator { source, .. } = element {
+                assert!(source.value.is_none(), "Slur source should be consumed");
+            }
+        }
+
+        // Note: in_slur field has been replaced with slur_position enum
+        // Test should be updated to check slur_position instead
+    }
 
     #[test]
     fn test_validation_consumption_success() {
@@ -1575,12 +1748,20 @@ mod tests {
             elements: vec![
                 UpperElement::UpperOctaveMarker {
                     marker: ".".to_string(),
-                    value: None, // Consumed
-                    char_index: 0,
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                        value: None, // Consumed
+                        position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+                    },
                 },
             ],
-            value: Some(".".to_string()),
-            char_index: 0,
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                value: Some(".".to_string()),
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+            },
         };
 
         let lower_line = create_test_lower_line_empty();
@@ -1594,12 +1775,20 @@ mod tests {
             elements: vec![
                 UpperElement::UpperOctaveMarker {
                     marker: ".".to_string(),
-                    value: Some(".".to_string()), // Not consumed
-                    char_index: 0,
+                    source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                        value: Some(".".to_string()), // Not consumed
+                        position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+                    },
                 },
             ],
-            value: Some(".".to_string()),
-            char_index: 0,
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                value: Some(".".to_string()),
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+            },
         };
 
         let lower_line = create_test_lower_line_empty();
@@ -1611,8 +1800,12 @@ mod tests {
     fn test_consume_lower_line_octave_markers() {
         let upper_line = UpperLine {
             elements: vec![],
-            value: Some("".to_string()),
-            char_index: 0,
+            source: Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+                value: Some("".to_string()),
+                position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+            },
         };
         let lower_line = create_test_lower_line_with_markers();
 
@@ -1626,21 +1819,60 @@ mod tests {
         assert_eq!(consumed_markers[0].0, 0);
         assert_eq!(consumed_markers[0].1.octave_value, -1);
 
-        // Original value should be consumed (None)
+        // Original source should be consumed (None)
         for element in &updated_lower.elements {
-            if let LowerElement::LowerOctaveMarker { value, .. } = element {
-                assert!(value.is_none(), "Lower marker value should be consumed");
+            if let LowerElement::LowerOctaveMarker { source, .. } = element {
+                assert!(source.value.is_none(), "Lower marker source should be consumed");
             }
         }
     }
 
-    // #[test]
-    // fn test_lower_line_octave_assignment() {
-    //     // TODO: This function has been removed/refactored - test may no longer be needed
-    // }
+    #[test]
+    fn test_lower_line_octave_assignment() {
+        // Test the specific case: "1\n." should give octave -1
+        let notes = vec![create_test_note("1", 0)];
 
-    // #[test]
-    // fn test_consumed_marker_move_semantics() {
-    //     // TODO: This test uses old Attributes struct that may no longer exist
-    // }
+        let consumed_markers = vec![
+            (0, ConsumedMarker {
+                octave_value: -1,  // Lower line marker
+                char_index: 0, // was: original_source
+                marker_symbol: ".".to_string(),
+                is_upper: false,
+            }),
+        ];
+
+        let (updated_notes, remaining_markers) =
+            assign_markers_direct(notes, consumed_markers);
+
+        // Marker should be assigned
+        assert_eq!(remaining_markers.len(), 0);
+        assert_eq!(updated_notes[0].octave, -1);
+    }
+
+    #[test]
+    fn test_consumed_marker_move_semantics() {
+        let mut original_source = Attributes {
+                            slur_start: false,
+                            slur_char_length: None,
+            value: Some(".".to_string()),
+            position: Position { line: 0, column: 0, index_in_line: 0, index_in_doc: 0 },
+        };
+
+        // Simulate consumption
+        let consumed_value = original_source.value.take();
+        assert!(consumed_value.is_some());
+        assert!(original_source.value.is_none());
+
+        let consumed_marker = ConsumedMarker {
+            octave_value: 1,
+            char_index: 0, // was: original_source
+            marker_symbol: ".".to_string(),
+            is_upper: true,
+        };
+
+        // Original source is now consumed
+        assert!(original_source.value.is_none());
+        // But consumed marker preserves the value
+        assert!(consumed_marker.original_source.value.is_some());
+    }
 }
