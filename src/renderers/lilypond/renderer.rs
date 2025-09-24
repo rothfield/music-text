@@ -323,6 +323,7 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
     // Use analyzer-provided tuplet information
     if beat.is_tuplet.unwrap_or(false) {
         if let Some((tuplet_num, tuplet_den)) = beat.tuplet_ratio {
+            // For now, just use the notes as-is and let fraction_to_lilypond_note handle durations
             let tuplet_content = notes.join(" ");
             Ok(vec![format!("\\tuplet {}/{} {{ {} }}", tuplet_num, tuplet_den, tuplet_content)])
         } else {
@@ -331,6 +332,46 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
     } else {
         Ok(notes)
     }
+}
+
+/// Adjust note durations for tuplets - convert from compressed durations to target durations
+fn adjust_tuplet_note_durations(notes: &[String], tuplet_num: usize, tuplet_den: usize) -> Vec<String> {
+    // Use systematic subdivision approach - denominator determines subdivision note value
+    let target_duration_str = match tuplet_den {
+        1 => "4",     // Quarter note subdivisions
+        2 => "8",     // Eighth note subdivisions
+        4 => "16",    // Sixteenth note subdivisions
+        8 => "32",    // Thirty-second note subdivisions
+        16 => "64",   // Sixty-fourth note subdivisions
+        32 => "128",  // 128th note subdivisions
+        64 => "256",  // 256th note subdivisions
+        _ => "16",    // Default fallback
+    };
+
+    notes.iter().map(|note| {
+        // Extract pitch and non-duration parts from note string
+        let mut pitch = String::new();
+        let mut suffix = String::new();
+        let mut in_duration = false;
+        let mut past_duration = false;
+
+        for ch in note.chars() {
+            if ch.is_ascii_digit() && !past_duration {
+                in_duration = true;
+                // Skip the duration digits
+            } else if in_duration && !ch.is_ascii_digit() {
+                past_duration = true;
+                suffix.push(ch);
+            } else if !in_duration {
+                pitch.push(ch);
+            } else {
+                suffix.push(ch);
+            }
+        }
+
+        // Reconstruct note with target duration
+        format!("{}{}{}", pitch, target_duration_str, suffix)
+    }).collect()
 }
 
 /// Add manual beam brackets to notes in a beat - if beat has more than one note, add [ to first and ] to last
@@ -690,4 +731,87 @@ pub fn convert_processed_document_to_minimal_lilypond_src(
     // Use minimal template
     render_lilypond(LilyPondTemplate::Minimal, &context)
         .map_err(|e| format!("Minimal template render error: {}", e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parse::recursive_descent::parse_document;
+    use crate::rhythm::analyzer::analyze_rhythm_into_document;
+
+    /// Helper function to parse input string and convert to LilyPond
+    fn parse_and_convert_to_lilypond(input: &str) -> Result<String, String> {
+        let mut document = parse_document(input)
+            .map_err(|e| format!("Parse error: {:?}", e))?;
+
+        analyze_rhythm_into_document(&mut document)
+            .map_err(|e| format!("Analysis error: {}", e))?;
+
+        convert_processed_document_to_minimal_lilypond_src(&document, None)
+    }
+
+    #[test]
+    fn test_standalone_dash_sequences_lilypond() {
+        // Test case: "-- -1" should produce r4 r8 c8
+        let result = parse_and_convert_to_lilypond("-- -1").unwrap();
+
+        // Extract just the notes from the score
+        let expected_notes = "r4 r8 c8";
+        assert!(result.contains(expected_notes),
+            "Expected '{}' in output, got: {}", expected_notes, result);
+    }
+
+    #[test]
+    fn test_tied_dashes_lilypond() {
+        // Test case: "-547 -5" should produce r16 g16 f16 b16~ b8 g8
+        let result = parse_and_convert_to_lilypond("-547 -5").unwrap();
+
+        // Extract just the notes from the score
+        let expected_notes = "r16 g16 f16 b16~ b8 g8";
+        assert!(result.contains(expected_notes),
+            "Expected '{}' in output, got: {}", expected_notes, result);
+    }
+
+    #[test]
+    fn test_triple_dashes_lilypond() {
+        // Test case: "--- -R" should produce \tuplet 3/2 { r4 } r8 d8
+        let result = parse_and_convert_to_lilypond("--- -R").unwrap();
+
+        // Check for tuplet structure and notes
+        assert!(result.contains("\\tuplet 3/2"),
+            "Expected tuplet structure in output: {}", result);
+        assert!(result.contains("r4"),
+            "Expected r4 in tuplet: {}", result);
+        assert!(result.contains("r8 d8"),
+            "Expected 'r8 d8' in output: {}", result);
+    }
+
+    #[test]
+    fn test_mixed_patterns_lilypond() {
+        // Test case: "12- -34" produces tuplets due to odd subdivisions
+        let result = parse_and_convert_to_lilypond("12- -34").unwrap();
+
+        // Check for tuplet structures
+        assert!(result.contains("\\tuplet 3/2"),
+            "Expected tuplet structures in output: {}", result);
+        assert!(result.contains("c16 d8"),
+            "Expected 'c16 d8' pattern in first tuplet: {}", result);
+        assert!(result.contains("r16 e16 f16"),
+            "Expected 'r16 e16 f16' pattern in second tuplet: {}", result);
+    }
+
+    #[test]
+    fn test_dash_vs_rest_distinction() {
+        // Test standalone dashes vs notes - dashes in isolation don't produce content
+        let dash_result = parse_and_convert_to_lilypond("--").unwrap();
+        let note_result = parse_and_convert_to_lilypond("1").unwrap();
+
+        // Standalone dashes alone don't produce musical content
+        assert!(dash_result.contains("No musical content") || dash_result.is_empty(),
+            "Standalone dash sequence should produce no content: {}", dash_result);
+
+        // But notes should produce actual notes
+        assert!(note_result.contains("c4"),
+            "Note should produce c4: {}", note_result);
+    }
 }

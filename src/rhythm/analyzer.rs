@@ -57,6 +57,7 @@ pub fn analyze_content_line_rhythm(elements: &mut Vec<ContentElement>) -> Result
 enum State {
     Initial,
     InNote { note_index: usize },
+    InRest { rest_index: usize },
 }
 
 /// Check if a beat starting with dashes should be tied to a previous note/rest
@@ -116,8 +117,9 @@ fn analyze_beat_rhythm_fsm(beat: &mut Beat, should_tie: bool) -> Result<(), Stri
     // Set tied_to_previous based on the analysis
     beat.tied_to_previous = Some(should_tie);
 
-    // Track subdivision counts for each note
+    // Track subdivision counts for each note and rest
     let mut note_subdivisions = Vec::new();
+    let mut rest_subdivisions = Vec::new();
     let mut state = State::Initial;
     let mut total_subdivisions = 0;
 
@@ -136,6 +138,12 @@ fn analyze_beat_rhythm_fsm(beat: &mut Beat, should_tie: bool) -> Result<(), Stri
                 total_subdivisions += 1;
                 state = State::InNote { note_index: note_subdivisions.len() - 1 };
             }
+            (State::InRest { .. }, BeatElement::Note(_)) => {
+                // Start new note after rest
+                note_subdivisions.push(1);
+                total_subdivisions += 1;
+                state = State::InNote { note_index: note_subdivisions.len() - 1 };
+            }
 
             // Dash encountered (duration extender)
             (State::InNote { note_index }, BeatElement::Dash(_)) => {
@@ -145,9 +153,18 @@ fn analyze_beat_rhythm_fsm(beat: &mut Beat, should_tie: bool) -> Result<(), Stri
                 }
                 // Stay in same state
             }
+            (State::InRest { rest_index }, BeatElement::Dash(_)) => {
+                if let Some(subdivisions) = rest_subdivisions.get_mut(*rest_index) {
+                    *subdivisions += 1;
+                    total_subdivisions += 1;
+                }
+                // Stay in same state
+            }
             (State::Initial, BeatElement::Dash(_)) => {
-                // Dash without preceding note - treat as rest (ignore for now)
+                // Dash without preceding note - start new rest
+                rest_subdivisions.push(1);
                 total_subdivisions += 1;
+                state = State::InRest { rest_index: rest_subdivisions.len() - 1 };
             }
 
             // Rest encountered
@@ -157,6 +174,10 @@ fn analyze_beat_rhythm_fsm(beat: &mut Beat, should_tie: bool) -> Result<(), Stri
             }
             (State::InNote { .. }, BeatElement::Rest(_)) => {
                 // Rest after note - treat as new element
+                total_subdivisions += 1;
+            }
+            (State::InRest { .. }, BeatElement::Rest(_)) => {
+                // Rest after rest - treat as new element
                 total_subdivisions += 1;
             }
 
@@ -180,14 +201,11 @@ fn analyze_beat_rhythm_fsm(beat: &mut Beat, should_tie: bool) -> Result<(), Stri
         beat.tuplet_ratio = Some(calculate_tuplet_ratio(total_subdivisions));
     }
 
-    // Check if first element is a dash that should be treated as a rest
-    let first_dash_is_rest = beat.elements.first()
-        .map(|first| matches!(first, BeatElement::Dash(_)))
-        .unwrap_or(false) && !should_tie;
-
-    // Apply calculated durations to notes and dashes
+    // Apply calculated durations to notes and starting dashes (rests)
     let mut note_index = 0;
-    let mut is_first_element = true;
+    let mut rest_index = 0;
+    let mut current_state = State::Initial;
+
     for beat_element in &mut beat.elements {
         match beat_element {
             BeatElement::Note(note) => {
@@ -204,22 +222,43 @@ fn analyze_beat_rhythm_fsm(beat: &mut Beat, should_tie: bool) -> Result<(), Stri
                     note.denominator = Some(denom);
 
                     note_index += 1;
+                    current_state = State::InNote { note_index: note_index - 1 };
                 }
-                is_first_element = false;
             }
             BeatElement::Dash(dash) => {
-                // If this is the first dash and not tied, it represents a rest
-                if is_first_element && first_dash_is_rest {
-                    let duration = Fraction::new(1u64, total_subdivisions as u64) * Fraction::new(1u64, 4u64);
-                    let numer = *duration.numer().unwrap() as u32;
-                    let denom = *duration.denom().unwrap() as u32;
-                    dash.numerator = Some(numer);
-                    dash.denominator = Some(denom);
+                match current_state {
+                    State::Initial => {
+                        // Starting dash - check if this beat is tied to previous
+                        if should_tie {
+                            // This dash is a tie continuation, don't assign rhythm data
+                            // The renderer will handle the tie continuation
+                        } else {
+                            // Starting dash for a new rest, assign rhythm data
+                            if rest_index < rest_subdivisions.len() {
+                                let subdivisions = rest_subdivisions[rest_index];
+                                let duration = Fraction::new(subdivisions as u64, total_subdivisions as u64) * Fraction::new(1u64, 4u64);
+                                let numer = *duration.numer().unwrap() as u32;
+                                let denom = *duration.denom().unwrap() as u32;
+                                dash.numerator = Some(numer);
+                                dash.denominator = Some(denom);
+
+                                rest_index += 1;
+                                current_state = State::InRest { rest_index: rest_index - 1 };
+                            }
+                        }
+                    }
+                    State::InNote { .. } => {
+                        // Extending note - no rhythm data needed
+                        // State stays the same
+                    }
+                    State::InRest { .. } => {
+                        // Extending rest - no rhythm data needed
+                        // State stays the same
+                    }
                 }
-                is_first_element = false;
             }
             _ => {
-                is_first_element = false;
+                // Other elements don't change state
             }
         }
     }
@@ -234,29 +273,33 @@ fn is_tuplet_division(divisions: usize) -> bool {
     divisions > 0 && (divisions & (divisions - 1)) != 0
 }
 
-/// Calculate tuplet ratio for a given number of divisions
+/// Calculate tuplet ratio using systematic subdivision approach
 fn calculate_tuplet_ratio(divisions: usize) -> (usize, usize) {
-    match divisions {
-        3 => (3, 2),   // Triplet: 3 notes in the time of 2
-        5 => (5, 4),   // Quintuplet: 5 notes in the time of 4
-        6 => (6, 4),   // Sextuplet: 6 notes in the time of 4
-        7 => (7, 4),   // Septuplet: 7 notes in the time of 4
-        9 => (9, 8),   // Nonuplet: 9 notes in the time of 8
-        10 => (10, 8), // 10 notes in the time of 8
-        11 => (11, 8), // 11 notes in the time of 8
-        12 => (12, 8), // 12 notes in the time of 8
+    // Systematic subdivision by note count ranges
+    let denominator = match divisions {
+        1..=2 => 1,    // Quarter note subdivisions
+        3..=3 => 2,    // Eighth note subdivisions
+        4..=4 => 4,    // Quarter note (power of 2, not tuplet)
+        5..=7 => 4,    // Sixteenth note subdivisions
+        8..=8 => 8,    // Eighth note (power of 2, not tuplet)
+        9..=15 => 8,   // Thirty-second note subdivisions
+        16..=16 => 16, // Sixteenth note (power of 2, not tuplet)
+        17..=31 => 16, // Sixty-fourth note subdivisions
+        32..=32 => 32, // Thirty-second note (power of 2, not tuplet)
+        33..=63 => 32, // 128th note subdivisions
+        64..=64 => 64, // Sixty-fourth note (power of 2, not tuplet)
+        65..=127 => 64, // 256th note subdivisions
         _ => {
-            // For other cases, find the nearest power of 2
+            // For extreme cases, find next power of 2
             let mut power_of_two = 1;
             while power_of_two < divisions {
                 power_of_two *= 2;
             }
-            if power_of_two > divisions {
-                power_of_two /= 2;
-            }
-            (divisions, power_of_two)
+            power_of_two / 2 // Use the subdivision count that fits in a quarter beat
         }
-    }
+    };
+
+    (divisions, denominator)
 }
 
 #[cfg(test)]
@@ -299,5 +342,146 @@ mod tests {
         }
 
         assert_eq!(beat.divisions, Some(4)); // Total subdivisions
+    }
+
+    #[test]
+    fn test_standalone_dash_sequences() {
+        // Test case: "-- -1" (2 beats: rest sequence + dash+note)
+        // Beat 1: "--" should have first dash as rest, second as extender
+        let mut beat1 = Beat {
+            elements: vec![
+                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 0, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 1, consumed_elements: vec![], numerator: None, denominator: None }),
+            ],
+            value: Some("--".to_string()),
+            char_index: 0,
+            consumed_elements: vec![],
+            divisions: None,
+            total_duration: None,
+            is_tuplet: None,
+            tuplet_ratio: None,
+            tied_to_previous: None,
+        };
+
+        analyze_beat_rhythm_fsm(&mut beat1, false).unwrap(); // Not tied
+
+        // Check first dash gets rhythm data (rest)
+        if let BeatElement::Dash(dash1) = &beat1.elements[0] {
+            assert_eq!(dash1.numerator, Some(1));
+            assert_eq!(dash1.denominator, Some(4)); // 2/2 * 1/4 = 1/4
+        }
+
+        // Check second dash has no rhythm data (extender)
+        if let BeatElement::Dash(dash2) = &beat1.elements[1] {
+            assert_eq!(dash2.numerator, None);
+            assert_eq!(dash2.denominator, None);
+        }
+
+        assert_eq!(beat1.divisions, Some(2)); // Total subdivisions
+
+        // Beat 2: "-1" should have dash as rest, note gets rhythm data
+        let mut beat2 = Beat {
+            elements: vec![
+                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 3, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Note(Note::new(Some("1".to_string()), 4, PitchCode::N1, NotationSystem::Number)),
+            ],
+            value: Some("-1".to_string()),
+            char_index: 3,
+            consumed_elements: vec![],
+            divisions: None,
+            total_duration: None,
+            is_tuplet: None,
+            tuplet_ratio: None,
+            tied_to_previous: None,
+        };
+
+        analyze_beat_rhythm_fsm(&mut beat2, false).unwrap(); // Not tied
+
+        // Check dash gets rhythm data (rest)
+        if let BeatElement::Dash(dash) = &beat2.elements[0] {
+            assert_eq!(dash.numerator, Some(1));
+            assert_eq!(dash.denominator, Some(8)); // 1/2 * 1/4 = 1/8
+        }
+
+        // Check note gets rhythm data
+        if let BeatElement::Note(note) = &beat2.elements[1] {
+            assert_eq!(note.numerator, Some(1));
+            assert_eq!(note.denominator, Some(8)); // 1/2 * 1/4 = 1/8
+        }
+
+        assert_eq!(beat2.divisions, Some(2)); // Total subdivisions
+    }
+
+    #[test]
+    fn test_tied_dashes() {
+        // Test case: "-547 -5" where -5 is tied to previous
+        // Beat 1: "-547" should have dash as rest, notes get rhythm data
+        let mut beat1 = Beat {
+            elements: vec![
+                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 0, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Note(Note::new(Some("5".to_string()), 1, PitchCode::N5, NotationSystem::Number)),
+                BeatElement::Note(Note::new(Some("4".to_string()), 2, PitchCode::N4, NotationSystem::Number)),
+                BeatElement::Note(Note::new(Some("7".to_string()), 3, PitchCode::N7, NotationSystem::Number)),
+            ],
+            value: Some("-547".to_string()),
+            char_index: 0,
+            consumed_elements: vec![],
+            divisions: None,
+            total_duration: None,
+            is_tuplet: None,
+            tuplet_ratio: None,
+            tied_to_previous: None,
+        };
+
+        analyze_beat_rhythm_fsm(&mut beat1, false).unwrap(); // Not tied
+
+        // Check dash gets rhythm data (rest)
+        if let BeatElement::Dash(dash) = &beat1.elements[0] {
+            assert_eq!(dash.numerator, Some(1));
+            assert_eq!(dash.denominator, Some(16)); // 1/4 * 1/4 = 1/16
+        }
+
+        // Check all notes get rhythm data
+        for i in 1..4 {
+            if let BeatElement::Note(note) = &beat1.elements[i] {
+                assert_eq!(note.numerator, Some(1));
+                assert_eq!(note.denominator, Some(16)); // 1/4 * 1/4 = 1/16 each
+            }
+        }
+
+        assert_eq!(beat1.divisions, Some(4)); // Total subdivisions
+
+        // Beat 2: "-5" tied to previous - dash should NOT get rhythm data
+        let mut beat2 = Beat {
+            elements: vec![
+                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 5, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Note(Note::new(Some("5".to_string()), 6, PitchCode::N5, NotationSystem::Number)),
+            ],
+            value: Some("-5".to_string()),
+            char_index: 5,
+            consumed_elements: vec![],
+            divisions: None,
+            total_duration: None,
+            is_tuplet: None,
+            tuplet_ratio: None,
+            tied_to_previous: None,
+        };
+
+        analyze_beat_rhythm_fsm(&mut beat2, true).unwrap(); // TIED to previous
+
+        // Check dash has NO rhythm data (tie continuation)
+        if let BeatElement::Dash(dash) = &beat2.elements[0] {
+            assert_eq!(dash.numerator, None);
+            assert_eq!(dash.denominator, None);
+        }
+
+        // Check note gets rhythm data
+        if let BeatElement::Note(note) = &beat2.elements[1] {
+            assert_eq!(note.numerator, Some(1));
+            assert_eq!(note.denominator, Some(8)); // 1/2 * 1/4 = 1/8
+        }
+
+        assert_eq!(beat2.divisions, Some(2)); // Total subdivisions
+        assert_eq!(beat2.tied_to_previous, Some(true)); // Confirms tied
     }
 }
