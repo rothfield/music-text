@@ -105,6 +105,9 @@ class MusicTextApp {
     setupEventListeners() {
         // Set up canvas editor event listeners
         this.canvasEditor.onContentChange = (content) => {
+            // Update the backing text tab
+            UI.updateBackingTextOutput(content);
+
             // Save input text
             LocalStorage.saveInputText(content);
 
@@ -120,7 +123,48 @@ class MusicTextApp {
         this.canvasEditor.onSelectionChange = (selection) => {
             this.saveCursorPosition();
             this.updateOctaveButtonStates();
+
+            // Sync textarea cursor/selection with canvas
+            const backingTextArea = document.getElementById('backing-text-output');
+            if (backingTextArea) {
+                backingTextArea.selectionStart = selection.start;
+                backingTextArea.selectionEnd = selection.end;
+            }
         };
+
+        // Add event listener for backing text textarea to enable two-way sync
+        const backingTextArea = document.getElementById('backing-text-output');
+        if (backingTextArea) {
+            backingTextArea.addEventListener('input', (e) => {
+                // Update canvas editor when backing text is edited with cursor position
+                this.canvasEditor.setValue(e.target.value, e.target.selectionStart);
+                // Make sure selection is in sync
+                this.canvasEditor.selection.end = e.target.selectionEnd;
+            });
+
+            // Sync cursor/selection when user clicks or selects in textarea
+            backingTextArea.addEventListener('select', (e) => {
+                this.canvasEditor.setSelection(e.target.selectionStart, e.target.selectionEnd, true); // silent to prevent loop
+            });
+
+            backingTextArea.addEventListener('click', (e) => {
+                // Update cursor position and trigger server update
+                this.canvasEditor.cursorPosition = e.target.selectionStart;
+                this.canvasEditor.selection.start = e.target.selectionStart;
+                this.canvasEditor.selection.end = e.target.selectionEnd;
+                this.canvasEditor.submitToServer(this.canvasEditor.textContent);
+            });
+
+            backingTextArea.addEventListener('keyup', (e) => {
+                // Sync cursor position after arrow keys, Enter, etc.
+                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter'].includes(e.key)) {
+                    this.canvasEditor.cursorPosition = e.target.selectionStart;
+                    this.canvasEditor.selection.start = e.target.selectionStart;
+                    this.canvasEditor.selection.end = e.target.selectionEnd;
+                    this.canvasEditor.submitToServer(this.canvasEditor.textContent);
+                }
+            });
+        }
     }
 
     // Handle input events
@@ -411,14 +455,29 @@ class MusicTextApp {
 
         try {
             // Apply octave modification using full document context
-            const modifiedText = this.processOctaveAdjustmentWithColumns(fullText, selectionStart, selectionEnd, octaveType);
+            const { modifiedText, upperLineWasAdded } = this.processOctaveAdjustmentWithColumns(fullText, selectionStart, selectionEnd, octaveType);
 
             // Replace entire text
             this.canvasEditor.setValue(modifiedText);
 
-            // Restore focus and selection (adjust for potential line additions)
+            // Calculate the new cursor position
+            let newSelectionStart = selectionStart;
+            let newSelectionEnd = selectionEnd;
+            const lengthDifference = modifiedText.length - fullText.length;
+
+            if (upperLineWasAdded) {
+                // If an upper line was added, the whole selection is shifted down by its length.
+                newSelectionStart += lengthDifference;
+                newSelectionEnd += lengthDifference;
+            } else {
+                // If a lower line was added, the selection end might need adjustment if it spans multiple lines,
+                // but for a single line selection, it stays the same. We'll just adjust the end.
+                newSelectionEnd += lengthDifference;
+            }
+
+            // Restore focus and selection
             this.canvasEditor.focus();
-            this.canvasEditor.setSelection(selectionStart, selectionStart + (modifiedText.length - fullText.length) + (selectionEnd - selectionStart));
+            this.canvasEditor.setSelection(newSelectionStart, newSelectionEnd);
 
             // Trigger re-parsing
             if (this.canvasEditor.onContentChange) {
@@ -444,12 +503,13 @@ class MusicTextApp {
     processOctaveAdjustmentWithColumns(fullText, selectionStart, selectionEnd, octaveType) {
         const lines = fullText.split('\n');
         const marker = this.getOctaveMarker(octaveType);
+        let upperLineWasAdded = false;
 
         // Find which lines and columns contain the selected notes
         const selectedNotePositions = this.findSelectedNotePositions(fullText, selectionStart, selectionEnd);
 
         if (selectedNotePositions.length === 0) {
-            return fullText; // No notes found in selection
+            return { modifiedText: fullText, upperLineWasAdded: false }; // No notes found
         }
 
         // Group note positions by line
@@ -461,16 +521,39 @@ class MusicTextApp {
             notesByLine.get(pos.lineIndex).push(pos.column);
         }
 
-        // Process each line that has selected notes
-        for (const [lineIndex, columns] of notesByLine) {
+        // Create a list of line indices to process, sorted, to handle multiple line selections
+        const sortedLineIndices = Array.from(notesByLine.keys()).sort((a, b) => a - b);
+        let linesAdded = 0; // Track how many lines we've added to adjust indices
+
+        for (const lineIndex of sortedLineIndices) {
+            const columns = notesByLine.get(lineIndex);
+            const adjustedLineIndex = lineIndex + linesAdded;
+
             if (this.isUpperOctave(octaveType)) {
-                this.addToUpperLineWithColumns(lines, lineIndex, columns, marker);
-            } else {
-                this.addToLowerLineWithColumns(lines, lineIndex, columns, marker);
+                const upperLineIndex = adjustedLineIndex - 1;
+                // Check if there's already an upper line
+                if (upperLineIndex >= 0 && this.isUpperLine(lines[upperLineIndex])) {
+                    lines[upperLineIndex] = this.addMarkersAtColumns(lines[upperLineIndex], columns, marker);
+                } else {
+                    const newUpperLine = this.createLineWithMarkersAtColumns(columns, marker);
+                    lines.splice(adjustedLineIndex, 0, newUpperLine);
+                    linesAdded++;
+                    upperLineWasAdded = true;
+                }
+            } else { // Lower Octave
+                const lowerLineIndex = adjustedLineIndex + 1;
+                // Check if there's already a lower line
+                if (lowerLineIndex < lines.length && this.isLowerLine(lines[lowerLineIndex])) {
+                    lines[lowerLineIndex] = this.addMarkersAtColumns(lines[lowerLineIndex], columns, marker);
+                } else {
+                    const newLowerLine = this.createLineWithMarkersAtColumns(columns, marker);
+                    lines.splice(lowerLineIndex, 0, newLowerLine);
+                    linesAdded++;
+                }
             }
         }
 
-        return lines.join('\n');
+        return { modifiedText: lines.join('\n'), upperLineWasAdded };
     }
 
     // Add markers to upper line at specific columns

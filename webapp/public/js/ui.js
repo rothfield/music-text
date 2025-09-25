@@ -237,4 +237,12 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
         }
     },
 
+    // Update backing text output
+    updateBackingTextOutput(text) {
+        const output = document.getElementById('backing-text-output');
+        if (output) {
+            output.value = text;
+        }
+    },
+
 };

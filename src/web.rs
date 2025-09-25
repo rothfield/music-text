@@ -67,6 +67,7 @@ pub struct CanvasSvgRequest {
     selection_end: Option<usize>,
 }
 
+use crate::parse::Document;
 // Template rendering helper
 async fn render_retro_template(
     input: &str,
@@ -111,6 +112,27 @@ async fn render_retro_template(
         .replace("{{success_message}}", success_message.unwrap_or(""))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RenderFromModelRequest {
+    document: Document,
+    notation_type: String,
+    cursor_position: Option<usize>,
+    selection_start: Option<usize>,
+    selection_end: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SplitLineRequest {
+    text: String,
+    cursor_position: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SplitLineResponse {
+    new_text: String,
+    new_cursor_position: usize,
+}
+
 pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
     // Preload and validate CSS file on server startup
     match std::fs::read_to_string("assets/svg-styles.css") {
@@ -134,6 +156,8 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/parse", get(parse_text))
         .route("/api/render-svg-poc", post(render_svg_poc))
         .route("/api/canvas-svg", post(render_canvas_svg))
+        .route("/api/render-from-model", post(render_from_model))
+        .route("/api/split-line", post(split_line_handler))
         .route("/retro/load", post(retro_load))
         .route("/retro", post(retro_parse).get(serve_retro_page))
         .route("/retro/", get(serve_retro_page))
@@ -152,6 +176,44 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await.unwrap();
     
     Ok(())
+}
+
+async fn render_from_model(Json(request): Json<RenderFromModelRequest>) -> impl IntoResponse {
+    // In this new flow, the document *is* the source of truth.
+    // The original `input_text` is less relevant but the renderer uses it for placeholders.
+    // We can pass an empty string as a stand-in.
+    let placeholder_text = "";
+
+    let svg_content = match crate::renderers::editor::render_canvas_svg(
+        &request.document,
+        &request.notation_type,
+        placeholder_text,
+        request.cursor_position,
+        request.selection_start,
+        request.selection_end,
+    ) {
+        Ok(svg) => svg,
+        Err(err) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("SVG generation failed: {}", err),
+            )
+                .into_response()
+        }
+    };
+    Html(svg_content).into_response()
+}
+
+async fn split_line_handler(Json(request): Json<SplitLineRequest>) -> impl IntoResponse {
+    let (new_text, new_cursor_position) =
+        crate::parse::actions::split_line_at_cursor(&request.text, request.cursor_position);
+
+    let response = SplitLineResponse {
+        new_text,
+        new_cursor_position,
+    };
+
+    Json(response)
 }
 
 async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {

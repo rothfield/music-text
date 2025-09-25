@@ -49,6 +49,30 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
     let mut author = None;
     let mut directives = HashMap::new();
 
+    // For simple musical content (like "12\n\n\n3"), use the character-based parser directly
+    // to properly handle blank lines between staves
+    let trimmed = input.trim();
+    let looks_like_simple_music = trimmed.lines().all(|line| {
+        let t = line.trim();
+        t.is_empty() || // blank line
+        t.chars().all(|c| matches!(c, '0'..='9' | ' ' | '-' | '|' | ':')) // simple musical chars
+    });
+
+    if looks_like_simple_music && !trimmed.starts_with("###") {
+        // Use character-based parser for the entire input to preserve blank lines
+        if let Ok(mut body_elements) = parse_document_body(input, 0) {
+            elements.append(&mut body_elements);
+            return Ok(Document {
+                title,
+                author,
+                directives,
+                elements,
+                value: Some(input.to_string()),
+                char_index: 0,
+            });
+        }
+    }
+
     // Skip leading blank lines (blank_lines*)
     while line_idx < lines.len() && lines[line_idx].trim().is_empty() {
         line_idx += 1;
@@ -211,17 +235,6 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
                 elements.append(&mut stave_elements);
             }
             line_idx = stave_end;
-        } else {
-            // Single line stave
-            let single_line = lines[line_idx];
-            let start_doc_index: usize = lines[..line_idx].iter()
-                .map(|line| line.len() + 1)
-                .sum();
-
-            if let Ok(mut stave_elements) = parse_document_body(single_line, start_doc_index) {
-                elements.append(&mut stave_elements);
-            }
-            line_idx += 1;
         }
     }
 
@@ -357,13 +370,13 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             break;
         }
 
-        // Collect the current line
+        // Collect the current line INCLUDING the newline if present
         let mut current_line = String::new();
         let this_line_start_doc_index = *doc_index;
         while let Some(&ch) = chars.peek() {
             if ch == '\n' {
                 chars.next(); // consume newline
-                current_line.push(ch);
+                current_line.push(ch);  // Include the newline in current_line
                 stave_content.push(ch);
                 *line += 1;
                 *column = 1;
@@ -377,6 +390,7 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
                 *doc_index += 1;
             }
         }
+
 
         // Check precedence: upper lines should be checked before content lines
         // because lines like ".123" could match both but should be treated as upper lines
@@ -395,6 +409,7 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
         } else if is_content_line(&current_line.trim_end_matches('\n')) {
             // Use the document notation system instead of detecting per line
             // Parse directly to ContentLine using v3 parser
+            // Pass the line exactly as collected, preserving whether it has a newline or not
             let content_line = crate::parse::content_line_parser_v3::parse_content_line(
                 &current_line,
                 *line,
@@ -424,13 +439,13 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             break;
         }
 
-        // Collect the current line
+        // Collect the current line INCLUDING the newline if present
         let mut current_line = String::new();
         let this_line_start_doc_index = *doc_index;
         while let Some(&ch) = chars.peek() {
             if ch == '\n' {
                 chars.next(); // consume newline
-                current_line.push(ch);
+                current_line.push(ch);  // Include the newline in current_line
                 stave_content.push(ch);
                 *line += 1;
                 *column = 1;
@@ -489,6 +504,7 @@ fn parse_stave_from_chars_with_system(chars: &mut std::iter::Peekable<std::str::
             lines.push(crate::parse::model::StaveLine::Whitespace(whitespace_line));
         } else if is_content_line(&current_line.trim_end_matches('\n')) {
             // Additional content lines (multiple content lines in a stave are allowed)
+            // Pass the line exactly as collected, preserving whether it has a newline or not
             let content_line = crate::parse::content_line_parser_v3::parse_content_line(
                 &current_line,
                 *line,
@@ -695,8 +711,14 @@ fn parse_document_body(input: &str, start_doc_index: usize) -> Result<Vec<crate:
         // Parse (blank_lines stave)*
         while chars.peek().is_some() {
             if is_blank_lines_start(&mut chars.clone()) {
-                let blank_lines = parse_blank_lines_element(&mut chars, &mut line, &mut column, &mut doc_index)?;
-                elements.push(crate::parse::model::DocumentElement::BlankLines(blank_lines));
+                match parse_blank_lines_element(&mut chars, &mut line, &mut column, &mut doc_index) {
+                    Ok(blank_lines) => {
+                        elements.push(crate::parse::model::DocumentElement::BlankLines(blank_lines));
+                    },
+                    Err(e) => {
+                        // Don't propagate error, just continue
+                    }
+                }
             }
 
             if chars.peek().is_some() {

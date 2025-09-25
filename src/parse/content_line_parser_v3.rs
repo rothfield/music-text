@@ -92,6 +92,7 @@ pub fn parse_content_line(
 
                 let whitespace_content = " ".repeat(space_count);
                 elements.push(ContentElement::Whitespace(crate::parse::model::Whitespace {
+                    id: uuid::Uuid::new_v4(),
                     value: Some(whitespace_content),
                     char_index: line_start_doc_index + start_pos,
                     consumed_elements: Vec::new(),
@@ -153,6 +154,7 @@ pub fn parse_content_line(
         }
     }
 
+    eprintln!("DEBUG parse_content_line: setting value to {:?}", input);
     Ok(ContentLine {
         elements,
         value: Some(input.to_string()),

@@ -1,10 +1,13 @@
 use serde::{Deserialize, Serialize};
 use fraction::Fraction;
+use uuid::Uuid;
 
 // Core music elements - the fundamental building blocks of musical notation
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Note {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,                       // Unique identifier
     // Common fields
     pub value: Option<String>,          // Raw pitch string
     pub char_index: usize,              // Position in source
@@ -26,6 +29,7 @@ impl Note {
         notation_system: super::notation::NotationSystem,
     ) -> Self {
         Self {
+            id: Uuid::new_v4(),             // Generate unique ID
             value,
             char_index,
             octave: 0,                      // Default octave
@@ -40,6 +44,8 @@ impl Note {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dash {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
     // Duration fields populated by rhythm analyzer
@@ -50,6 +56,8 @@ pub struct Dash {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BreathMark {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
     pub consumed_elements: Vec<super::position::ConsumedElement>,
@@ -57,6 +65,8 @@ pub struct BreathMark {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Rest {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
     pub consumed_elements: Vec<super::position::ConsumedElement>,
@@ -67,6 +77,8 @@ pub struct Rest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Space {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
     pub count: usize,
@@ -75,6 +87,8 @@ pub struct Space {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Whitespace {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
     pub consumed_elements: Vec<super::position::ConsumedElement>,
@@ -82,12 +96,16 @@ pub struct Whitespace {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Newline {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EndOfInput {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
 }

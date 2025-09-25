@@ -34,6 +34,7 @@ pub fn parse_beat(
         Some(&(pos, '-')) => {
             chars.next();
             elements.push(BeatElement::Dash(Dash {
+                id: uuid::Uuid::new_v4(),
                 value: Some("-".to_string()),
                 char_index: line_start_doc_index + pos,
                 consumed_elements: Vec::new(),
@@ -45,6 +46,7 @@ pub fn parse_beat(
             let (pitch_str, pitch_code) = parse_pitch_with_indices(chars, notation_system, line_num, input)?;
 
             elements.push(BeatElement::Note(Note {
+                id: uuid::Uuid::new_v4(),
                 value: Some(pitch_str),
                 char_index: line_start_doc_index + pos,
                 pitch_code,
@@ -81,6 +83,7 @@ pub fn parse_beat(
             Some(&(pos, '-')) => {
                 chars.next();
                 elements.push(BeatElement::Dash(Dash {
+                    id: uuid::Uuid::new_v4(),
                     value: Some("-".to_string()),
                     char_index: line_start_doc_index + pos,
                     consumed_elements: Vec::new(),
@@ -93,6 +96,7 @@ pub fn parse_beat(
             Some(&(pos, '\'')) => {
                 chars.next();
                 elements.push(BeatElement::BreathMark(BreathMark {
+                    id: uuid::Uuid::new_v4(),
                     value: Some("'".to_string()),
                     char_index: line_start_doc_index + pos,
                     consumed_elements: Vec::new(),
@@ -104,12 +108,13 @@ pub fn parse_beat(
                 let (pitch_str, pitch_code) = parse_pitch_with_indices(chars, notation_system, line_num, input)?;
 
                 elements.push(BeatElement::Note(Note {
+                    id: uuid::Uuid::new_v4(),
                     value: Some(pitch_str),
                     char_index: line_start_doc_index + pos,
                     pitch_code,
                     octave: 0,
                     notation_system,
-                        consumed_elements: Vec::new(), // Will be populated during spatial analysis
+                    consumed_elements: Vec::new(), // Will be populated during spatial analysis
                     numerator: None, // Will be populated by rhythm analysis
                     denominator: None // Will be populated by rhythm analysis
                 }));

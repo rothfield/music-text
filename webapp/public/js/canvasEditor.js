@@ -3,6 +3,18 @@
  * Canvas-based visual and text editor for music notation
  */
 
+// Helper function for throttling
+function throttle(func, limit) {
+    let inThrottle;
+    return function(...args) {
+        if (!inThrottle) {
+            func.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    };
+}
+
 export class CanvasEditor {
     constructor() {
         this.canvas = null;
@@ -27,9 +39,20 @@ export class CanvasEditor {
         this.noteElements = [];
         this.selectedElement = null;
 
+        // Coordinate tracking from SVG
+        this.elementCoordinates = [];
+        this.characterPositions = {};
+
+        // Stored SVG data for cursor blinking
+        this.lastSvgContent = null;
+        this.lastSvgImage = null;
+        this.cursorBlinkState = true;
+
         // Event handlers
         this.onContentChange = null;
         this.onSelectionChange = null;
+
+        this.throttledSubmitToServer = throttle(this.submitToServer, 50); // 50ms throttle for smoother updates
     }
 
     // Initialize the canvas editor
@@ -52,13 +75,18 @@ export class CanvasEditor {
         // Set initial mode to text
         this.switchToTextMode();
 
-        // Initialize canvas with placeholder message
-        this.clearCanvas();
+        // Load saved state from local storage
+        const hasLoadedState = this.loadFromLocalStorage();
+
+        // Initialize canvas with placeholder message if nothing loaded
+        if (!hasLoadedState) {
+            this.clearCanvas();
+        }
 
         // Start cursor blinking
         this.startCursorBlink();
 
-        console.log('✅ Canvas Editor initialized');
+        console.log('✅ Canvas Editor initialized', hasLoadedState ? '(loaded from localStorage)' : '(fresh start)');
         return this;
     }
 
@@ -140,6 +168,9 @@ export class CanvasEditor {
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
             e.preventDefault();
             this.moveCursor(e.key === 'ArrowLeft' ? -1 : 1);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            this.handleEnterKey();
         } else if (e.key === 'Escape') {
             this.selectedElement = null;
             this.render();
@@ -166,8 +197,8 @@ export class CanvasEditor {
 
     // Handle key press events for text input
     handleKeyPress(e) {
-        if (e.ctrlKey || e.metaKey || e.key === 'Escape') {
-            return; // Ignore special keys
+        if (e.ctrlKey || e.metaKey || e.key === 'Escape' || e.key === 'Enter') {
+            return; // Ignore special keys (Enter is handled in handleKeyDown)
         }
 
         e.preventDefault();
@@ -191,8 +222,19 @@ export class CanvasEditor {
             this.selection.end = clickPosition;
             this.resetCursorBlink();
 
+            // Save to local storage
+            this.saveToLocalStorage();
+
             // Re-render with new cursor position
             this.submitToServer(this.textContent);
+
+            // Notify selection change
+            if (this.onSelectionChange) {
+                this.onSelectionChange({
+                    start: this.selection.start,
+                    end: this.selection.end
+                });
+            }
         }
 
         // Prevent text selection outside canvas
@@ -203,6 +245,9 @@ export class CanvasEditor {
     handleCanvasMouseUp(e) {
         if (this.isSelecting) {
             this.isSelecting = false;
+
+            // A final update to ensure the selection is correctly rendered
+            this.submitToServer(this.textContent);
 
             // Notify selection change if there's a callback
             if (this.onSelectionChange) {
@@ -227,7 +272,84 @@ export class CanvasEditor {
         const scaledX = x * scaleX;
         const scaledY = y * scaleY;
 
-        // SVG rendering parameters (these should match the SVG renderer)
+        // First, try to use precise character positions from SVG metadata
+        if (this.characterPositions && Object.keys(this.characterPositions).length > 0) {
+            // Account for SVG transform translate(20, 60)
+            const adjustedX = scaledX - 20;
+            const adjustedY = scaledY - 60;
+
+            // Find bounds and closest position
+            let closestPos = 0;
+            let closestXDistance = Number.MAX_VALUE;
+            let leftmostX = Number.MAX_VALUE;
+            let rightmostX = Number.MIN_VALUE;
+            let rightmostPos = 0;
+            let topMostY = Number.MAX_VALUE;
+            let bottomMostY = Number.MIN_VALUE;
+
+            // First pass: find bounds and closest position based on X only
+            for (const [posStr, coords] of Object.entries(this.characterPositions)) {
+                const pos = parseInt(posStr);
+                const xCoord = typeof coords === 'number' ? coords : coords.x;
+                const yCoord = typeof coords === 'number' ? 0 : coords.y;
+
+                // Track leftmost and rightmost positions
+                if (xCoord < leftmostX) {
+                    leftmostX = xCoord;
+                }
+                if (xCoord > rightmostX) {
+                    rightmostX = xCoord;
+                    rightmostPos = pos;
+                }
+
+                // Track topmost and bottommost Y positions
+                if (yCoord < topMostY) {
+                    topMostY = yCoord;
+                }
+                if (yCoord > bottomMostY) {
+                    bottomMostY = yCoord;
+                }
+
+                // For now, just find closest by X distance on the same line
+                const xDist = Math.abs(xCoord - adjustedX);
+                const yDist = Math.abs(yCoord - adjustedY);
+
+                // Only consider positions on nearby lines (within 30 pixels vertically)
+                if (yDist < 30 && xDist < closestXDistance) {
+                    closestXDistance = xDist;
+                    closestPos = pos;
+                }
+            }
+
+            // If click is above all content (more than 30 pixels above the first line), position at start
+            if (adjustedY < topMostY - 30) {
+                console.log(`Click above content: adjustedY(${adjustedY.toFixed(1)}) < topMost(${topMostY}) - 30 -> cursor 0`);
+                return 0;
+            }
+
+            // If click is below all content (more than 30 pixels below the last line), position at end
+            if (adjustedY > bottomMostY + 30) {
+                console.log(`Click below content: adjustedY(${adjustedY.toFixed(1)}) > bottomMost(${bottomMostY}) + 30 -> cursor ${this.textContent.length}`);
+                return this.textContent.length;
+            }
+
+            // If click is far to the left of content, position at start
+            if (adjustedX < leftmostX - 20) {
+                console.log(`Click far left: adjusted(${adjustedX.toFixed(1)}) -> cursor 0`);
+                return 0;
+            }
+
+            // If click is far to the right of content, position at end
+            if (adjustedX > rightmostX + 20) {
+                console.log(`Click far right: adjusted(${adjustedX.toFixed(1)}) -> cursor ${this.textContent.length}`);
+                return this.textContent.length;
+            }
+
+            console.log(`Click: adjusted(${adjustedX.toFixed(1)}, ${adjustedY.toFixed(1)}) -> cursor ${closestPos}`);
+            return Math.min(closestPos, this.textContent.length);
+        }
+
+        // Fallback to approximate calculation if no precise positions available
         const charWidth = 12; // Character width based on font size
         const lineHeight = 60; // Line spacing from SVG renderer
         const leftMargin = 20; // Left margin from SVG transform translate(20, 60)
@@ -256,7 +378,7 @@ export class CanvasEditor {
             cursorPosition += Math.min(charIndex, currentLine.length);
         }
 
-        console.log(`Click: display(${x.toFixed(1)}, ${y.toFixed(1)}) -> scaled(${scaledX.toFixed(1)}, ${scaledY.toFixed(1)}) -> line ${lineIndex}, char ${charIndex} -> cursor ${cursorPosition}`);
+        console.log(`Click: display(${x.toFixed(1)}, ${y.toFixed(1)}) -> scaled(${scaledX.toFixed(1)}, ${scaledY.toFixed(1)}) -> line ${lineIndex}, char ${charIndex} -> cursor ${cursorPosition} (fallback)`);
 
         // Ensure cursor position is within bounds
         return Math.min(cursorPosition, this.textContent.length);
@@ -278,8 +400,7 @@ export class CanvasEditor {
                 this.cursorPosition = dragPosition;
 
                 // Re-render with updated selection (but don't update server constantly during drag)
-                // TODO: Add visual selection highlighting in SVG
-                console.log(`Selection: ${this.selection.start} to ${this.selection.end}`);
+                this.throttledSubmitToServer(this.textContent);
             }
         }
 
@@ -300,11 +421,22 @@ export class CanvasEditor {
         // Reset cursor blink
         this.resetCursorBlink();
 
+        // Save to local storage
+        this.saveToLocalStorage();
+
         // Submit to server for real-time canvas SVG generation
         this.submitToServer(this.textContent);
 
         if (this.onContentChange) {
             this.onContentChange(this.textContent);
+        }
+
+        // Notify selection change
+        if (this.onSelectionChange) {
+            this.onSelectionChange({
+                start: this.selection.start,
+                end: this.selection.end
+            });
         }
     }
 
@@ -321,11 +453,22 @@ export class CanvasEditor {
             // Reset cursor blink
             this.resetCursorBlink();
 
+            // Save to local storage
+            this.saveToLocalStorage();
+
             // Submit to server for real-time canvas SVG generation
             this.submitToServer(this.textContent);
 
             if (this.onContentChange) {
                 this.onContentChange(this.textContent);
+            }
+
+            // Notify selection change
+            if (this.onSelectionChange) {
+                this.onSelectionChange({
+                    start: this.selection.start,
+                    end: this.selection.end
+                });
             }
         }
     }
@@ -342,12 +485,55 @@ export class CanvasEditor {
             // Reset cursor blink
             this.resetCursorBlink();
 
+            // Save to local storage
+            this.saveToLocalStorage();
+
             // Submit to server for real-time canvas SVG generation
             this.submitToServer(this.textContent);
 
             if (this.onContentChange) {
                 this.onContentChange(this.textContent);
             }
+
+            // Notify selection change
+            if (this.onSelectionChange) {
+                this.onSelectionChange({
+                    start: this.selection.start,
+                    end: this.selection.end
+                });
+            }
+        }
+    }
+
+    // Handle Enter key - insert newline
+    handleEnterKey() {
+        // Insert newline at cursor position
+        this.textContent = this.textContent.slice(0, this.cursorPosition) + '\n' + this.textContent.slice(this.cursorPosition);
+        this.cursorPosition++; // Move cursor after the newline
+        this.selection.start = this.cursorPosition;
+        this.selection.end = this.cursorPosition;
+        this.lines = this.textContent.split('\n');
+        this.isDirty = true;
+
+        // Reset cursor blink
+        this.resetCursorBlink();
+
+        // Save to local storage
+        this.saveToLocalStorage();
+
+        // Submit to server for real-time canvas SVG generation
+        this.submitToServer(this.textContent);
+
+        if (this.onContentChange) {
+            this.onContentChange(this.textContent);
+        }
+
+        // Notify selection change
+        if (this.onSelectionChange) {
+            this.onSelectionChange({
+                start: this.selection.start,
+                end: this.selection.end
+            });
         }
     }
 
@@ -357,6 +543,20 @@ export class CanvasEditor {
         this.selection.start = this.cursorPosition;
         this.selection.end = this.cursorPosition;
         this.resetCursorBlink();
+
+        // Save to local storage
+        this.saveToLocalStorage();
+
+        // Submit to server to update cursor position
+        this.submitToServer(this.textContent);
+
+        // Notify selection change
+        if (this.onSelectionChange) {
+            this.onSelectionChange({
+                start: this.selection.start,
+                end: this.selection.end
+            });
+        }
     }
 
     // Start cursor blinking
@@ -456,6 +656,23 @@ export class CanvasEditor {
         const svgElement = tempDiv.querySelector('svg');
 
         if (svgElement) {
+            // Extract coordinate metadata from the SVG
+            const metadata = svgElement.querySelector('metadata#coordinate-data');
+            if (metadata) {
+                try {
+                    const coordinateData = JSON.parse(metadata.textContent);
+                    this.elementCoordinates = coordinateData.elements || [];
+                    this.characterPositions = coordinateData.characterPositions || {};
+
+                    console.log('Extracted coordinate data:', {
+                        elements: this.elementCoordinates.length,
+                        charPositions: Object.keys(this.characterPositions).length
+                    });
+                } catch (e) {
+                    console.error('Failed to parse coordinate metadata:', e);
+                }
+            }
+
             // Clear the canvas first
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -740,6 +957,24 @@ export class CanvasEditor {
 
     // Find element at coordinates
     findElementAt(x, y) {
+        // First try to find element using precise SVG coordinates
+        if (this.elementCoordinates && this.elementCoordinates.length > 0) {
+            // Get the actual canvas display dimensions vs internal dimensions
+            const rect = this.canvas.getBoundingClientRect();
+            const scaleX = this.canvas.width / rect.width;
+            const scaleY = this.canvas.height / rect.height;
+
+            // Scale click coordinates to match internal canvas coordinates
+            const scaledX = x * scaleX - 20; // Account for SVG transform
+            const scaledY = y * scaleY - 60; // Account for SVG transform
+
+            return this.elementCoordinates.find(element =>
+                scaledX >= element.x && scaledX <= element.x + element.width &&
+                scaledY >= element.y - element.height && scaledY <= element.y + 5
+            );
+        }
+
+        // Fallback to noteElements if no SVG coordinates
         return this.noteElements.find(element =>
             x >= element.x && x <= element.x + element.width &&
             y >= element.y && y <= element.y + element.height
@@ -802,10 +1037,19 @@ export class CanvasEditor {
         return this.textContent;
     }
 
-    setValue(content) {
+    setValue(content, cursorPos = null) {
         this.textContent = content;
         this.lines = content.split('\n');
-        this.cursorPosition = Math.min(this.cursorPosition, content.length);
+
+        // If cursor position provided, use it; otherwise keep current (clamped)
+        if (cursorPos !== null) {
+            this.cursorPosition = Math.min(cursorPos, content.length);
+            this.selection.start = this.cursorPosition;
+            this.selection.end = this.cursorPosition;
+        } else {
+            this.cursorPosition = Math.min(this.cursorPosition, content.length);
+        }
+
         this.isDirty = true;
         this.submitToServer(content);
     }
@@ -821,11 +1065,19 @@ export class CanvasEditor {
         };
     }
 
-    setSelection(start, end) {
+    setSelection(start, end, silent = false) {
         this.selection.start = Math.max(0, Math.min(this.textContent.length, start));
         this.selection.end = Math.max(0, Math.min(this.textContent.length, end));
         this.cursorPosition = this.selection.end;
         this.resetCursorBlink();
+
+        // Notify selection change unless silent flag is set
+        if (!silent && this.onSelectionChange) {
+            this.onSelectionChange({
+                start: this.selection.start,
+                end: this.selection.end
+            });
+        }
     }
 
     // Update selection tracking
@@ -863,82 +1115,11 @@ export class CanvasEditor {
         if (lineText.includes(':') && !lineText.includes('|')) {
             return false; // Likely a directive line
         }
-        const musicalIndicators = /[|\-'SRGMPDNsrgmpdnCDEFGAB1-7]/;
+        const musicalIndicators = /[|\-ҳои'SRGMPDNsrgmpdnCDEFGAB1-7]/;
         return musicalIndicators.test(lineText);
     }
 
-    // Handle keyboard key down events
-    handleKeyDown(e) {
-        // Handle special keys
-        if (e.key === 'Backspace') {
-            e.preventDefault();
-            this.handleBackspace();
-        } else if (e.key === 'Delete') {
-            e.preventDefault();
-            this.handleDelete();
-        } else if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            this.moveCursor(-1);
-        } else if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            this.moveCursor(1);
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            this.insertText('\n');
-        }
-    }
 
-    // Handle keyboard key press events
-    handleKeyPress(e) {
-        // Only handle printable characters
-        if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            e.preventDefault();
-            this.insertText(e.key);
-        }
-    }
-
-    // Handle backspace key
-    handleBackspace() {
-        if (this.cursorPosition > 0) {
-            const beforeCursor = this.textContent.substring(0, this.cursorPosition - 1);
-            const afterCursor = this.textContent.substring(this.cursorPosition);
-            this.textContent = beforeCursor + afterCursor;
-            this.cursorPosition--;
-            this.isDirty = true;
-            this.render();
-            this.submitToServer(this.textContent);
-        }
-    }
-
-    // Handle delete key
-    handleDelete() {
-        if (this.cursorPosition < this.textContent.length) {
-            const beforeCursor = this.textContent.substring(0, this.cursorPosition);
-            const afterCursor = this.textContent.substring(this.cursorPosition + 1);
-            this.textContent = beforeCursor + afterCursor;
-            this.isDirty = true;
-            this.render();
-            this.submitToServer(this.textContent);
-        }
-    }
-
-    // Move cursor position
-    moveCursor(delta) {
-        this.cursorPosition = Math.max(0, Math.min(this.textContent.length, this.cursorPosition + delta));
-        this.resetCursorBlink();
-        this.render();
-    }
-
-    // Insert text at cursor position
-    insertText(text) {
-        const beforeCursor = this.textContent.substring(0, this.cursorPosition);
-        const afterCursor = this.textContent.substring(this.cursorPosition);
-        this.textContent = beforeCursor + text + afterCursor;
-        this.cursorPosition += text.length;
-        this.isDirty = true;
-        this.render();
-        this.submitToServer(this.textContent);
-    }
 
     // Detect notation system
     detectNotationSystem(lineText) {
@@ -957,5 +1138,76 @@ export class CanvasEditor {
             return 'number';
         }
         return 'unknown';
+    }
+
+    // Save editor state to local storage
+    saveToLocalStorage() {
+        try {
+            const editorState = {
+                textContent: this.textContent,
+                cursorPosition: this.cursorPosition,
+                selectionStart: this.selection.start,
+                selectionEnd: this.selection.end,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('musicTextEditorState', JSON.stringify(editorState));
+            console.log('Saved to localStorage:', {
+                contentLength: this.textContent.length,
+                cursor: this.cursorPosition,
+                selection: [this.selection.start, this.selection.end]
+            });
+        } catch (e) {
+            console.error('Failed to save to localStorage:', e);
+        }
+    }
+
+    // Load editor state from local storage
+    loadFromLocalStorage() {
+        try {
+            const savedState = localStorage.getItem('musicTextEditorState');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                this.textContent = state.textContent || '';
+                this.cursorPosition = Math.min(state.cursorPosition || 0, this.textContent.length);
+                this.selection.start = Math.min(state.selectionStart || this.cursorPosition, this.textContent.length);
+                this.selection.end = Math.min(state.selectionEnd || this.cursorPosition, this.textContent.length);
+                this.lines = this.textContent.split('\n');
+
+                console.log('Loaded from localStorage:', {
+                    contentLength: this.textContent.length,
+                    cursor: this.cursorPosition,
+                    selection: [this.selection.start, this.selection.end],
+                    age: Date.now() - (state.timestamp || 0)
+                });
+
+                // Update backing text area if it exists
+                const backingTextArea = document.getElementById('backing-text-output');
+                if (backingTextArea) {
+                    backingTextArea.value = this.textContent;
+                    backingTextArea.selectionStart = this.selection.start;
+                    backingTextArea.selectionEnd = this.selection.end;
+                }
+
+                // Submit to server to render the loaded content
+                if (this.textContent) {
+                    this.submitToServer(this.textContent);
+                }
+
+                return true;
+            }
+        } catch (e) {
+            console.error('Failed to load from localStorage:', e);
+        }
+        return false;
+    }
+
+    // Clear local storage
+    clearLocalStorage() {
+        try {
+            localStorage.removeItem('musicTextEditorState');
+            console.log('Cleared localStorage');
+        } catch (e) {
+            console.error('Failed to clear localStorage:', e);
+        }
     }
 }
