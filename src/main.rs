@@ -72,6 +72,8 @@ enum Commands {
     Roundtrip { input: Option<String> },
     /// Run performance benchmarks
     Perf,
+    /// Render input to SVG
+    Svg { input: Option<String> },
     /// Test SVG Renderer POC (render test JSON to SVG)
     #[command(name = "svg-test")]
     SvgTest,
@@ -174,12 +176,77 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("Performance benchmarks not yet implemented");
             return Ok(());
         }
+        Some(Commands::Svg { input }) => {
+            let notation = get_input_from_option_or_stdin(input)?;
+            let result = pipeline::process_notation(&notation)?;
+
+            // Use the canvas SVG renderer
+            let svg_output = music_text::renderers::editor::svg::render_canvas_svg(
+                &result.document,
+                "number", // notation type
+                &notation, // input text
+                None, // cursor position
+                None, // selection start
+                None  // selection end
+            )?;
+
+            println!("{}", svg_output);
+            return Ok(());
+        }
         Some(Commands::SvgTest) => {
-            println!("SVG test functionality removed");
+            let notation = get_input_from_option_or_stdin(None)?;
+            let result = pipeline::process_notation(&notation)?;
+
+            // Use the canvas SVG renderer
+            let svg_output = music_text::renderers::editor::svg::render_canvas_svg(
+                &result.document,
+                "number", // notation type
+                &notation, // input text
+                None, // cursor position
+                None, // selection start
+                None  // selection end
+            )?;
+
+            println!("{}", svg_output);
             return Ok(());
         }
         Some(Commands::SvgTests) => {
-            println!("SVG test functionality removed");
+            // Run test cases
+            let test_cases = vec![
+                "1234",
+                "1234|5678",
+                "Sa Re Ga Ma",
+                "1-2-3-",
+            ];
+
+            println!("Running SVG test cases...\n");
+
+            for (i, test_input) in test_cases.iter().enumerate() {
+                println!("=== Test Case {} ===", i + 1);
+                println!("Input: {}", test_input);
+
+                match pipeline::process_notation(test_input) {
+                    Ok(result) => {
+                        match music_text::renderers::editor::svg::render_canvas_svg(
+                            &result.document,
+                            "number",
+                            test_input,
+                            None, None, None
+                        ) {
+                            Ok(svg) => {
+                                println!("SVG Length: {} chars", svg.len());
+                                println!("✓ Rendered successfully\n");
+                            }
+                            Err(e) => {
+                                println!("✗ SVG render failed: {}\n", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("✗ Parse failed: {}\n", e);
+                    }
+                }
+            }
             return Ok(());
         }
         None => {

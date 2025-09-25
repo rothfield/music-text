@@ -129,9 +129,9 @@ pub fn parse_content_line(
                 let start_pos = pos;
                 let mut token = String::new();
 
-                // Collect contiguous non-space, non-barline characters
+                // Collect contiguous non-space, non-barline characters (: is allowed in unknown tokens)
                 while let Some(&(_, ch)) = chars.peek() {
-                    if ch == ' ' || ch == '|' || ch == ':' || ch == '\n' {
+                    if ch == ' ' || ch == '|' || ch == '\n' {
                         break;
                     }
                     token.push(ch);

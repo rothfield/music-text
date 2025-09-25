@@ -74,7 +74,15 @@ impl CanvasSvgRenderer {
         self.current_x = 0.0;
         self.current_y = 0.0;
 
-        // Render music elements or title if no musical content
+        // Render title at the top if it exists
+        if let Some(ref title) = document.title {
+            if !title.trim().is_empty() {
+                self.render_title_at_top(&mut svg, title)?;
+                self.current_y += 40.0; // Add space after title
+            }
+        }
+
+        // Render music elements or placeholder if no musical content
         let mut char_position = 0;
         let has_musical_content = !document.elements.is_empty();
 
@@ -98,15 +106,47 @@ impl CanvasSvgRenderer {
                                         self.current_x = new_x;
                                         char_position += chars_consumed;
                                     } else if let crate::parse::model::ContentElement::Barline(barline) = content_element {
+                                        // Store character position for barline
+                                        self.char_positions.insert(char_position, self.current_x);
+
+                                        // Check if cursor should be shown at this position
+                                        if self.config.show_cursor && char_position == self.config.cursor_position {
+                                            self.render_cursor_at_position(&mut svg, self.current_x);
+                                        }
+
                                         self.render_barline(&mut svg, barline)?;
                                         char_position += 1; // Barlines typically consume one character
                                     }
                                     // Handle other content elements (whitespace, unknown tokens, etc.)
                                     else if let crate::parse::model::ContentElement::Whitespace(ws) = content_element {
-                                        self.current_x += self.get_char_width(&ws.value.as_ref().unwrap_or(&" ".to_string()));
-                                        char_position += ws.value.as_ref().map(|s| s.len()).unwrap_or(1);
+                                        let default_space = " ".to_string();
+                                        let ws_value = ws.value.as_ref().unwrap_or(&default_space);
+                                        // Track character positions for whitespace
+                                        for (char_idx, _) in ws_value.char_indices() {
+                                            let char_pos = char_position + char_idx;
+                                            let char_x = self.current_x + (char_idx as f32 * self.get_char_width(" "));
+                                            self.char_positions.insert(char_pos, char_x);
+
+                                            // Check if cursor should be shown at this position
+                                            if self.config.show_cursor && char_pos == self.config.cursor_position {
+                                                self.render_cursor_at_position(&mut svg, char_x);
+                                            }
+                                        }
+                                        self.current_x += self.get_char_width(ws_value);
+                                        char_position += ws_value.len();
                                     }
                                     else if let crate::parse::model::ContentElement::UnknownToken(token) = content_element {
+                                        // Track character positions for unknown tokens
+                                        for (char_idx, _) in token.token_value.char_indices() {
+                                            let char_pos = char_position + char_idx;
+                                            let char_x = self.current_x + (char_idx as f32 * self.get_char_width("1"));
+                                            self.char_positions.insert(char_pos, char_x);
+
+                                            // Check if cursor should be shown at this position
+                                            if self.config.show_cursor && char_pos == self.config.cursor_position {
+                                                self.render_cursor_at_position(&mut svg, char_x);
+                                            }
+                                        }
                                         // Render unknown tokens with a different style
                                         writeln!(svg, r#"    <text x="{:.1}" y="{}" class="canvas-unknown">{}</text>"#,
                                                 self.current_x, self.current_y, token.token_value).unwrap();
@@ -125,14 +165,21 @@ impl CanvasSvgRenderer {
             self.render_title_or_placeholder(&mut svg, document, input_text)?;
         }
 
+        // Store final position for cursor at end of content
+        self.char_positions.insert(char_position, self.current_x);
+
         // Show selection highlighting if enabled
         if self.config.show_selection {
             self.render_selection_highlighting(&mut svg);
         }
 
-        // Show cursor if enabled and we haven't rendered it yet
-        if self.config.show_cursor && char_position <= self.config.cursor_position {
-            self.render_cursor(&mut svg);
+        // Show cursor if enabled - now handles any character position
+        if self.config.show_cursor {
+            // Find the correct x position for the cursor based on character positions
+            let cursor_x = self.char_positions.get(&self.config.cursor_position)
+                .copied()
+                .unwrap_or(self.current_x);
+            self.render_cursor_at_position(&mut svg, cursor_x);
         }
 
         writeln!(svg, "  </g>").unwrap();
@@ -143,11 +190,8 @@ impl CanvasSvgRenderer {
 
     /// Generate canvas-specific CSS
     fn generate_canvas_css(&self) -> String {
-        if cfg!(debug_assertions) {
-            self.generate_dev_css()
-        } else {
-            self.generate_embedded_css()
-        }
+        // Always use embedded CSS to ensure all styles are included
+        self.generate_embedded_css()
     }
 
     /// Generate CSS for development (external + dynamic overrides)
@@ -192,36 +236,44 @@ impl CanvasSvgRenderer {
         format!(r#"
   <style>
     <![CDATA[
+    @font-face {{
+      font-family: 'Bravura';
+      src: url('/fonts/Bravura.woff2') format('woff2'),
+           url('/fonts/Bravura.woff') format('woff');
+      font-weight: normal;
+      font-style: normal;
+    }}
+
     .canvas-content {{
-      font-family: 'Inter', sans-serif;
+      font-family: monospace, 'Courier New', monospace;
     }}
 
     .canvas-note {{
       font-size: {}px;
       fill: deepskyblue;
       font-weight: normal;
-      font-family: 'Inter', sans-serif;
+      font-family: monospace, 'Courier New', monospace;
     }}
 
     .canvas-octave-upper {{
       font-size: {}px;
       fill: red;
       font-weight: normal;
-      font-family: 'Inter', sans-serif;
+      font-family: monospace, 'Courier New', monospace;
     }}
 
     .canvas-octave-lower {{
       font-size: {}px;
       fill: red;
       font-weight: normal;
-      font-family: 'Inter', sans-serif;
+      font-family: monospace, 'Courier New', monospace;
     }}
 
     .canvas-barline {{
       font-size: {}px;
       fill: mediumorchid;
       font-weight: bold;
-      font-family: 'Inter', sans-serif;
+      font-family: monospace, 'Courier New', monospace;
     }}
 
     .canvas-cursor {{
@@ -247,7 +299,7 @@ impl CanvasSvgRenderer {
       fill: gray;
       font-style: italic;
       font-weight: normal;
-      font-family: 'Inter', sans-serif;
+      font-family: monospace, 'Courier New', monospace;
     }}
 
     .canvas-unknown {{
@@ -255,16 +307,25 @@ impl CanvasSvgRenderer {
       fill: gray;
       font-weight: normal;
       font-style: italic;
-      font-family: 'Inter', sans-serif;
+      font-family: monospace, 'Courier New', monospace;
+    }}
+
+    .canvas-title {{
+      font-size: {}px;
+      fill: black;
+      font-weight: bold;
+      font-family: monospace, 'Courier New', monospace;
     }}
 
     @keyframes blink {{
       0%, 50% {{ opacity: 1; }}
       51%, 100% {{ opacity: 0; }}
     }}
+
+    /* Character replacement styles removed - handled in rendering logic */
     ]]>
   </style>
-"#, note_size, octave_size, octave_size, note_size, note_size * 0.9, note_size * 0.8)
+"#, note_size, octave_size, octave_size, note_size, note_size * 0.9, note_size * 0.8, note_size * 1.5)
     }
 
     /// Render a beat with cursor awareness
@@ -293,12 +354,13 @@ impl CanvasSvgRenderer {
                     let note_value = pitch_systems::pitchcode_to_string(note.pitch_code, notation)
                         .unwrap_or_else(|| "1".to_string());
 
-                    // Store character position for selection highlighting
-                    self.char_positions.insert(start_char_position + chars_consumed, self.current_x);
+                    // Store character position for each character in the note
+                    for (char_idx, _) in note_value.char_indices() {
+                        let char_pos = start_char_position + chars_consumed + char_idx;
+                        let char_x = self.current_x + (char_idx as f32 * self.get_char_width("1"));
+                        self.char_positions.insert(char_pos, char_x);
 
-                    // Check if cursor should be shown before this note
-                    if self.config.show_cursor && start_char_position + chars_consumed == self.config.cursor_position {
-                        self.render_cursor_at_position(svg, self.current_x);
+                        // Character positions are stored for cursor rendering at the end
                     }
 
                     element_positions.push(self.current_x);
@@ -322,12 +384,11 @@ impl CanvasSvgRenderer {
                     chars_consumed += note_value.len();
                 }
                 crate::parse::model::BeatElement::Dash(_) => {
-                    // Store character position for selection highlighting
-                    self.char_positions.insert(start_char_position + chars_consumed, self.current_x);
+                    // Store character position for dash
+                    let char_pos = start_char_position + chars_consumed;
+                    self.char_positions.insert(char_pos, self.current_x);
 
-                    if self.config.show_cursor && start_char_position + chars_consumed == self.config.cursor_position {
-                        self.render_cursor_at_position(svg, self.current_x);
-                    }
+                    // Character position stored for cursor rendering at the end
 
                     element_positions.push(self.current_x);
                     writeln!(svg, r#"    <text x="{:.1}" y="{}" class="canvas-note">-</text>"#,
@@ -343,13 +404,12 @@ impl CanvasSvgRenderer {
             }
         }
 
-        // Draw beat grouping arc if multiple elements
+        // Draw beat grouping arc under notes if multiple elements
         if element_positions.len() > 1 {
             self.render_beat_arc(svg, &element_positions);
         }
 
-        // Add beat spacing
-        self.current_x += 20.0;
+        // No beat spacing - elements flow naturally
 
         Ok((self.current_x, chars_consumed))
     }
@@ -358,22 +418,18 @@ impl CanvasSvgRenderer {
     /// Render barline using SMuFL music font symbols
     fn render_barline(&mut self, svg: &mut String, barline: &crate::parse::model::Barline) -> Result<(), String> {
         let symbol = match barline {
-            crate::parse::model::Barline::Single(_) => "\u{E030}",      // SMuFL: Single barline
-            crate::parse::model::Barline::Double(_) => "\u{E031}",      // SMuFL: Double barline
-            crate::parse::model::Barline::Final(_) => "\u{E032}",       // SMuFL: Final barline (thick-thin)
-            crate::parse::model::Barline::RepeatStart(_) => "\u{E040}", // SMuFL: Repeat start
-            crate::parse::model::Barline::RepeatEnd(_) => "\u{E041}",   // SMuFL: Repeat end
-            crate::parse::model::Barline::RepeatBoth(_) => "\u{E040}\u{E041}", // SMuFL: Repeat both (combine start + end)
+            crate::parse::model::Barline::Single(_) => "|",
+            crate::parse::model::Barline::Double(_) => "||",
+            crate::parse::model::Barline::Final(_) => "||",
+            crate::parse::model::Barline::RepeatStart(_) => "|:",
+            crate::parse::model::Barline::RepeatEnd(_) => ":|",
+            crate::parse::model::Barline::RepeatBoth(_) => ":|:",
         };
 
         writeln!(svg, r#"    <text x="{:.1}" y="{}" class="canvas-barline">{}</text>"#,
                 self.current_x, self.current_y, symbol).unwrap();
 
-        // Adjust spacing - SMuFL symbols may have different widths than ASCII
-        let width_adjustment = match barline {
-            crate::parse::model::Barline::RepeatBoth(_) => 20.0, // Wider for combined symbols
-            _ => 12.0,
-        };
+        let width_adjustment = self.get_char_width(symbol);
         self.current_x += width_adjustment + 10.0;
         Ok(())
     }
@@ -396,21 +452,32 @@ impl CanvasSvgRenderer {
         }
 
         let start_x = positions[0];
-        let end_x = positions[positions.len() - 1] + 15.0; // Add character width
+        let end_x = positions[positions.len() - 1] + self.get_char_width("1"); // Add actual character width
 
-        // Position arc below the text baseline
-        let arc_start_y = self.current_y + 18.0;  // Start point below notes
-        let arc_end_y = self.current_y + 18.0;    // End point below notes
+        // Position arc just under the notes like a hammock
+        let arc_start_y = self.current_y + 8.0;  // Start point just under notes
+        let arc_end_y = self.current_y + 8.0;    // End point just under notes
 
         // Calculate ellipse parameters
         let width = end_x - start_x;
         let rx = width / 2.0;  // X-radius (half the width)
-        let ry = 12.0;         // Y-radius (taller arc for better visibility)
+        let ry = 8.0;          // Y-radius (made less tall)
 
         // Use elliptical arc command: A rx,ry x-axis-rotation large-arc-flag,sweep-flag x,y
-        // sweep-flag=0 creates an upward curve (counter-clockwise)
+        // sweep-flag=0 creates an upward curve (counter-clockwise for hammock under notes)
         writeln!(svg, r#"    <path d="M {:.1} {:.1} A {:.1} {:.1} 0 0 0 {:.1} {:.1}" class="canvas-beat-arc"/>"#,
                 start_x, arc_start_y, rx, ry, end_x, arc_end_y).unwrap();
+    }
+
+    /// Render title at the top of the page
+    fn render_title_at_top(&mut self, svg: &mut String, title: &str) -> Result<(), String> {
+        let title_x = self.config.width / 2.0;
+        let title_y = self.current_y + 30.0; // Position from top
+
+        writeln!(svg, r#"    <text x="{:.1}" y="{:.1}" class="canvas-title" text-anchor="middle">{}</text>"#,
+                title_x, title_y, title).unwrap();
+
+        Ok(())
     }
 
     /// Render title or placeholder when no musical content exists
@@ -450,12 +517,10 @@ impl CanvasSvgRenderer {
 
         // Get x coordinates for start and end positions
         let start_x = self.char_positions.get(&start_pos).copied().unwrap_or(0.0);
-        let end_x = if end_pos < self.char_positions.len() {
-            self.char_positions.get(&end_pos).copied().unwrap_or(start_x + 20.0)
-        } else {
+        let end_x = self.char_positions.get(&end_pos).copied().unwrap_or_else(|| {
             // If end position is beyond tracked positions, extend to current x
             self.current_x
-        };
+        });
 
         if end_x > start_x {
             self.render_selection_at_range(svg, start_x, end_x);
