@@ -2,6 +2,8 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
+use reqwest;
+use serde_json;
 
 use music_text::pipeline;
 use music_text::parse::line_classifier;
@@ -80,6 +82,111 @@ enum Commands {
     /// Run all SVG renderer test cases
     #[command(name = "svg-tests")]
     SvgTests,
+
+    // API wrapper commands
+    /// Create a new document via API
+    #[command(name = "api-create")]
+    ApiCreate {
+        /// Initial music text content
+        #[arg(short, long)]
+        text: Option<String>,
+        /// Document title
+        #[arg(short = 'T', long)]
+        title: Option<String>,
+        /// Composer name
+        #[arg(short, long)]
+        composer: Option<String>,
+        /// API server URL
+        #[arg(long, default_value = "http://localhost:3000")]
+        server: String,
+    },
+    /// Get document by ID via API
+    #[command(name = "api-get")]
+    ApiGet {
+        /// Document ID
+        document_id: String,
+        /// API server URL
+        #[arg(long, default_value = "http://localhost:3000")]
+        server: String,
+    },
+    /// Execute semantic command on document
+    #[command(name = "api-command")]
+    ApiCommand {
+        /// Document ID
+        document_id: String,
+        /// Command type (apply_slur, set_octave, insert_note, etc.)
+        #[arg(short, long)]
+        command: String,
+        /// Target UUIDs (comma-separated)
+        #[arg(short, long)]
+        targets: Option<String>,
+        /// Command parameters as JSON
+        #[arg(short, long)]
+        params: Option<String>,
+        /// API server URL
+        #[arg(long, default_value = "http://localhost:3000")]
+        server: String,
+    },
+    /// Transform document with semantic operations
+    #[command(name = "api-transform")]
+    ApiTransform {
+        /// JSON document to transform
+        document: String,
+        /// Command type (apply_slur, set_octave, etc.)
+        #[arg(short, long)]
+        command: String,
+        /// Target UUIDs (comma-separated)
+        #[arg(short, long)]
+        targets: Option<String>,
+        /// Command parameters as JSON
+        #[arg(short, long)]
+        params: Option<String>,
+        /// API server URL
+        #[arg(long, default_value = "http://localhost:3000")]
+        server: String,
+    },
+    /// Export document to different formats
+    #[command(name = "api-export")]
+    ApiExport {
+        /// JSON document to export
+        document: String,
+        /// Export format (lilypond, svg)
+        #[arg(short, long)]
+        format: String,
+        /// API server URL
+        #[arg(long, default_value = "http://localhost:3000")]
+        server: String,
+    },
+    /// Transform document by UUID
+    #[command(name = "transform")]
+    TransformById {
+        /// Document UUID
+        document_id: String,
+        /// Command type (apply_slur, set_octave, etc.)
+        #[arg(short, long)]
+        command: String,
+        /// Target UUIDs (comma-separated)
+        #[arg(short, long)]
+        targets: Option<String>,
+        /// Command parameters as JSON
+        #[arg(short, long)]
+        params: Option<String>,
+        /// API server URL
+        #[arg(long, default_value = "http://localhost:3000")]
+        server: String,
+    },
+    /// Export document by UUID
+    #[command(name = "export")]
+    ExportById {
+        /// Document UUID
+        document_id: String,
+        /// Export format (lilypond, svg)
+        #[arg(short, long)]
+        format: String,
+        /// API server URL
+        #[arg(long, default_value = "http://localhost:3000")]
+        server: String,
+    },
 }
 
 #[tokio::main]
@@ -249,6 +356,88 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
             return Ok(());
         }
+
+        // API wrapper command handlers
+        Some(Commands::ApiCreate { text, title, composer, server }) => {
+            let result = api_create_document(&server, text.as_deref(), title.as_deref(), composer.as_deref()).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            return Ok(());
+        }
+        Some(Commands::ApiGet { document_id, server }) => {
+            let result = api_get_document(&server, &document_id).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            return Ok(());
+        }
+        Some(Commands::ApiCommand { document_id, command, targets, params, server }) => {
+            let target_uuids: Vec<String> = targets
+                .as_deref()
+                .unwrap_or("")
+                .split(',')
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.trim().to_string())
+                .collect();
+
+            let parameters = if let Some(params_str) = params {
+                serde_json::from_str(&params_str)?
+            } else {
+                serde_json::Value::Object(serde_json::Map::new())
+            };
+
+            let result = api_execute_command(&server, &document_id, &command, &target_uuids, parameters).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            return Ok(());
+        }
+        Some(Commands::ApiTransform { document, command, targets, params, server }) => {
+            let target_uuids: Vec<String> = targets
+                .as_deref()
+                .unwrap_or("")
+                .split(',')
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.trim().to_string())
+                .collect();
+
+            let parameters = if let Some(params_str) = params {
+                serde_json::from_str(&params_str)?
+            } else {
+                serde_json::Value::Object(serde_json::Map::new())
+            };
+
+            let doc: serde_json::Value = serde_json::from_str(&document)?;
+            let result = api_transform_document(&server, doc, &command, &target_uuids, parameters).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            return Ok(());
+        }
+        Some(Commands::ApiExport { document, format, server }) => {
+            let doc: serde_json::Value = serde_json::from_str(&document)?;
+            let result = api_export_document(&server, doc, &format).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            return Ok(());
+        }
+        Some(Commands::TransformById { document_id, command, targets, params, server }) => {
+            let target_uuids: Vec<String> = targets
+                .as_deref()
+                .unwrap_or("")
+                .split(',')
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.trim().to_string())
+                .collect();
+
+            let parameters = if let Some(params_str) = params {
+                serde_json::from_str(&params_str)?
+            } else {
+                serde_json::Value::Object(serde_json::Map::new())
+            };
+
+            let result = api_transform_document_by_id(&server, &document_id, &command, &target_uuids, parameters).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            return Ok(());
+        }
+        Some(Commands::ExportById { document_id, format, server }) => {
+            let result = api_export_document_by_id(&server, &document_id, &format).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            return Ok(());
+        }
+
         None => {
             // No subcommand - use legacy behavior
         }
@@ -412,6 +601,194 @@ impl OutputFormat {
             OutputFormat::CharacterStyles,
         ]
     }
+}
+
+// API wrapper functions
+async fn api_create_document(
+    server: &str,
+    text: Option<&str>,
+    title: Option<&str>,
+    composer: Option<&str>,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let mut metadata = serde_json::Map::new();
+    if let Some(title) = title {
+        metadata.insert("title".to_string(), serde_json::Value::String(title.to_string()));
+    }
+    if let Some(composer) = composer {
+        metadata.insert("composer".to_string(), serde_json::Value::String(composer.to_string()));
+    }
+
+    let mut request_body = serde_json::Map::new();
+    if let Some(text) = text {
+        request_body.insert("music_text".to_string(), serde_json::Value::String(text.to_string()));
+    }
+    if !metadata.is_empty() {
+        request_body.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+    }
+
+    let url = format!("{}/api/documents", server);
+    let response = client
+        .post(&url)
+        .json(&serde_json::Value::Object(request_body))
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        let json: serde_json::Value = response.json().await?;
+        Ok(json)
+    } else {
+        let error_text = response.text().await?;
+        Err(format!("API error: {}", error_text).into())
+    }
+}
+
+async fn api_get_document(
+    server: &str,
+    document_id: &str,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/documents/{}", server, document_id);
+
+    let response = client.get(&url).send().await?;
+
+    if response.status().is_success() {
+        let json: serde_json::Value = response.json().await?;
+        Ok(json)
+    } else {
+        let error_text = response.text().await?;
+        Err(format!("API error: {}", error_text).into())
+    }
+}
+
+async fn api_execute_command(
+    server: &str,
+    document_id: &str,
+    command: &str,
+    target_uuids: &[String],
+    parameters: serde_json::Value,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let request_body = serde_json::json!({
+        "command_type": command,
+        "target_uuids": target_uuids,
+        "parameters": parameters
+    });
+
+    let url = format!("{}/api/documents/{}/commands", server, document_id);
+    let response = client
+        .post(&url)
+        .json(&request_body)
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        let json: serde_json::Value = response.json().await?;
+        Ok(json)
+    } else {
+        let error_text = response.text().await?;
+        Err(format!("API error: {}", error_text).into())
+    }
+}
+
+async fn api_transform_document(
+    server: &str,
+    document: serde_json::Value,
+    command: &str,
+    target_uuids: &[String],
+    parameters: serde_json::Value,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let request_body = serde_json::json!({
+        "document": document,
+        "command_type": command,
+        "target_uuids": target_uuids,
+        "parameters": parameters
+    });
+
+    let response = client
+        .post(&format!("{}/api/documents/transform", server))
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .send()
+        .await?;
+
+    let result: serde_json::Value = response.json().await?;
+    Ok(result)
+}
+
+async fn api_export_document(
+    server: &str,
+    document: serde_json::Value,
+    format: &str,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let request_body = serde_json::json!({
+        "document": document,
+        "format": format
+    });
+
+    let response = client
+        .post(&format!("{}/api/documents/export", server))
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .send()
+        .await?;
+
+    let result: serde_json::Value = response.json().await?;
+    Ok(result)
+}
+
+async fn api_transform_document_by_id(
+    server: &str,
+    document_id: &str,
+    command: &str,
+    target_uuids: &[String],
+    parameters: serde_json::Value,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let request_body = serde_json::json!({
+        "command_type": command,
+        "target_uuids": target_uuids,
+        "parameters": parameters
+    });
+
+    let response = client
+        .post(&format!("{}/api/documents/{}/transform", server, document_id))
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .send()
+        .await?;
+
+    let result: serde_json::Value = response.json().await?;
+    Ok(result)
+}
+
+async fn api_export_document_by_id(
+    server: &str,
+    document_id: &str,
+    format: &str,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+
+    let request_body = serde_json::json!({
+        "format": format
+    });
+
+    let response = client
+        .post(&format!("{}/api/documents/{}/export", server, document_id))
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .send()
+        .await?;
+
+    let result: serde_json::Value = response.json().await?;
+    Ok(result)
 }
 
 

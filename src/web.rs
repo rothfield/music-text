@@ -1,6 +1,6 @@
 // Web server for live notation parsing
 use axum::{
-    extract::{Query, Multipart, Form},
+    extract::{Query, Multipart, Form, Path},
     response::{IntoResponse, Html, Response},
     routing::{get, post},
     Json, Router,
@@ -9,10 +9,16 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use uuid::Uuid;
+use chrono;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 // Removed pest import - using hand-written recursive descent parser
+use crate::pipeline;
+use crate::renderers::lilypond::renderer;
+use crate::renderers::editor::svg;
 
 #[derive(Debug, Deserialize)]
 pub struct ParseRequest {
@@ -44,6 +50,104 @@ pub struct ParseResponse {
     error: Option<String>,
 }
 
+// Document-first API structures
+#[derive(Debug, Deserialize)]
+pub struct CreateDocumentRequest {
+    pub music_text: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreateDocumentResponse {
+    pub document_id: String,
+    pub document: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentModel {
+    pub version: String,
+    pub timestamp: String,
+    pub elements: serde_json::Value,
+    pub content: Vec<String>,
+    pub metadata: serde_json::Value,
+    pub ui_state: serde_json::Value,
+}
+
+// Document transformation structures
+#[derive(Debug, Deserialize)]
+pub struct TransformDocumentRequest {
+    pub document: serde_json::Value,
+    pub command_type: String, // "apply_slur", "set_octave", etc.
+    pub target_uuids: Vec<String>,
+    pub parameters: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TransformDocumentResponse {
+    pub success: bool,
+    pub document: serde_json::Value,
+    pub updated_elements: Vec<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExportDocumentRequest {
+    pub document: serde_json::Value,
+    pub format: String, // "lilypond", "svg", "midi"
+    pub options: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ExportDocumentResponse {
+    pub success: bool,
+    pub format: String,
+    pub content: String,
+    pub message: Option<String>,
+}
+
+// Document storage - on-disk for durability
+type DocumentStore = std::path::PathBuf;
+
+// UUID-based API structures
+#[derive(Debug, Deserialize)]
+pub struct TransformDocumentByIdRequest {
+    pub command_type: String,
+    pub target_uuids: Vec<String>,
+    pub parameters: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExportDocumentByIdRequest {
+    pub format: String,
+    pub options: Option<serde_json::Value>,
+}
+
+// Helper functions for document storage
+fn get_documents_dir() -> std::path::PathBuf {
+    std::path::Path::new("./documents").to_path_buf()
+}
+
+fn get_document_path(document_id: &str) -> std::path::PathBuf {
+    get_documents_dir().join(format!("{}.json", document_id))
+}
+
+async fn save_document(document_id: &str, document: &serde_json::Value) -> Result<(), std::io::Error> {
+    let docs_dir = get_documents_dir();
+    tokio::fs::create_dir_all(&docs_dir).await?;
+
+    let doc_path = get_document_path(document_id);
+    let content = serde_json::to_string_pretty(document)?;
+    tokio::fs::write(&doc_path, content).await?;
+    Ok(())
+}
+
+async fn load_document(document_id: &str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    let doc_path = get_document_path(document_id);
+    let content = tokio::fs::read_to_string(&doc_path).await?;
+    let document: serde_json::Value = serde_json::from_str(&content)?;
+    Ok(document)
+}
+
 // Removed PestDebugRequest and PestDebugResponse - no longer using pest
 
 #[derive(Debug, Deserialize)]
@@ -68,6 +172,7 @@ pub struct CanvasSvgRequest {
 }
 
 use crate::parse::Document;
+use crate::parse::actions::{TransformRequest, TransformResponse, apply_octave_transform, apply_slur_transform};
 // Template rendering helper
 async fn render_retro_template(
     input: &str,
@@ -158,6 +263,13 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/canvas-svg", post(render_canvas_svg))
         .route("/api/render-from-model", post(render_from_model))
         .route("/api/split-line", post(split_line_handler))
+        .route("/api/transform/octave", post(transform_octave_handler))
+        .route("/api/transform/slur", post(transform_slur_handler))
+        .route("/api/documents", post(create_document_handler))
+        .route("/api/documents/transform", post(transform_document_handler))
+        .route("/api/documents/export", post(export_document_handler))
+        .route("/api/documents/:document_id/transform", post(transform_document_by_id_handler))
+        .route("/api/documents/:document_id/export", post(export_document_by_id_handler))
         .route("/retro/load", post(retro_load))
         .route("/retro", post(retro_parse).get(serve_retro_page))
         .route("/retro/", get(serve_retro_page))
@@ -214,6 +326,318 @@ async fn split_line_handler(Json(request): Json<SplitLineRequest>) -> impl IntoR
     };
 
     Json(response)
+}
+
+async fn transform_octave_handler(Json(request): Json<TransformRequest>) -> impl IntoResponse {
+    let octave_type = request.octave_type.as_deref().unwrap_or("higher");
+
+    let response = apply_octave_transform(
+        &request.text,
+        request.selection_start,
+        request.selection_end,
+        octave_type,
+    );
+
+    Json(response)
+}
+
+async fn transform_slur_handler(Json(request): Json<TransformRequest>) -> impl IntoResponse {
+    let response = apply_slur_transform(
+        &request.text,
+        request.selection_start,
+        request.selection_end,
+    );
+
+    Json(response)
+}
+
+// Document creation endpoint
+async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> impl IntoResponse {
+    let document_id = Uuid::new_v4().to_string();
+    let timestamp = chrono::Utc::now().to_rfc3339();
+
+    // Create empty document model
+    let mut document = serde_json::json!({
+        "version": "1.0.0",
+        "timestamp": timestamp,
+        "elements": {},
+        "content": [],
+        "metadata": request.metadata.unwrap_or(serde_json::json!({})),
+        "ui_state": {
+            "selection": {
+                "selected_uuids": [],
+                "cursor_uuid": null,
+                "cursor_position": 0
+            },
+            "viewport": {
+                "scroll_x": 0,
+                "scroll_y": 0,
+                "zoom_level": 1.0
+            },
+            "editor_mode": "text",
+            "active_tab": "vexflow"
+        },
+        "format_cache": {
+            "music_text": request.music_text,
+            "lilypond": null,
+            "svg": null,
+            "midi": null
+        }
+    });
+
+    // If music_text was provided, we could parse it here to populate elements
+    // For now, just return the empty document structure
+
+    // Save document to disk
+    if let Err(e) = save_document(&document_id, &document).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))
+        ).into_response();
+    }
+
+    let response = CreateDocumentResponse {
+        document_id: document_id.clone(),
+        document: document,
+    };
+
+    Json(response).into_response()
+}
+
+// Document transformation endpoint
+async fn transform_document_handler(Json(request): Json<TransformDocumentRequest>) -> impl IntoResponse {
+    // For now, implement basic transformations
+    // In a full implementation, this would parse the document JSON back to the Document model,
+    // apply the transformation, and return the updated document
+
+    let mut updated_document = request.document.clone();
+    let updated_elements = request.target_uuids.clone();
+
+    match request.command_type.as_str() {
+        "apply_slur" => {
+            // For demonstration, just add slur metadata to the document
+            if let Some(metadata) = updated_document.get_mut("metadata") {
+                if let Some(meta_obj) = metadata.as_object_mut() {
+                    let slur_count = meta_obj.get("slur_count").and_then(|v| v.as_u64()).unwrap_or(0);
+                    meta_obj.insert("slur_count".to_string(), serde_json::Value::Number(serde_json::Number::from(slur_count + 1)));
+                }
+            }
+        }
+        "set_octave" => {
+            // For demonstration, add octave metadata
+            if let Some(metadata) = updated_document.get_mut("metadata") {
+                if let Some(meta_obj) = metadata.as_object_mut() {
+                    if let Some(params) = &request.parameters {
+                        if let Some(octave_type) = params.get("octave_type") {
+                            meta_obj.insert("last_octave_change".to_string(), octave_type.clone());
+                        }
+                    }
+                }
+            }
+        }
+        _ => {
+            return Json(TransformDocumentResponse {
+                success: false,
+                document: request.document,
+                updated_elements: vec![],
+                message: Some(format!("Unknown command type: {}", request.command_type)),
+            });
+        }
+    }
+
+    // Update timestamp
+    if let Some(timestamp_field) = updated_document.get_mut("timestamp") {
+        *timestamp_field = serde_json::Value::String(chrono::Utc::now().to_rfc3339());
+    }
+
+    Json(TransformDocumentResponse {
+        success: true,
+        document: updated_document,
+        updated_elements,
+        message: Some(format!("Applied {} to {} elements", request.command_type, request.target_uuids.len())),
+    })
+}
+
+// Document export endpoint
+async fn export_document_handler(Json(request): Json<ExportDocumentRequest>) -> impl IntoResponse {
+    match request.format.as_str() {
+        "lilypond" => {
+            // Extract music_text from document format_cache and convert to LilyPond
+            if let Some(format_cache) = request.document.get("format_cache") {
+                if let Some(music_text) = format_cache.get("music_text") {
+                    if let Some(text_str) = music_text.as_str() {
+                        if !text_str.is_empty() {
+                            match pipeline::process_notation(text_str) {
+                                Ok(result) => {
+                                    let minimal_lilypond = match renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, Some(text_str)) {
+                                        Ok(lily) => lily,
+                                        Err(e) => return Json(ExportDocumentResponse {
+                                            success: false,
+                                            format: request.format,
+                                            content: "".to_string(),
+                                            message: Some(format!("LilyPond conversion failed: {}", e)),
+                                        }),
+                                    };
+
+                                    return Json(ExportDocumentResponse {
+                                        success: true,
+                                        format: request.format,
+                                        content: minimal_lilypond,
+                                        message: Some("Exported to LilyPond successfully".to_string()),
+                                    });
+                                }
+                                Err(e) => return Json(ExportDocumentResponse {
+                                    success: false,
+                                    format: request.format,
+                                    content: "".to_string(),
+                                    message: Some(format!("Parse failed: {}", e)),
+                                }),
+                            }
+                        }
+                    }
+                }
+            }
+
+            Json(ExportDocumentResponse {
+                success: false,
+                format: request.format,
+                content: "".to_string(),
+                message: Some("No music_text found in document format_cache".to_string()),
+            })
+        }
+        "svg" => {
+            // Similar to LilyPond but export to SVG
+            if let Some(format_cache) = request.document.get("format_cache") {
+                if let Some(music_text) = format_cache.get("music_text") {
+                    if let Some(text_str) = music_text.as_str() {
+                        if !text_str.is_empty() {
+                            match pipeline::process_notation(text_str) {
+                                Ok(result) => {
+                                    match svg::render_canvas_svg(
+                                        &result.document,
+                                        "number", // notation type - could be extracted from document
+                                        text_str,
+                                        None, None, None // cursor/selection - could be extracted from ui_state
+                                    ) {
+                                        Ok(svg) => return Json(ExportDocumentResponse {
+                                            success: true,
+                                            format: request.format,
+                                            content: svg,
+                                            message: Some("Exported to SVG successfully".to_string()),
+                                        }),
+                                        Err(e) => return Json(ExportDocumentResponse {
+                                            success: false,
+                                            format: request.format,
+                                            content: "".to_string(),
+                                            message: Some(format!("SVG render failed: {}", e)),
+                                        }),
+                                    }
+                                }
+                                Err(e) => return Json(ExportDocumentResponse {
+                                    success: false,
+                                    format: request.format,
+                                    content: "".to_string(),
+                                    message: Some(format!("Parse failed: {}", e)),
+                                }),
+                            }
+                        }
+                    }
+                }
+            }
+
+            Json(ExportDocumentResponse {
+                success: false,
+                format: request.format,
+                content: "".to_string(),
+                message: Some("No music_text found in document format_cache".to_string()),
+            })
+        }
+        _ => {
+            let format_str = request.format.clone();
+            Json(ExportDocumentResponse {
+                success: false,
+                format: request.format,
+                content: "".to_string(),
+                message: Some(format!("Unsupported export format: {}", format_str)),
+            })
+        }
+    }
+}
+
+// UUID-based transform handler
+async fn transform_document_by_id_handler(
+    Path(document_id): Path<String>,
+    Json(request): Json<TransformDocumentByIdRequest>
+) -> impl IntoResponse {
+    // Load document from disk
+    let mut document = match load_document(&document_id).await {
+        Ok(doc) => doc,
+        Err(e) => return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": format!("Document not found: {}", e)}))
+        ).into_response()
+    };
+
+    // Apply transformation (same logic as before, but simpler since we have the document)
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    document["timestamp"] = serde_json::Value::String(timestamp);
+
+    // Update metadata based on command type
+    if let Some(metadata) = document.get_mut("metadata") {
+        match request.command_type.as_str() {
+            "apply_slur" => {
+                let slur_count = metadata.get("slur_count").and_then(|v| v.as_u64()).unwrap_or(0);
+                metadata.as_object_mut().unwrap().insert("slur_count".to_string(), serde_json::Value::Number(serde_json::Number::from(slur_count + 1)));
+            }
+            "set_octave" => {
+                if let Some(params) = &request.parameters {
+                    if let Some(octave) = params.get("octave") {
+                        metadata.as_object_mut().unwrap().insert("default_octave".to_string(), octave.clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Save updated document back to disk
+    if let Err(e) = save_document(&document_id, &document).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))
+        ).into_response();
+    }
+
+    Json(TransformDocumentResponse {
+        success: true,
+        document: document,
+        message: Some(format!("Applied {} to {} elements", request.command_type, request.target_uuids.len())),
+        updated_elements: Vec::new(), // Would contain actual updated element UUIDs in full implementation
+    }).into_response()
+}
+
+// UUID-based export handler
+async fn export_document_by_id_handler(
+    Path(document_id): Path<String>,
+    Json(request): Json<ExportDocumentByIdRequest>
+) -> impl IntoResponse {
+    // Load document from disk
+    let document = match load_document(&document_id).await {
+        Ok(doc) => doc,
+        Err(e) => return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": format!("Document not found: {}", e)}))
+        ).into_response()
+    };
+
+    // Use existing export logic
+    let export_request = ExportDocumentRequest {
+        document: document,
+        format: request.format,
+        options: request.options,
+    };
+
+    export_document_handler(Json(export_request)).await.into_response()
 }
 
 async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {

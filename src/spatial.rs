@@ -804,10 +804,6 @@ fn process_content_line_spatial(
                     match beat_element {
                         BeatElement::Note(note) => {
                             column_to_note_path.insert(current_column, (element_idx, beat_element_idx));
-                            eprintln!("DEBUG: Note '{}' at column {} (char_index {})",
-                                     note.value.as_ref().unwrap_or(&"?".to_string()),
-                                     current_column,
-                                     note.char_index);
                             current_column += 1; // Each note is 1 character
                         },
                         BeatElement::Dash(_dash) => {
@@ -833,19 +829,13 @@ fn process_content_line_spatial(
     }
 
     // Second pass: Process upper octave markers using direct access
-    eprintln!("DEBUG: Processing upper octave markers");
     for upper_line in upper_lines.iter_mut() {
         let upper_line_start = upper_line.char_index;
-        eprintln!("DEBUG: Upper line starts at char_index {}", upper_line_start);
         for element in &mut upper_line.elements {
             if let UpperElement::UpperOctaveMarker { marker, value, char_index, .. } = element {
-                eprintln!("DEBUG: Found marker '{}' at char_index {}, value present: {}",
-                         marker, char_index, value.is_some());
                 if let Some(marker_value) = value.take() {
                     let marker_column = char_index.saturating_sub(upper_line_start);
-                    eprintln!("DEBUG: Marker at column {}, looking for note", marker_column);
                     if let Some(&(element_idx, beat_element_idx)) = column_to_note_path.get(&marker_column) {
-                        eprintln!("DEBUG: Found note at element_idx {}, beat_element_idx {}", element_idx, beat_element_idx);
                         if let ContentElement::Beat(beat) = &mut content_line.elements[element_idx] {
                             if let BeatElement::Note(note) = &mut beat.elements[beat_element_idx] {
                                 let octave_value = match marker.as_str() {

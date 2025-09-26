@@ -37,7 +37,10 @@ Avoid `mod.rs` files - use Rust's modern module system with named module files. 
 ### VII. Tech Stack Philosophy
 Avoid JavaScript whenever possible. Move code to server side rather than client side. Don't worry about performance optimization as a WASM version will come later to address speed concerns.
 
-### VIII. Build System Discipline
+### VIII. Document-First Architecture
+The system follows a document-model-centric architecture where the parsed document model is the primary interface for all operations. The music-text format serves as one supported import/export format rather than the core representation. Interactive editing operates directly on the document model to avoid parsing overhead and enable format-agnostic operations. The server maintains authoritative document state and selection state, with the client serving as a thin presentation layer sending semantic commands with UUID-based element references.
+
+### IX. Build System Discipline
 ALWAYS use `make build` for development builds. NEVER use `--release` flag during development. We are using a RAMDISK so beware of putting too much in target/. We take a SINGLE BINARY approach. Development builds MUST be fast and iterative. Release builds only for production deployment after thorough testing.
 
 ## Quality Standards

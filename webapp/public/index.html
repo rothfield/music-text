@@ -18,6 +18,7 @@
     </script>
 
     <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+    <script src="js/vexflow-renderer.js"></script>
     <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -32,12 +33,11 @@
 
                 <div class="octave-controls">
                     <span class="octave-label">Octave:</span>
-                    <button onclick="applyOctaveAdjustment('lowest')" class="octave-btn" title="Lowest (-2 octaves)" disabled id="btn-lowest">↓↓↓</button>
-                    <button onclick="applyOctaveAdjustment('lowish')" class="octave-btn" title="Lowish (-1 octave)" disabled id="btn-lowish">↓↓</button>
-                    <button onclick="applyOctaveAdjustment('lower')" class="octave-btn" title="Lower (-1 octave)" disabled id="btn-lower">↓</button>
-                    <button onclick="applyOctaveAdjustment('higher')" class="octave-btn" title="Higher (+1 octave)" disabled id="btn-higher">↑</button>
-                    <button onclick="applyOctaveAdjustment('highish')" class="octave-btn" title="Highish (+1 octave)" disabled id="btn-highish">↑↑</button>
-                    <button onclick="applyOctaveAdjustment('highest')" class="octave-btn" title="Highest (+3 octaves)" disabled id="btn-highest">↑↑↑</button>
+                    <button onclick="applyOctaveAdjustment('lowest')" class="octave-btn" title="Lowest (: below)" disabled id="btn-lowest">LL</button>
+                    <button onclick="applyOctaveAdjustment('lower')" class="octave-btn" title="Lower (. below)" disabled id="btn-lower">L</button>
+                    <button onclick="applyOctaveAdjustment('middle')" class="octave-btn" title="Middle (remove octave marks)" disabled id="btn-middle">M</button>
+                    <button onclick="applyOctaveAdjustment('higher')" class="octave-btn" title="Upper (. above)" disabled id="btn-higher">U</button>
+                    <button onclick="applyOctaveAdjustment('highest')" class="octave-btn" title="Highest (: above)" disabled id="btn-highest">HH</button>
                 </div>
                 <div class="font-selector">
                     <label for="fontSelect">Font:</label>
@@ -54,7 +54,7 @@
         </div>
         
         <div id="canvasEditor" class="canvas-editor">
-            <textarea id="backing-text-output" class="canvas-text-input" placeholder="Edit the backing text here - changes sync to canvas..." style="width: 100%; height: 120px; margin-bottom: 10px; font-family: monospace;"></textarea>
+            <textarea id="backing-text-output" class="canvas-text-input" placeholder="Read-only text representation of document - edit via canvas" readonly style="width: 100%; height: 120px; margin-bottom: 10px; font-family: monospace; background-color: #f5f5f5;"></textarea>
             <canvas id="musicCanvas" width="800" height="340"></canvas>
             <div id="canvasToolbar" class="canvas-toolbar">
                 <button id="textMode" class="toolbar-btn active">Text Mode</button>

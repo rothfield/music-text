@@ -162,15 +162,27 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
             script.async = true;
 
             script.onload = () => {
-                if (window.Vex && window.Vex.Flow) {
-                    console.log('🎵 VexFlow library loaded successfully');
-                    resolve(true);
-                } else {
-                    reject(new Error('VexFlow loaded but not accessible'));
-                }
+                // Give VexFlow a moment to initialize
+                setTimeout(() => {
+                    if (window.Vex && window.Vex.Flow) {
+                        console.log('🎵 VexFlow library loaded successfully');
+                        resolve(true);
+                    } else {
+                        console.error('❌ VexFlow loaded but Vex.Flow not accessible. Available:', {
+                            hasVex: !!window.Vex,
+                            hasFlow: !!(window.Vex && window.Vex.Flow),
+                            vexKeys: window.Vex ? Object.keys(window.Vex) : []
+                        });
+                        reject(new Error('VexFlow loaded but not accessible'));
+                    }
+                }, 100);
             };
 
-            script.onerror = () => reject(new Error('Failed to load VexFlow library'));
+            script.onerror = (error) => {
+                console.error('❌ Failed to load VexFlow script:', error);
+                reject(new Error('Failed to load VexFlow library'));
+            };
+
             document.head.appendChild(script);
         });
     },
@@ -237,11 +249,12 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
         }
     },
 
-    // Update backing text output
+    // Update backing text display (read-only)
     updateBackingTextOutput(text) {
         const output = document.getElementById('backing-text-output');
         if (output) {
             output.value = text;
+            output.readOnly = true; // Ensure read-only in document-first architecture
         }
     },
 

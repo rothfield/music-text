@@ -124,47 +124,17 @@ class MusicTextApp {
             this.saveCursorPosition();
             this.updateOctaveButtonStates();
 
-            // Sync textarea cursor/selection with canvas
+            // Update backing text display (read-only) to show current selection
             const backingTextArea = document.getElementById('backing-text-output');
             if (backingTextArea) {
+                // Make textarea read-only and just display the current document text
+                backingTextArea.readOnly = true;
+                backingTextArea.placeholder = "Read-only text representation of document - edit via canvas";
+                // Show selection but don't allow editing
                 backingTextArea.selectionStart = selection.start;
                 backingTextArea.selectionEnd = selection.end;
             }
         };
-
-        // Add event listener for backing text textarea to enable two-way sync
-        const backingTextArea = document.getElementById('backing-text-output');
-        if (backingTextArea) {
-            backingTextArea.addEventListener('input', (e) => {
-                // Update canvas editor when backing text is edited with cursor position
-                this.canvasEditor.setValue(e.target.value, e.target.selectionStart);
-                // Make sure selection is in sync
-                this.canvasEditor.selection.end = e.target.selectionEnd;
-            });
-
-            // Sync cursor/selection when user clicks or selects in textarea
-            backingTextArea.addEventListener('select', (e) => {
-                this.canvasEditor.setSelection(e.target.selectionStart, e.target.selectionEnd, true); // silent to prevent loop
-            });
-
-            backingTextArea.addEventListener('click', (e) => {
-                // Update cursor position and trigger server update
-                this.canvasEditor.cursorPosition = e.target.selectionStart;
-                this.canvasEditor.selection.start = e.target.selectionStart;
-                this.canvasEditor.selection.end = e.target.selectionEnd;
-                this.canvasEditor.submitToServer(this.canvasEditor.textContent);
-            });
-
-            backingTextArea.addEventListener('keyup', (e) => {
-                // Sync cursor position after arrow keys, Enter, etc.
-                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter'].includes(e.key)) {
-                    this.canvasEditor.cursorPosition = e.target.selectionStart;
-                    this.canvasEditor.selection.start = e.target.selectionStart;
-                    this.canvasEditor.selection.end = e.target.selectionEnd;
-                    this.canvasEditor.submitToServer(this.canvasEditor.textContent);
-                }
-            });
-        }
     }
 
     // Handle input events
@@ -432,63 +402,40 @@ class MusicTextApp {
         });
     }
 
-    // Apply octave adjustment to selected text
-    applyOctaveAdjustment(octaveType) {
-        const cursorPos = this.canvasEditor.getCursorPosition();
-        const selectionStart = cursorPos.start;
-        const selectionEnd = cursorPos.end;
+    // Apply octave adjustment to selected elements
+    async applyOctaveAdjustment(octaveType) {
+        const selectedUuids = this.canvasEditor.getSelectedUuids();
 
-        // Check if there's a selection
-        if (selectionStart === selectionEnd) {
+        // Check if there are selected elements
+        if (selectedUuids.length === 0) {
             UI.setStatus('Please select some notes first', 'error');
             return;
         }
 
-        const fullText = this.canvasEditor.getValue();
-        const selectedText = fullText.substring(selectionStart, selectionEnd);
-
-        // Check if selection contains musical notes
-        if (!this.containsMusicalNotes(selectedText)) {
-            UI.setStatus('Selection contains no musical notes', 'error');
-            return;
-        }
-
         try {
-            // Apply octave modification using full document context
-            const { modifiedText, upperLineWasAdded } = this.processOctaveAdjustmentWithColumns(fullText, selectionStart, selectionEnd, octaveType);
+            // Use semantic command for document-first operation
+            await this.canvasEditor.executeSemanticCommand('set_octave', {
+                octave_type: octaveType // 'lowest', 'lower', 'middle', 'higher', 'highest'
+            });
 
-            // Replace entire text
-            this.canvasEditor.setValue(modifiedText);
-
-            // Calculate the new cursor position
-            let newSelectionStart = selectionStart;
-            let newSelectionEnd = selectionEnd;
-            const lengthDifference = modifiedText.length - fullText.length;
-
-            if (upperLineWasAdded) {
-                // If an upper line was added, the whole selection is shifted down by its length.
-                newSelectionStart += lengthDifference;
-                newSelectionEnd += lengthDifference;
-            } else {
-                // If a lower line was added, the selection end might need adjustment if it spans multiple lines,
-                // but for a single line selection, it stays the same. We'll just adjust the end.
-                newSelectionEnd += lengthDifference;
-            }
-
-            // Restore focus and selection
-            this.canvasEditor.focus();
-            this.canvasEditor.setSelection(newSelectionStart, newSelectionEnd);
-
-            // Trigger re-parsing
-            if (this.canvasEditor.onContentChange) {
-                this.canvasEditor.onContentChange(modifiedText);
-            }
-
-            UI.setStatus(`Applied ${octaveType} octave adjustment`, 'success');
+            UI.setStatus(`Applied ${octaveType} octave to ${selectedUuids.length} elements`, 'success');
 
         } catch (error) {
             console.error('Octave adjustment error:', error);
             UI.setStatus('Failed to apply octave adjustment', 'error');
+
+            // Fallback to legacy text-based transform if semantic command not available
+            console.log('Falling back to legacy octave transform...');
+            try {
+                await this.canvasEditor.applyTransformation('/api/transform/octave', {
+                    action: 'octave',
+                    octave_type: octaveType
+                });
+                UI.setStatus(`Applied ${octaveType} octave adjustment (legacy mode)`, 'success');
+            } catch (fallbackError) {
+                console.error('Legacy octave fallback also failed:', fallbackError);
+                UI.setStatus('Failed to apply octave adjustment', 'error');
+            }
         }
     }
 
@@ -529,7 +476,21 @@ class MusicTextApp {
             const columns = notesByLine.get(lineIndex);
             const adjustedLineIndex = lineIndex + linesAdded;
 
-            if (this.isUpperOctave(octaveType)) {
+            if (octaveType === 'middle') {
+                // Remove octave markers at these columns
+                const upperLineIndex = adjustedLineIndex - 1;
+                const lowerLineIndex = adjustedLineIndex + 1;
+
+                // Remove from upper line if it exists
+                if (upperLineIndex >= 0 && this.isUpperLine(lines[upperLineIndex])) {
+                    lines[upperLineIndex] = this.removeMarkersAtColumns(lines[upperLineIndex], columns);
+                }
+
+                // Remove from lower line if it exists
+                if (lowerLineIndex < lines.length && this.isLowerLine(lines[lowerLineIndex])) {
+                    lines[lowerLineIndex] = this.removeMarkersAtColumns(lines[lowerLineIndex], columns);
+                }
+            } else if (this.isUpperOctave(octaveType)) {
                 const upperLineIndex = adjustedLineIndex - 1;
                 // Check if there's already an upper line
                 if (upperLineIndex >= 0 && this.isUpperLine(lines[upperLineIndex])) {
@@ -605,17 +566,33 @@ class MusicTextApp {
     // Add markers to existing line at specific columns
     addMarkersAtColumns(existingLine, columns, marker) {
         let result = existingLine;
+        const markerLength = marker.length;
 
         for (const column of columns) {
-            // Ensure the line is long enough
-            while (result.length <= column) {
+            // Ensure the line is long enough for the marker
+            while (result.length < column + markerLength) {
                 result += ' ';
             }
-            // Add marker at the specified column
-            result = result.substring(0, column) + marker + result.substring(column + 1);
+            // Replace spaces with the marker at the specified column
+            result = result.substring(0, column) + marker + result.substring(column + markerLength);
         }
 
         return result;
+    }
+
+    // Remove markers at specified columns
+    removeMarkersAtColumns(existingLine, columns) {
+        let result = existingLine;
+
+        for (const column of columns) {
+            if (column < result.length) {
+                // Replace marker with space
+                result = result.substring(0, column) + ' ' + result.substring(column + 1);
+            }
+        }
+
+        // Trim trailing spaces
+        return result.replace(/\s+$/, '');
     }
 
     // Create new line with markers at specific columns
@@ -625,10 +602,19 @@ class MusicTextApp {
         }
 
         const maxColumn = Math.max(...columns);
-        let line = ' '.repeat(maxColumn + 1);
+        // For two-dot markers, ensure we have enough space
+        const lineLength = marker === '..' ? maxColumn + 2 : maxColumn + 1;
+        let line = ' '.repeat(lineLength);
 
-        for (const column of columns) {
-            line = line.substring(0, column) + marker + line.substring(column + 1);
+        // Handle two-dot markers specially
+        if (marker === '..') {
+            for (const column of columns) {
+                line = line.substring(0, column) + '..' + line.substring(column + 2);
+            }
+        } else {
+            for (const column of columns) {
+                line = line.substring(0, column) + marker + line.substring(column + marker.length);
+            }
         }
 
         // Remove trailing spaces to keep spatial lines clean
@@ -649,6 +635,7 @@ class MusicTextApp {
     isUpperOctave(octaveType) {
         return ['higher', 'highish', 'highest'].includes(octaveType);
     }
+
 
 
     // Find positions of selected notes with line and column information
@@ -684,12 +671,13 @@ class MusicTextApp {
     // Get the appropriate octave marker for the octave type
     getOctaveMarker(octaveType) {
         const markerMap = {
-            'lowest': ':',   // -2 octaves
-            'lowish': '.',   // -1 octave (same as lower for now)
-            'lower': '.',    // -1 octave
-            'higher': '.',   // +1 octave
-            'highish': '.',  // +1 octave (same as higher for now)
-            'highest': ':'   // +3 octaves
+            'lowest': ':',    // LL - Lowest octave (: below)
+            'lowish': '.',    // L - Lower octave (. below)
+            'lower': '.',     // L - Lower octave (. below)
+            'middle': '',     // M - Middle octave (no markers)
+            'higher': '.',    // U - Upper octave (. above)
+            'highish': ':',   // HH - Higher octave (: above)
+            'highest': ':'    // HH - Highest octave (: above)
         };
 
         return markerMap[octaveType] || '.';
@@ -752,6 +740,7 @@ class MusicTextApp {
 
 // Create global app instance
 const app = new MusicTextApp();
+window.appInstance = app;  // Make app instance accessible globally
 window.MusicTextApp = app;
 window.musicApp = app; // For UI access
 
@@ -779,9 +768,45 @@ window.updateNotationType = () => {
 window.clearAll = () => app.clearAll();
 window.switchTab = (tabName, clickedTab) => UI.switchTab(tabName, clickedTab);
 window.changeFontFamily = (fontClass) => FontManager.changeFont(fontClass);
-window.toggleSlur = () => {
-    // Note: Slur functionality would need to be implemented in canvas editor
-    console.log('Slur toggle not yet implemented in canvas editor');
+window.toggleSlur = async () => {
+    const app = window.appInstance;
+    if (!app) {
+        console.error('App instance not found');
+        return;
+    }
+
+    const selectedUuids = app.canvasEditor.getSelectedUuids();
+
+    // Check if there are selected elements
+    if (selectedUuids.length === 0) {
+        UI.setStatus('Please select some notes first', 'error');
+        return;
+    }
+
+    try {
+        // Use semantic command for document-first operation
+        await app.canvasEditor.executeSemanticCommand('apply_slur', {
+            slur_type: 'standard' // Could be 'tie', 'phrase', etc.
+        });
+
+        UI.setStatus(`Applied slur to ${selectedUuids.length} elements`, 'success');
+
+    } catch (error) {
+        console.error('Slur application error:', error);
+        UI.setStatus('Failed to apply slur', 'error');
+
+        // Fallback to legacy text-based transform if semantic command not available
+        console.log('Falling back to legacy text transform...');
+        try {
+            await app.canvasEditor.applyTransformation('/api/transform/slur', {
+                action: 'slur'
+            });
+            UI.setStatus('Applied slur (legacy mode)', 'success');
+        } catch (fallbackError) {
+            console.error('Legacy fallback also failed:', fallbackError);
+            UI.setStatus('Failed to apply slur', 'error');
+        }
+    }
 };
 window.applyOctaveAdjustment = (octaveType) => app.applyOctaveAdjustment(octaveType);
 

@@ -468,7 +468,7 @@ impl CanvasSvgRenderer {
 
     .canvas-cursor {{
       stroke: #e74c3c;
-      stroke-width: 2;
+      stroke-width: 1;
       animation: blink 1s infinite;
     }}
 

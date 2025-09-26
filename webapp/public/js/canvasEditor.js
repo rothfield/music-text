@@ -3,6 +3,8 @@
  * Canvas-based visual and text editor for music notation
  */
 
+import { DocumentModel, DocumentPersistence } from './documentModel.js';
+
 // Helper function for throttling
 function throttle(func, limit) {
     let inThrottle;
@@ -25,9 +27,16 @@ export class CanvasEditor {
         this.cursor = { line: 0, char: 0 };
         this.lines = [''];
         this.isDirty = false;
+
+        // Document-first architecture
+        this.document = new DocumentModel(); // Primary document model
+        this.persistence = new DocumentPersistence('musicTextDocument');
+
+        // Legacy text-based support (for backward compatibility)
         this.textContent = ''; // Store the current text content
         this.cursorPosition = 0; // Current cursor position in text
         this.selection = { start: 0, end: 0 }; // Selection range (position-based)
+
         this.cursorVisible = true; // For blinking cursor
         this.cursorBlinkInterval = null;
 
@@ -38,6 +47,10 @@ export class CanvasEditor {
         // Visual elements
         this.noteElements = [];
         this.selectedElement = null;
+
+        // UUID-based selection tracking (now connected to document model)
+        this.selectedUuids = new Set(); // Set of UUIDs for selected elements
+        this.elementUuidMap = new Map(); // Map of UUID -> element data
 
         // Coordinate tracking from SVG
         this.elementCoordinates = [];
@@ -94,6 +107,7 @@ export class CanvasEditor {
     setupEventListeners() {
         // Make canvas focusable and handle keyboard input
         this.canvas.setAttribute('tabindex', '0');
+        this.canvas.style.cursor = 'text'; // Always show text cursor
         this.canvas.addEventListener('keydown', (e) => {
             this.handleKeyDown(e);
         });
@@ -108,6 +122,10 @@ export class CanvasEditor {
             this.handleCanvasMouseDown(e);
         });
 
+        this.canvas.addEventListener('dblclick', (e) => {
+            this.handleCanvasDoubleClick(e);
+        });
+
         this.canvas.addEventListener('mousemove', (e) => {
             this.handleCanvasMouseMove(e);
         });
@@ -119,6 +137,11 @@ export class CanvasEditor {
         // Handle mouse leaving canvas during selection
         this.canvas.addEventListener('mouseleave', (e) => {
             this.handleCanvasMouseUp(e);
+        });
+
+        // Prevent context menu on right-click to avoid interfering with selection
+        this.canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
         });
     }
 
@@ -168,6 +191,9 @@ export class CanvasEditor {
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
             e.preventDefault();
             this.moveCursor(e.key === 'ArrowLeft' ? -1 : 1);
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            this.moveCursorVertical(e.key === 'ArrowUp' ? -1 : 1);
         } else if (e.key === 'Enter') {
             e.preventDefault();
             this.handleEnterKey();
@@ -220,6 +246,10 @@ export class CanvasEditor {
             this.cursorPosition = clickPosition;
             this.selection.start = clickPosition;
             this.selection.end = clickPosition;
+
+            // Update UUID selection from character position
+            this.updateUuidSelectionFromCharacters();
+
             this.resetCursorBlink();
 
             // Save to local storage
@@ -232,7 +262,8 @@ export class CanvasEditor {
             if (this.onSelectionChange) {
                 this.onSelectionChange({
                     start: this.selection.start,
-                    end: this.selection.end
+                    end: this.selection.end,
+                    uuids: Array.from(this.selectedUuids)
                 });
             }
         }
@@ -246,6 +277,9 @@ export class CanvasEditor {
         if (this.isSelecting) {
             this.isSelecting = false;
 
+            // Update UUID selection from final character selection
+            this.updateUuidSelectionFromCharacters();
+
             // A final update to ensure the selection is correctly rendered
             this.submitToServer(this.textContent);
 
@@ -253,7 +287,8 @@ export class CanvasEditor {
             if (this.onSelectionChange) {
                 this.onSelectionChange({
                     start: this.selection.start,
-                    end: this.selection.end
+                    end: this.selection.end,
+                    uuids: Array.from(this.selectedUuids)
                 });
             }
         }
@@ -278,29 +313,17 @@ export class CanvasEditor {
             const adjustedX = scaledX - 20;
             const adjustedY = scaledY - 60;
 
-            // Find bounds and closest position
-            let closestPos = 0;
-            let closestXDistance = Number.MAX_VALUE;
-            let leftmostX = Number.MAX_VALUE;
-            let rightmostX = Number.MIN_VALUE;
-            let rightmostPos = 0;
+            // Find bounds and organize positions by line
             let topMostY = Number.MAX_VALUE;
             let bottomMostY = Number.MIN_VALUE;
 
-            // First pass: find bounds and closest position based on X only
+            // Group positions by Y coordinate (lines)
+            const lineMap = new Map(); // Y -> array of {pos, x}
+
             for (const [posStr, coords] of Object.entries(this.characterPositions)) {
                 const pos = parseInt(posStr);
                 const xCoord = typeof coords === 'number' ? coords : coords.x;
                 const yCoord = typeof coords === 'number' ? 0 : coords.y;
-
-                // Track leftmost and rightmost positions
-                if (xCoord < leftmostX) {
-                    leftmostX = xCoord;
-                }
-                if (xCoord > rightmostX) {
-                    rightmostX = xCoord;
-                    rightmostPos = pos;
-                }
 
                 // Track topmost and bottommost Y positions
                 if (yCoord < topMostY) {
@@ -310,15 +333,16 @@ export class CanvasEditor {
                     bottomMostY = yCoord;
                 }
 
-                // For now, just find closest by X distance on the same line
-                const xDist = Math.abs(xCoord - adjustedX);
-                const yDist = Math.abs(yCoord - adjustedY);
-
-                // Only consider positions on nearby lines (within 30 pixels vertically)
-                if (yDist < 30 && xDist < closestXDistance) {
-                    closestXDistance = xDist;
-                    closestPos = pos;
+                // Group by Y coordinate
+                if (!lineMap.has(yCoord)) {
+                    lineMap.set(yCoord, []);
                 }
+                lineMap.get(yCoord).push({pos, x: xCoord});
+            }
+
+            // Sort each line's positions by x coordinate
+            for (const [y, positions] of lineMap) {
+                positions.sort((a, b) => a.x - b.x);
             }
 
             // If click is above all content (more than 30 pixels above the first line), position at start
@@ -333,20 +357,58 @@ export class CanvasEditor {
                 return this.textContent.length;
             }
 
-            // If click is far to the left of content, position at start
-            if (adjustedX < leftmostX - 20) {
-                console.log(`Click far left: adjusted(${adjustedX.toFixed(1)}) -> cursor 0`);
-                return 0;
+            // Find the closest line
+            let closestLineY = null;
+            let minYDistance = Number.MAX_VALUE;
+
+            for (const y of lineMap.keys()) {
+                const yDist = Math.abs(y - adjustedY);
+                if (yDist < minYDistance) {
+                    minYDistance = yDist;
+                    closestLineY = y;
+                }
             }
 
-            // If click is far to the right of content, position at end
-            if (adjustedX > rightmostX + 20) {
-                console.log(`Click far right: adjusted(${adjustedX.toFixed(1)}) -> cursor ${this.textContent.length}`);
-                return this.textContent.length;
+            // If we found a line within reasonable distance
+            if (closestLineY !== null && minYDistance < 30) {
+                const linePositions = lineMap.get(closestLineY);
+
+                if (linePositions && linePositions.length > 0) {
+                    const firstPosInLine = linePositions[0];
+                    const lastPosInLine = linePositions[linePositions.length - 1];
+
+                    // If click is to the left of the first position on this line
+                    if (adjustedX < firstPosInLine.x - 20) {
+                        console.log(`Click left of line: adjusted(${adjustedX.toFixed(1)}) -> cursor ${firstPosInLine.pos}`);
+                        return firstPosInLine.pos;
+                    }
+
+                    // If click is to the right of the last position on this line
+                    if (adjustedX > lastPosInLine.x + 20) {
+                        console.log(`Click right of line: adjusted(${adjustedX.toFixed(1)}) -> cursor ${lastPosInLine.pos}`);
+                        return lastPosInLine.pos;
+                    }
+
+                    // Find closest position on this line
+                    let closestPos = firstPosInLine.pos;
+                    let minXDistance = Number.MAX_VALUE;
+
+                    for (const {pos, x} of linePositions) {
+                        const xDist = Math.abs(x - adjustedX);
+                        if (xDist < minXDistance) {
+                            minXDistance = xDist;
+                            closestPos = pos;
+                        }
+                    }
+
+                    console.log(`Click on line: adjusted(${adjustedX.toFixed(1)}, ${adjustedY.toFixed(1)}) -> cursor ${closestPos}`);
+                    return Math.min(closestPos, this.textContent.length);
+                }
             }
 
-            console.log(`Click: adjusted(${adjustedX.toFixed(1)}, ${adjustedY.toFixed(1)}) -> cursor ${closestPos}`);
-            return Math.min(closestPos, this.textContent.length);
+            // Fallback: return 0 if nothing matched
+            console.log(`Click: no match found, defaulting to cursor 0`);
+            return 0;
         }
 
         // Fallback to approximate calculation if no precise positions available
@@ -404,19 +466,23 @@ export class CanvasEditor {
             }
         }
 
-        // Handle visual element hover (existing functionality)
-        const hoveredElement = this.findElementAt(x, y);
-        this.canvas.style.cursor = this.isSelecting ? 'text' : (hoveredElement ? 'pointer' : 'text');
+        // Always use text cursor since this is a text editor
+        this.canvas.style.cursor = 'text';
     }
 
-    // Insert character at cursor position
+    // Insert character at cursor position (document-first)
     insertCharacter(char) {
+        // Update text content (legacy format)
         this.textContent = this.textContent.slice(0, this.cursorPosition) + char + this.textContent.slice(this.cursorPosition);
         this.cursorPosition++;
         this.selection.start = this.cursorPosition;
         this.selection.end = this.cursorPosition;
         this.lines = this.textContent.split('\n');
         this.isDirty = true;
+
+        // Update document model with new text
+        this.document.cacheFormat('music_text', this.textContent);
+        this.document.setCursor(null, this.cursorPosition);
 
         // Reset cursor blink
         this.resetCursorBlink();
@@ -440,15 +506,20 @@ export class CanvasEditor {
         }
     }
 
-    // Handle backspace
+    // Handle backspace (document-first)
     handleBackspace() {
         if (this.cursorPosition > 0) {
+            // Update text content (legacy format)
             this.textContent = this.textContent.slice(0, this.cursorPosition - 1) + this.textContent.slice(this.cursorPosition);
             this.cursorPosition--;
             this.selection.start = this.cursorPosition;
             this.selection.end = this.cursorPosition;
             this.lines = this.textContent.split('\n');
             this.isDirty = true;
+
+            // Update document model with new text
+            this.document.cacheFormat('music_text', this.textContent);
+            this.document.setCursor(null, this.cursorPosition);
 
             // Reset cursor blink
             this.resetCursorBlink();
@@ -473,14 +544,19 @@ export class CanvasEditor {
         }
     }
 
-    // Handle delete
+    // Handle delete (document-first)
     handleDelete() {
         if (this.cursorPosition < this.textContent.length) {
+            // Update text content (legacy format)
             this.textContent = this.textContent.slice(0, this.cursorPosition) + this.textContent.slice(this.cursorPosition + 1);
             this.selection.start = this.cursorPosition;
             this.selection.end = this.cursorPosition;
             this.lines = this.textContent.split('\n');
             this.isDirty = true;
+
+            // Update document model with new text
+            this.document.cacheFormat('music_text', this.textContent);
+            this.document.setCursor(null, this.cursorPosition);
 
             // Reset cursor blink
             this.resetCursorBlink();
@@ -559,6 +635,66 @@ export class CanvasEditor {
         }
     }
 
+    // Move cursor vertically (up or down lines)
+    moveCursorVertical(direction) {
+        if (!this.characterPositions || Object.keys(this.characterPositions).length === 0) {
+            return; // No coordinate data available
+        }
+
+        // Get current position coordinates
+        const currentCoords = this.characterPositions[this.cursorPosition];
+        if (!currentCoords) {
+            return; // Current position not tracked
+        }
+
+        const currentX = typeof currentCoords === 'number' ? currentCoords : currentCoords.x;
+        const currentY = typeof currentCoords === 'number' ? 0 : currentCoords.y;
+
+        // Find target Y coordinate (line above or below)
+        const targetY = currentY + (direction * 60); // Assuming 60px line height
+
+        // Find the position on the target line closest to current X
+        let bestPosition = this.cursorPosition;
+        let bestDistance = Number.MAX_VALUE;
+
+        for (const [posStr, coords] of Object.entries(this.characterPositions)) {
+            const pos = parseInt(posStr);
+            const x = typeof coords === 'number' ? coords : coords.x;
+            const y = typeof coords === 'number' ? 0 : coords.y;
+
+            // Look for positions on the target line (within 15px tolerance)
+            if (Math.abs(y - targetY) < 15) {
+                const xDistance = Math.abs(x - currentX);
+                if (xDistance < bestDistance) {
+                    bestDistance = xDistance;
+                    bestPosition = pos;
+                }
+            }
+        }
+
+        // If we found a position on the target line, move there
+        if (bestPosition !== this.cursorPosition) {
+            this.cursorPosition = bestPosition;
+            this.selection.start = this.cursorPosition;
+            this.selection.end = this.cursorPosition;
+            this.resetCursorBlink();
+
+            // Save to local storage
+            this.saveToLocalStorage();
+
+            // Submit to server to update cursor position
+            this.submitToServer(this.textContent);
+
+            // Notify selection change
+            if (this.onSelectionChange) {
+                this.onSelectionChange({
+                    start: this.selection.start,
+                    end: this.selection.end
+                });
+            }
+        }
+    }
+
     // Start cursor blinking
     startCursorBlink() {
         if (this.cursorBlinkInterval) {
@@ -588,7 +724,7 @@ export class CanvasEditor {
         this.startCursorBlink();
     }
 
-    // Submit text to server for canvas SVG generation
+    // Submit to server for canvas SVG generation (document-first)
     async submitToServer(inputText) {
         if (!inputText.trim()) {
             this.clearCanvas();
@@ -596,19 +732,27 @@ export class CanvasEditor {
         }
 
         try {
-            // Use the new canvas SVG API with cursor position support
+            // Prepare request data with both legacy and document-first information
+            const requestData = {
+                // Legacy text-based format (required for now)
+                input_text: inputText,
+                notation_type: this.detectNotationSystem(inputText),
+                cursor_position: this.cursorPosition,
+                selection_start: this.selection.start !== this.selection.end ? this.selection.start : null,
+                selection_end: this.selection.start !== this.selection.end ? this.selection.end : null,
+
+                // Document-first data (when available)
+                selected_uuids: Array.from(this.selectedUuids),
+                document_model: this.document.elements.size > 0 ? this.document.toJSON() : null
+            };
+
+            // Use the canvas SVG API with document-first support
             const response = await fetch('/api/canvas-svg', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    input_text: inputText,
-                    notation_type: this.detectNotationSystem(inputText),  // Auto-detect notation system
-                    cursor_position: this.cursorPosition,
-                    selection_start: this.selection.start !== this.selection.end ? this.selection.start : null,
-                    selection_end: this.selection.start !== this.selection.end ? this.selection.end : null
-                })
+                body: JSON.stringify(requestData)
             });
 
             if (response.ok) {
@@ -656,6 +800,32 @@ export class CanvasEditor {
         const svgElement = tempDiv.querySelector('svg');
 
         if (svgElement) {
+            // Extract UUID data from SVG elements
+            this.elementUuidMap.clear();
+            const elementsWithUuids = svgElement.querySelectorAll('[data-note-id]');
+            elementsWithUuids.forEach(element => {
+                const uuid = element.getAttribute('data-note-id');
+                const charStart = parseInt(element.getAttribute('data-char-start') || '0');
+                const charEnd = parseInt(element.getAttribute('data-char-end') || '0');
+                const x = parseFloat(element.getAttribute('x') || '0');
+                const y = parseFloat(element.getAttribute('y') || '0');
+                const elementType = element.getAttribute('data-element-type') || 'unknown';
+
+                this.elementUuidMap.set(uuid, {
+                    uuid,
+                    charStart,
+                    charEnd,
+                    x,
+                    y,
+                    elementType,
+                    element: element
+                });
+            });
+
+            console.log('Extracted UUID data:', {
+                uuids: this.elementUuidMap.size
+            });
+
             // Extract coordinate metadata from the SVG
             const metadata = svgElement.querySelector('metadata#coordinate-data');
             if (metadata) {
@@ -1033,11 +1203,18 @@ export class CanvasEditor {
     }
 
     // Utility methods for compatibility with existing code
+    // DEPRECATED: Use document.getCachedFormat('music_text') instead
     getValue() {
+        console.warn('getValue() is deprecated. Use document.getCachedFormat("music_text") for document-first architecture.');
         return this.textContent;
     }
 
+    // DEPRECATED: Use document operations instead of direct text manipulation
     setValue(content, cursorPos = null) {
+        console.warn('setValue() is deprecated. Use document operations for document-first architecture.');
+
+        // Legacy support: update document cache when text is set
+        this.document.cacheFormat('music_text', content);
         this.textContent = content;
         this.lines = content.split('\n');
 
@@ -1063,6 +1240,121 @@ export class CanvasEditor {
             start: this.selection.start,
             end: this.selection.end
         };
+    }
+
+    // New semantic command method for document-first operations
+    async executeSemanticCommand(commandType, parameters = {}) {
+        if (this.selectedUuids.size === 0) {
+            throw new Error('No elements selected for semantic command');
+        }
+
+        try {
+            const requestData = {
+                command_type: commandType,
+                target_uuids: Array.from(this.selectedUuids),
+                parameters: parameters
+            };
+
+            const response = await fetch('/api/semantic-command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.message || 'Semantic command failed');
+            }
+
+            console.log('Semantic command executed:', result);
+
+            // Re-render to show changes (server maintains document state)
+            await this.submitToServer(this.textContent);
+
+            return result;
+
+        } catch (error) {
+            console.error('Semantic command failed:', error);
+            throw error;
+        }
+    }
+
+    // Generic method to apply text transformations via API (legacy)
+    async applyTransformation(endpoint, transformData) {
+        try {
+            // Add current text, character-based selection, and UUID-based selection
+            const requestData = {
+                text: this.textContent,
+                selection_start: this.selection.start,
+                selection_end: this.selection.end,
+                cursor_position: this.cursorPosition,
+                selected_uuids: Array.from(this.selectedUuids), // Include UUID selection
+                ...transformData
+            };
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`API request failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            // Apply the transformed text and selection
+            if (result.text !== undefined) {
+                this.textContent = result.text;
+                this.lines = result.text.split('\n');
+                this.isDirty = true;
+            }
+
+            // Update cursor and selection if provided
+            if (result.selection_start !== undefined) {
+                this.selection.start = result.selection_start;
+            }
+            if (result.selection_end !== undefined) {
+                this.selection.end = result.selection_end;
+            }
+            if (result.cursor_position !== undefined) {
+                this.cursorPosition = result.cursor_position;
+            } else if (result.selection_end !== undefined) {
+                this.cursorPosition = result.selection_end;
+            }
+
+            // Save and submit
+            this.saveToLocalStorage();
+            this.submitToServer(this.textContent);
+
+            // Trigger callbacks
+            if (this.onContentChange) {
+                this.onContentChange(this.textContent);
+            }
+            if (this.onSelectionChange) {
+                this.onSelectionChange({
+                    start: this.selection.start,
+                    end: this.selection.end
+                });
+            }
+
+            this.focus();
+            return result;
+
+        } catch (error) {
+            console.error('Transformation failed:', error);
+            throw error;
+        }
     }
 
     setSelection(start, end, silent = false) {
@@ -1140,9 +1432,24 @@ export class CanvasEditor {
         return 'unknown';
     }
 
-    // Save editor state to local storage
+    // Save editor state to local storage (document-first)
     saveToLocalStorage() {
         try {
+            // Update document model with current UI state
+            this.document.setCursor(null, this.cursorPosition);
+            this.document.setSelection(Array.from(this.selectedUuids));
+            this.document.ui_state.editor_mode = this.currentMode;
+
+            // Cache the current text representation
+            this.document.cacheFormat('music_text', this.textContent);
+
+            // Save document model
+            const saved = this.persistence.saveDocument(this.document);
+            if (saved) {
+                console.log('Document saved to localStorage:', this.document.getStats());
+            }
+
+            // Legacy backup save (for compatibility during transition)
             const editorState = {
                 textContent: this.textContent,
                 cursorPosition: this.cursorPosition,
@@ -1151,34 +1458,34 @@ export class CanvasEditor {
                 timestamp: Date.now()
             };
             localStorage.setItem('musicTextEditorState', JSON.stringify(editorState));
-            console.log('Saved to localStorage:', {
-                contentLength: this.textContent.length,
-                cursor: this.cursorPosition,
-                selection: [this.selection.start, this.selection.end]
-            });
+
         } catch (e) {
             console.error('Failed to save to localStorage:', e);
         }
     }
 
-    // Load editor state from local storage
+    // Load editor state from local storage (document-first)
     loadFromLocalStorage() {
         try {
-            const savedState = localStorage.getItem('musicTextEditorState');
-            if (savedState) {
-                const state = JSON.parse(savedState);
-                this.textContent = state.textContent || '';
-                this.cursorPosition = Math.min(state.cursorPosition || 0, this.textContent.length);
-                this.selection.start = Math.min(state.selectionStart || this.cursorPosition, this.textContent.length);
-                this.selection.end = Math.min(state.selectionEnd || this.cursorPosition, this.textContent.length);
+            // Try to load document model first
+            const loadedDocument = this.persistence.loadDocument();
+            if (loadedDocument) {
+                this.document = loadedDocument;
+
+                // Restore UI state from document
+                const musicText = this.document.getCachedFormat('music_text') || '';
+                this.textContent = musicText;
+                this.cursorPosition = this.document.ui_state.selection.cursor_position;
+                this.currentMode = this.document.ui_state.editor_mode || 'text';
+
+                // Restore UUID-based selection
+                this.selectedUuids = new Set(this.document.ui_state.selection.selected_uuids);
+
+                // Update legacy character-based selection for compatibility
+                this.updateCharacterSelectionFromUuids();
                 this.lines = this.textContent.split('\n');
 
-                console.log('Loaded from localStorage:', {
-                    contentLength: this.textContent.length,
-                    cursor: this.cursorPosition,
-                    selection: [this.selection.start, this.selection.end],
-                    age: Date.now() - (state.timestamp || 0)
-                });
+                console.log('Loaded document from localStorage:', this.document.getStats());
 
                 // Update backing text area if it exists
                 const backingTextArea = document.getElementById('backing-text-output');
@@ -1195,19 +1502,145 @@ export class CanvasEditor {
 
                 return true;
             }
+
+            // Fallback to legacy format
+            const savedState = localStorage.getItem('musicTextEditorState');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                this.textContent = state.textContent || '';
+                this.cursorPosition = Math.min(state.cursorPosition || 0, this.textContent.length);
+                this.selection.start = Math.min(state.selectionStart || this.cursorPosition, this.textContent.length);
+                this.selection.end = Math.min(state.selectionEnd || this.cursorPosition, this.textContent.length);
+                this.lines = this.textContent.split('\n');
+
+                // Create new document from loaded text
+                if (this.textContent) {
+                    DocumentModel.fromMusicText(this.textContent).then(doc => {
+                        this.document = doc;
+                        this.document.setCursor(null, this.cursorPosition);
+                    });
+                }
+
+                console.log('Loaded legacy format from localStorage:', {
+                    contentLength: this.textContent.length,
+                    cursor: this.cursorPosition,
+                    selection: [this.selection.start, this.selection.end],
+                    age: Date.now() - (state.timestamp || 0)
+                });
+
+                // Update backing text area
+                const backingTextArea = document.getElementById('backing-text-output');
+                if (backingTextArea) {
+                    backingTextArea.value = this.textContent;
+                    backingTextArea.selectionStart = this.selection.start;
+                    backingTextArea.selectionEnd = this.selection.end;
+                }
+
+                // Submit to server to render the loaded content
+                if (this.textContent) {
+                    this.submitToServer(this.textContent);
+                }
+
+                return true;
+            }
+
         } catch (e) {
             console.error('Failed to load from localStorage:', e);
         }
         return false;
     }
 
-    // Clear local storage
+    // Clear local storage (both document and legacy)
     clearLocalStorage() {
         try {
+            // Clear document model
+            this.persistence.clearDocument();
+
+            // Clear legacy format
             localStorage.removeItem('musicTextEditorState');
-            console.log('Cleared localStorage');
+
+            // Reset current document
+            this.document = new DocumentModel();
+
+            console.log('Cleared localStorage (document + legacy)');
         } catch (e) {
             console.error('Failed to clear localStorage:', e);
         }
+    }
+
+    // UUID-based selection methods for document-first operations
+
+    // Select elements by their UUIDs
+    selectByUuids(uuids) {
+        this.selectedUuids.clear();
+        if (Array.isArray(uuids)) {
+            uuids.forEach(uuid => this.selectedUuids.add(uuid));
+        } else {
+            this.selectedUuids.add(uuids);
+        }
+
+        // Update character-based selection for backward compatibility
+        this.updateCharacterSelectionFromUuids();
+
+        console.log('Selected UUIDs:', Array.from(this.selectedUuids));
+    }
+
+    // Get currently selected UUIDs
+    getSelectedUuids() {
+        return Array.from(this.selectedUuids);
+    }
+
+    // Convert UUID selection to character indices for backward compatibility
+    updateCharacterSelectionFromUuids() {
+        if (this.selectedUuids.size === 0) {
+            this.selection.start = this.cursorPosition;
+            this.selection.end = this.cursorPosition;
+            return;
+        }
+
+        let minStart = Number.MAX_VALUE;
+        let maxEnd = Number.MIN_VALUE;
+
+        for (const uuid of this.selectedUuids) {
+            const element = this.elementUuidMap.get(uuid);
+            if (element) {
+                minStart = Math.min(minStart, element.charStart);
+                maxEnd = Math.max(maxEnd, element.charEnd);
+            }
+        }
+
+        if (minStart !== Number.MAX_VALUE && maxEnd !== Number.MIN_VALUE) {
+            this.selection.start = minStart;
+            this.selection.end = maxEnd;
+        }
+    }
+
+    // Convert character selection to UUIDs
+    updateUuidSelectionFromCharacters() {
+        this.selectedUuids.clear();
+
+        if (this.selection.start === this.selection.end) {
+            return; // No selection
+        }
+
+        for (const [uuid, element] of this.elementUuidMap) {
+            // Check if element overlaps with selection
+            if (element.charEnd > this.selection.start && element.charStart < this.selection.end) {
+                this.selectedUuids.add(uuid);
+            }
+        }
+
+        console.log('Updated UUID selection from characters:', Array.from(this.selectedUuids));
+    }
+
+    // Get selection as both UUIDs and character indices
+    getSelectionBoth() {
+        return {
+            uuids: Array.from(this.selectedUuids),
+            characterRange: {
+                start: this.selection.start,
+                end: this.selection.end
+            }
+        };
     }
 }

@@ -154,7 +154,6 @@ pub fn parse_content_line(
         }
     }
 
-    eprintln!("DEBUG parse_content_line: setting value to {:?}", input);
     Ok(ContentLine {
         elements,
         value: Some(input.to_string()),
