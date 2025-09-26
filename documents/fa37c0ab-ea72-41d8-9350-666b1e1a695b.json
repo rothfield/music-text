@@ -1,0 +1,185 @@
+{
+  "content": [],
+  "elements": [
+    {
+      "Stave": {
+        "char_index": 0,
+        "column": 1,
+        "index_in_doc": 0,
+        "index_in_line": 0,
+        "line": 1,
+        "lines": [
+          {
+            "ContentLine": {
+              "char_index": 0,
+              "consumed_elements": [],
+              "elements": [
+                {
+                  "Beat": {
+                    "char_index": 0,
+                    "consumed_elements": [],
+                    "divisions": null,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 0,
+                          "consumed_elements": [],
+                          "denominator": null,
+                          "id": "90bc2259-5b54-47cb-84ef-11a562c59c31",
+                          "notation_system": "Sargam",
+                          "numerator": null,
+                          "octave": 0,
+                          "pitch_code": "N1",
+                          "value": "S"
+                        }
+                      }
+                    ],
+                    "is_tuplet": null,
+                    "tied_to_previous": null,
+                    "total_duration": null,
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 1,
+                    "consumed_elements": [],
+                    "id": "f2705ed5-5a4c-4131-9ae3-705ef383d7c1",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 2,
+                    "consumed_elements": [],
+                    "divisions": null,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 2,
+                          "consumed_elements": [],
+                          "denominator": null,
+                          "id": "371e353f-6ccc-49c4-93f0-96fdeb44d135",
+                          "notation_system": "Sargam",
+                          "numerator": null,
+                          "octave": 0,
+                          "pitch_code": "N2",
+                          "value": "R"
+                        }
+                      }
+                    ],
+                    "is_tuplet": null,
+                    "tied_to_previous": null,
+                    "total_duration": null,
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 3,
+                    "consumed_elements": [],
+                    "id": "83bce244-065c-47f1-a27e-e2cd256116a7",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 4,
+                    "consumed_elements": [],
+                    "divisions": null,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 4,
+                          "consumed_elements": [],
+                          "denominator": null,
+                          "id": "f9ebef39-7115-4bba-a957-3c46bbd31cbf",
+                          "notation_system": "Sargam",
+                          "numerator": null,
+                          "octave": 0,
+                          "pitch_code": "N3",
+                          "value": "G"
+                        }
+                      }
+                    ],
+                    "is_tuplet": null,
+                    "tied_to_previous": null,
+                    "total_duration": null,
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 5,
+                    "consumed_elements": [],
+                    "id": "5937a158-d2be-460e-ae64-598cd193def9",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 6,
+                    "consumed_elements": [],
+                    "divisions": null,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 6,
+                          "consumed_elements": [],
+                          "denominator": null,
+                          "id": "75a4aafe-edd9-4281-b1b2-ded514042268",
+                          "notation_system": "Sargam",
+                          "numerator": null,
+                          "octave": 0,
+                          "pitch_code": "N4s",
+                          "value": "M"
+                        }
+                      }
+                    ],
+                    "is_tuplet": null,
+                    "tied_to_previous": null,
+                    "total_duration": null,
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                }
+              ],
+              "value": "S R G M"
+            }
+          }
+        ],
+        "notation_system": "Sargam",
+        "value": "S R G M"
+      }
+    }
+  ],
+  "format_cache": {
+    "lilypond": null,
+    "midi": null,
+    "music_text": "S R G M",
+    "svg": null
+  },
+  "metadata": {
+    "created_by": "Test",
+    "title": "Test Document"
+  },
+  "timestamp": "2025-09-26T03:18:14.329902617+00:00",
+  "ui_state": {
+    "active_tab": "vexflow",
+    "editor_mode": "text",
+    "selection": {
+      "cursor_position": 0,
+      "cursor_uuid": null,
+      "selected_uuids": []
+    },
+    "viewport": {
+      "scroll_x": 0,
+      "scroll_y": 0,
+      "zoom_level": 1.0
+    }
+  },
+  "version": "1.0.0"
+}

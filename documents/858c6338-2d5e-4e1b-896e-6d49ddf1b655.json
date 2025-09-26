@@ -1,0 +1,29 @@
+{
+  "content": [],
+  "elements": {},
+  "format_cache": {
+    "lilypond": null,
+    "midi": null,
+    "music_text": "SRGm",
+    "svg": null
+  },
+  "metadata": {
+    "slur_count": 1
+  },
+  "timestamp": "2025-09-26T02:07:12.007704016+00:00",
+  "ui_state": {
+    "active_tab": "vexflow",
+    "editor_mode": "text",
+    "selection": {
+      "cursor_position": 0,
+      "cursor_uuid": null,
+      "selected_uuids": []
+    },
+    "viewport": {
+      "scroll_x": 0,
+      "scroll_y": 0,
+      "zoom_level": 1.0
+    }
+  },
+  "version": "1.0.0"
+}

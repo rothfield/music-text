@@ -124,16 +124,7 @@ class MusicTextApp {
             this.saveCursorPosition();
             this.updateOctaveButtonStates();
 
-            // Update backing text display (read-only) to show current selection
-            const backingTextArea = document.getElementById('backing-text-output');
-            if (backingTextArea) {
-                // Make textarea read-only and just display the current document text
-                backingTextArea.readOnly = true;
-                backingTextArea.placeholder = "Read-only text representation of document - edit via canvas";
-                // Show selection but don't allow editing
-                backingTextArea.selectionStart = selection.start;
-                backingTextArea.selectionEnd = selection.end;
-            }
+            // Backing text display removed - no longer needed
         };
     }
 
@@ -384,14 +375,88 @@ class MusicTextApp {
         UI.switchTab('vexflow');
     }
 
+    // Create a new document using the API
+    async createNewDocument() {
+        try {
+            UI.setStatus('Creating new document...', 'loading');
+
+            // Ask user if they want to start with a template or blank document
+            const createWithTemplate = confirm('Start with a template? (S R G M)\n\nOK = Template\nCancel = Blank document');
+
+            const requestBody = {
+                music_text: createWithTemplate ? 'S R G M' : null,
+                metadata: {
+                    title: 'Untitled Document',
+                    created_at: new Date().toISOString(),
+                    created_by: 'Web Interface'
+                }
+            };
+
+            const response = await fetch('/api/documents', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to create document: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (result.document_id && result.document) {
+                // Clear current content
+                this.clearAll();
+
+                // Set up new document from API response
+                this.canvasEditor.document.id = result.document_id;
+
+                // Load the document content if it was created with template
+                if (createWithTemplate && result.document.format_cache && result.document.format_cache.music_text) {
+                    const content = result.document.format_cache.music_text;
+                    this.canvasEditor.setValue(content);
+                    this.canvasEditor.throttledSubmitToServer(content); // Render immediately
+                }
+
+                // Update document metadata
+                if (result.document.metadata) {
+                    this.canvasEditor.document.metadata = result.document.metadata;
+                }
+
+                // Save the new document state
+                this.canvasEditor.saveToLocalStorage();
+
+                const hasContent = createWithTemplate ? ' with template content' : ' (blank)';
+                UI.setStatus(`New document created${hasContent} (ID: ${result.document_id.slice(0, 8)}...)`, 'success');
+
+                // Focus the canvas for immediate editing
+                this.canvasEditor.focus();
+
+            } else {
+                throw new Error('Invalid response from document creation API');
+            }
+
+        } catch (error) {
+            console.error('Failed to create new document:', error);
+            UI.setStatus('Failed to create new document: ' + error.message, 'error');
+
+            // Fallback: just clear everything locally
+            console.log('Falling back to local clear...');
+            this.clearAll();
+            UI.setStatus('Created new document (offline)', 'success');
+        }
+    }
+
     // Update octave button states based on text selection
     updateOctaveButtonStates() {
-        const cursorPos = this.canvasEditor.getCursorPosition();
-        const hasSelection = cursorPos.start !== cursorPos.end;
+        const selectedUuids = this.canvasEditor.getSelectedUuids();
+        const hasSelection = selectedUuids.length > 0;
 
         const octaveButtons = [
-            'btn-lowest', 'btn-lowish', 'btn-lower',
-            'btn-higher', 'btn-highish', 'btn-highest'
+            'btn-lowest', 'btn-lower', 'btn-middle',
+            'btn-higher', 'btn-highest'
         ];
 
         octaveButtons.forEach(buttonId => {
@@ -412,9 +477,11 @@ class MusicTextApp {
             return;
         }
 
+        UI.setStatus(`Applying ${octaveType} octave to ${selectedUuids.length} elements...`, 'loading');
+
         try {
-            // Use semantic command for document-first operation
-            await this.canvasEditor.executeSemanticCommand('set_octave', {
+            // Use the new transform endpoint
+            await this.canvasEditor.executeTransform('set_octave', {
                 octave_type: octaveType // 'lowest', 'lower', 'middle', 'higher', 'highest'
             });
 
@@ -422,19 +489,30 @@ class MusicTextApp {
 
         } catch (error) {
             console.error('Octave adjustment error:', error);
-            UI.setStatus('Failed to apply octave adjustment', 'error');
+            UI.setStatus('Failed to apply octave adjustment: ' + error.message, 'error');
 
-            // Fallback to legacy text-based transform if semantic command not available
-            console.log('Falling back to legacy octave transform...');
+            // Fallback to semantic command if transform not available
+            console.log('Falling back to semantic command...');
             try {
-                await this.canvasEditor.applyTransformation('/api/transform/octave', {
-                    action: 'octave',
+                await this.canvasEditor.executeSemanticCommand('set_octave', {
                     octave_type: octaveType
                 });
-                UI.setStatus(`Applied ${octaveType} octave adjustment (legacy mode)`, 'success');
+                UI.setStatus(`Applied ${octaveType} octave (semantic command)`, 'success');
             } catch (fallbackError) {
-                console.error('Legacy octave fallback also failed:', fallbackError);
-                UI.setStatus('Failed to apply octave adjustment', 'error');
+                console.error('Semantic command fallback also failed:', fallbackError);
+
+                // Last fallback to legacy text-based transform
+                console.log('Falling back to legacy octave transform...');
+                try {
+                    await this.canvasEditor.applyTransformation('/api/transform/octave', {
+                        action: 'octave',
+                        octave_type: octaveType
+                    });
+                    UI.setStatus(`Applied ${octaveType} octave (legacy mode)`, 'success');
+                } catch (legacyError) {
+                    console.error('All fallbacks failed:', legacyError);
+                    UI.setStatus('Failed to apply octave adjustment', 'error');
+                }
             }
         }
     }
@@ -766,6 +844,7 @@ window.updateNotationType = () => {
     }
 };
 window.clearAll = () => app.clearAll();
+window.createNewDocument = () => app.createNewDocument();
 window.switchTab = (tabName, clickedTab) => UI.switchTab(tabName, clickedTab);
 window.changeFontFamily = (fontClass) => FontManager.changeFont(fontClass);
 window.toggleSlur = async () => {

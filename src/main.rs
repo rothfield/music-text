@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, CommandFactory};
+use clap_complete::{generate, Shell};
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
@@ -32,6 +33,33 @@ struct Cli {
     /// Show line classification tags like #content number# or #text#
     #[arg(long)]
     classify: bool,
+
+    /// Export document to format (requires uuid or json)
+    #[arg(long)]
+    export: bool,
+
+    /// Transform document with command (requires uuid)
+    #[arg(long)]
+    transform: Option<String>,
+
+    /// Format for export/transform (lilypond, svg, etc.)
+    #[arg(long)]
+    format: Option<String>,
+
+    /// Target UUIDs for transform operations (comma-separated)
+    #[arg(long)]
+    targets: Option<String>,
+
+    /// Parameters for transform operations (JSON)
+    #[arg(long)]
+    params: Option<String>,
+
+    /// API server URL
+    #[arg(long, default_value = "http://localhost:3000")]
+    server: String,
+
+    /// Document UUID or JSON content
+    document: Option<String>,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -187,6 +215,13 @@ enum Commands {
         #[arg(long, default_value = "http://localhost:3000")]
         server: String,
     },
+    /// Generate shell completion scripts
+    #[command(name = "completion")]
+    Completion {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
 }
 
 #[tokio::main]
@@ -196,6 +231,50 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Web server mode
     if cli.web {
         music_text::web::start_server().await?;
+        return Ok(());
+    }
+
+    // Handle export flag
+    if cli.export {
+        let document = cli.document.ok_or("Document UUID or JSON required for export")?;
+        let format = cli.format.as_deref().unwrap_or("lilypond");
+
+        // Check if it's a UUID (simple check: if it's short and contains no spaces/braces)
+        if document.len() < 100 && !document.contains('{') && !document.contains(' ') {
+            // Treat as UUID
+            let result = api_export_document_by_id(&cli.server, &document, format).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        } else {
+            // Treat as JSON document
+            let doc: serde_json::Value = serde_json::from_str(&document)?;
+            let result = api_export_document(&cli.server, doc, format).await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+        return Ok(());
+    }
+
+    // Handle transform flag
+    if let Some(command) = cli.transform {
+        let document = cli.document.ok_or("Document UUID required for transform")?;
+
+        // Parse target UUIDs
+        let target_uuids: Vec<String> = cli.targets
+            .as_deref()
+            .unwrap_or("")
+            .split(',')
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.trim().to_string())
+            .collect();
+
+        // Parse parameters
+        let parameters = if let Some(params_str) = cli.params {
+            serde_json::from_str(&params_str)?
+        } else {
+            serde_json::Value::Object(serde_json::Map::new())
+        };
+
+        let result = api_transform_document_by_id(&cli.server, &document, &command, &target_uuids, parameters).await?;
+        println!("{}", serde_json::to_string_pretty(&result)?);
         return Ok(());
     }
 
@@ -435,6 +514,12 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         Some(Commands::ExportById { document_id, format, server }) => {
             let result = api_export_document_by_id(&server, &document_id, &format).await?;
             println!("{}", serde_json::to_string_pretty(&result)?);
+            return Ok(());
+        }
+        Some(Commands::Completion { shell }) => {
+            let mut cmd = Cli::command();
+            let name = cmd.get_name().to_string();
+            generate(shell, &mut cmd, name, &mut io::stdout());
             return Ok(());
         }
 

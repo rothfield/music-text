@@ -1,0 +1,186 @@
+{
+  "content": [],
+  "elements": [
+    {
+      "Stave": {
+        "char_index": 0,
+        "column": 1,
+        "index_in_doc": 0,
+        "index_in_line": 0,
+        "line": 1,
+        "lines": [
+          {
+            "ContentLine": {
+              "char_index": 0,
+              "consumed_elements": [],
+              "elements": [
+                {
+                  "Beat": {
+                    "char_index": 0,
+                    "consumed_elements": [],
+                    "divisions": null,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 0,
+                          "consumed_elements": [],
+                          "denominator": null,
+                          "id": "0d55c164-4572-4056-abf2-0a5e46cb8448",
+                          "notation_system": "Sargam",
+                          "numerator": null,
+                          "octave": 0,
+                          "pitch_code": "N1",
+                          "value": "S"
+                        }
+                      }
+                    ],
+                    "is_tuplet": null,
+                    "tied_to_previous": null,
+                    "total_duration": null,
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 1,
+                    "consumed_elements": [],
+                    "id": "1a74e07c-746c-4ba9-8916-ca0e3e005540",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 2,
+                    "consumed_elements": [],
+                    "divisions": null,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 2,
+                          "consumed_elements": [],
+                          "denominator": null,
+                          "id": "fcfc6cb7-efe1-45a2-b412-ac33d5e994b8",
+                          "notation_system": "Sargam",
+                          "numerator": null,
+                          "octave": 0,
+                          "pitch_code": "N2",
+                          "value": "R"
+                        }
+                      }
+                    ],
+                    "is_tuplet": null,
+                    "tied_to_previous": null,
+                    "total_duration": null,
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 3,
+                    "consumed_elements": [],
+                    "id": "68794f8f-461e-403f-b315-61898a4d49ab",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 4,
+                    "consumed_elements": [],
+                    "divisions": null,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 4,
+                          "consumed_elements": [],
+                          "denominator": null,
+                          "id": "4ddc8ce2-72eb-436f-8ba9-9dedd7be5c39",
+                          "notation_system": "Sargam",
+                          "numerator": null,
+                          "octave": 0,
+                          "pitch_code": "N3",
+                          "value": "G"
+                        }
+                      }
+                    ],
+                    "is_tuplet": null,
+                    "tied_to_previous": null,
+                    "total_duration": null,
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 5,
+                    "consumed_elements": [],
+                    "id": "1847cadf-0bad-474e-8813-57385081e89b",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 6,
+                    "consumed_elements": [],
+                    "divisions": null,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 6,
+                          "consumed_elements": [],
+                          "denominator": null,
+                          "id": "6bdaaa84-b512-4ee0-b486-cda2695ac36d",
+                          "notation_system": "Sargam",
+                          "numerator": null,
+                          "octave": 0,
+                          "pitch_code": "N4s",
+                          "value": "M"
+                        }
+                      }
+                    ],
+                    "is_tuplet": null,
+                    "tied_to_previous": null,
+                    "total_duration": null,
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                }
+              ],
+              "value": "S R G M"
+            }
+          }
+        ],
+        "notation_system": "Sargam",
+        "value": "S R G M"
+      }
+    }
+  ],
+  "format_cache": {
+    "lilypond": null,
+    "midi": null,
+    "music_text": "S R G M",
+    "svg": null
+  },
+  "metadata": {
+    "created_at": "2025-09-26T03:20:51.700Z",
+    "created_by": "Web Interface",
+    "title": "Untitled Document"
+  },
+  "timestamp": "2025-09-26T03:20:51.703464827+00:00",
+  "ui_state": {
+    "active_tab": "vexflow",
+    "editor_mode": "text",
+    "selection": {
+      "cursor_position": 0,
+      "cursor_uuid": null,
+      "selected_uuids": []
+    },
+    "viewport": {
+      "scroll_x": 0,
+      "scroll_y": 0,
+      "zoom_level": 1.0
+    }
+  },
+  "version": "1.0.0"
+}

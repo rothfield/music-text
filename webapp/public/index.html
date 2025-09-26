@@ -25,6 +25,7 @@
     <div class="app">
         <div class="control-bar">
             <div class="controls">
+                <button onclick="createNewDocument()" class="primary">New</button>
                 <button onclick="parseMusic()">Parse</button>
                 <button onclick="generateSVG()" class="secondary">LilyPond</button>
                 <button onclick="clearAll()" class="secondary">Clear</button>
@@ -54,8 +55,7 @@
         </div>
         
         <div id="canvasEditor" class="canvas-editor">
-            <textarea id="backing-text-output" class="canvas-text-input" placeholder="Read-only text representation of document - edit via canvas" readonly style="width: 100%; height: 120px; margin-bottom: 10px; font-family: monospace; background-color: #f5f5f5;"></textarea>
-            <canvas id="musicCanvas" width="800" height="340"></canvas>
+            <div id="svg-container" class="svg-container" tabindex="0"></div>
             <div id="canvasToolbar" class="canvas-toolbar">
                 <button id="textMode" class="toolbar-btn active">Text Mode</button>
                 <button id="visualMode" class="toolbar-btn">Visual Mode</button>

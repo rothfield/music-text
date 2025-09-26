@@ -54,14 +54,28 @@ export const UI = {
 
     // Clear all UI content
     clearAllContent() {
-        document.getElementById('musicInput').value = '';
-        document.getElementById('lilypond-output').textContent = 'Enter music notation above to see LilyPond source';
-        document.getElementById('vexflow-output').innerHTML = '';
-        document.getElementById('svg-output').innerHTML = 'Click "LilyPond" to generate SVG';
-        document.getElementById('svgpoc-output').innerHTML = 'Enter music notation and click "Generate SVG POC" to test the SVG renderer';
-        document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
-        document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
-        document.getElementById('status').textContent = '';
+        // Backing text input removed - no longer needed
+
+        const elements = {
+            'lilypond-output': 'Enter music notation above to see LilyPond source',
+            'vexflow-output': '',
+            'svg-output': 'Click "LilyPond" to generate SVG',
+            'document-output': 'Enter music notation to see parsed document output',
+            'source-output': 'Plain text will appear here after parsing',
+            'svg-source-output': 'SVG source code will appear here',
+            'status': ''
+        };
+
+        Object.entries(elements).forEach(([id, content]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                if (id === 'vexflow-output' || id === 'svg-output') {
+                    element.innerHTML = content;
+                } else {
+                    element.textContent = content;
+                }
+            }
+        });
     },
 
     // Update pipeline data outputs
@@ -220,6 +234,7 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
 
     // Helper function to escape HTML for safe display
     escapeHTML(str) {
+        if (!str || typeof str !== 'string') return '';
         return str
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
@@ -249,12 +264,18 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
         }
     },
 
-    // Update backing text display (read-only)
+    // Backing text display removed - no longer needed
     updateBackingTextOutput(text) {
-        const output = document.getElementById('backing-text-output');
-        if (output) {
-            output.value = text;
-            output.readOnly = true; // Ensure read-only in document-first architecture
+        // No-op: backing text display removed
+    },
+
+    // Restore focus and cursor position (placeholder for now)
+    restoreFocusAndCursor() {
+        // TODO: Implement proper focus and cursor restoration
+        // For now, just ensure the editor textarea has focus
+        const textarea = document.getElementById('textInput');
+        if (textarea) {
+            textarea.focus();
         }
     },
 

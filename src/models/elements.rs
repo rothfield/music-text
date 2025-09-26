@@ -122,6 +122,8 @@ pub enum BeatElement {
 // Beat structure - a sequence of beat elements
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Beat {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
     pub divisions: Option<usize>,        // Number of divisions in this beat (e.g., 12 for 12 sixteenths)

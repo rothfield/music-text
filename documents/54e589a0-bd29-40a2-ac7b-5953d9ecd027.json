@@ -1,0 +1,30 @@
+{
+  "content": [],
+  "elements": {},
+  "format_cache": {
+    "lilypond": null,
+    "midi": null,
+    "music_text": "S R G M",
+    "svg": null
+  },
+  "metadata": {
+    "created_by": "API Test",
+    "title": "Test Document"
+  },
+  "timestamp": "2025-09-26T03:14:20.941927147+00:00",
+  "ui_state": {
+    "active_tab": "vexflow",
+    "editor_mode": "text",
+    "selection": {
+      "cursor_position": 0,
+      "cursor_uuid": null,
+      "selected_uuids": []
+    },
+    "viewport": {
+      "scroll_x": 0,
+      "scroll_y": 0,
+      "zoom_level": 1.0
+    }
+  },
+  "version": "1.0.0"
+}

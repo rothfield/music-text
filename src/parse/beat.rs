@@ -126,6 +126,7 @@ pub fn parse_beat(
     }
 
     let beat = Beat {
+        id: uuid::Uuid::new_v4(),
         elements,
         value: None, // Will be filled by caller if needed
         char_index: line_start_doc_index + beat_start_pos,

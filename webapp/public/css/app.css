@@ -458,19 +458,60 @@ textarea:focus {
     border-bottom: 1px solid #e1e5e9;
 }
 
-#musicCanvas {
+.svg-container {
     border: 2px solid #ddd;
     border-radius: 6px;
     background: white;
     display: block;
     margin: 0 auto 12px;
     cursor: text;
+    width: 800px;
+    height: 340px;
+    overflow: auto;
+    position: relative;
 }
 
-#musicCanvas:focus {
+.svg-container:focus {
     outline: none;
     border-color: #007acc;
     box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+.svg-container svg {
+    width: 100%;
+    height: auto;
+    min-height: 100%;
+}
+
+/* SVG Client-Side Selection and Cursor Styles */
+.svg-selected {
+    fill: #007acc !important;
+    background: rgba(0, 122, 204, 0.2) !important;
+    stroke: #007acc !important;
+    stroke-width: 1px !important;
+}
+
+.svg-hovered {
+    fill: #4a90e2 !important;
+    opacity: 0.8 !important;
+}
+
+.svg-cursor {
+    stroke: #000 !important;
+    stroke-width: 1px !important;
+    animation: svg-cursor-blink 1s ease-in-out infinite;
+}
+
+@keyframes svg-cursor-blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+.svg-selection-highlight {
+    fill: rgba(0, 122, 204, 0.15) !important;
+    stroke: rgba(0, 122, 204, 0.4) !important;
+    stroke-width: 1px !important;
+    pointer-events: none;
 }
 
 .canvas-toolbar {
@@ -544,12 +585,12 @@ textarea:focus {
     display: none;
 }
 
-.canvas-editor.text-mode #musicCanvas {
+.canvas-editor.text-mode .svg-container {
     opacity: 1.0;
-    /* pointer-events: none; -- Removed to allow canvas interaction in text mode */
+    /* pointer-events: none; -- Removed to allow svg interaction in text mode */
 }
 
-.canvas-editor.text-mode #musicCanvas:focus {
+.canvas-editor.text-mode .svg-container:focus {
     outline: 2px solid #007acc;
     outline-offset: -2px;
 }

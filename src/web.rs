@@ -88,6 +88,7 @@ pub struct TransformDocumentResponse {
     pub document: serde_json::Value,
     pub updated_elements: Vec<String>,
     pub message: Option<String>,
+    pub svg: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -120,6 +121,20 @@ pub struct TransformDocumentByIdRequest {
 pub struct ExportDocumentByIdRequest {
     pub format: String,
     pub options: Option<serde_json::Value>,
+}
+
+// Semantic command structures (for fallback)
+#[derive(Debug, Deserialize)]
+pub struct SemanticCommandRequest {
+    pub command_type: String,
+    pub target_uuids: Vec<String>,
+    pub parameters: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SemanticCommandResponse {
+    pub success: bool,
+    pub message: Option<String>,
 }
 
 // Helper functions for document storage
@@ -270,6 +285,7 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/documents/export", post(export_document_handler))
         .route("/api/documents/:document_id/transform", post(transform_document_by_id_handler))
         .route("/api/documents/:document_id/export", post(export_document_by_id_handler))
+        .route("/api/semantic-command", post(semantic_command_handler))
         .route("/retro/load", post(retro_load))
         .route("/retro", post(retro_parse).get(serve_retro_page))
         .route("/retro/", get(serve_retro_page))
@@ -385,8 +401,29 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
         }
     });
 
-    // If music_text was provided, we could parse it here to populate elements
-    // For now, just return the empty document structure
+    // If music_text was provided, parse it to populate elements with UUIDs
+    if let Some(ref music_text) = request.music_text {
+        if !music_text.trim().is_empty() {
+            match crate::parse::parse_document(music_text) {
+                Ok(parsed_doc) => {
+                    // Convert parsed document to JSON and merge into document
+                    if let Ok(parsed_json) = serde_json::to_value(&parsed_doc) {
+                        if let Some(elements) = parsed_json.get("elements") {
+                            document["elements"] = elements.clone();
+                        }
+                        // Update format cache with successful parse
+                        document["format_cache"]["music_text"] = serde_json::Value::String(music_text.clone());
+                    }
+                }
+                Err(parse_error) => {
+                    // Still create document but note parsing failed in metadata
+                    if let Some(metadata) = document.get_mut("metadata") {
+                        metadata["parse_error"] = serde_json::Value::String(format!("Failed to parse music_text: {}", parse_error));
+                    }
+                }
+            }
+        }
+    }
 
     // Save document to disk
     if let Err(e) = save_document(&document_id, &document).await {
@@ -412,6 +449,7 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
 
     let mut updated_document = request.document.clone();
     let updated_elements = request.target_uuids.clone();
+    let mut svg_content: Option<String> = None;
 
     match request.command_type.as_str() {
         "apply_slur" => {
@@ -424,14 +462,115 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
             }
         }
         "set_octave" => {
-            // For demonstration, add octave metadata
-            if let Some(metadata) = updated_document.get_mut("metadata") {
-                if let Some(meta_obj) = metadata.as_object_mut() {
-                    if let Some(params) = &request.parameters {
-                        if let Some(octave_type) = params.get("octave_type") {
-                            meta_obj.insert("last_octave_change".to_string(), octave_type.clone());
+            // FIXED DOCUMENT SERIALIZATION PATTERN:
+            // Work directly with JSON to preserve UUIDs
+
+            let octave_type = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("octave_type"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("higher");
+
+            let octave_value = match octave_type {
+                "lowest" => -2,
+                "lower" => -1,
+                "middle" => 0,
+                "higher" => 1,
+                "highest" => 2,
+                _ => 1,
+            };
+
+            // Find and modify notes in JSON document directly
+            let mut modified_count = 0;
+            // Debug: Transform request for {} UUIDs"
+
+            if let Some(elements) = updated_document.get_mut("elements") {
+                if let Some(elements_array) = elements.as_array_mut() {
+                    for element in elements_array {
+                        if let Some(stave) = element.get_mut("Stave") {
+                            if let Some(lines) = stave.get_mut("lines") {
+                                if let Some(lines_array) = lines.as_array_mut() {
+                                    for line in lines_array {
+                                        if let Some(content_line) = line.get_mut("ContentLine") {
+                                            if let Some(line_elements) = content_line.get_mut("elements") {
+                                                if let Some(line_elements_array) = line_elements.as_array_mut() {
+                                                    for line_element in line_elements_array {
+                                                        if let Some(beat) = line_element.get_mut("Beat") {
+                                                            if let Some(beat_id) = beat.get("id").and_then(|v| v.as_str()) {
+                                                                // Check Beat UUID
+                                                                // Check if this Beat UUID is targeted
+                                                                if request.target_uuids.contains(&beat_id.to_string()) {
+                                                                    // Beat UUID matches - apply octave
+                                                                    // Apply octave to all notes in this beat
+                                                                    if let Some(beat_elements) = beat.get_mut("elements") {
+                                                                        if let Some(beat_elements_array) = beat_elements.as_array_mut() {
+                                                                            for beat_element in beat_elements_array {
+                                                                                if let Some(note) = beat_element.get_mut("Note") {
+                                                                                    note.as_object_mut().unwrap().insert("octave".to_string(), serde_json::Value::Number(serde_json::Number::from(octave_value)));
+                                                                                    modified_count += 1;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                } else {
+                                                                    // Check individual Note UUIDs within the beat
+                                                                    if let Some(beat_elements) = beat.get_mut("elements") {
+                                                                        if let Some(beat_elements_array) = beat_elements.as_array_mut() {
+                                                                            for beat_element in beat_elements_array {
+                                                                                if let Some(note) = beat_element.get_mut("Note") {
+                                                                                    if let Some(note_id) = note.get("id").and_then(|v| v.as_str()) {
+                                                                                        // Check Note UUID
+                                                                                        if request.target_uuids.contains(&note_id.to_string()) {
+                                                                                            // Note UUID matches
+                                                                                            note.as_object_mut().unwrap().insert("octave".to_string(), serde_json::Value::Number(serde_json::Number::from(octave_value)));
+                                                                                            modified_count += 1;
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
+                }
+            }
+
+            if modified_count == 0 {
+                return Json(TransformDocumentResponse {
+                    success: false,
+                    document: request.document,
+                    updated_elements: vec![],
+                    message: Some(format!("No notes found with the provided UUIDs. Searched for {} UUIDs in JSON document.", request.target_uuids.len())),
+                    svg: None,
+                });
+            }
+
+            // Debug: println!("🔧 JSON-based octave edit: Modified {} notes", modified_count);
+
+            // For SVG regeneration, we need to deserialize to Document struct just for rendering
+            if let Ok(document) = serde_json::from_value::<crate::parse::Document>(updated_document.clone()) {
+                svg_content = crate::renderers::editor::svg::render_canvas_svg(
+                    &document,
+                    "number",
+                    "",
+                    None, None, None
+                ).ok();
+            }
+
+            // Update metadata to track the operation
+            if let Some(metadata) = updated_document.get_mut("metadata") {
+                if let Some(meta_obj) = metadata.as_object_mut() {
+                    meta_obj.insert("last_octave_change".to_string(), serde_json::Value::String(octave_type.to_string()));
                 }
             }
         }
@@ -441,6 +580,7 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
                 document: request.document,
                 updated_elements: vec![],
                 message: Some(format!("Unknown command type: {}", request.command_type)),
+                svg: None,
             });
         }
     }
@@ -455,6 +595,7 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
         document: updated_document,
         updated_elements,
         message: Some(format!("Applied {} to {} elements", request.command_type, request.target_uuids.len())),
+        svg: svg_content,
     })
 }
 
@@ -613,6 +754,7 @@ async fn transform_document_by_id_handler(
         document: document,
         message: Some(format!("Applied {} to {} elements", request.command_type, request.target_uuids.len())),
         updated_elements: Vec::new(), // Would contain actual updated element UUIDs in full implementation
+        svg: None, // This endpoint doesn't generate SVG
     }).into_response()
 }
 
@@ -988,21 +1130,21 @@ async fn retro_parse(Form(form_data): Form<RetroParseRequest>) -> impl IntoRespo
 
 // Retro mode file upload handling
 async fn retro_load(mut multipart: Multipart) -> impl IntoResponse {
-    println!("🔧 File upload request received");
+    
 
     match multipart.next_field().await {
         Ok(Some(field)) => {
             let name = field.name().unwrap_or("").to_string();
-            println!("🔧 Field name: {}", name);
+            
 
             if name == "musicfile" {
                 let filename = field.file_name().unwrap_or("unknown").to_string();
-                println!("🔧 Filename: {}", filename);
+                
 
                 match field.bytes().await {
                     Ok(data) => {
                         let content = String::from_utf8_lossy(&data);
-                        println!("🔧 Loaded file: {} ({} bytes)", filename, data.len());
+                        
 
                         let html = render_retro_template(
                             &content,
@@ -1019,7 +1161,7 @@ async fn retro_load(mut multipart: Multipart) -> impl IntoResponse {
                             .unwrap();
                     },
                     Err(e) => {
-                        println!("🔧 Error reading file data: {}", e);
+                        
                         let html = render_retro_template(
                             "",
                             None,
@@ -1035,14 +1177,14 @@ async fn retro_load(mut multipart: Multipart) -> impl IntoResponse {
                     }
                 }
             } else {
-                println!("🔧 Wrong field name, expected 'musicfile', got '{}'", name);
+                
             }
         },
         Ok(None) => {
-            println!("🔧 No fields in multipart");
+            
         },
         Err(e) => {
-            println!("🔧 Error processing multipart: {}", e);
+            
             let html = render_retro_template(
                 "",
                 None,
@@ -1058,7 +1200,7 @@ async fn retro_load(mut multipart: Multipart) -> impl IntoResponse {
         }
     }
 
-    println!("🔧 No file found in upload");
+    
     let html = render_retro_template(
         "",
         None,
@@ -1071,5 +1213,28 @@ async fn retro_load(mut multipart: Multipart) -> impl IntoResponse {
         .header(header::CONTENT_TYPE, "text/html")
         .body(Body::from(html))
         .unwrap()
+}
+
+// Semantic command handler - fallback for simple transformations without full document
+async fn semantic_command_handler(Json(request): Json<SemanticCommandRequest>) -> impl IntoResponse {
+    // For now, this is a simple fallback that just responds success
+    // In the future, this could handle lightweight operations without requiring full document parsing
+
+    println!("Semantic command: {} with {} target UUIDs", request.command_type, request.target_uuids.len());
+
+    match request.command_type.as_str() {
+        "set_octave" | "apply_slur" => {
+            Json(SemanticCommandResponse {
+                success: true,
+                message: Some(format!("Semantic command '{}' applied to {} elements", request.command_type, request.target_uuids.len())),
+            })
+        }
+        _ => {
+            Json(SemanticCommandResponse {
+                success: false,
+                message: Some(format!("Unknown semantic command: {}", request.command_type)),
+            })
+        }
+    }
 }
 

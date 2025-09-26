@@ -105,7 +105,7 @@ impl CanvasSvgRenderer {
         Self {
             config,
             current_x: 20.0,
-            current_y: 60.0,
+            current_y: 20.0,  // Reduced top padding from 60.0 to 20.0
             char_positions: std::collections::HashMap::new(),
             element_coordinates: Vec::new(),
             element_id_counter: 0,
@@ -546,6 +546,14 @@ impl CanvasSvgRenderer {
         // Store Y coordinate at the start of this beat - important for bbox tracking
         let beat_y = self.current_y;
 
+        // Store initial x position to calculate beat width later
+        let beat_start_x = self.current_x;
+
+        // Start a group for the beat with its UUID
+        writeln!(svg, r#"    <g id="beat-{}" data-beat-id="{}" data-element-type="beat">"#,
+                self.element_id_counter, beat.id).unwrap();
+        self.element_id_counter += 1;
+
         for beat_element in &beat.elements {
             match beat_element {
                 crate::parse::model::BeatElement::Note(note) => {
@@ -657,6 +665,20 @@ impl CanvasSvgRenderer {
         if element_positions.len() > 1 {
             self.render_beat_arc(svg, &element_positions);
         }
+
+        // Add an invisible clickable rectangle covering the entire beat
+        let beat_width = self.current_x - beat_start_x;
+        if beat_width > 0.0 {
+            writeln!(svg, r#"      <rect x="{:.1}" y="{}" width="{:.1}" height="{:.1}" fill="transparent" data-char-start="{}" data-char-end="{}" data-beat-id="{}" data-element-type="beat"/>"#,
+                    beat_start_x, beat_y - self.config.font_size,
+                    beat_width, self.config.font_size + 10.0,
+                    start_char_position,
+                    start_char_position + chars_consumed,
+                    beat.id).unwrap();
+        }
+
+        // Close the beat group
+        writeln!(svg, "    </g>").unwrap();
 
         // No beat spacing - elements flow naturally
 
