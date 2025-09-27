@@ -1,6 +1,15 @@
 - Always use make build . Never use --release  We are using a ramdisk and we don't want it to fill up!! single binary.
 - WE AREN"T USING NODE SERVER t
 
+# LOCAL-FIRST ARCHITECTURE
+
+**Browser owns document state:**
+- LocalStorage holds the authoritative document between sessions
+- Browser sends full document to server for processing
+- Server is stateless - transforms what it receives and logs to disk
+- Server still assigns UUIDs (REST compliant) but browser treats localStorage as truth
+- Preparing for WASM where server becomes optional (just backup/sync)
+
 # CORE ARCHITECTURE: Document Serialization Pattern
 
 **ALL EDITOR INTERACTIONS FOLLOW THIS PATTERN:**

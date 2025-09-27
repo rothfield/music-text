@@ -45,6 +45,7 @@ base64 = "0.22"
 tempfile = "3.8"
 quick-xml = "0.31"
 anyhow = "1"
+fontdue = "0.8"
 
 
 [build-dependencies]

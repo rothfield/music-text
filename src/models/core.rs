@@ -11,8 +11,19 @@ pub enum DocumentElement {
     Stave(Stave),
 }
 
+impl DocumentElement {
+    pub fn as_stave_mut(&mut self) -> Option<&mut Stave> {
+        match self {
+            DocumentElement::Stave(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Document {
+    #[serde(rename = "documentUUID")]
+    pub document_uuid: Option<String>,  // Document's unique identifier
     pub value: Option<String>,
     pub char_index: usize,
     pub title: Option<String>,
@@ -23,6 +34,8 @@ pub struct Document {
     pub elements: Vec<DocumentElement>, // Document as sequence of elements
     #[serde(default)]
     pub ui_state: UIState,
+    #[serde(default)]
+    pub timestamp: String,
 }
 
 impl Document {
@@ -83,6 +96,15 @@ pub enum StaveLine {
     Lyrics(super::elements::LyricsLine),
     Whitespace(super::elements::WhitespaceLine),
     BlankLines(BlankLines),
+}
+
+impl StaveLine {
+    pub fn as_content_line_mut(&mut self) -> Option<&mut crate::models::ContentLine> {
+        match self {
+            StaveLine::ContentLine(cl) => Some(cl),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

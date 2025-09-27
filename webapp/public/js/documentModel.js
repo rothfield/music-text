@@ -5,7 +5,8 @@
 
 export class DocumentModel {
     constructor() {
-        this.documentUUID = null; // Document UUID
+        // UUID must come from server - never generate client-side
+        this.documentUUID = null;
         this.version = "1.0.0";
         this.timestamp = new Date().toISOString();
 
@@ -120,6 +121,12 @@ export class DocumentModel {
             value: this.value,
             ui_state: this.ui_state
         };
+    }
+
+    // Static factory method to create DocumentModel from JSON
+    static fromJSON(data) {
+        const doc = new DocumentModel();
+        return doc.fromJSON(data);
     }
 
     // Import from JSON - store server document as-is

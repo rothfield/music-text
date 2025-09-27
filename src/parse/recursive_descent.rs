@@ -1,4 +1,5 @@
 use crate::parse::model::{Document, Stave, TextLine, WhitespaceLine, NotationSystem};
+use crate::models::UIState;
 use crate::parse::document_header;
 use crate::rhythm::types::{ParsedElement, Position};
 use std::collections::HashMap;
@@ -32,12 +33,15 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
     // Handle empty input
     if input.is_empty() {
         return Ok(Document {
+            document_uuid: None,
             title: None,
             author: None,
             directives: HashMap::new(),
             elements: Vec::new(),
             value: Some(input.to_string()),
             char_index: 0, // was: line, column, index_in_line, index_in_doc
+            ui_state: UIState::default(),
+            timestamp: String::new(),
         });
     }
 
@@ -63,12 +67,15 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
         if let Ok(mut body_elements) = parse_document_body(input, 0) {
             elements.append(&mut body_elements);
             return Ok(Document {
+                document_uuid: None,
                 title,
                 author,
                 directives,
                 elements,
                 value: Some(input.to_string()),
                 char_index: 0,
+                ui_state: UIState::default(),
+                timestamp: String::new(),
             });
         }
     }
@@ -239,12 +246,15 @@ pub fn parse_document(input: &str) -> Result<Document, ParseError> {
     }
 
     Ok(Document {
+        document_uuid: None,
         title,
         author,
         directives,
         elements,
         value: Some(input.to_string()),
         char_index: 0, // was: line, column, index_in_line, index_in_doc
+        ui_state: UIState::default(),
+        timestamp: String::new(),
     })
 }
 

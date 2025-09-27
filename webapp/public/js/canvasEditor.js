@@ -24,18 +24,18 @@ export class CanvasEditor {
         this.textInput = null;
         this.currentMode = 'text'; // 'text' or 'visual'
         this.parseResult = null;
-        this.cursor = { line: 0, char: 0 };
-        // No longer tracking lines - document elements are source of truth
+        // No longer tracking lines or cursor - document elements are source of truth
         this.isDirty = false;
 
         // Document-first architecture
-        this.document = new DocumentModel(); // Primary document model
+        this.document = null; // Document must come from server or localStorage
         this.persistence = new DocumentPersistence('musicTextDocument');
+        this.isCreatingDocument = false; // Flag to prevent duplicate document creation
+        this.pendingEditCommands = []; // Queue for edit commands while document is being created
 
         // UUID-based selection for document-first architecture
         this.selectedUuids = new Set(); // Set of UUIDs for selected elements
         this.cursorUuid = null; // UUID where cursor is positioned
-        this.cursorPosition = 0; // Temporary - for UI display only
 
         // this.cursorVisible = true; // For blinking cursor (disabled)
         // this.cursorBlinkInterval = null; // (disabled)
@@ -65,6 +65,7 @@ export class CanvasEditor {
         this.onSelectionChange = null;
 
         this.draw = throttle(this.renderDocument.bind(this), 50); // 50ms throttle for smoother updates
+        this.throttledSave = throttle(this.saveToLocalStorage.bind(this), 500); // 500ms throttle for saving
         this.drawNow = this.renderDocument.bind(this); // Immediate draw without throttling
     }
 
@@ -142,6 +143,19 @@ export class CanvasEditor {
         // Prevent context menu on right-click to avoid interfering with selection
         this.svgContainer.addEventListener('contextmenu', (e) => {
             e.preventDefault();
+        });
+
+        // Track scroll position for viewport state
+        this.svgContainer.addEventListener('scroll', (e) => {
+            if (this.document) {
+                this.document.setViewport({
+                    scroll_x: this.svgContainer.scrollLeft,
+                    scroll_y: this.svgContainer.scrollTop
+                });
+            }
+            // Don't save on every scroll event (too frequent)
+            // Use throttled save instead
+            this.throttledSave();
         });
     }
 
@@ -228,6 +242,12 @@ export class CanvasEditor {
 
     // Handle mouse down for starting text selection
     handleSvgMouseDown(e) {
+        // Don't handle clicks if there's no document yet
+        if (!this.document) {
+            console.log('No document - ignoring click');
+            return;
+        }
+
         const rect = this.svgContainer.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -239,14 +259,16 @@ export class CanvasEditor {
         if (clickedChar) {
             // Get the character index directly from the element
             const charIndex = parseInt(clickedChar.getAttribute('data-char-index') || '0');
-            this.cursorPosition = charIndex;
+            // Use standard setCursorPosition method
+            this.setCursorPosition(charIndex);
             foundValidClick = true;
             console.log('Clicked on character at index:', charIndex);
         } else {
             // If no character found, try to calculate position from coordinates
             const calculatedPosition = this.calculateCursorPositionFromClick(x, y);
             if (calculatedPosition !== null) {
-                this.cursorPosition = calculatedPosition;
+                // Use standard setCursorPosition method
+                this.setCursorPosition(calculatedPosition);
                 foundValidClick = true;
                 console.log('Calculated cursor position:', calculatedPosition);
             }
@@ -256,11 +278,17 @@ export class CanvasEditor {
         if (foundValidClick) {
             // Start selection tracking
             this.isSelecting = true;
-            this.selectionStart = this.cursorPosition;
+            this.selectionStart = this.document?.ui_state.selection.cursor_position || 0;
             // Clear selection when clicking
 
             // Clear selection when clicking (single point selection)
             this.selectedUuids.clear();
+
+            // Update document UI state when clicking
+            if (this.document) {
+                this.document.setCursor(null, this.document.ui_state.selection.cursor_position);
+                this.document.setSelection([]);
+            }
 
             this.saveToLocalStorage();
 
@@ -288,6 +316,10 @@ export class CanvasEditor {
 
             // Update UUID selection from final character selection
             this.updateUuidSelectionFromCharacters();
+
+            // Update document UI state with selection
+            this.document.setSelection(Array.from(this.selectedUuids));
+            this.document.setCursor(null, this.document.ui_state.selection.cursor_position);
 
             // Console logging for selection testing
             const selectedText = ''; // Document elements are source of truth
@@ -332,7 +364,7 @@ export class CanvasEditor {
             const selection = this.selectBeatOrWordAt(clickPosition);
             if (selection) {
                 // Selection is UUID-based, not position-based
-                this.cursorPosition = 0; // Temporary
+                this.document.ui_state.selection.cursor_position = 0;
 
                 // Update UUID selection from character selection
                 this.updateUuidSelectionFromCharacters();
@@ -520,7 +552,7 @@ export class CanvasEditor {
                 // Update selection range
                 // UUID-based selection during drag
                 // TODO: Select UUIDs between start and drag positions
-                this.cursorPosition = dragPosition;
+                this.document.ui_state.selection.cursor_position = dragPosition;
 
                 // Console logging for drag selection testing
                 if (this.selectedUuids.size > 0) {
@@ -547,7 +579,7 @@ export class CanvasEditor {
         // Build editing command for server
         const editCommand = {
             type: 'insert_text',
-            position: this.cursorPosition,
+            position: this.document?.ui_state?.selection?.cursor_position || 0,
             text: char
         };
 
@@ -556,10 +588,11 @@ export class CanvasEditor {
 
     // Handle backspace via document update
     async handleBackspace() {
-        if (this.cursorPosition > 0 || this.selectedUuids.size > 0) {
+        const cursorPos = this.document?.ui_state?.selection?.cursor_position || 0;
+        if (cursorPos > 0 || this.selectedUuids.size > 0) {
             const editCommand = {
                 type: 'delete_text',
-                position: this.cursorPosition,
+                position: cursorPos,
                 direction: 'backward',
                 selected_uuids: Array.from(this.selectedUuids)
             };
@@ -570,10 +603,12 @@ export class CanvasEditor {
 
     // Handle delete via document update
     async handleDelete() {
-        if (this.cursorPosition < (this.document.content?.length || 0) || this.selectedUuids.size > 0) {
+        const cursorPos = this.document?.ui_state?.selection?.cursor_position || 0;
+        const contentLength = this.document?.content?.length || 0;
+        if (cursorPos < contentLength || this.selectedUuids.size > 0) {
             const editCommand = {
                 type: 'delete_text',
-                position: this.cursorPosition,
+                position: cursorPos,
                 direction: 'forward',
                 selected_uuids: Array.from(this.selectedUuids)
             };
@@ -584,9 +619,116 @@ export class CanvasEditor {
 
     // Apply edit command via PUT to server
     async applyEditCommand(editCommand) {
-        if (!this.document.documentUUID) {
-            console.error('Cannot apply edit command without document UUID');
-            return;
+        console.log('applyEditCommand called with:', editCommand);
+        console.log('Current document state:', this.document ? `UUID: ${this.document.documentUUID}` : 'null');
+        console.trace('Call stack for applyEditCommand');
+
+        // If no document exists, create new document with initial content
+        if (!this.document || !this.document.documentUUID) {
+            // If already creating a document, queue this command
+            if (this.isCreatingDocument) {
+                console.log('Document creation in progress, queueing command...');
+                this.pendingEditCommands.push(editCommand);
+                return;
+            }
+
+            this.isCreatingDocument = true;
+            this.pendingEditCommands = [editCommand]; // Start with current command
+            console.log('No document, creating new document with edit command:', editCommand);
+
+            // Wait a tiny bit to collect rapid keystrokes
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            // Build initial text from all queued insert commands
+            let initialText = '';
+            for (const cmd of this.pendingEditCommands) {
+                if (cmd.type === 'insert_text') {
+                    initialText += cmd.text || '';
+                }
+            }
+            console.log('Creating document with initial text:', initialText);
+
+            try {
+                // Use from-text endpoint to properly parse the initial text
+                const response = await fetch('/api/documents/from-text', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        music_text: initialText,
+                        notation_type: this.notationType || 'number'
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.document) {
+                        // Create document from server response (includes UUID)
+                        this.document = DocumentModel.fromJSON(result.document);
+                        console.log('Created new document with UUID:', this.document.documentUUID);
+                        console.log('Document after creation:', this.document);
+                        console.log('Document cursor position after creation:', this.document.ui_state.selection.cursor_position);
+                        console.log('Document elements:', this.document.elements);
+
+                        // Verify the document was properly created
+                        if (!this.document.documentUUID) {
+                            console.error('ERROR: Document created but no UUID!');
+                        } else {
+                            console.log('✅ Document successfully set with UUID:', this.document.documentUUID);
+                        }
+
+                        // Update document tab display
+                        this.updateDocumentTabDisplay();
+
+                        // Cursor position is already in document.ui_state
+
+                        // Update all format tabs from server response
+                        if (result.formats) {
+                            // Update editor SVG
+                            if (result.formats.editor_svg) {
+                                const svgContainer = document.getElementById('svg-container');
+                                if (svgContainer) {
+                                    svgContainer.innerHTML = result.formats.editor_svg;
+                                    // Re-initialize cursor after SVG update
+                                    this.initializeVisualCursor();
+                                }
+                            }
+
+                            // Update all format tabs using the unified function
+                            if (window.UI && window.UI.updateFormatsFromBackend) {
+                                window.UI.updateFormatsFromBackend(result.formats);
+                            }
+                        }
+
+                        // Save to localStorage now that we have a UUID
+                        this.saveToLocalStorage();
+
+                        // Update UI
+                        if (window.UI && window.UI.updateDocumentStatus) {
+                            window.UI.updateDocumentStatus();
+                        }
+
+                        // Clear the queue - all text has been included in the document
+                        this.pendingEditCommands = [];
+                        this.isCreatingDocument = false;
+
+                        // All queued commands have been handled in the initial document creation
+                        return;
+                    }
+                } else {
+                    console.error('Failed to create document:', response.status);
+                    this.pendingEditCommands = [];
+                    this.isCreatingDocument = false;
+                    return;
+                }
+            } catch (error) {
+                console.error('Failed to create document on server:', error);
+                this.pendingEditCommands = [];
+                this.isCreatingDocument = false;
+                return;
+            } finally {
+                this.isCreatingDocument = false;
+                this.pendingEditCommands = [];
+            }
         }
 
         try {
@@ -611,19 +753,26 @@ export class CanvasEditor {
                     this.document.fromJSON(result.document);
                     this.isDirty = true;
 
-                    // Update cursor position from edit result
-                    if (result.cursor_position !== undefined) {
-                        this.cursorPosition = result.cursor_position;
-                        // Clear selection
-                        this.document.setCursor(null, this.cursorPosition);
-                    }
+                    // Update document tab display
+                    this.updateDocumentTabDisplay();
 
-                    // Render the updated document
-                    if (result.formats && result.formats.editor_svg) {
-                        // Update SVG display directly
-                        const svgContainer = document.getElementById('svg-container');
-                        if (svgContainer) {
-                            svgContainer.innerHTML = result.formats.editor_svg;
+                    // Cursor position is already updated in document.ui_state
+
+                    // Update all format tabs from server response
+                    if (result.formats) {
+                        // Update editor SVG
+                        if (result.formats.editor_svg) {
+                            const svgContainer = document.getElementById('svg-container');
+                            if (svgContainer) {
+                                svgContainer.innerHTML = result.formats.editor_svg;
+                                // Re-initialize cursor after SVG update
+                                this.initializeVisualCursor();
+                            }
+                        }
+
+                        // Update all format tabs using the unified function
+                        if (window.UI && window.UI.updateFormatsFromBackend) {
+                            window.UI.updateFormatsFromBackend(result.formats);
                         }
                     } else {
                         this.draw();
@@ -640,6 +789,18 @@ export class CanvasEditor {
                         });
                     }
                 }
+            } else {
+                // Handle error response
+                const errorText = await response.text();
+                console.error('PUT request failed:', response.status, errorText);
+
+                // Try to parse as JSON for detailed error
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    console.error('Server error details:', errorJson);
+                } catch {
+                    console.error('Server error (raw):', errorText);
+                }
             }
         } catch (error) {
             console.error('Failed to apply edit command:', error);
@@ -653,9 +814,13 @@ export class CanvasEditor {
 
     // Move cursor
     moveCursor(direction) {
-        this.cursorPosition = Math.max(0, Math.min(this.document.content?.length || 0, this.cursorPosition + direction));
+        this.document.ui_state.selection.cursor_position = Math.max(0, Math.min(this.document.content?.length || 0, this.document.ui_state.selection.cursor_position + direction));
         // Clear UUID selection
         // this.resetCursorBlink(); // Disabled blinking cursor
+
+        // Update document UI state
+        this.document.setCursor(null, this.document.ui_state.selection.cursor_position);
+        this.document.setSelection([]);
 
         // Save to local storage
         this.saveToLocalStorage();
@@ -678,7 +843,7 @@ export class CanvasEditor {
         }
 
         // Get current position coordinates
-        const currentCoords = this.characterPositions[this.cursorPosition];
+        const currentCoords = this.characterPositions[this.document.ui_state.selection.cursor_position];
         if (!currentCoords) {
             return; // Current position not tracked
         }
@@ -690,7 +855,7 @@ export class CanvasEditor {
         const targetY = currentY + (direction * 60); // Assuming 60px line height
 
         // Find the position on the target line closest to current X
-        let bestPosition = this.cursorPosition;
+        let bestPosition = this.document.ui_state.selection.cursor_position;
         let bestDistance = Number.MAX_VALUE;
 
         for (const [posStr, coords] of Object.entries(this.characterPositions)) {
@@ -709,9 +874,13 @@ export class CanvasEditor {
         }
 
         // If we found a position on the target line, move there
-        if (bestPosition !== this.cursorPosition) {
-            this.cursorPosition = bestPosition;
+        if (bestPosition !== this.document.ui_state.selection.cursor_position) {
+            this.document.ui_state.selection.cursor_position = bestPosition;
             // Clear selection when clicking
+
+            // Update document UI state
+            this.document.setCursor(null, this.document.ui_state.selection.cursor_position);
+            this.document.setSelection([]);
 
             // Save to local storage
             this.saveToLocalStorage();
@@ -729,14 +898,20 @@ export class CanvasEditor {
     }
 
 
-    // Fetch document by UUID using GET and update all tabs
+    // Send document to server for processing and update all tabs
+    // In local-first architecture, we send the document we have
     async fetchDocumentByUUID(documentUUID) {
         try {
+            // Send our document to server for processing
             const response = await fetch(`/api/documents/${documentUUID}`, {
-                method: 'GET',
+                method: 'PUT',
                 headers: {
-                    'Accept': 'application/json',
-                }
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    document: this.document.toJSON(),
+                    notation_type: this.notationType || 'number'
+                })
             });
 
             if (!response.ok) {
@@ -748,8 +923,7 @@ export class CanvasEditor {
             // Update local document with server data
             if (result.document) {
                 // Update document model with server version
-                this.document = new DocumentModel();
-                this.document.fromJSON(result.document);
+                this.document = DocumentModel.fromJSON(result.document);
 
                 // Update text content if available from server
                 // Server might store music_text in different places
@@ -759,7 +933,7 @@ export class CanvasEditor {
 
                 // Update editor state from document UI state
                 if (this.document.ui_state) {
-                    this.cursorPosition = this.document.ui_state.selection.cursor_position || 0;
+                    // cursor_position already in document.ui_state.selection
                     this.selectedUuids = new Set(this.document.ui_state.selection.selected_uuids || []);
                     // Note: currentMode is editor-specific, not document-specific
                 }
@@ -787,9 +961,6 @@ export class CanvasEditor {
                     const documentOutput = document.getElementById('document-output');
                     if (documentOutput && result.document) {
                         documentOutput.textContent = JSON.stringify(result.document, null, 2);
-                    }
-                    if (window.UI.updateSourceOutput) {
-                        window.UI.updateSourceOutput(parseResult);
                     }
                     if (result.formats.svg && window.UI.updateSVGSourceOutput) {
                         window.UI.updateSVGSourceOutput({
@@ -837,7 +1008,7 @@ export class CanvasEditor {
                 }
 
                 const createResult = await createResponse.json();
-                this.document.documentUUID = createResult.documentUUID;
+                this.document.fromJSON(createResult.document);
                 documentData = createResult.document;
 
                 // Update local document with server-generated data
@@ -847,12 +1018,17 @@ export class CanvasEditor {
                 }
             }
 
-            // Fetch document with formats from server
+            // In local-first architecture, send document to server for rendering
+            // Use PUT without edit command to just get formats
             const response = await fetch(`/api/documents/${this.document.documentUUID}`, {
-                method: 'GET',
+                method: 'PUT',
                 headers: {
-                    'Accept': 'application/json',
-                }
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    document: this.document.toJSON(),
+                    notation_type: this.notationType || 'number'
+                })
             });
 
             if (response.ok) {
@@ -861,6 +1037,7 @@ export class CanvasEditor {
                 // Update local document with server data
                 if (result.document) {
                     this.document.fromJSON(result.document);
+                    this.updateDocumentTabDisplay();
                 }
 
                 // Render the SVG if available
@@ -872,6 +1049,8 @@ export class CanvasEditor {
                     this.renderError('No SVG format available');
                 }
             } else {
+                const error = await response.text();
+                console.error('Server error:', error);
                 this.renderError(`Server error: ${response.status}`);
             }
 
@@ -1173,7 +1352,7 @@ export class CanvasEditor {
 
         for (const [uuid, elementData] of this.elementUuidMap) {
             // Check if cursor is within this element's character range
-            if (this.cursorPosition >= elementData.charStart && this.cursorPosition <= elementData.charEnd) {
+            if (this.document.ui_state.selection.cursor_position >= elementData.charStart && this.document.ui_state.selection.cursor_position <= elementData.charEnd) {
                 return {
                     uuid,
                     x: elementData.x,
@@ -1184,7 +1363,7 @@ export class CanvasEditor {
             }
 
             // Track closest element if cursor is not within any element
-            const distance = Math.abs(this.cursorPosition - elementData.charStart);
+            const distance = Math.abs(this.document.ui_state.selection.cursor_position - elementData.charStart);
             if (distance < bestDistance) {
                 bestDistance = distance;
                 bestElement = elementData;
@@ -1213,8 +1392,11 @@ export class CanvasEditor {
         const adjustedX = x - (this.svgTransformX || 20);
         const adjustedY = y - (this.svgTransformY || 20);
 
-        // Look for .char elements at the click point
-        const charElements = this.currentSvg.querySelectorAll('.char');
+        // Look for character elements with semantic classes at the click point
+        const selector = '.char, .note-char, .rest-char, .barline-char, .dash-char, ' +
+                        '.breath-char, .lyrics-char, .text-char, .unknown-char, ' +
+                        '.upper-char, .lower-char, .whitespace-char';
+        const charElements = this.currentSvg.querySelectorAll(selector);
         for (const char of charElements) {
             // Get element position directly from attributes
             const elemX = parseFloat(char.getAttribute('x')) || 0;
@@ -1294,11 +1476,11 @@ export class CanvasEditor {
             const elementCenter = elementInfo.x + (elementInfo.width / 2);
             if (clickX < elementCenter) {
                 // Clicked on left side - position at start
-                this.cursorPosition = elementData.charStart;
+                this.document.ui_state.selection.cursor_position = elementData.charStart;
                 this.cursorX = elementInfo.x;
             } else {
                 // Clicked on right side - position at end
-                this.cursorPosition = elementData.charEnd;
+                this.document.ui_state.selection.cursor_position = elementData.charEnd;
                 this.cursorX = elementInfo.x + elementInfo.width;
             }
             this.cursorY = elementInfo.y;
@@ -1312,7 +1494,7 @@ export class CanvasEditor {
         this.cursorY = y;
 
         // For empty space, we can estimate character position or use 0
-        this.cursorPosition = 0; // Or estimate based on position
+        this.document.ui_state.selection.cursor_position = 0; // Or estimate based on position
     }
 
     // Render error message in SVG container
@@ -1375,7 +1557,7 @@ export class CanvasEditor {
 
     // Calculate cursor X position based on text content
     calculateCursorX() {
-        if ((this.document.content?.length || 0) === 0 || this.cursorPosition === 0) {
+        if ((this.document.content?.length || 0) === 0 || this.document.ui_state.selection.cursor_position === 0) {
             return 20; // Left margin
         }
 
@@ -1398,7 +1580,7 @@ export class CanvasEditor {
         const lineHeight = 24;
         const topMargin = 40;
 
-        if ((this.document.content?.length || 0) === 0 || this.cursorPosition === 0) {
+        if ((this.document.content?.length || 0) === 0 || this.document.ui_state.selection.cursor_position === 0) {
             return topMargin; // Top position for empty text or start
         }
 
@@ -1612,7 +1794,7 @@ export class CanvasEditor {
     insertText(text) {
         // Document-first: insert elements instead of text
         console.log('Insert text in document-first mode:', text);
-        this.cursorPosition += text.length;
+        this.document.ui_state.selection.cursor_position += text.length;
         // Clear UUID selection
         // Document-first: no line tracking
         this.isDirty = true;
@@ -1669,7 +1851,7 @@ export class CanvasEditor {
     async paste() {
         const editCommand = {
             type: 'paste',
-            position: this.cursorPosition,
+            position: this.document.ui_state.selection.cursor_position,
             selection_start: this.selection.start,
             selection_end: this.selection.end,
         };
@@ -1687,10 +1869,10 @@ export class CanvasEditor {
 
         // If cursor position provided, use it; otherwise keep current (clamped)
         if (cursorPos !== null) {
-            this.cursorPosition = Math.min(cursorPos, content.length);
+            this.document.ui_state.selection.cursor_position = Math.min(cursorPos, content.length);
             // Clear selection when clicking
         } else {
-            this.cursorPosition = Math.min(this.cursorPosition, content.length);
+            this.document.ui_state.selection.cursor_position = Math.min(this.document.ui_state.selection.cursor_position, content.length);
         }
 
         this.isDirty = true;
@@ -1826,7 +2008,7 @@ export class CanvasEditor {
                 // Send the document structure directly
                 document_model: this.document,
                 selected_uuids: Array.from(this.selectedUuids),
-                cursor_position: this.cursorPosition,
+                cursor_position: this.document.ui_state.selection.cursor_position,
 
                 // Legacy fields for compatibility (may not be needed)
                 input_text: "", // No text input, using document
@@ -1863,7 +2045,7 @@ export class CanvasEditor {
             const requestData = {
                 text: '', // Document-first: no text tracking
                 selected_uuids: Array.from(this.selectedUuids),
-                cursor_position: this.cursorPosition,
+                cursor_position: this.document.ui_state.selection.cursor_position,
                 selected_uuids: Array.from(this.selectedUuids), // Include UUID selection
                 ...transformData
             };
@@ -1895,10 +2077,9 @@ export class CanvasEditor {
             if (result.selection_end !== undefined) {
                 // UUID-based selection
             }
-            if (result.cursor_position !== undefined) {
-                this.cursorPosition = result.cursor_position;
-            } else if (result.selection_end !== undefined) {
-                this.cursorPosition = result.selection_end;
+            // Cursor position is already in document.ui_state
+            if (result.selection_end !== undefined) {
+                this.document.ui_state.selection.cursor_position = result.selection_end;
             }
 
             // Save and submit
@@ -1927,7 +2108,7 @@ export class CanvasEditor {
     setSelection(start, end, silent = false) {
         // UUID-based selection - not numeric positions
         console.warn('setSelection called with numeric positions - ignoring');
-        this.cursorPosition = 0;
+        this.document.ui_state.selection.cursor_position = 0;
         // this.resetCursorBlink(); // Disabled blinking cursor
 
         // Notify selection change unless silent flag is set
@@ -1951,7 +2132,7 @@ export class CanvasEditor {
     shouldConvertToSargamUppercase() {
         const text = this.textContent;
         const lines = text.split('\n');
-        const cursorPos = this.cursorPosition;
+        const cursorPos = this.document.ui_state.selection.cursor_position;
 
         // Find which line the cursor is on
         let currentPos = 0;
@@ -1997,11 +2178,25 @@ export class CanvasEditor {
         return 'unknown';
     }
 
+    // Update the document tab display
+    updateDocumentTabDisplay() {
+        const documentOutput = document.getElementById('document-output');
+        if (documentOutput && this.document) {
+            documentOutput.textContent = JSON.stringify(this.document.toJSON(), null, 2);
+        }
+    }
+
     // Save editor state to local storage (document-first)
     saveToLocalStorage() {
         try {
+            // Skip saving if no document or document has no UUID (not yet created on server)
+            if (!this.document || !this.document.documentUUID) {
+                console.log('Skipping localStorage save - no document or no UUID yet');
+                return;
+            }
+
             // Update document model with current UI state
-            this.document.setCursor(null, this.cursorPosition);
+            this.document.setCursor(null, this.document.ui_state.selection.cursor_position);
             this.document.setSelection(Array.from(this.selectedUuids));
 
             // Note: text content is sent to server, not cached in document
@@ -2011,6 +2206,9 @@ export class CanvasEditor {
             if (saved) {
                 console.log('Document saved to localStorage:', this.document.getStats());
             }
+
+            // Update the document tab display
+            this.updateDocumentTabDisplay();
 
             // Legacy backup save removed - using document-first approach only
 
@@ -2025,49 +2223,52 @@ export class CanvasEditor {
             // Try to load document model first
             const loadedDocument = this.persistence.loadDocument();
             if (loadedDocument) {
-                this.document = loadedDocument;
+                if (loadedDocument.documentUUID) {
+                    // Valid document with UUID
+                    this.document = loadedDocument;
 
-                // Restore UI state from document
-                // Text might be stored directly or need to be fetched from server
-                // Document-first: no text tracking
-                this.cursorPosition = this.document.ui_state.selection.cursor_position;
+                    // Restore UI state from document
+                    // Text might be stored directly or need to be fetched from server
+                    // Document-first: no text tracking
+                    // cursor_position already in document.ui_state.selection
 
-                // Restore UUID-based selection
-                this.selectedUuids = new Set(this.document.ui_state.selection.selected_uuids);
+                    // Restore UUID-based selection
+                    this.selectedUuids = new Set(this.document.ui_state.selection.selected_uuids);
 
-                // Update legacy character-based selection for compatibility
-                this.updateCharacterSelectionFromUuids();
-                // Document-first: no line tracking
+                    // Update legacy character-based selection for compatibility
+                    this.updateCharacterSelectionFromUuids();
+                    // Document-first: no line tracking
 
-                console.log('Loaded document from localStorage:', this.document.getStats());
+                    console.log('Loaded document from localStorage:', this.document.getStats());
 
-                // Update UI to show document UUID
-                console.log('Document UUID loaded from localStorage:', this.document.documentUUID);
-                if (window.UI && window.UI.updateDocumentStatus) {
-                    window.UI.updateDocumentStatus();
-                }
+                    // Update UI to show document UUID
+                    console.log('Document UUID loaded from localStorage:', this.document.documentUUID);
+                    if (window.UI && window.UI.updateDocumentStatus) {
+                        window.UI.updateDocumentStatus();
+                    }
 
-                // Fetch full document from server using UUID on startup
-                if (this.document.documentUUID) {
-                    console.log('Fetching document from server:', this.document.documentUUID);
-                    // GET document by UUID to get all formats and update tabs
-                    this.fetchDocumentByUUID(this.document.documentUUID).then(() => {
-                        console.log('Document fetched and tabs updated');
-                    }).catch(err => {
-                        console.error('Failed to fetch document from server:', err);
-                        // Fallback to local rendering
+                    // In local-first architecture, render the document we have
+                    // Don't fetch from server - we already have the document
+                    if (this.document.documentUUID) {
+                        console.log('Rendering document from localStorage:', this.document.documentUUID);
+                        // Update document tab display
+                        this.updateDocumentTabDisplay();
+                        // Render the document to get formats
                         this.drawNow();
-                    });
-                } else if (this.textContent) {
-                    // No UUID yet, create document on server
-                    console.log('Creating new document on server...');
-                    this.drawNow();
-                } else {
-                    // If no text content, clear the canvas
-                    this.clearCanvas();
-                }
+                    } else {
+                        // If no document UUID, clear the canvas
+                        this.clearCanvas();
+                    }
 
-                return true;
+                    return true;
+                } else {
+                    // Invalid document without UUID - clear it
+                    console.warn('Clearing invalid document from localStorage (no UUID)');
+                    this.persistence.clearDocument();
+                    return false;
+                }
+            } else {
+                return false;
             }
 
             // No legacy fallback - using document-first approach only
@@ -2103,7 +2304,11 @@ export class CanvasEditor {
     // Get all content-line elements (char class) in order
     getContentElements() {
         if (!this.currentSvg) return [];
-        return Array.from(this.currentSvg.querySelectorAll('.char'));
+        // Select all character elements with semantic classes
+        const selector = '.char, .note-char, .rest-char, .barline-char, .dash-char, ' +
+                        '.breath-char, .lyrics-char, .text-char, .unknown-char, ' +
+                        '.upper-char, .lower-char, .whitespace-char';
+        return Array.from(this.currentSvg.querySelectorAll(selector));
     }
 
     // Find current cursor element index
@@ -2118,109 +2323,187 @@ export class CanvasEditor {
         );
     }
 
-    // Move cursor to previous content element
+    // Move cursor to previous position
     moveCursorLeft() {
-        const elements = this.getContentElements();
-        if (elements.length === 0) return;
+        if (!this.document) return;
 
-        // Find current cursor element
-        let currentIndex = -1;
-        for (let i = 0; i < elements.length; i++) {
-            if (elements[i].classList.contains('cursor')) {
-                currentIndex = i;
-                break;
-            }
-        }
-
-        // Move to previous element (no wrapping)
-        if (currentIndex > 0) {
-            // Remove cursor from current element
-            this.removeCursorRectangle(elements[currentIndex]);
-            elements[currentIndex].classList.remove('cursor');
-
-            // Add cursor to new element
-            const newIndex = currentIndex - 1;
-            elements[newIndex].classList.add('cursor');
-            this.addCursorRectangle(elements[newIndex]);
-            console.log(`Moved cursor left to element ${newIndex}`);
+        const currentPos = this.document.ui_state.selection.cursor_position || 0;
+        if (currentPos > 0) {
+            this.setCursorPosition(currentPos - 1);
         }
     }
 
-    // Move cursor to next content element
+    // Move cursor to next position
     moveCursorRight() {
+        if (!this.document) return;
+
+        const currentPos = this.document.ui_state.selection.cursor_position || 0;
+        // Allow cursor to go one position past the last character
         const elements = this.getContentElements();
-        if (elements.length === 0) return;
-
-        // Find current cursor element
-        let currentIndex = -1;
-        for (let i = 0; i < elements.length; i++) {
-            if (elements[i].classList.contains('cursor')) {
-                currentIndex = i;
-                break;
-            }
-        }
-
-        // Move to next element (no wrapping)
-        if (currentIndex < elements.length - 1) {
-            // Remove cursor from current element
-            this.removeCursorRectangle(elements[currentIndex]);
-            elements[currentIndex].classList.remove('cursor');
-
-            // Add cursor to new element
-            const newIndex = currentIndex + 1;
-            elements[newIndex].classList.add('cursor');
-            this.addCursorRectangle(elements[newIndex]);
-            console.log(`Moved cursor right to element ${newIndex}`);
+        if (currentPos <= elements.length) {
+            this.setCursorPosition(currentPos + 1);
         }
     }
 
-    // Initialize visual cursor on first char element
+    // Set cursor to a specific position (standard approach)
+    setCursorPosition(position) {
+        if (!this.document) return;
+
+        // Update document state
+        this.document.ui_state.selection.cursor_position = position;
+
+        // Update visual position
+        const coords = this.getCoordinatesForPosition(position);
+        if (coords) {
+            // Ensure cursor exists
+            if (!this.cursorElement) {
+                this.createCursorElement(coords.x, coords.y);
+            } else {
+                // Just move existing cursor
+                this.updateCursorPosition(coords.x, coords.y);
+            }
+        }
+
+        console.log(`Cursor position: ${position}`);
+    }
+
+    // Get (x,y) coordinates for a cursor position
+    getCoordinatesForPosition(position) {
+        if (!this.currentSvg) return null;
+
+        // Standard approach: position N means "after character N-1, before character N"
+        // Position 0 = before all characters
+        // Position 1 = after char 0, before char 1
+        // Position length = after all characters
+
+        const elements = this.getContentElements();
+
+        // Default coordinates - use reasonable defaults for visibility
+        let x = 20;  // Some left margin
+        let y = 60;  // Reasonable baseline position
+
+        if (elements.length === 0) {
+            console.log('No elements found, using default position');
+            return { x: 20, y: 60 };
+        }
+
+        if (position === 0) {
+            // Before first character
+            const firstEl = elements[0];
+            if (firstEl) {
+                x = parseFloat(firstEl.getAttribute('x') || '0');
+                y = parseFloat(firstEl.getAttribute('y') || '20');
+            }
+        } else if (position > 0 && position <= elements.length) {
+            // After character at index (position - 1)
+            const charEl = elements[position - 1];
+            if (charEl) {
+                x = parseFloat(charEl.getAttribute('x') || '0');
+                y = parseFloat(charEl.getAttribute('y') || '20');
+
+                // Add character width to position cursor after it
+                const width = parseFloat(charEl.getAttribute('data-width') || '12');
+                x += width;
+            }
+        } else if (position > elements.length) {
+            // Past last character - position at end
+            const lastEl = elements[elements.length - 1];
+            if (lastEl) {
+                x = parseFloat(lastEl.getAttribute('x') || '0');
+                y = parseFloat(lastEl.getAttribute('y') || '20');
+                const width = parseFloat(lastEl.getAttribute('data-width') || '12');
+                x += width;
+            }
+        }
+
+        return { x, y };
+    }
+
+    // Initialize visual cursor as a separate SVG element
     initializeVisualCursor() {
-        const elements = this.getContentElements();
-        if (elements.length > 0) {
-            // Clear any existing cursor
-            elements.forEach(el => {
-                this.removeCursorRectangle(el);
-                el.classList.remove('cursor');
-            });
+        if (!this.currentSvg || !this.document) return;
 
-            // Find the element corresponding to current cursor position
-            let targetElement = null;
-            for (const element of elements) {
-                const charIndex = parseInt(element.getAttribute('data-char-index') || '0');
-                if (charIndex === this.cursorPosition) {
-                    targetElement = element;
-                    break;
-                }
-            }
-
-            // If no exact match, use the closest element or first element as fallback
-            if (!targetElement) {
-                targetElement = elements[Math.min(this.cursorPosition, elements.length - 1)] || elements[0];
-            }
-
-            // Add cursor to target element
-            targetElement.classList.add('cursor');
-            this.addCursorRectangle(targetElement);
-            console.log(`Initialized visual cursor at position ${this.cursorPosition}`);
-        }
+        // Simple: just set cursor to current position
+        const cursorPos = this.document.ui_state.selection.cursor_position || 0;
+        this.setCursorPosition(cursorPos);
     }
 
-    // Add cursor styling to character element
-    addCursorRectangle(element) {
-        if (!element) return;
-
-        // Add cursor styling to character element
-        element.classList.add('cursor');
-    }
-
-    // Remove cursor styling from element
-    removeCursorRectangle(element = null) {
+    // Create a cursor element in the SVG
+    createCursorElement(x, y) {
         if (!this.currentSvg) return;
 
-        // Remove cursor styling from all character elements
-        const cursorElements = this.currentSvg.querySelectorAll('.cursor');
-        cursorElements.forEach(el => el.classList.remove('cursor'));
+        // Remove any existing cursor first
+        this.removeCursorElement();
+
+        // Find the content group to add cursor to
+        const contentGroup = this.currentSvg.querySelector('.canvas-content');
+        if (!contentGroup) {
+            console.warn('No .canvas-content group found in SVG');
+            return;
+        }
+
+        console.log(`Creating cursor at (${x}, ${y})`);
+
+        // Create cursor as a vertical line
+        const cursor = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        cursor.setAttribute('id', 'text-cursor');
+        cursor.setAttribute('class', 'svg-cursor');
+        cursor.setAttribute('x1', x.toString());
+        cursor.setAttribute('y1', (y - 20).toString()); // Above baseline
+        cursor.setAttribute('x2', x.toString());
+        cursor.setAttribute('y2', (y + 5).toString());  // Below baseline
+        cursor.setAttribute('stroke', '#ff0000');  // Red for visibility
+        cursor.setAttribute('stroke-width', '2');
+        cursor.setAttribute('opacity', '0.8');
+
+        // Add blinking animation with inline style
+        cursor.style.animation = 'cursor-blink 1s infinite';
+
+        // Ensure cursor is on top by appending last
+        contentGroup.appendChild(cursor);
+
+        // Store reference
+        this.cursorElement = cursor;
+
+        console.log('Cursor element created:', cursor);
+    }
+
+    // Remove the cursor element
+    removeCursorElement() {
+        if (this.cursorElement && this.cursorElement.parentNode) {
+            this.cursorElement.parentNode.removeChild(this.cursorElement);
+            this.cursorElement = null;
+        }
+
+        // Also remove any existing cursor by ID
+        const existingCursor = this.currentSvg?.querySelector('#text-cursor');
+        if (existingCursor && existingCursor.parentNode) {
+            existingCursor.parentNode.removeChild(existingCursor);
+        }
+    }
+
+    // Update cursor position without recreating it
+    updateCursorPosition(x, y) {
+        if (this.cursorElement) {
+            this.cursorElement.setAttribute('x1', x.toString());
+            this.cursorElement.setAttribute('y1', (y - 15).toString());
+            this.cursorElement.setAttribute('x2', x.toString());
+            this.cursorElement.setAttribute('y2', (y + 5).toString());
+        } else {
+            this.createCursorElement(x, y);
+        }
+    }
+
+    // Legacy compatibility - redirect to new implementation
+    addCursorRectangle(element) {
+        // No longer modifies elements - cursor is separate
+        this.initializeVisualCursor();
+    }
+
+    // Legacy compatibility - redirect to new implementation
+    removeCursorRectangle(element = null) {
+        // No longer modifies elements - cursor is separate
+        // Just ensure cursor element is properly positioned
     }
 
     // Move cursor up to previous line
@@ -2358,7 +2641,7 @@ export class CanvasEditor {
             // Update editor state from document
             const musicText = this.document.getCachedFormat('music_text') || '';
             // Document-first: no text tracking
-            this.cursorPosition = this.document.ui_state.selection.cursor_position;
+            // cursor_position already in document.ui_state.selection
             this.selectedUuids = new Set(this.document.ui_state.selection.selected_uuids);
             // Document-first: no line tracking
 
@@ -2391,7 +2674,7 @@ export class CanvasEditor {
             // Legacy format no longer used
 
             // Reset current document
-            this.document = new DocumentModel();
+            this.document = null;
 
             console.log('Cleared localStorage (document + legacy)');
         } catch (e) {

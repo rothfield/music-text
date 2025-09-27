@@ -250,6 +250,7 @@ pub fn import_musicxml_to_document(xml: &str, opts: Option<ImportOptions>) -> an
     };
 
     let document = Document {
+        document_uuid: None,
         value: None,
         char_index: 0,
         title: None,
@@ -257,6 +258,7 @@ pub fn import_musicxml_to_document(xml: &str, opts: Option<ImportOptions>) -> an
         directives: Default::default(),
         elements: vec![DocumentElement::Stave(stave)],
         ui_state: Default::default(),
+        timestamp: String::new(),
     };
 
     Ok(document)
@@ -276,7 +278,7 @@ fn map_pc_to_degree_with_acc(pc: &str, scale: &[String;7]) -> String {
     // compute semitone index for pc and for each scale degree; choose nearest with delta in [-6,6]
     let pcs = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
     let idx = pcs.iter().position(|p| *p == pc).unwrap_or(0) as i32;
-    let mut best_deg = 1; let mut best_delta = 12;
+    let mut best_deg = 1; let mut best_delta: i32 = 12;
     for (i, sd) in scale.iter().enumerate() {
         let si = pcs.iter().position(|p| *p == sd).unwrap_or(0) as i32;
         let mut d = (idx - si) % 12; let mut d2 = d;

@@ -8,6 +8,7 @@ import { UI } from './ui.js';
 import { API } from './api.js';
 import { FontManager } from './fontManager.js';
 import { CanvasEditor } from './canvasEditor.js';
+import { DocumentModel } from './documentModel.js';
 import { MusicTextPlayer } from './midiPlayer.js';
 
 // Make LocalStorage available globally for DocumentPersistence
@@ -109,6 +110,7 @@ class MusicTextApp {
         // Setup event listeners for main control buttons
         document.getElementById('newDocButton').addEventListener('click', () => this.createNewDocument());
         document.getElementById('clearButton').addEventListener('click', () => this.clearAll());
+        document.getElementById('clearStorageButton').addEventListener('click', () => this.clearLocalStorage());
         document.getElementById('copyButton').addEventListener('click', () => this.canvasEditor.copySelection());
         document.getElementById('pasteButton').addEventListener('click', () => this.canvasEditor.paste());
         document.getElementById('lilypondButton').addEventListener('click', () => this.generateSVG());
@@ -365,6 +367,34 @@ class MusicTextApp {
 
         // Switch back to Editor SVG tab and restore focus
         UI.switchTab('editor_svg');
+    }
+
+    // Clear localStorage completely
+    clearLocalStorage() {
+        if (confirm('Clear all localStorage data? This will remove all saved documents.')) {
+            try {
+                // Clear all musictext-related localStorage keys
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.startsWith('musictext_') || key.startsWith('musicText'))) {
+                        keysToRemove.push(key);
+                    }
+                }
+
+                keysToRemove.forEach(key => localStorage.removeItem(key));
+
+                // Reset the current document
+                this.canvasEditor.document = null;
+                this.canvasEditor.clearCanvas();
+
+                UI.setStatus('LocalStorage cleared', 'success');
+                console.log('Cleared localStorage keys:', keysToRemove);
+            } catch (error) {
+                console.error('Failed to clear localStorage:', error);
+                UI.setStatus('Failed to clear localStorage', 'error');
+            }
+        }
     }
 
     // Create a new document using the API

@@ -72,8 +72,8 @@ impl VexFlowJSGenerator {
                                 all_notes.extend(tuplet_note_names);
                             } else {
                                 let beat_notes = self.generate_beat_notes(beat);
-                                // Beam all notes in a beat (VexFlow will ignore rests automatically)
-                                if beat_notes.len() >= 2 {
+                                // Only beam if the beat contains beamable notes (eighth or shorter)
+                                if beat_notes.len() >= 2 && self.is_beat_beamable(beat) {
                                     beams.push(beat_notes.clone());
                                 }
                                 all_notes.extend(beat_notes);
@@ -255,6 +255,32 @@ impl VexFlowJSGenerator {
         note_names
     }
 
+
+    /// Check if a beat contains only notes that can be beamed (eighth notes or shorter)
+    fn is_beat_beamable(&self, beat: &Beat) -> bool {
+        for element in &beat.elements {
+            match element {
+                BeatElement::Note(note) => {
+                    let denominator = note.denominator.unwrap_or(4);
+                    // Only eighth notes (8) and shorter (16, 32, etc.) can be beamed
+                    // Quarter notes (4), half notes (2), and whole notes (1) cannot
+                    if denominator < 8 {
+                        return false;
+                    }
+                }
+                BeatElement::Dash(dash) => {
+                    // Check rests with rhythm data
+                    if let Some(denom) = dash.denominator {
+                        if denom < 8 {
+                            return false;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        true
+    }
 
     fn note_to_vexflow_key(&self, note: &Note) -> (String, Vec<String>) {
         let degree = self.pitch_code_to_degree(note.pitch_code);

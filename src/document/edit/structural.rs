@@ -12,13 +12,83 @@
 // phase to run after each edit to recalculate these document-wide properties.
 // That re-analysis phase is NOT implemented here.
 
-use crate::parse::{Document, DocumentElement, Stave, StaveLine, ContentLine, NotationSystem};
+use crate::models::{Document, DocumentElement, Stave, StaveLine, ContentLine, NotationSystem};
 use serde::{Deserialize, Serialize};
 
 /// Represents clipboard content. For now, it's text-based.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Clipboard {
     pub content: String,
+}
+
+/// Reconstruct the document's value field from its elements
+pub fn reconstruct_document_value(doc: &mut Document) {
+    let mut text = String::new();
+    let mut first_element = true;
+
+    for element in &doc.elements {
+        if !first_element {
+            // Elements are separated by blank lines (for now, simplify)
+            // In the future, track actual whitespace between elements
+        }
+
+        match element {
+            DocumentElement::BlankLines(blank) => {
+                if let Some(value) = &blank.value {
+                    text.push_str(value);
+                }
+            }
+            DocumentElement::Stave(stave) => {
+                for (line_idx, line) in stave.lines.iter().enumerate() {
+                    if line_idx > 0 {
+                        text.push('\n');
+                    }
+
+                    match line {
+                        StaveLine::ContentLine(cl) => {
+                            if let Some(value) = &cl.value {
+                                text.push_str(value);
+                            }
+                        }
+                        StaveLine::Content(_) => {} // Legacy, skip
+                        StaveLine::Upper(ul) => {
+                            if let Some(value) = &ul.value {
+                                text.push_str(value);
+                            }
+                        }
+                        StaveLine::Lower(ll) => {
+                            if let Some(value) = &ll.value {
+                                text.push_str(value);
+                            }
+                        }
+                        StaveLine::Lyrics(ll) => {
+                            if let Some(value) = &ll.value {
+                                text.push_str(value);
+                            }
+                        }
+                        StaveLine::Text(tl) => {
+                            if let Some(value) = &tl.value {
+                                text.push_str(value);
+                            }
+                        }
+                        StaveLine::Whitespace(wl) => {
+                            if let Some(value) = &wl.value {
+                                text.push_str(value);
+                            }
+                        }
+                        StaveLine::BlankLines(bl) => {
+                            if let Some(value) = &bl.value {
+                                text.push_str(value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        first_element = false;
+    }
+
+    doc.value = Some(text);
 }
 
 /// Locates the mutable ContentLine and relative position for an absolute character position.
@@ -77,6 +147,20 @@ pub fn delete_selection(doc: &mut Document, start: usize, end: usize) -> Result<
         }
     }
     Err("Could not perform selection deletion.".to_string())
+}
+
+pub fn insert_char(doc: &mut Document, position: usize, ch: char) -> Result<usize, String> {
+    let notation_system = doc.get_detected_notation_systems().first().cloned().unwrap_or(NotationSystem::Number);
+    if let Some((stave_idx, line_idx, relative_pos, _)) = find_structural_position(doc, position) {
+        if let Some(StaveLine::ContentLine(line)) = doc.elements[stave_idx].as_stave_mut().unwrap().lines.get_mut(line_idx) {
+            let mut text = line.value.as_ref().cloned().unwrap_or_default();
+            text.insert(relative_pos, ch);
+            line.value = Some(text);
+            reparse_content_line(line, notation_system)?;
+            return Ok(position + 1);
+        }
+    }
+    Err("Could not insert character.".to_string())
 }
 
 pub fn delete_char_left(doc: &mut Document, position: usize) -> Result<usize, String> {
@@ -202,20 +286,4 @@ pub fn paste(doc: &mut Document, position: usize, clipboard: &Clipboard) -> Resu
     Err("Could not paste.".to_string())
 }
 
-// Helper trait to simplify getting mutable Stave/ContentLine from enums
-impl DocumentElement {
-    fn as_stave_mut(&mut self) -> Option<&mut Stave> {
-        match self {
-            DocumentElement::Stave(s) => Some(s),
-            _ => None,
-        }
-    }
-}
-impl StaveLine {
-    fn as_content_line_mut(&mut self) -> Option<&mut ContentLine> {
-        match self {
-            StaveLine::ContentLine(cl) => Some(cl),
-            _ => None,
-        }
-    }
-}
+// Helper methods are already defined in models/core.rs, removed duplicates

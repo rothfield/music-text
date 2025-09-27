@@ -59,7 +59,7 @@ pub struct CreateDocumentRequest {
 
 #[derive(Debug, Serialize)]
 pub struct CreateDocumentResponse {
-    pub documentUUID: String,
+    pub success: bool,
     pub document: serde_json::Value,
     pub formats: DocumentFormats,
 }
@@ -87,11 +87,12 @@ pub struct UpdateDocumentRequest {
 pub struct EditCommand {
     #[serde(rename = "type")]
     pub command_type: String,
-    pub position: usize,
+    pub position: Option<usize>,  // Made optional since not all commands need it
     pub text: Option<String>,
     pub direction: Option<String>,
     pub selection_start: Option<usize>,
     pub selection_end: Option<usize>,
+    pub selected_uuids: Option<Vec<String>>, // For delete operations
 }
 
 // Document transformation structures
@@ -375,6 +376,8 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/documents/from-text", post(create_document_from_text_handler))
         .route("/api/documents/:documentUUID", get(get_document_by_id_handler))
         .route("/api/documents/:documentUUID", put(update_document_handler))
+        // Edit route - loads document from backup into editor
+        .route("/documents/:documentUUID/edit", get(edit_document_handler))
         .route("/api/documents/transform", post(transform_document_handler))
         .route("/api/documents/:documentUUID/transform", post(transform_document_by_id_handler))
         .route("/api/documents/export", post(export_document_handler))
@@ -479,27 +482,23 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
     let documentUUID = Uuid::new_v4().to_string();
     let timestamp = chrono::Utc::now().to_rfc3339();
 
-    // Parse initial notation to get document with full parse tree structure
-    // Using "|SRG" creates a stave with a barline and some notes
-    let parsed_empty = match crate::pipeline::process_notation("|SRG") {
-        Ok(r) => r,
-        Err(_) => {
-            // Fallback to minimal structure if parsing fails
-            crate::pipeline::ProcessingResult {
-                original_input: String::new(),
-                document: crate::parse::Document {
-                    value: None,
-                    char_index: 0,
-                    title: None,
-                    author: None,
-                    directives: std::collections::HashMap::new(),
-                    elements: vec![],
-                },
-                lilypond: String::new(),
-                vexflow_svg: String::new(),
-                vexflow_data: serde_json::Value::Null,
-            }
-        }
+    // Create a truly empty document
+    let parsed_empty = crate::pipeline::ProcessingResult {
+        original_input: String::new(),
+        document: crate::parse::Document {
+            document_uuid: Some(documentUUID.clone()),
+            value: None,
+            char_index: 0,
+            title: None,
+            author: None,
+            directives: std::collections::HashMap::new(),
+            elements: vec![],  // Empty elements - no content
+            ui_state: crate::models::UIState::default(),
+            timestamp: String::new(),
+        },
+        lilypond: String::new(),
+        vexflow_svg: String::new(),
+        vexflow_data: serde_json::Value::Null,
     };
 
     // Create document model from parsed empty document
@@ -510,9 +509,8 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
         })
     });
 
-    // Add document metadata
+    // Add document metadata (UUID already in document)
     if let serde_json::Value::Object(ref mut map) = document_value {
-        map.insert("documentUUID".to_string(), serde_json::Value::String(documentUUID.clone()));
         map.insert("version".to_string(), serde_json::Value::String("1.0.0".to_string()));
         map.insert("timestamp".to_string(), serde_json::Value::String(timestamp.clone()));
         map.insert("metadata".to_string(), request.metadata.unwrap_or(serde_json::json!({})));
@@ -534,12 +532,16 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
 
     let document = document_value;
 
-    // Save document to disk
+    // Debug: Log the documentUUID being sent
+    println!("Created document with UUID: {}", documentUUID);
+
+    // Log the new document to filesystem for backup/history
+    // (In local-first architecture, browser owns the document, server logs for backup)
     if let Err(e) = save_document(&documentUUID, &document).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))
-        ).into_response();
+        // Log error but don't fail - logging is not critical for document creation
+        eprintln!("Warning: Failed to log new document {} to disk: {}", documentUUID, e);
+    } else {
+        println!("Created and logged new document {} to disk (backup)", documentUUID);
     }
 
     // Generate all formats from the parsed document
@@ -567,7 +569,7 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
     };
 
     let response = CreateDocumentResponse {
-        documentUUID: documentUUID.clone(),
+        success: true,
         document: document,
         formats,
     };
@@ -577,23 +579,61 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
 
 // Create a new document from raw textual music notation (parse → save → render)
 async fn create_document_from_text_handler(Json(request): Json<CreateDocumentFromTextRequest>) -> impl IntoResponse {
-    // Parse textual notation using same pipeline as CLI
-    let parse_result = match crate::pipeline::process_notation(&request.music_text) {
+    // Generate UUID and timestamp first
+    let documentUUID = Uuid::new_v4().to_string();
+    let timestamp = chrono::Utc::now().to_rfc3339();
+
+    // Parse the input text (even if it's just one character) through the full parser
+    // This creates a proper document structure with staves and lines
+    let mut parse_result = match crate::pipeline::process_notation(&request.music_text) {
         Ok(r) => r,
         Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "success": false,
-                    "error": format!("Parsing failed: {}", e),
-                }))
-            ).into_response();
+            // If parsing fails (e.g., empty string), create minimal valid structure
+            eprintln!("Parse failed for '{}': {}", request.music_text, e);
+
+            // Create a minimal document with one stave containing the input text
+            let minimal_doc = crate::parse::Document {
+                document_uuid: Some(documentUUID.clone()),
+                value: Some(request.music_text.clone()),
+                char_index: 0,
+                title: None,
+                author: None,
+                directives: std::collections::HashMap::new(),
+                elements: vec![
+                    crate::models::DocumentElement::Stave(crate::models::Stave {
+                        value: Some(request.music_text.clone()),
+                        char_index: 0,
+                        notation_system: crate::models::NotationSystem::Number,
+                        line: 0,
+                        column: 0,
+                        index_in_doc: 0,
+                        index_in_line: 0,
+                        lines: vec![
+                            crate::models::StaveLine::ContentLine(crate::models::ContentLine {
+                                value: Some(request.music_text.clone()),
+                                char_index: 0,
+                                elements: vec![],
+                                consumed_elements: vec![],
+                            })
+                        ],
+                    })
+                ],
+                ui_state: crate::models::UIState::default(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+
+            crate::pipeline::ProcessingResult {
+                original_input: request.music_text.clone(),
+                document: minimal_doc,
+                lilypond: String::new(),
+                vexflow_svg: String::new(),
+                vexflow_data: serde_json::Value::Null,
+            }
         }
     };
 
-    // Build persisted document JSON mirroring existing schema
-    let documentUUID = Uuid::new_v4().to_string();
-    let timestamp = chrono::Utc::now().to_rfc3339();
+    // Set the UUID in the document
+    parse_result.document.document_uuid = Some(documentUUID.clone());
 
     let mut metadata = request.metadata.unwrap_or(serde_json::json!({}));
     if let Some(obj) = metadata.as_object_mut() {
@@ -601,31 +641,35 @@ async fn create_document_from_text_handler(Json(request): Json<CreateDocumentFro
         obj.entry("created_by").or_insert(serde_json::Value::String("Web Interface".to_string()));
     }
 
-    let document = serde_json::json!({
-        "documentUUID": documentUUID,
-        "version": "1.0.0",
-        "timestamp": timestamp,
-        "elements": [],
-        "content": [],
-        "metadata": metadata,
-        "ui_state": {
+    // Convert the parsed document to JSON, preserving its structure
+    let mut document = serde_json::to_value(&parse_result.document).unwrap_or(serde_json::json!({}));
+
+    // Add/update required fields (UUID already in document)
+    document["version"] = serde_json::Value::String("1.0.0".to_string());
+    document["timestamp"] = serde_json::Value::String(timestamp.clone());
+    document["metadata"] = metadata;
+
+    // Ensure UI state exists
+    if !document.get("ui_state").is_some() {
+        document["ui_state"] = serde_json::json!({
             "selection": {
                 "selected_uuids": [],
                 "cursor_uuid": null,
-                "cursor_position": 0
+                "cursor_position": request.music_text.len()  // Position after all text
             },
             "viewport": { "scroll_x": 0, "scroll_y": 0, "zoom_level": 1.0 },
             "editor_mode": "text",
             "active_tab": "vexflow"
-        }
-    });
+        });
+    }
 
-    // Save document to disk
+    // Log the new document to filesystem for backup/history
+    // (In local-first architecture, browser owns the document, server logs for backup)
     if let Err(e) = save_document(&documentUUID, &document).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))
-        ).into_response();
+        // Log error but don't fail - logging is not critical for document creation
+        eprintln!("Warning: Failed to log new document {} to disk: {}", documentUUID, e);
+    } else {
+        println!("Created and logged new document {} to disk (backup)", documentUUID);
     }
 
     // Generate all formats from the parsed document
@@ -651,13 +695,13 @@ async fn create_document_from_text_handler(Json(request): Json<CreateDocumentFro
         midi: None,
     };
 
-    let response = CreateDocumentResponse {
-        documentUUID: documentUUID.clone(),
-        document,
-        formats,
-    };
-
-    Json(response).into_response()
+    // Return success response with document (UUID is already in document)
+    Json(serde_json::json!({
+        "success": true,
+        "document": document,
+        "formats": formats,
+        "cursor_position": 1  // After first character
+    })).into_response()
 }
 
 // Document transformation endpoint
@@ -934,15 +978,24 @@ async fn update_document_handler(
                 // Standard editor behavior: if there's a selection, delete it before inserting.
                 if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
                     if start < end {
-                        new_cursor_pos = crate::document::edit::structural::delete_selection(&mut doc, start, end)?;
+                        match crate::document::edit::structural::delete_selection(&mut doc, start, end) {
+                            Ok(pos) => new_cursor_pos = pos,
+                            Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
+                        }
                     }
                 }
                 let text = edit_command.text.unwrap_or_default();
+                println!("Insert text '{}' at position {}, doc has {} elements", text, new_cursor_pos, doc.elements.len());
+                // Debug document structure
+                for (i, elem) in doc.elements.iter().enumerate() {
+                    if let crate::models::DocumentElement::Stave(stave) = elem {
+                        println!("  Stave {}: {} lines", i, stave.lines.len());
+                    }
+                }
                 if text == "\n" {
                     crate::document::edit::structural::insert_newline(&mut doc, new_cursor_pos)
                 } else if let Some(char_to_insert) = text.chars().next() {
                     crate::document::edit::structural::insert_char(&mut doc, new_cursor_pos, char_to_insert)
-                        .map(|_| new_cursor_pos + 1)
                 } else {
                     Ok(new_cursor_pos) // No text to insert
                 }
@@ -952,22 +1005,24 @@ async fn update_document_handler(
                     if start < end {
                         crate::document::edit::structural::delete_selection(&mut doc, start, end)
                     } else if let Some(direction) = edit_command.direction {
-                         if direction == "backward" {
-                            crate::document::edit::structural::delete_char_left(&mut doc, edit_command.position)
+                        let pos = edit_command.position.unwrap_or(new_cursor_pos);
+                        if direction == "backward" {
+                            crate::document::edit::structural::delete_char_left(&mut doc, pos)
                         } else {
-                            crate::document::edit::structural::delete_char_right(&mut doc, edit_command.position)
+                            crate::document::edit::structural::delete_char_right(&mut doc, pos)
                         }
                     } else {
-                        Ok(edit_command.position)
+                        Ok(edit_command.position.unwrap_or(new_cursor_pos))
                     }
                 } else if let Some(direction) = edit_command.direction {
+                    let pos = edit_command.position.unwrap_or(new_cursor_pos);
                     if direction == "backward" {
-                        crate::document::edit::structural::delete_char_left(&mut doc, edit_command.position)
+                        crate::document::edit::structural::delete_char_left(&mut doc, pos)
                     } else {
-                        crate::document::edit::structural::delete_char_right(&mut doc, edit_command.position)
+                        crate::document::edit::structural::delete_char_right(&mut doc, pos)
                     }
                 } else {
-                    Ok(edit_command.position)
+                    Ok(edit_command.position.unwrap_or(new_cursor_pos))
                 }
             }
             "copy_selection" => {
@@ -977,22 +1032,25 @@ async fn update_document_handler(
                             Ok(clipboard_content) => {
                                 doc.ui_state.clipboard_content = Some(clipboard_content.content);
                             }
-                            Err(e) => return Err(e),
+                            Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
                         }
                     }
                 }
                 Ok(new_cursor_pos) // Copy doesn't move the cursor
             }
             "paste" => {
-                if let Some(clipboard_content) = &doc.ui_state.clipboard_content {
+                if let Some(clipboard_content) = doc.ui_state.clipboard_content.clone() {
                     // First, delete any existing selection
                     if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
                         if start < end {
-                           new_cursor_pos = crate::document::edit::structural::delete_selection(&mut doc, start, end)?;
+                           match crate::document::edit::structural::delete_selection(&mut doc, start, end) {
+                            Ok(pos) => new_cursor_pos = pos,
+                            Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
+                        }
                         }
                     }
                     // Then, paste
-                    let clipboard = crate::document::edit::structural::Clipboard { content: clipboard_content.clone() };
+                    let clipboard = crate::document::edit::structural::Clipboard { content: clipboard_content };
                     crate::document::edit::structural::paste(&mut doc, new_cursor_pos, &clipboard)
                 } else {
                     Ok(new_cursor_pos) // Nothing to paste
@@ -1007,6 +1065,9 @@ async fn update_document_handler(
         }
     }
     
+    // Reconstruct document value from elements after edit
+    crate::document::edit::structural::reconstruct_document_value(&mut doc);
+
     // Update UI state and timestamp in the model
     doc.ui_state.selection.cursor_position = new_cursor_pos;
     doc.timestamp = chrono::Utc::now().to_rfc3339();
@@ -1017,14 +1078,27 @@ async fn update_document_handler(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("Failed to re-serialize document: {}", e)}))).into_response(),
     };
 
-    // Save the updated document.
+    // Log the updated document to filesystem for backup/history
+    // (In local-first architecture, browser owns the document, server logs for backup)
     if let Err(e) = save_document(&documentUUID, &document_json).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))).into_response();
+        // Log error but don't fail - logging is not critical for the operation
+        eprintln!("Warning: Failed to log document {} to disk: {}", documentUUID, e);
+    } else {
+        println!("Logged document {} to disk (backup)", documentUUID);
     }
 
     // Generate all formats from the modified document.
     let formats = {
-        let editor_svg = crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok();
+        let editor_svg = match crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None) {
+            Ok(svg) => {
+                eprintln!("✅ Generated editor SVG ({} chars)", svg.len());
+                Some(svg)
+            },
+            Err(e) => {
+                eprintln!("❌ Failed to generate editor SVG: {}", e);
+                None
+            }
+        };
         let lilypond_src = crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None).ok();
         let vexflow_renderer = crate::renderers::vexflow::VexFlowRenderer::new();
         let vexflow_data = vexflow_renderer.render_data_from_document(&doc);
@@ -1046,93 +1120,76 @@ async fn update_document_handler(
 async fn get_document_by_id_handler(
     Path(documentUUID): Path<String>
 ) -> impl IntoResponse {
-    // Load document from disk
+    // In local-first architecture, browser owns the document
+    // Server doesn't maintain state - just log the request
+    println!("GET request for document UUID: {}", documentUUID);
+
+    // Return not found - browser should use its localStorage copy
+    (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({
+            "error": "Document not found. In local-first architecture, documents are stored in browser localStorage.",
+            "documentUUID": documentUUID
+        }))
+    ).into_response()
+}
+
+// Edit document handler - loads a document from backup and opens editor
+async fn edit_document_handler(
+    Path(documentUUID): Path<String>
+) -> impl IntoResponse {
+    // Load document from backup (for editing/recovery purposes)
     match load_document(&documentUUID).await {
-        Ok(mut document_json) => {
-            // Ensure the document includes its own UUID
-            if !document_json.get("documentUUID").is_some() {
-                document_json["documentUUID"] = serde_json::Value::String(documentUUID.clone());
-            }
-            // Normalize JSON for older docs: ensure arrays are arrays
-            if let Some(elements_val) = document_json.get_mut("elements") {
-                if !elements_val.is_array() {
-                    *elements_val = serde_json::Value::Array(vec![]);
-                }
-            }
+        Ok(document_json) => {
+            // Return HTML page that loads this document into the editor
+            let html = format!(r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Document - {}</title>
+    <meta charset="UTF-8">
+    <script>
+        // Load document into localStorage and redirect to main editor
+        window.addEventListener('DOMContentLoaded', function() {{
+            const document = {};
 
-    // If empty document, parse minimal notation to get proper document structure
-    let is_empty = document_json.get("elements").and_then(|v| v.as_array()).map(|a| a.is_empty()).unwrap_or(true);
-    let editor_svg = if is_empty {
-        // Parse initial notation through music-text parser to get proper document with structure
-        match crate::pipeline::process_notation("|SRG") {
-            Ok(parse_result) => {
-                crate::renderers::editor::svg::render_editor_svg(&parse_result.document, None, None, None).ok()
-            },
-            Err(_) => {
-                // Fallback if parsing empty string fails
-                match serde_json::from_value::<Document>(document_json.clone()) {
-                    Ok(doc) => crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok(),
-                    Err(_) => None
-                }
-            }
-        }
-    } else {
-        match serde_json::from_value::<Document>(document_json.clone()) {
-            Ok(doc) => crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok(),
-            Err(_) => {
-                // Try parsing initial notation as fallback
-                match crate::pipeline::process_notation("|SRG") {
-                    Ok(parse_result) => {
-                        crate::renderers::editor::svg::render_editor_svg(&parse_result.document, None, None, None).ok()
-                    },
-                    Err(_) => None
-                }
-            }
-        }
-    };
+            // Store document in localStorage
+            const documentUUID = '{}';
+            localStorage.setItem('musictext_document_' + documentUUID, JSON.stringify(document));
+            localStorage.setItem('musictext_current_document', documentUUID);
 
-            // Generate all formats from the document
-            let formats = if let Ok(doc) = serde_json::from_value::<Document>(document_json.clone()) {
-                // Generate LilyPond source
-                let lilypond_src = crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None).ok();
+            // Redirect to main editor
+            window.location.href = '/';
+        }});
+    </script>
+</head>
+<body>
+    <p>Loading document {}...</p>
+</body>
+</html>
+"#, documentUUID, serde_json::to_string(&document_json).unwrap_or_default(), documentUUID, documentUUID);
 
-                // Generate VexFlow JavaScript (self-executing)
-                let vexflow_renderer = crate::renderers::vexflow::VexFlowRenderer::new();
-                let vexflow_data = vexflow_renderer.render_data_from_document(&doc);
-                let vexflow_svg = vexflow_data.get("vexflow_js")
-                    .and_then(|js| js.as_str())
-                    .map(|s| s.to_string());
-
-                DocumentFormats {
-                    vexflow_svg,  // Contains self-executing JavaScript
-                    editor_svg,
-                    lilypond_svg: None,  // Would need to run lilypond command
-                    lilypond_src,
-                    midi: None,
-                }
-            } else {
-                // Fallback with just editor SVG
-                DocumentFormats {
-                    vexflow_svg: None,
-                    editor_svg,
-                    lilypond_svg: None,
-                    lilypond_src: None,
-                    midi: None,
-                }
-            };
-
-            let response = DocumentWithFormatsResponse {
-                document: document_json,
-                formats,
-            };
-
-            Json(response).into_response()
+            Html(html).into_response()
         },
         Err(e) => {
-            (
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({"error": format!("Document not found: {}", e)}))
-            ).into_response()
+            // Document not found in backup
+            let html = format!(r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Not Found</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>Document Not Found</h1>
+    <p>Document {} not found in backup storage.</p>
+    <p>Error: {}</p>
+    <a href="/">Return to Editor</a>
+</body>
+</html>
+"#, documentUUID, e);
+
+            Html(html).into_response()
         }
     }
 }
@@ -1142,52 +1199,17 @@ async fn transform_document_by_id_handler(
     Path(documentUUID): Path<String>,
     Json(request): Json<TransformDocumentByIdRequest>
 ) -> impl IntoResponse {
-    // Load document from disk
-    let mut document = match load_document(&documentUUID).await {
-        Ok(doc) => doc,
-        Err(e) => return (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": format!("Document not found: {}", e)}))
-        ).into_response()
-    };
+    // In local-first architecture, this endpoint shouldn't be used
+    // Document should be sent in the request body
+    println!("Transform request for document UUID: {} (deprecated endpoint)", documentUUID);
 
-    // Apply transformation (same logic as before, but simpler since we have the document)
-    let timestamp = chrono::Utc::now().to_rfc3339();
-    document["timestamp"] = serde_json::Value::String(timestamp);
-
-    // Update metadata based on command type
-    if let Some(metadata) = document.get_mut("metadata") {
-        match request.command_type.as_str() {
-            "apply_slur" => {
-                let slur_count = metadata.get("slur_count").and_then(|v| v.as_u64()).unwrap_or(0);
-                metadata.as_object_mut().unwrap().insert("slur_count".to_string(), serde_json::Value::Number(serde_json::Number::from(slur_count + 1)));
-            }
-            "set_octave" => {
-                if let Some(params) = &request.parameters {
-                    if let Some(octave) = params.get("octave") {
-                        metadata.as_object_mut().unwrap().insert("default_octave".to_string(), octave.clone());
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    // Save updated document back to disk
-    if let Err(e) = save_document(&documentUUID, &document).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))
-        ).into_response();
-    }
-
-    Json(TransformDocumentResponse {
-        success: true,
-        document: document,
-        message: Some(format!("Applied {} to {} elements", request.command_type, request.target_uuids.len())),
-        updated_elements: Vec::new(), // Would contain actual updated element UUIDs in full implementation
-        svg: None, // This endpoint doesn't generate SVG
-    }).into_response()
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(serde_json::json!({
+            "error": "This endpoint is deprecated. Use /api/documents/transform with document in request body.",
+            "documentUUID": documentUUID
+        }))
+    ).into_response()
 }
 
 // UUID-based export handler
@@ -1195,23 +1217,17 @@ async fn export_document_by_id_handler(
     Path(documentUUID): Path<String>,
     Json(request): Json<ExportDocumentByIdRequest>
 ) -> impl IntoResponse {
-    // Load document from disk
-    let document = match load_document(&documentUUID).await {
-        Ok(doc) => doc,
-        Err(e) => return (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": format!("Document not found: {}", e)}))
-        ).into_response()
-    };
+    // In local-first architecture, this endpoint shouldn't be used
+    // Document should be sent in the request body
+    println!("Export request for document UUID: {} (deprecated endpoint)", documentUUID);
 
-    // Use existing export logic
-    let export_request = ExportDocumentRequest {
-        document: document,
-        format: request.format,
-        options: request.options,
-    };
-
-    export_document_handler(Json(export_request)).await.into_response()
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(serde_json::json!({
+            "error": "This endpoint is deprecated. Use /api/documents/export with document in request body.",
+            "documentUUID": documentUUID
+        }))
+    ).into_response()
 }
 
 async fn health_endpoint() -> impl IntoResponse {

@@ -536,12 +536,15 @@ pub fn convert_processed_document_to_lilypond_src(
             }
         };
         convert_document_to_lilypond_src(&Document {
+            document_uuid: document.document_uuid.clone(),
             title: document.title.clone(),
             author: document.author.clone(),
             directives: document.directives.clone(),
             value: document.value.clone(),
             char_index: document.char_index,
             elements: vec![DocumentElement::Stave(stave.clone())],
+            ui_state: document.ui_state.clone(),
+            timestamp: document.timestamp.clone(),
         }, source)
     } else {
         // Multiple staves with content - use multi-stave template

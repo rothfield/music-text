@@ -808,3 +808,9 @@ textarea:focus {
         text-align: center;
     }
 }
+
+/* Animation for the new cursor line element */
+@keyframes cursor-blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}

@@ -7,6 +7,7 @@ pub mod models;
 pub mod spatial;
 pub mod document;
 pub mod import;
+pub mod font_metrics;
 
 pub fn parse(input: &str, _system: Option<&str>) -> Result<parse::Document, parse::ParseError> {
     parse::parse_document(input)

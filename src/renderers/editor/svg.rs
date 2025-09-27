@@ -147,46 +147,95 @@ impl EditorSvgRenderer {
         // This is always at the start of the content area
         self.char_positions.insert(0, (0.0, 0.0));
 
-        // Title is now handled as part of normal document structure - no special rendering
+        // Render document elements (hybrid approach: objects with character tracking)
+        let mut global_char_position = 0;
 
-        // Just render all characters from input text directly
-        let mut char_position = 0;
-        let input_chars: Vec<char> = input_text.chars().collect();
+        // Iterate through document elements
+        for element in &document.elements {
+            match element {
+                crate::models::DocumentElement::BlankLines(blank_lines) => {
+                    // Render blank lines
+                    if let Some(value) = &blank_lines.value {
+                        for ch in value.chars() {
+                            if ch == '\n' {
+                                self.char_positions.insert(global_char_position, (self.current_x, self.current_y));
+                                self.current_y += 60.0;
+                                self.current_x = 0.0;
+                            }
+                            global_char_position += 1;
+                        }
+                    }
+                }
+                crate::models::DocumentElement::Stave(stave) => {
+                    // Render each line in the stave
+                    for (line_idx, line) in stave.lines.iter().enumerate() {
+                        if line_idx > 0 {
+                            // Add newline position
+                            self.char_positions.insert(global_char_position, (self.current_x, self.current_y));
+                            self.current_y += 60.0;
+                            self.current_x = 0.0;
+                            global_char_position += 1;
+                        }
 
-        for (char_idx, ch) in input_text.char_indices() {
-            let char_width = self.get_char_width(&ch.to_string());
-
-            // Each character gets its own unique UUID
-            let char_uuid = uuid::Uuid::new_v4().to_string();
-
-            // Store character position
-            self.char_positions.insert(char_idx, (self.current_x, self.current_y));
-
-            // Handle newlines
-            if ch == '\n' {
-                // Move to next line
-                self.current_y += 60.0;
-                self.current_x = 0.0;
-                char_position = char_idx + 1;
-                continue;
+                        match line {
+                            crate::models::StaveLine::ContentLine(content_line) => {
+                                // Render content line elements
+                                self.render_content_line_elements(&mut svg, content_line, &mut global_char_position)?;
+                            }
+                            crate::models::StaveLine::Text(text_line) => {
+                                // Render text line
+                                if let Some(value) = &text_line.value {
+                                    self.render_text_content(&mut svg, value, &mut global_char_position);
+                                }
+                            }
+                            crate::models::StaveLine::Lyrics(lyrics_line) => {
+                                // Render lyrics with special styling
+                                if let Some(value) = &lyrics_line.value {
+                                    self.render_lyrics_content(&mut svg, value, &mut global_char_position);
+                                }
+                            }
+                            crate::models::StaveLine::Upper(upper_line) => {
+                                // Render upper annotation line
+                                if let Some(value) = &upper_line.value {
+                                    self.render_annotation_content(&mut svg, value, &mut global_char_position, "upper");
+                                }
+                            }
+                            crate::models::StaveLine::Lower(lower_line) => {
+                                // Render lower annotation line
+                                if let Some(value) = &lower_line.value {
+                                    self.render_annotation_content(&mut svg, value, &mut global_char_position, "lower");
+                                }
+                            }
+                            crate::models::StaveLine::Whitespace(ws_line) => {
+                                // Render whitespace line
+                                if let Some(value) = &ws_line.value {
+                                    self.render_whitespace_content(&mut svg, value, &mut global_char_position);
+                                }
+                            }
+                            crate::models::StaveLine::BlankLines(blank) => {
+                                // Render blank lines within stave
+                                if let Some(value) = &blank.value {
+                                    for ch in value.chars() {
+                                        if ch == '\n' {
+                                            self.char_positions.insert(global_char_position, (self.current_x, self.current_y));
+                                            self.current_y += 60.0;
+                                            self.current_x = 0.0;
+                                        }
+                                        global_char_position += 1;
+                                    }
+                                }
+                            }
+                            _ => {
+                                // Skip other line types for now
+                            }
+                        }
+                    }
+                }
             }
-
-            // Render character
-            writeln!(svg, r#"    <text id="char-{}" x="{:.1}" y="{}" class="char" data-source-uuid="{}" data-char-index="{}" data-width="{:.1}">{}</text>"#,
-                self.element_id_counter,
-                self.current_x, self.current_y,
-                char_uuid,
-                char_idx,
-                char_width,
-                ch
-            ).unwrap();
-
-            self.element_id_counter += 1;
-            self.current_x += char_width;
         }
 
         // Store EOF position
-        self.char_positions.insert(input_text.len(), (self.current_x, self.current_y));
+        self.char_positions.insert(global_char_position, (self.current_x, self.current_y));
 
         // Show selection highlighting if enabled
         if self.config.show_selection {
@@ -238,6 +287,376 @@ impl EditorSvgRenderer {
         Ok(svg)
     }
 
+    /// Render content line elements using hybrid approach
+    fn render_content_line_elements(
+        &mut self,
+        svg: &mut String,
+        content_line: &crate::models::ContentLine,
+        char_position: &mut usize
+    ) -> Result<(), String> {
+        // Iterate through content elements
+        for element in &content_line.elements {
+            match element {
+                crate::models::ContentElement::Beat(beat) => {
+                    self.render_beat_element(svg, beat, char_position)?;
+                }
+                crate::models::ContentElement::Barline(barline) => {
+                    self.render_barline_element(svg, barline, char_position)?;
+                }
+                crate::models::ContentElement::Whitespace(whitespace) => {
+                    self.render_whitespace_element(svg, whitespace, char_position)?;
+                }
+                crate::models::ContentElement::UnknownToken(token) => {
+                    self.render_unknown_token(svg, token, char_position)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Render a beat element with semantic styling
+    fn render_beat_element(
+        &mut self,
+        svg: &mut String,
+        beat: &crate::models::Beat,
+        char_position: &mut usize
+    ) -> Result<(), String> {
+        // Start a group for the beat
+        writeln!(svg, r#"    <g class="beat" data-beat-id="{}" data-char-start="{}">"#,
+            beat.id, char_position).unwrap();
+
+        // Render each beat element
+        for beat_elem in &beat.elements {
+            match beat_elem {
+                crate::models::BeatElement::Note(note) => {
+                    self.render_note(svg, note, char_position)?;
+                }
+                crate::models::BeatElement::Rest(rest) => {
+                    self.render_rest(svg, rest, char_position)?;
+                }
+                crate::models::BeatElement::Dash(dash) => {
+                    self.render_dash(svg, dash, char_position)?;
+                }
+                crate::models::BeatElement::BreathMark(breath) => {
+                    self.render_breath_mark(svg, breath, char_position)?;
+                }
+            }
+        }
+
+        writeln!(svg, "    </g>").unwrap();
+        Ok(())
+    }
+
+    /// Render a note with proper styling and character tracking
+    fn render_note(
+        &mut self,
+        svg: &mut String,
+        note: &crate::models::Note,
+        char_position: &mut usize
+    ) -> Result<(), String> {
+        if let Some(value) = &note.value {
+            // Start note group
+            writeln!(svg, r#"      <g class="note" data-note-id="{}" data-octave="{}">"#,
+                note.id, note.octave).unwrap();
+
+            // Render each character of the note
+            for ch in value.chars() {
+                let char_width = self.get_char_width(&ch.to_string());
+
+                // Track character position for cursor
+                self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+                // Render the character
+                writeln!(svg, r#"        <text x="{:.1}" y="{}" class="note-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                    self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+
+                self.current_x += char_width;
+                *char_position += 1;
+            }
+
+            // Add octave dots if present
+            if note.octave != 0 {
+                self.render_octave_dots(svg, note.octave);
+            }
+
+            writeln!(svg, "      </g>").unwrap();
+        }
+        Ok(())
+    }
+
+    /// Render a rest
+    fn render_rest(
+        &mut self,
+        svg: &mut String,
+        rest: &crate::models::Rest,
+        char_position: &mut usize
+    ) -> Result<(), String> {
+        if let Some(value) = &rest.value {
+            writeln!(svg, r#"      <g class="rest" data-rest-id="{}">"#, rest.id).unwrap();
+
+            for ch in value.chars() {
+                let char_width = self.get_char_width(&ch.to_string());
+                self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+                writeln!(svg, r#"        <text x="{:.1}" y="{}" class="rest-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                    self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+
+                self.current_x += char_width;
+                *char_position += 1;
+            }
+
+            writeln!(svg, "      </g>").unwrap();
+        }
+        Ok(())
+    }
+
+    /// Render a dash (note extension)
+    fn render_dash(
+        &mut self,
+        svg: &mut String,
+        dash: &crate::models::Dash,
+        char_position: &mut usize
+    ) -> Result<(), String> {
+        if let Some(value) = &dash.value {
+            for ch in value.chars() {
+                let char_width = self.get_char_width(&ch.to_string());
+                self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+                writeln!(svg, r#"        <text x="{:.1}" y="{}" class="dash-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                    self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+
+                self.current_x += char_width;
+                *char_position += 1;
+            }
+        }
+        Ok(())
+    }
+
+    /// Render a breath mark
+    fn render_breath_mark(
+        &mut self,
+        svg: &mut String,
+        breath: &crate::models::BreathMark,
+        char_position: &mut usize
+    ) -> Result<(), String> {
+        if let Some(value) = &breath.value {
+            for ch in value.chars() {
+                let char_width = self.get_char_width(&ch.to_string());
+                self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+                writeln!(svg, r#"        <text x="{:.1}" y="{}" class="breath-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                    self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+
+                self.current_x += char_width;
+                *char_position += 1;
+            }
+        }
+        Ok(())
+    }
+
+    /// Render a barline
+    fn render_barline_element(
+        &mut self,
+        svg: &mut String,
+        barline: &crate::models::barlines::Barline,
+        char_position: &mut usize
+    ) -> Result<(), String> {
+        let barline_text = match barline {
+            crate::models::barlines::Barline::Single(_) => "|",
+            crate::models::barlines::Barline::Double(_) => "||",
+            crate::models::barlines::Barline::Final(_) => "|]",
+            crate::models::barlines::Barline::RepeatStart(_) => "|:",
+            crate::models::barlines::Barline::RepeatEnd(_) => ":|",
+            crate::models::barlines::Barline::RepeatBoth(_) => ":|:",
+        };
+
+        writeln!(svg, r#"    <g class="barline">"#).unwrap();
+
+        for ch in barline_text.chars() {
+            let char_width = self.get_char_width(&ch.to_string());
+            self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+            writeln!(svg, r#"      <text x="{:.1}" y="{}" class="barline-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+
+            self.current_x += char_width;
+            *char_position += 1;
+        }
+
+        writeln!(svg, "    </g>").unwrap();
+        Ok(())
+    }
+
+    /// Render whitespace
+    fn render_whitespace_element(
+        &mut self,
+        svg: &mut String,
+        whitespace: &crate::models::Whitespace,
+        char_position: &mut usize
+    ) -> Result<(), String> {
+        if let Some(value) = &whitespace.value {
+            for ch in value.chars() {
+                let char_width = self.get_char_width(&ch.to_string());
+                self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+                // Don't render visible text for spaces, just track position
+                if ch != ' ' {
+                    writeln!(svg, r#"    <text x="{:.1}" y="{}" class="whitespace-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                        self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+                }
+
+                self.current_x += char_width;
+                *char_position += 1;
+            }
+        }
+        Ok(())
+    }
+
+    /// Render unknown token
+    fn render_unknown_token(
+        &mut self,
+        svg: &mut String,
+        token: &crate::models::UnknownToken,
+        char_position: &mut usize
+    ) -> Result<(), String> {
+        writeln!(svg, r#"    <g class="unknown-token">"#).unwrap();
+
+        for ch in token.token_value.chars() {
+            let char_width = self.get_char_width(&ch.to_string());
+            self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+            writeln!(svg, r#"      <text x="{:.1}" y="{}" class="unknown-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+
+            self.current_x += char_width;
+            *char_position += 1;
+        }
+
+        writeln!(svg, "    </g>").unwrap();
+        Ok(())
+    }
+
+    /// Render text content
+    fn render_text_content(
+        &mut self,
+        svg: &mut String,
+        text: &str,
+        char_position: &mut usize
+    ) {
+        for ch in text.chars() {
+            let char_width = self.get_char_width(&ch.to_string());
+            self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+            if ch == '\n' {
+                self.current_y += 60.0;
+                self.current_x = 0.0;
+            } else {
+                writeln!(svg, r#"    <text x="{:.1}" y="{}" class="text-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                    self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+                self.current_x += char_width;
+            }
+
+            *char_position += 1;
+        }
+    }
+
+    /// Render lyrics content with special styling
+    fn render_lyrics_content(
+        &mut self,
+        svg: &mut String,
+        text: &str,
+        char_position: &mut usize
+    ) {
+        writeln!(svg, r#"    <g class="lyrics-line">"#).unwrap();
+
+        for ch in text.chars() {
+            let char_width = self.get_char_width(&ch.to_string());
+            self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+            if ch == '\n' {
+                self.current_y += 60.0;
+                self.current_x = 0.0;
+            } else {
+                writeln!(svg, r#"      <text x="{:.1}" y="{}" class="lyrics-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                    self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+                self.current_x += char_width;
+            }
+
+            *char_position += 1;
+        }
+
+        writeln!(svg, "    </g>").unwrap();
+    }
+
+    /// Render annotation content (upper/lower lines)
+    fn render_annotation_content(
+        &mut self,
+        svg: &mut String,
+        text: &str,
+        char_position: &mut usize,
+        annotation_type: &str
+    ) {
+        writeln!(svg, r#"    <g class="{}-annotation">"#, annotation_type).unwrap();
+
+        for ch in text.chars() {
+            let char_width = self.get_char_width(&ch.to_string());
+            self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+            if ch == '\n' {
+                self.current_y += 60.0;
+                self.current_x = 0.0;
+            } else {
+                writeln!(svg, r#"      <text x="{:.1}" y="{}" class="{}-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                    self.current_x, self.current_y, annotation_type, char_position, char_width, ch).unwrap();
+                self.current_x += char_width;
+            }
+
+            *char_position += 1;
+        }
+
+        writeln!(svg, "    </g>").unwrap();
+    }
+
+    /// Render whitespace content
+    fn render_whitespace_content(
+        &mut self,
+        svg: &mut String,
+        text: &str,
+        char_position: &mut usize
+    ) {
+        for ch in text.chars() {
+            let char_width = self.get_char_width(&ch.to_string());
+            self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+            if ch == '\n' {
+                self.current_y += 60.0;
+                self.current_x = 0.0;
+            } else if ch != ' ' {
+                // Only render visible whitespace characters
+                writeln!(svg, r#"    <text x="{:.1}" y="{}" class="whitespace-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                    self.current_x, self.current_y, char_position, char_width, ch).unwrap();
+            }
+
+            if ch != '\n' {
+                self.current_x += char_width;
+            }
+
+            *char_position += 1;
+        }
+    }
+
+    /// Render octave dots above or below the current position
+    fn render_octave_dots(&self, svg: &mut String, octave: i8) {
+        let dot_offset = if octave > 0 { -10.0 } else { 10.0 };
+        let num_dots = octave.abs() as usize;
+
+        for i in 0..num_dots {
+            let y = self.current_y + dot_offset - (i as f32 * 3.0 * octave.signum() as f32);
+            writeln!(svg, r#"        <circle cx="{:.1}" cy="{:.1}" r="1.5" class="octave-dot"/>"#,
+                self.current_x - 10.0, y).unwrap();
+        }
+    }
+
     /// Generate canvas-specific CSS
     fn generate_canvas_css(&self) -> String {
         // Always use embedded CSS to ensure all styles are included
@@ -276,7 +695,7 @@ impl EditorSvgRenderer {
       fill: deepskyblue;
       font-weight: normal;
       font-family: monospace, 'Courier New', monospace;
-      cursor: pointer;
+      cursor: text;
     }}
 
     .char.cursor {{
@@ -284,6 +703,79 @@ impl EditorSvgRenderer {
       stroke: black;
       stroke-width: 2px;
       opacity: 0.9;
+    }}
+
+    /* Semantic element styles */
+    .note-char {{
+      font-size: {}px;
+      fill: #1e90ff;
+      font-weight: normal;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: text;
+    }}
+
+    .rest-char {{
+      font-size: {}px;
+      fill: #808080;
+      font-style: italic;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: text;
+    }}
+
+    .barline-char {{
+      font-size: {}px;
+      fill: #8b008b;
+      font-weight: bold;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: text;
+    }}
+
+    .dash-char {{
+      font-size: {}px;
+      fill: #4682b4;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: text;
+    }}
+
+    .breath-char {{
+      font-size: {}px;
+      fill: #ff6347;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: text;
+    }}
+
+    .lyrics-char {{
+      font-size: {}px;
+      fill: #666666;
+      font-style: italic;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: text;
+    }}
+
+    .text-char {{
+      font-size: {}px;
+      fill: #333333;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: text;
+    }}
+
+    .unknown-char {{
+      font-size: {}px;
+      fill: #999999;
+      font-style: italic;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: text;
+    }}
+
+    .upper-char, .lower-char {{
+      font-size: {}px;
+      fill: #ff4500;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: text;
+    }}
+
+    .octave-dot {{
+      fill: #ff0000;
     }}
 
     .canvas-octave-upper {{
@@ -366,7 +858,19 @@ impl EditorSvgRenderer {
     /* Character replacement styles removed - handled in rendering logic */
     ]]>
   </style>
-"#, note_size, note_size, octave_size, octave_size, note_size, note_size * 0.9, note_size * 0.8, note_size * 1.5, note_size * 0.9, note_size)
+"#, note_size, note_size,
+        // New semantic styles
+        note_size,    // note-char
+        note_size,    // rest-char
+        note_size,    // barline-char
+        note_size,    // dash-char
+        note_size,    // breath-char
+        note_size * 0.9,    // lyrics-char
+        note_size,    // text-char
+        note_size * 0.9,    // unknown-char
+        note_size * 0.8,    // upper/lower-char
+        // Original styles
+        octave_size, octave_size, note_size, note_size * 0.9, note_size * 0.8, note_size * 1.5, note_size * 0.9, note_size)
     }
 
     /// Render content line as individual characters using document element UUIDs
@@ -748,10 +1252,10 @@ impl EditorSvgRenderer {
                 start_x - 2.0, selection_y, end_x - start_x + 4.0, selection_height).unwrap();
     }
 
-    /// Get approximate character width
+    /// Get accurate character width using font metrics
     fn get_char_width(&self, text: &str) -> f32 {
-        // Approximate monospace character width based on font size
-        text.chars().count() as f32 * (self.config.font_size * 0.6)
+        // Use real font metrics for accurate width calculation
+        crate::font_metrics::get_string_width(text, self.config.font_size)
     }
 
     /// Render lyrics line below the current content line
