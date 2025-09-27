@@ -6,6 +6,7 @@ pub mod position;
 pub mod barlines;
 pub mod pitch_systems;
 pub mod rhythm;
+pub mod ui_state;
 
 // Re-export everything for convenience
 pub use core::*;
@@ -14,6 +15,7 @@ pub use notation::*;
 pub use position::*;
 pub use barlines::*;
 pub use rhythm::*;
+pub use ui_state::*;
 
 // For backwards compatibility, also export the old pitch module concepts
 // These are now unified in notation.rs

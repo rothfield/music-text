@@ -25,11 +25,13 @@
     <div class="app">
         <div class="control-bar">
             <div class="controls">
-                <button onclick="createNewDocument()" class="primary">New</button>
-                <button onclick="parseMusic()">Parse</button>
-                <button onclick="generateSVG()" class="secondary">LilyPond</button>
-                <button onclick="clearAll()" class="secondary">Clear</button>
-                <button onclick="toggleSlur()" class="secondary">Slur</button>
+                            <button id="newDocButton" class="control-button">New</button>
+            <button id="clearButton" class="control-button">Clear</button>
+            <button id="copyButton" class="control-button">Copy</button>
+            <button id="pasteButton" class="control-button">Paste</button>
+            <button id="lilypondButton" class="control-button">LilyPond</button>
+            <button id="playButton" class="control-button">Play</button>
+            <button id="stopButton" class="control-button">Stop</button>
 
 
                 <div class="octave-controls">

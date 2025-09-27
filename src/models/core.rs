@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::models::ui_state::UIState;
 
 // Core document structure models
 // These represent the fundamental structure of a music document
@@ -10,14 +11,18 @@ pub enum DocumentElement {
     Stave(Stave),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Document {
     pub value: Option<String>,
     pub char_index: usize,
     pub title: Option<String>,
     pub author: Option<String>,
+    #[serde(default)]
     pub directives: HashMap<String, String>, // key -> value
+    #[serde(default)]
     pub elements: Vec<DocumentElement>, // Document as sequence of elements
+    #[serde(default)]
+    pub ui_state: UIState,
 }
 
 impl Document {

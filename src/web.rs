@@ -338,6 +338,13 @@ pub struct SplitLineResponse {
     new_cursor_position: usize,
 }
 
+use crate::document::edit::structural::Clipboard;
+
+// App state for managing shared resources like the clipboard
+struct AppState {
+    clipboard: Arc<Mutex<Option<Clipboard>>>,
+}
+
 pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
     // Preload CSS file on server startup
     match std::fs::read_to_string("assets/svg-styles.css") {
@@ -349,7 +356,10 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // SVG router removed - using canvas SVG instead
+    // Shared state for the application
+    let shared_state = Arc::new(AppState {
+        clipboard: Arc::new(Mutex::new(None)),
+    });
 
     let app = Router::new()
         // RESTful Document API endpoints
@@ -364,7 +374,8 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health_endpoint))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/", ServeDir::new("webapp/public"))
-        .layer(CorsLayer::permissive());
+        .layer(CorsLayer::permissive())
+        .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
@@ -878,71 +889,140 @@ async fn export_document_handler(Json(request): Json<ExportDocumentRequest>) -> 
     }
 }
 
+use axum::extract::State;
+
 // PUT update document handler
 async fn update_document_handler(
     Path(documentUUID): Path<String>,
     Json(request): Json<UpdateDocumentRequest>
 ) -> impl IntoResponse {
-    // Start with document from request
-    let mut document = request.document.clone();
+    // Deserialize the incoming JSON to our Document model.
+    let mut doc: Document = match serde_json::from_value(request.document.clone()) {
+        Ok(d) => d,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": format!("Failed to deserialize document: {}", e) }))
+            ).into_response();
+        }
+    };
 
-    let mut cursor_position = document["ui_state"]["selection"]["cursor_position"]
-        .as_u64()
-        .unwrap_or(0) as usize;
+    let mut new_cursor_pos = doc.ui_state.selection.cursor_position;
 
-    // Update timestamp
-    document["timestamp"] = serde_json::Value::String(chrono::Utc::now().to_rfc3339());
+    // If there's an edit command, apply it directly to the Document model.
+    if let Some(edit_command) = request.edit_command {
+        let result = match edit_command.command_type.as_str() {
+            "insert_text" => {
+                // Standard editor behavior: if there's a selection, delete it before inserting.
+                if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
+                    if start < end {
+                        new_cursor_pos = crate::document::edit::structural::delete_selection(&mut doc, start, end)?;
+                    }
+                }
+                let text = edit_command.text.unwrap_or_default();
+                if text == "\n" {
+                    crate::document::edit::structural::insert_newline(&mut doc, new_cursor_pos)
+                } else if let Some(char_to_insert) = text.chars().next() {
+                    crate::document::edit::structural::insert_char(&mut doc, new_cursor_pos, char_to_insert)
+                        .map(|_| new_cursor_pos + 1)
+                } else {
+                    Ok(new_cursor_pos) // No text to insert
+                }
+            }
+            "delete_text" => {
+                if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
+                    if start < end {
+                        crate::document::edit::structural::delete_selection(&mut doc, start, end)
+                    } else if let Some(direction) = edit_command.direction {
+                         if direction == "backward" {
+                            crate::document::edit::structural::delete_char_left(&mut doc, edit_command.position)
+                        } else {
+                            crate::document::edit::structural::delete_char_right(&mut doc, edit_command.position)
+                        }
+                    } else {
+                        Ok(edit_command.position)
+                    }
+                } else if let Some(direction) = edit_command.direction {
+                    if direction == "backward" {
+                        crate::document::edit::structural::delete_char_left(&mut doc, edit_command.position)
+                    } else {
+                        crate::document::edit::structural::delete_char_right(&mut doc, edit_command.position)
+                    }
+                } else {
+                    Ok(edit_command.position)
+                }
+            }
+            "copy_selection" => {
+                if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
+                    if start < end {
+                        match crate::document::edit::structural::copy_selection(&doc, start, end) {
+                            Ok(clipboard_content) => {
+                                doc.ui_state.clipboard_content = Some(clipboard_content.content);
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
+                }
+                Ok(new_cursor_pos) // Copy doesn't move the cursor
+            }
+            "paste" => {
+                if let Some(clipboard_content) = &doc.ui_state.clipboard_content {
+                    // First, delete any existing selection
+                    if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
+                        if start < end {
+                           new_cursor_pos = crate::document::edit::structural::delete_selection(&mut doc, start, end)?;
+                        }
+                    }
+                    // Then, paste
+                    let clipboard = crate::document::edit::structural::Clipboard { content: clipboard_content.clone() };
+                    crate::document::edit::structural::paste(&mut doc, new_cursor_pos, &clipboard)
+                } else {
+                    Ok(new_cursor_pos) // Nothing to paste
+                }
+            }
+            _ => Err(format!("Unknown edit command type: {}", edit_command.command_type)),
+        };
 
-    // Save updated document
-    if let Err(e) = save_document(&documentUUID, &document).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({
-                "error": format!("Failed to save document: {}", e)
-            }))
-        ).into_response();
+        match result {
+            Ok(cursor) => new_cursor_pos = cursor,
+            Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
+        }
+    }
+    
+    // Update UI state and timestamp in the model
+    doc.ui_state.selection.cursor_position = new_cursor_pos;
+    doc.timestamp = chrono::Utc::now().to_rfc3339();
+
+    // Convert the modified Document model back to JSON.
+    let document_json = match serde_json::to_value(&doc) {
+        Ok(json) => json,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("Failed to re-serialize document: {}", e)}))).into_response(),
+    };
+
+    // Save the updated document.
+    if let Err(e) = save_document(&documentUUID, &document_json).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))).into_response();
     }
 
-    // Generate formats from the document
-    let formats = if let Ok(doc) = serde_json::from_value::<Document>(document.clone()) {
-        // Generate all formats from the Document struct
+    // Generate all formats from the modified document.
+    let formats = {
         let editor_svg = crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok();
-
-        // Generate LilyPond source
         let lilypond_src = crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None).ok();
-
-        // Generate VexFlow JavaScript
         let vexflow_renderer = crate::renderers::vexflow::VexFlowRenderer::new();
         let vexflow_data = vexflow_renderer.render_data_from_document(&doc);
-        let vexflow_svg = vexflow_data.get("vexflow_js")
-            .and_then(|js| js.as_str())
-            .map(|s| s.to_string());
-
-        DocumentFormats {
-            vexflow_svg,
-            editor_svg,
-            lilypond_svg: None,  // Would need to run lilypond command
-            lilypond_src,
-            midi: None,
-        }
-    } else {
-        // If we can't deserialize, return empty formats
-        DocumentFormats {
-            vexflow_svg: None,
-            editor_svg: None,
-            lilypond_svg: None,
-            lilypond_src: None,
-            midi: None,
-        }
+        let vexflow_svg = vexflow_data.get("vexflow_js").and_then(|js| js.as_str()).map(|s| s.to_string());
+        DocumentFormats { vexflow_svg, editor_svg, lilypond_svg: None, lilypond_src, midi: None }
     };
 
     Json(serde_json::json!({
         "success": true,
-        "document": document,
+        "document": document_json,
         "formats": formats,
-        "cursor_position": cursor_position
+        "cursor_position": new_cursor_pos
     })).into_response()
 }
+
+
 
 // GET document by UUID handler
 async fn get_document_by_id_handler(

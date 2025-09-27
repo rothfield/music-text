@@ -106,6 +106,15 @@ class MusicTextApp {
 
     // Setup event listeners
     setupEventListeners() {
+        // Setup event listeners for main control buttons
+        document.getElementById('newDocButton').addEventListener('click', () => this.createNewDocument());
+        document.getElementById('clearButton').addEventListener('click', () => this.clearAll());
+        document.getElementById('copyButton').addEventListener('click', () => this.canvasEditor.copySelection());
+        document.getElementById('pasteButton').addEventListener('click', () => this.canvasEditor.paste());
+        document.getElementById('lilypondButton').addEventListener('click', () => this.generateSVG());
+        document.getElementById('playButton').addEventListener('click', () => this.playMidi());
+        document.getElementById('stopButton').addEventListener('click', () => this.stopMidi());
+
         // Set up canvas editor event listeners
         this.canvasEditor.onContentChange = (content) => {
             // Update the backing text tab

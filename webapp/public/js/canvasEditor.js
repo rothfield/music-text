@@ -648,18 +648,7 @@ export class CanvasEditor {
 
     // Handle Enter key - document-first architecture
     handleEnterKey() {
-        // In document-first architecture, we'd insert a line break element
-        console.log('Enter key in document-first mode');
-        // TODO: Implement line break insertion
-        this.isDirty = true;
-        this.saveToLocalStorage();
-        this.draw();
-
-        if (this.onSelectionChange) {
-            this.onSelectionChange({
-                // UUID-based selection
-            });
-        }
+        this.insertCharacter('\n');
     }
 
     // Move cursor

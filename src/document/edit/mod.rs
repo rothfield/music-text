@@ -2,6 +2,8 @@ use crate::parse::Document;
 use serde_json;
 
 pub mod octave;
+pub mod text;
+pub mod structural;
 
 /// Execute an edit operation on a document
 /// This is the main entry point for all document edit operations
