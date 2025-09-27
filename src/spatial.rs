@@ -1,8 +1,8 @@
 use crate::models::{
     Document, DocumentElement, Stave, StaveLine, UpperLine, LowerLine, LyricsLine,
-    UpperElement, LowerElement, Syllable, ContentLine, ContentElement, Beat, BeatElement, Note, ConsumedElement, Attributes, Position
+    UpperElement, LowerElement, ContentLine, ContentElement, BeatElement, Note, ConsumedElement
 };
-use crate::rhythm::types::{ParsedElement, Position as RhythmPosition, ParsedChild};
+use crate::rhythm::types::{ParsedElement, ParsedChild};
 
 /// Consumed marker with move semantics - original source is consumed
 #[derive(Debug, Clone)]
@@ -458,7 +458,7 @@ fn consume_beat_groups(mut lower_lines: Vec<LowerLine>) -> (Vec<(usize, Consumed
         for element in &mut lower_line.elements {
             let pos = tracker.advance_for_lower_element(element);
 
-            if let LowerElement::BeatGroupIndicator { value, indicator_value, char_index, .. } = element {
+            if let LowerElement::BeatGroupIndicator { value,  char_index, .. } = element {
                 if let Some(underscore_value) = value.take() {
                     let consumed = ConsumedBeatGroup {
                         start_pos: pos,
@@ -778,7 +778,7 @@ fn process_content_line_spatial(
     lower_lines: &mut [LowerLine],
     lyrics_lines: &[LyricsLine]
 ) -> Result<(ContentLine, Vec<String>), String> {
-    let mut warnings = Vec::new();
+    let warnings = Vec::new();
 
     // Get the starting char_index of the content line to calculate columns
     let content_line_start = content_line.char_index;
@@ -1043,7 +1043,7 @@ fn collect_upper_line_spans(upper_line: &mut UpperLine) -> Vec<SpatialSpan> {
                     tracker.advance_for_upper_element(element);
                 }
             },
-            UpperElement::UpperOctaveMarker { value, marker, char_index, .. } => {
+            UpperElement::UpperOctaveMarker { value,  char_index, .. } => {
                 let element_char_index = *char_index;
 
                 if let Some(consumed_value) = value.take() { // Consume octave marker

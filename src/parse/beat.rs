@@ -1,4 +1,4 @@
-use crate::parse::model::{Beat, BeatElement, Note, Dash, BreathMark, NotationSystem, Attributes, Position};
+use crate::parse::model::{Beat, BeatElement, Note, Dash, BreathMark, NotationSystem};
 use crate::parse::pitch::{parse_pitch_with_indices, is_pitch_start};
 use crate::parse::ParseError;
 use std::str::CharIndices;

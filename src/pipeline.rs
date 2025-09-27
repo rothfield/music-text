@@ -1,6 +1,5 @@
-use crate::parse::{Document, model::{DocumentElement, Stave, StaveLine, ContentLine, NotationSystem}};
-use crate::parse::recursive_descent::{parse_document, ParseError};
-use crate::parse::content_line_parser_v3::parse_content_line as parse_content_line_v3;
+use crate::parse::Document;
+use crate::parse::recursive_descent::parse_document;
 use crate::spatial::process_spatial_assignments_unified;
 use crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src;
 use crate::renderers::vexflow::VexFlowRenderer;
@@ -14,14 +13,11 @@ pub struct ProcessingResult {
     pub vexflow_svg: String,
     pub vexflow_data: serde_json::Value,
 }
-use crate::models::pitch_systems::{sargam, western, number};
-use crate::models::Degree;
-use std::str::FromStr;
 
 /// New pipeline using direct beat parsing (no separate rhythm analysis)
 pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
     // Stage 1: Parse with direct beat creation
-    let mut parsed_document = parse_document_with_direct_beats(input)?;
+    let parsed_document = parse_document_with_direct_beats(input)?;
 
     // Stage 2: Process spatial assignments (octave markers, slurs, syllables) BEFORE rhythm analysis
     let (spatial_document, _spatial_warnings) = process_spatial_assignments_unified(parsed_document.clone())

@@ -3,7 +3,7 @@ use crate::models::{Degree, PitchCode};
 /// Get all valid number symbols (for regex pattern generation)
 /// Returns symbols sorted by length (longest first) for proper regex matching
 pub fn get_all_symbols() -> Vec<String> {
-    let mut symbols = vec![
+    let symbols = vec![
         // Double accidentals (longest first) - Unicode variants
         "1♯♯".to_string(), "2♯♯".to_string(), "3♯♯".to_string(), "4♯♯".to_string(),
         "5♯♯".to_string(), "6♯♯".to_string(), "7♯♯".to_string(),

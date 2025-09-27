@@ -281,7 +281,7 @@ fn map_pc_to_degree_with_acc(pc: &str, scale: &[String;7]) -> String {
     let mut best_deg = 1; let mut best_delta: i32 = 12;
     for (i, sd) in scale.iter().enumerate() {
         let si = pcs.iter().position(|p| *p == sd).unwrap_or(0) as i32;
-        let mut d = (idx - si) % 12; let mut d2 = d;
+        let d = (idx - si) % 12; let mut d2 = d;
         if d2 > 6 { d2 -= 12; }
         if d2 < -6 { d2 += 12; }
         if d2.abs() < best_delta.abs() { best_delta = d2; best_deg = (i+1) as i32; }

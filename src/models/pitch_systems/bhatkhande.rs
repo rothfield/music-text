@@ -3,7 +3,7 @@ use crate::models::{Degree, PitchCode};
 /// Get all valid bhatkhande symbols (for regex pattern generation)
 /// Returns symbols sorted by length (longest first) for proper regex matching
 pub fn get_all_symbols() -> Vec<String> {
-    let mut symbols = vec![
+    let symbols = vec![
         // Devanagari with accidentals (longest first)
         "रे#".to_string(), "रेb".to_string(), "नि#".to_string(), "निb".to_string(),
         "स#".to_string(), "सb".to_string(), "ग#".to_string(), "गb".to_string(),

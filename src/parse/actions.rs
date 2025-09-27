@@ -128,7 +128,7 @@ pub fn apply_octave_transform(
     // The full implementation would parse the document and apply the octave markers
 
     // Find the lines containing the selection
-    let mut lines: Vec<&str> = text.lines().collect();
+    let lines: Vec<&str> = text.lines().collect();
     let mut char_count = 0;
     let mut start_line_idx = 0;
     let mut end_line_idx = 0;

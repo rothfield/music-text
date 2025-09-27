@@ -1,4 +1,4 @@
-use crate::parse::model::{LowerLine, LowerElement, Attributes, Position};
+use crate::parse::model::{LowerLine, LowerElement};
 use crate::parse::ParseError;
 
 /// Parse a lower line following the grammar specification

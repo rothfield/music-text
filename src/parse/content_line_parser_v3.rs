@@ -1,8 +1,8 @@
-use crate::parse::model::{ContentLine, ContentElement, NotationSystem, Barline, SingleBarline, DoubleBarline, FinalBarline, RepeatStartBarline, RepeatEndBarline, RepeatBothBarline, Whitespace, Beat, Attributes, Position};
+use crate::parse::model::{ContentLine, ContentElement, NotationSystem, Barline, SingleBarline, DoubleBarline, FinalBarline, RepeatStartBarline, RepeatEndBarline, RepeatBothBarline};
 use crate::parse::beat::parse_beat;
 use crate::parse::pitch::is_pitch_start;
 use crate::parse::ParseError;
-use std::str::{FromStr, CharIndices};
+use std::str::CharIndices;
 use std::iter::Peekable;
 
 /// Helper function to calculate column from position in input

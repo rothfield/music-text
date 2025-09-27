@@ -1,6 +1,6 @@
 // Rhythm analyzer FSM based on bak.src/rhythm_fsm.rs
 // Adapted to work with current parse model structures
-use crate::parse::model::{Document, DocumentElement, StaveLine, ContentElement, Beat, BeatElement, Note, Rest, Dash};
+use crate::parse::model::{Document, DocumentElement, StaveLine, ContentElement, Beat, BeatElement};
 use fraction::Fraction;
 
 /// Analyze rhythm patterns and add duration information to the document

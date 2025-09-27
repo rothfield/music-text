@@ -1,4 +1,4 @@
-use crate::parse::model::{UpperLine, UpperElement, Attributes, Position};
+use crate::parse::model::{UpperLine, UpperElement};
 use crate::parse::ParseError;
 
 /// Parse an upper line following the grammar specification

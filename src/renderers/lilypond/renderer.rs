@@ -38,7 +38,7 @@ pub fn convert_document_to_lilypond_src(
 
     let mut lilypond_notes: Vec<String> = Vec::new();
     let mut previous_beat_notes: Vec<String> = Vec::new();
-    let mut current_tonic: Option<Degree> = None;
+    let current_tonic: Option<Degree> = None;
 
     // Extract staves from document
     for element in &document.elements {
@@ -284,7 +284,7 @@ fn convert_beat_to_lilypond(beat: &Beat, current_tonic: Option<Degree>) -> Resul
                     note.octave,
                     current_tonic.map(|d| crate::models::pitch_systems::degree_to_pitch_code(d))
                 )?;
-                let mut note_str = format!("{}{}", lily_note, duration_string);
+                let note_str = format!("{}{}", lily_note, duration_string);
 
                 // TODO: Add slur markers from spatial assignments if available
 
@@ -581,7 +581,7 @@ fn convert_multistave_to_lilypond_src(
 /// Convert a single stave to LilyPond content (without template wrapper)
 fn convert_stave_to_lilypond_content(stave: &crate::parse::model::Stave) -> Result<String, String> {
     let mut lilypond_notes: Vec<String> = Vec::new();
-    let mut current_tonic: Option<Degree> = None;
+    let current_tonic: Option<Degree> = None;
 
     for line in &stave.lines {
         if let StaveLine::ContentLine(content_line) = line {

@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 
 // Re-export domain models from the models crate for convenience
 pub use crate::models::*;

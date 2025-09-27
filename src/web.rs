@@ -1,6 +1,6 @@
 // Web server for live notation parsing
 use axum::{
-    extract::{Query, Multipart, Form, Path},
+    extract::{Multipart, Form, Path},
     response::{IntoResponse, Html, Response},
     routing::{get, post, put},
     Json, Router,
@@ -8,18 +8,13 @@ use axum::{
     body::Body,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use chrono;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tokio::fs;
-use tokio::io::AsyncReadExt;
 // Removed pest import - using hand-written recursive descent parser
-use crate::pipeline;
 use crate::import::musicxml::{import_musicxml_to_document, ImportOptions};
-use crate::renderers::lilypond::renderer;
-use crate::renderers::editor::svg;
 
 #[derive(Debug, Deserialize)]
 pub struct ParseRequest {
@@ -236,7 +231,7 @@ struct MusicXmlImportRequest { xml: String, #[serde(default)] prefer_minor: bool
 struct MusicXmlImportResponse { document: crate::models::core::Document }
 
 use crate::parse::Document;
-use crate::parse::actions::{TransformRequest, TransformResponse, apply_octave_transform, apply_slur_transform};
+use crate::parse::actions::{TransformRequest, apply_octave_transform, apply_slur_transform};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 // Generate PNG from LilyPond source
@@ -951,7 +946,6 @@ async fn export_document_handler(Json(request): Json<ExportDocumentRequest>) -> 
     }
 }
 
-use axum::extract::State;
 
 // PUT update document handler
 async fn update_document_handler(

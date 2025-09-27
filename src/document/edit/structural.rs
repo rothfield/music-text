@@ -12,7 +12,7 @@
 // phase to run after each edit to recalculate these document-wide properties.
 // That re-analysis phase is NOT implemented here.
 
-use crate::models::{Document, DocumentElement, Stave, StaveLine, ContentLine, NotationSystem};
+use crate::models::{Document, DocumentElement, StaveLine, ContentLine, NotationSystem};
 use serde::{Deserialize, Serialize};
 
 /// Represents clipboard content. For now, it's text-based.

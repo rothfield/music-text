@@ -3,7 +3,7 @@ use crate::models::{Degree, PitchCode};
 /// Get all valid western symbols (for regex pattern generation)
 /// Returns symbols sorted by length (longest first) for proper regex matching
 pub fn get_all_symbols() -> Vec<String> {
-    let mut symbols = vec![
+    let symbols = vec![
         // Double accidentals (longest first)
         "C##".to_string(), "D##".to_string(), "E##".to_string(), "F##".to_string(),
         "G##".to_string(), "A##".to_string(), "B##".to_string(),
