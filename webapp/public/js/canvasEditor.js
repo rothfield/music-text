@@ -1647,6 +1647,37 @@ export class CanvasEditor {
         return ''; // Document-first: no text tracking
     }
 
+    // Copy the current selection to the server-side clipboard
+    async copySelection() {
+        const selection = this.getSelection();
+        if (selection.uuids.length === 0) {
+            UI.setStatus('No selection to copy.', 'error');
+            return;
+        }
+
+        const editCommand = {
+            type: 'copy_selection',
+            selection_start: selection.characterRange.start,
+            selection_end: selection.characterRange.end,
+        };
+
+        await this.applyEditCommand(editCommand);
+        UI.setStatus('Selection copied.', 'success');
+    }
+
+    // Paste from the server-side clipboard
+    async paste() {
+        const editCommand = {
+            type: 'paste',
+            position: this.cursorPosition,
+            selection_start: this.selection.start,
+            selection_end: this.selection.end,
+        };
+
+        await this.applyEditCommand(editCommand);
+        UI.setStatus('Pasted from clipboard.', 'success');
+    }
+
     // DEPRECATED: Use document operations instead of direct text manipulation
     setValue(content, cursorPos = null) {
         console.warn('setValue() is deprecated. Use document operations for document-first architecture.');

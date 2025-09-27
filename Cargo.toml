@@ -43,6 +43,8 @@ reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2.1"
 base64 = "0.22"
 tempfile = "3.8"
+quick-xml = "0.31"
+anyhow = "1"
 
 
 [build-dependencies]

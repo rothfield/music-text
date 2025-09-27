@@ -17,6 +17,7 @@ use tokio::fs;
 use tokio::io::AsyncReadExt;
 // Removed pest import - using hand-written recursive descent parser
 use crate::pipeline;
+use crate::import::musicxml::{import_musicxml_to_document, ImportOptions};
 use crate::renderers::lilypond::renderer;
 use crate::renderers::editor::svg;
 
@@ -227,6 +228,12 @@ pub struct DocumentFormats {
     midi: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct MusicXmlImportRequest { xml: String, #[serde(default)] prefer_minor: bool }
+
+#[derive(Debug, Serialize)]
+struct MusicXmlImportResponse { document: crate::models::core::Document }
+
 use crate::parse::Document;
 use crate::parse::actions::{TransformRequest, TransformResponse, apply_octave_transform, apply_slur_transform};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -362,6 +369,7 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let app = Router::new()
+        .route("/api/import/musicxml", post(import_musicxml_handler))
         // RESTful Document API endpoints
         .route("/api/documents", post(create_document_handler))
         .route("/api/documents/from-text", post(create_document_from_text_handler))
@@ -446,6 +454,16 @@ async fn transform_slur_handler(Json(request): Json<TransformRequest>) -> impl I
     );
 
     Json(response)
+}
+
+async fn import_musicxml_handler(Json(payload): Json<MusicXmlImportRequest>) -> impl IntoResponse {
+    match import_musicxml_to_document(&payload.xml, Some(ImportOptions{ prefer_minor: payload.prefer_minor })) {
+        Ok(document) => {
+            let resp = MusicXmlImportResponse { document };
+            (StatusCode::OK, Json(resp)).into_response()
+        }
+        Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": format!("{}", e)}))).into_response(),
+    }
 }
 
 // Duplicate removed; defined earlier
