@@ -43,6 +43,16 @@ The system follows a document-model-centric architecture where the parsed docume
 ### IX. Build System Discipline
 ALWAYS use `make build` for development builds. NEVER use `--release` flag during development. We are using a RAMDISK so beware of putting too much in target/. We take a SINGLE BINARY approach. Development builds MUST be fast and iterative. Release builds only for production deployment after thorough testing.
 
+### X. Canonical Format Names
+The system uses the following canonical names for all output formats across the entire codebase and APIs:
+- `vexflow_svg` - Staff notation rendered by VexFlow in SVG format
+- `editor_svg` - The interactive editor canvas in SVG format (formerly canvas_svg)
+- `lilypond_svg` - Staff notation rendered by LilyPond in SVG format
+- `lilypond_src` - LilyPond source code
+- `document` - The parsed document structure in JSON format
+
+These names MUST be used consistently in all interfaces, APIs, and code. No abbreviations or variations allowed.
+
 ## Quality Standards
 
 ### Testing Requirements

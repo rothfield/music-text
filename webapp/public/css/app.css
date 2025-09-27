@@ -496,11 +496,13 @@ textarea:focus {
     opacity: 0.8 !important;
 }
 
+/* Cursor disabled
 .svg-cursor {
     stroke: #000 !important;
     stroke-width: 1px !important;
     animation: svg-cursor-blink 1s ease-in-out infinite;
 }
+*/
 
 @keyframes svg-cursor-blink {
     0%, 50% { opacity: 1; }

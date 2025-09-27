@@ -23,7 +23,7 @@ export const API = {
             const selector = document.getElementById('notationTypeSelect');
             notationType = selector ? selector.value : 'number';
         }
-        url.searchParams.set('notation_type', notationType);
+        // notation_type removed from API
 
         const response = await fetch(url);
         if (!response.ok) {

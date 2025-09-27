@@ -30,7 +30,7 @@ impl VexFlowRenderer {
         let mut stave_count = 0;
         for element in &document.elements {
             if let DocumentElement::Stave(stave) = element {
-                let stave_js = js_generator.generate_for_stave(stave, "vexflow-output");
+                let stave_js = js_generator.generate_for_stave(stave, "vexflow_svg-output");
                 generated_js = stave_js; // For now, just use the last stave
                 stave_count += 1;
             }
@@ -52,7 +52,7 @@ impl VexFlowRenderer {
     fn generate_empty_stave_js(&self) -> String {
         format!(
             "(function() {{\n\
-               const container = document.getElementById('vexflow-output');\n\
+               const container = document.getElementById('vexflow_svg-output');\n\
                if (!container) return;\n\
                container.innerHTML = '';\n\
                \n\

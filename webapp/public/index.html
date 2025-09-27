@@ -67,30 +67,28 @@
         </div>
         
         <div class="tabs">
-            <div class="tab active" onclick="switchTab('vexflow', this)">VexFlow Draft</div>
-            <div class="tab" onclick="switchTab('svg', this)">LilyPond SVG</div>
-            <div class="tab" onclick="switchTab('lilypond', this)">LilyPond Src (minimal)</div>
-            <div class="tab" onclick="switchTab('lilypond-full', this)">LilyPond Src</div>
+            <div class="tab active" onclick="switchTab('editor_svg', this)">Editor</div>
+            <div class="tab" onclick="switchTab('vexflow_svg', this)">VexFlow</div>
+            <div class="tab" onclick="switchTab('lilypond_svg', this)">LilyPond SVG</div>
+            <div class="tab" onclick="switchTab('lilypond_src', this)">LilyPond Source</div>
             <div class="tab" onclick="switchTab('document', this)">Document</div>
             <div class="tab" onclick="switchTab('midi', this)">MIDI</div>
-            <div class="tab" onclick="switchTab('source', this)">Source</div>
-            <div class="tab" onclick="switchTab('svg-source', this)">Canvas SVG Source</div>
         </div>
         
-        <div id="vexflow-tab" class="tab-content active">
-            <div id="vexflow-output"></div>
+        <div id="editor_svg-tab" class="tab-content active">
+            <div id="editor_svg-output" class="pipeline-section">Editor SVG source will appear here</div>
         </div>
 
-        <div id="svg-tab" class="tab-content">
-            <div id="svg-output">Click "LilyPond" to generate SVG</div>
-        </div>
-        
-        <div id="lilypond-tab" class="tab-content">
-            <div id="lilypond-output">Enter music notation above to see minimal LilyPond source</div>
+        <div id="vexflow_svg-tab" class="tab-content">
+            <div id="vexflow_svg-output">VexFlow SVG will appear here</div>
         </div>
 
-        <div id="lilypond-full-tab" class="tab-content">
-            <div id="lilypond-full-output">Enter music notation above to see full LilyPond source</div>
+        <div id="lilypond_svg-tab" class="tab-content">
+            <div id="lilypond_svg-output">Click "LilyPond" to generate SVG</div>
+        </div>
+
+        <div id="lilypond_src-tab" class="tab-content">
+            <div id="lilypond_src-output">Enter music notation to see LilyPond source</div>
         </div>
         
         <div id="document-tab" class="tab-content">
@@ -136,13 +134,7 @@
             </div>
         </div>
 
-        <div id="source-tab" class="tab-content">
-            <div id="source-output" class="pipeline-section">Plain text will appear here after parsing</div>
-        </div>
 
-        <div id="svg-source-tab" class="tab-content">
-            <div id="svg-source-output" class="pipeline-section">SVG source code will appear here</div>
-        </div>
     </div></body>
 
     <script type="module" src="js/app.js"></script>

@@ -10,6 +10,9 @@ import { FontManager } from './fontManager.js';
 import { CanvasEditor } from './canvasEditor.js';
 import { MusicTextPlayer } from './midiPlayer.js';
 
+// Make LocalStorage available globally for DocumentPersistence
+window.LocalStorage = LocalStorage;
+
 class MusicTextApp {
     constructor() {
         this.currentParseResult = null;
@@ -108,9 +111,6 @@ class MusicTextApp {
             // Update the backing text tab
             UI.updateBackingTextOutput(content);
 
-            // Save input text
-            LocalStorage.saveInputText(content);
-
             // Debounced parsing for real-time updates
             clearTimeout(this.inputTimer);
             this.inputTimer = setTimeout(() => {
@@ -133,9 +133,6 @@ class MusicTextApp {
         
         const textarea = event.target;
 
-        // Save input text
-        LocalStorage.saveInputText(textarea.value);
-        
         // Debounced parsing for real-time updates
         clearTimeout(this.inputTimer);
         this.inputTimer = setTimeout(() => {
@@ -149,32 +146,13 @@ class MusicTextApp {
 
     // Save current cursor position
     saveCursorPosition() {
-        const cursorPos = this.canvasEditor.getCursorPosition();
-        if (cursorPos.start >= 0 && cursorPos.end >= 0) {
-            LocalStorage.saveCursorPosition(cursorPos.start, cursorPos.end);
-        }
+        // Cursor position is now saved automatically with document state
     }
 
     // Restore application state from localStorage
     restoreState() {
         
-        // Restore saved input text
-        const savedText = LocalStorage.loadInputText();
-        if (savedText) {
-            this.canvasEditor.setValue(savedText);
-            // Trigger parsing for restored content
-            if (savedText.trim()) {
-                this.parseAndUpdatePreview();
-            }
-        }
-        
-        // Restore cursor position
-        const cursorPos = LocalStorage.loadCursorPosition();
-        if (cursorPos.start >= 0 && cursorPos.end >= 0) {
-            setTimeout(() => {
-                this.canvasEditor.setSelection(cursorPos.start, cursorPos.end);
-            }, 100);
-        }
+        // Document state is now restored automatically by CanvasEditor.loadFromLocalStorage()
         
         // Restore active tab
         const activeTab = LocalStorage.loadActiveTab();
@@ -202,7 +180,6 @@ class MusicTextApp {
             UI.updateLilyPondOutput(result);
             UI.updateSourceOutput(result);
             await UI.updateVexFlowOutput(result);
-            UI.updateSVGSourceOutput(result);
             
             // Update canvas editor with parse results
             if (result.success) {
@@ -240,7 +217,6 @@ class MusicTextApp {
             UI.updatePipelineData(result);
             UI.updateLilyPondOutput(result);
             UI.updateSourceOutput(result);
-            UI.updateSVGSourceOutput(result);
 
             if (API.hasVexFlowData(result)) {
                 await UI.updateVexFlowOutput(result);
@@ -253,8 +229,8 @@ class MusicTextApp {
                 UI.setStatus('Parse failed.', 'error');
             }
             
-            // Auto-switch to VexFlow tab
-            UI.switchTab('vexflow');
+            // Auto-switch to Editor SVG tab
+            UI.switchTab('editor_svg');
             
         } catch (error) {
             UI.setStatus(`Error: ${error.message}`, 'error');
@@ -313,50 +289,59 @@ class MusicTextApp {
     }
 
 
-    // Generate SVG (triggered by LilyPond button)
+    // Generate LilyPond PNG (triggered by LilyPond button)
     async generateSVG() {
-        // Save cursor position before processing
-        this.saveCursorPosition();
-        
-        const input = this.canvasEditor.getValue();
-        
-        // Validate input
-        const validation = API.validateInput(input);
-        if (!validation.valid) {
-            UI.setStatus(validation.error, 'error');
-            UI.restoreFocusAndCursor();
+        // Check if we have a document UUID
+        const documentUUID = this.canvasEditor.document.documentUUID;
+        if (!documentUUID) {
+            UI.setStatus('No document loaded', 'error');
             return;
         }
-        
-        UI.setStatus('Generating LilyPond SVG...', 'loading');
-        
+
+        UI.setStatus('Generating LilyPond PNG...', 'loading');
+
         try {
-            const result = await API.parseWithSVG(input);
-            this.currentParseResult = result;
+            // Call the RESTful API to export as LilyPond PNG
+            const response = await fetch(`/api/documents/${documentUUID}/export`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    format: 'lilypond-png'
+                })
+            });
 
-            // Update all outputs
-            UI.updatePipelineData(result);
-            UI.updateLilyPondOutput(result);
-            UI.updateSourceOutput(result);
-            UI.updateSVGSourceOutput(result);
-
-            if (API.hasVexFlowData(result)) {
-                await UI.updateVexFlowOutput(result);
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP ${response.status}`);
             }
-            
-            // Handle SVG output
-            if (UI.updateSVGOutput(result)) {
-                UI.setStatus('LilyPond SVG generated successfully!', 'success');
-                UI.switchTab('svg');
+
+            const result = await response.json();
+
+            if (result.success && result.content) {
+                // Display the PNG in the LilyPond SVG tab
+                const lilypondSvgOutput = document.getElementById('lilypond_svg-output');
+                if (lilypondSvgOutput) {
+                    // result.content is a data URL (base64 encoded PNG)
+                    lilypondSvgOutput.innerHTML = `<img src="${result.content}" alt="LilyPond notation" style="max-width: 100%; height: auto;">`;
+                }
+
+                UI.setStatus('LilyPond PNG generated successfully!', 'success');
+                UI.switchTab('lilypond_svg');
             } else {
-                UI.setStatus('SVG generation failed.', 'error');
-                UI.restoreFocusAndCursor();
+                UI.setStatus(result.message || 'LilyPond generation failed', 'error');
             }
-            
+
         } catch (error) {
-            document.getElementById('svg-output').innerHTML = `<p>Error: ${error.message}</p>`;
+            console.error('LilyPond generation error:', error);
             UI.setStatus(`Error: ${error.message}`, 'error');
-            UI.restoreFocusAndCursor();
+
+            // Show error in the output tab
+            const lilypondSvgOutput = document.getElementById('lilypond_svg-output');
+            if (lilypondSvgOutput) {
+                lilypondSvgOutput.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
         }
     }
 
@@ -367,12 +352,10 @@ class MusicTextApp {
         this.canvasEditor.setValue('');
         this.currentParseResult = null;
 
-        // Clear localStorage
-        LocalStorage.saveInputText('');
-        LocalStorage.saveCursorPosition(0, 0);
+        // Document clearing is now handled by DocumentPersistence
 
-        // Switch back to VexFlow tab and restore focus
-        UI.switchTab('vexflow');
+        // Switch back to Editor SVG tab and restore focus
+        UI.switchTab('editor_svg');
     }
 
     // Create a new document using the API
@@ -380,11 +363,8 @@ class MusicTextApp {
         try {
             UI.setStatus('Creating new document...', 'loading');
 
-            // Ask user if they want to start with a template or blank document
-            const createWithTemplate = confirm('Start with a template? (S R G M)\n\nOK = Template\nCancel = Blank document');
-
+            // Create a blank document immediately without dialog
             const requestBody = {
-                music_text: createWithTemplate ? 'S R G M' : null,
                 metadata: {
                     title: 'Untitled Document',
                     created_at: new Date().toISOString(),
@@ -406,19 +386,14 @@ class MusicTextApp {
 
             const result = await response.json();
 
-            if (result.document_id && result.document) {
+            if (result.document && result.document.documentUUID) {
                 // Clear current content
                 this.clearAll();
 
-                // Set up new document from API response
-                this.canvasEditor.document.id = result.document_id;
+                // Set up new document from API response - UUID is now in document itself
+                this.canvasEditor.document.documentUUID = result.document.documentUUID;
 
-                // Load the document content if it was created with template
-                if (createWithTemplate && result.document.format_cache && result.document.format_cache.music_text) {
-                    const content = result.document.format_cache.music_text;
-                    this.canvasEditor.setValue(content);
-                    this.canvasEditor.throttledSubmitToServer(content); // Render immediately
-                }
+                // Document starts blank - no need to load content
 
                 // Update document metadata
                 if (result.document.metadata) {
@@ -428,8 +403,97 @@ class MusicTextApp {
                 // Save the new document state
                 this.canvasEditor.saveToLocalStorage();
 
-                const hasContent = createWithTemplate ? ' with template content' : ' (blank)';
-                UI.setStatus(`New document created${hasContent} (ID: ${result.document_id.slice(0, 8)}...)`, 'success');
+                UI.setStatus(`New document created (ID: ${result.document.documentUUID.slice(0, 8)}...)`, 'success');
+
+                // Fetch the complete document data by UUID for proper server-authoritative data
+                try {
+                    const docResponse = await fetch(`/api/documents/${result.document.documentUUID}`);
+                    if (docResponse.ok) {
+                        const docData = await docResponse.json();
+
+                        // Update the document model with server data
+                        if (docData.document) {
+                            this.canvasEditor.document.fromJSON(docData.document);
+                        }
+
+                        // Update UI tabs with complete server-side document data
+                        const uiResult = {
+                            success: true,
+                            document: docData.document,
+                            editor_svg: docData.formats.editor_svg
+                        };
+
+                        // Update document tab
+                        if (UI.updatePipelineData) {
+                            UI.updatePipelineData(uiResult);
+                        }
+
+                        // Update all format tabs if formats are available
+                        if (docData.formats) {
+                            // Update all tabs with the formats
+                            if (window.UI && window.UI.updateFormatsFromBackend) {
+                                window.UI.updateFormatsFromBackend(docData.formats);
+                            }
+
+                            // Render editor SVG if available
+                            if (docData.formats.editor_svg && this.canvasEditor.renderEditorSvg) {
+                                console.log('Rendering new document SVG, length:', docData.formats.editor_svg.length);
+                                this.canvasEditor.renderEditorSvg(docData.formats.editor_svg);
+                            }
+                        } else {
+                            console.warn('No formats in response');
+                        }
+                    } else {
+                        // Fallback to creation response data if GET fails
+                        if (result.document) {
+                            this.canvasEditor.document.fromJSON(result.document);
+                        }
+
+                        if (result.formats) {
+                            const uiResult = {
+                                success: true,
+                                document: result.document,
+                                editor_svg: result.formats.editor_svg
+                            };
+
+                            if (UI.updatePipelineData) {
+                                UI.updatePipelineData(uiResult);
+                            }
+
+                            if (result.formats && result.formats.editor_svg && this.canvasEditor.renderEditorSvg) {
+                                this.canvasEditor.renderEditorSvg(result.formats.editor_svg);
+                            }
+                        }
+                    }
+                } catch (fetchError) {
+                    console.warn('Failed to fetch document by UUID, using creation response:', fetchError);
+                    // Fallback to creation response data
+                    if (result.document) {
+                        this.canvasEditor.document.fromJSON(result.document);
+                    }
+
+                    // Update all format tabs from creation response
+                    if (result.formats) {
+                        // Update all tabs with the formats
+                        if (window.UI && window.UI.updateFormatsFromBackend) {
+                            window.UI.updateFormatsFromBackend(result.formats);
+                        }
+
+                        // Render editor SVG if available
+                        if (result.formats.editor_svg && this.canvasEditor.renderEditorSvg) {
+                            this.canvasEditor.renderEditorSvg(result.formats.editor_svg);
+                        }
+
+                        // Update document display
+                        const uiResult = {
+                            success: true,
+                            document: result.document
+                        };
+                        if (UI.updatePipelineData) {
+                            UI.updatePipelineData(uiResult);
+                        }
+                    }
+                }
 
                 // Focus the canvas for immediate editing
                 this.canvasEditor.focus();
@@ -768,31 +832,27 @@ class MusicTextApp {
             return;
         }
 
-        if (!this.currentParseResult || !this.currentParseResult.success) {
-            UI.setStatus('Please parse music notation first', 'error');
+        // Use the document from canvasEditor (document-first architecture)
+        const document = this.canvasEditor.document;
+
+        if (!document || !document.elements || document.elements.length === 0) {
+            UI.setStatus('No music content to play', 'error');
             return;
         }
 
-        console.log('Current parse result:', this.currentParseResult);
-        console.log('Parsed document:', this.currentParseResult.parsed_document);
+        console.log('🎵 Using document from canvasEditor:', document);
+        console.log('🎵 Document has elements:', document.elements?.length);
+        console.log('🎵 Document structure:', {
+            hasElements: !!document.elements,
+            elementCount: document.elements?.length,
+            firstElement: document.elements?.[0]
+        });
 
         try {
-            // Get the correct document structure from API response
-            const document = this.currentParseResult.document;
-
-            console.log('🎵 Passing document to MIDI player:', document);
-            console.log('🎵 Document type:', typeof document);
-            console.log('🎵 Document keys:', document ? Object.keys(document) : 'null');
-
-            if (!document) {
-                UI.setStatus('No parsed document available for playback', 'error');
-                return;
-            }
-
             this.midiPlayer.play(document);
         } catch (error) {
             console.error('MIDI playback error:', error);
-            UI.setStatus('MIDI playback failed', 'error');
+            UI.setStatus('MIDI playback failed: ' + error.message, 'error');
         }
     }
 

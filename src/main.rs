@@ -132,7 +132,7 @@ enum Commands {
     #[command(name = "api-get")]
     ApiGet {
         /// Document ID
-        document_id: String,
+        documentUUID: String,
         /// API server URL
         #[arg(long, default_value = "http://localhost:3000")]
         server: String,
@@ -141,7 +141,7 @@ enum Commands {
     #[command(name = "api-command")]
     ApiCommand {
         /// Document ID
-        document_id: String,
+        documentUUID: String,
         /// Command type (apply_slur, set_octave, insert_note, etc.)
         #[arg(short, long)]
         command: String,
@@ -189,7 +189,7 @@ enum Commands {
     #[command(name = "transform")]
     TransformById {
         /// Document UUID
-        document_id: String,
+        documentUUID: String,
         /// Command type (apply_slur, set_octave, etc.)
         #[arg(short, long)]
         command: String,
@@ -207,7 +207,7 @@ enum Commands {
     #[command(name = "export")]
     ExportById {
         /// Document UUID
-        document_id: String,
+        documentUUID: String,
         /// Export format (lilypond, svg)
         #[arg(short, long)]
         format: String,
@@ -367,13 +367,11 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let result = pipeline::process_notation(&notation)?;
 
             // Use the canvas SVG renderer
-            let svg_output = music_text::renderers::editor::svg::render_canvas_svg(
+            let svg_output = music_text::renderers::editor::svg::render_editor_svg(
                 &result.document,
-                "number", // notation type
-                &notation, // input text
-                None, // cursor position
-                None, // selection start
-                None  // selection end
+                None,
+                None,
+                None,
             )?;
 
             println!("{}", svg_output);
@@ -384,13 +382,11 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let result = pipeline::process_notation(&notation)?;
 
             // Use the canvas SVG renderer
-            let svg_output = music_text::renderers::editor::svg::render_canvas_svg(
+            let svg_output = music_text::renderers::editor::svg::render_editor_svg(
                 &result.document,
-                "number", // notation type
-                &notation, // input text
-                None, // cursor position
-                None, // selection start
-                None  // selection end
+                None,
+                None,
+                None,
             )?;
 
             println!("{}", svg_output);
@@ -413,10 +409,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
                 match pipeline::process_notation(test_input) {
                     Ok(result) => {
-                        match music_text::renderers::editor::svg::render_canvas_svg(
+                        match music_text::renderers::editor::svg::render_editor_svg(
                             &result.document,
-                            "number",
-                            test_input,
                             None, None, None
                         ) {
                             Ok(svg) => {
@@ -442,12 +436,12 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string_pretty(&result)?);
             return Ok(());
         }
-        Some(Commands::ApiGet { document_id, server }) => {
-            let result = api_get_document(&server, &document_id).await?;
+        Some(Commands::ApiGet { documentUUID, server }) => {
+            let result = api_get_document(&server, &documentUUID).await?;
             println!("{}", serde_json::to_string_pretty(&result)?);
             return Ok(());
         }
-        Some(Commands::ApiCommand { document_id, command, targets, params, server }) => {
+        Some(Commands::ApiCommand { documentUUID, command, targets, params, server }) => {
             let target_uuids: Vec<String> = targets
                 .as_deref()
                 .unwrap_or("")
@@ -462,7 +456,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 serde_json::Value::Object(serde_json::Map::new())
             };
 
-            let result = api_execute_command(&server, &document_id, &command, &target_uuids, parameters).await?;
+            let result = api_execute_command(&server, &documentUUID, &command, &target_uuids, parameters).await?;
             println!("{}", serde_json::to_string_pretty(&result)?);
             return Ok(());
         }
@@ -492,7 +486,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string_pretty(&result)?);
             return Ok(());
         }
-        Some(Commands::TransformById { document_id, command, targets, params, server }) => {
+        Some(Commands::TransformById { documentUUID, command, targets, params, server }) => {
             let target_uuids: Vec<String> = targets
                 .as_deref()
                 .unwrap_or("")
@@ -507,12 +501,12 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 serde_json::Value::Object(serde_json::Map::new())
             };
 
-            let result = api_transform_document_by_id(&server, &document_id, &command, &target_uuids, parameters).await?;
+            let result = api_transform_document_by_id(&server, &documentUUID, &command, &target_uuids, parameters).await?;
             println!("{}", serde_json::to_string_pretty(&result)?);
             return Ok(());
         }
-        Some(Commands::ExportById { document_id, format, server }) => {
-            let result = api_export_document_by_id(&server, &document_id, &format).await?;
+        Some(Commands::ExportById { documentUUID, format, server }) => {
+            let result = api_export_document_by_id(&server, &documentUUID, &format).await?;
             println!("{}", serde_json::to_string_pretty(&result)?);
             return Ok(());
         }
@@ -731,10 +725,10 @@ async fn api_create_document(
 
 async fn api_get_document(
     server: &str,
-    document_id: &str,
+    documentUUID: &str,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
-    let url = format!("{}/api/documents/{}", server, document_id);
+    let url = format!("{}/api/documents/{}", server, documentUUID);
 
     let response = client.get(&url).send().await?;
 
@@ -749,7 +743,7 @@ async fn api_get_document(
 
 async fn api_execute_command(
     server: &str,
-    document_id: &str,
+    documentUUID: &str,
     command: &str,
     target_uuids: &[String],
     parameters: serde_json::Value,
@@ -762,7 +756,7 @@ async fn api_execute_command(
         "parameters": parameters
     });
 
-    let url = format!("{}/api/documents/{}/commands", server, document_id);
+    let url = format!("{}/api/documents/{}/commands", server, documentUUID);
     let response = client
         .post(&url)
         .json(&request_body)
@@ -830,7 +824,7 @@ async fn api_export_document(
 
 async fn api_transform_document_by_id(
     server: &str,
-    document_id: &str,
+    documentUUID: &str,
     command: &str,
     target_uuids: &[String],
     parameters: serde_json::Value,
@@ -844,7 +838,7 @@ async fn api_transform_document_by_id(
     });
 
     let response = client
-        .post(&format!("{}/api/documents/{}/transform", server, document_id))
+        .post(&format!("{}/api/documents/{}/transform", server, documentUUID))
         .header("Content-Type", "application/json")
         .json(&request_body)
         .send()
@@ -856,7 +850,7 @@ async fn api_transform_document_by_id(
 
 async fn api_export_document_by_id(
     server: &str,
-    document_id: &str,
+    documentUUID: &str,
     format: &str,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
@@ -866,7 +860,7 @@ async fn api_export_document_by_id(
     });
 
     let response = client
-        .post(&format!("{}/api/documents/{}/export", server, document_id))
+        .post(&format!("{}/api/documents/{}/export", server, documentUUID))
         .header("Content-Type", "application/json")
         .json(&request_body)
         .send()
@@ -875,7 +869,6 @@ async fn api_export_document_by_id(
     let result: serde_json::Value = response.json().await?;
     Ok(result)
 }
-
 
 
 

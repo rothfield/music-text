@@ -2,7 +2,7 @@
 use axum::{
     extract::{Query, Multipart, Form, Path},
     response::{IntoResponse, Html, Response},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
     http::{StatusCode, header},
     body::Body,
@@ -46,21 +46,21 @@ pub struct ParseResponse {
     lilypond_svg: Option<String>,
     vexflow: Option<serde_json::Value>,
     vexflow_svg: Option<String>,
-    canvas_svg: Option<String>,  // Canvas WYSIWYG SVG
+    editor_svg: Option<String>,  // Canvas WYSIWYG SVG
     error: Option<String>,
 }
 
 // Document-first API structures
 #[derive(Debug, Deserialize)]
 pub struct CreateDocumentRequest {
-    pub music_text: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CreateDocumentResponse {
-    pub document_id: String,
+    pub documentUUID: String,
     pub document: serde_json::Value,
+    pub formats: DocumentFormats,
 }
 
 #[derive(Debug, Serialize)]
@@ -71,6 +71,26 @@ pub struct DocumentModel {
     pub content: Vec<String>,
     pub metadata: serde_json::Value,
     pub ui_state: serde_json::Value,
+}
+
+// Document update structure for PUT requests
+#[derive(Debug, Deserialize)]
+pub struct UpdateDocumentRequest {
+    pub document: serde_json::Value,
+    pub edit_command: Option<EditCommand>,
+    pub notation_type: Option<String>,
+}
+
+// Edit command structure
+#[derive(Debug, Deserialize)]
+pub struct EditCommand {
+    #[serde(rename = "type")]
+    pub command_type: String,
+    pub position: usize,
+    pub text: Option<String>,
+    pub direction: Option<String>,
+    pub selection_start: Option<usize>,
+    pub selection_end: Option<usize>,
 }
 
 // Document transformation structures
@@ -142,22 +162,22 @@ fn get_documents_dir() -> std::path::PathBuf {
     std::path::Path::new("./documents").to_path_buf()
 }
 
-fn get_document_path(document_id: &str) -> std::path::PathBuf {
-    get_documents_dir().join(format!("{}.json", document_id))
+fn get_document_path(documentUUID: &str) -> std::path::PathBuf {
+    get_documents_dir().join(format!("{}.json", documentUUID))
 }
 
-async fn save_document(document_id: &str, document: &serde_json::Value) -> Result<(), std::io::Error> {
+async fn save_document(documentUUID: &str, document: &serde_json::Value) -> Result<(), std::io::Error> {
     let docs_dir = get_documents_dir();
     tokio::fs::create_dir_all(&docs_dir).await?;
 
-    let doc_path = get_document_path(document_id);
+    let doc_path = get_document_path(documentUUID);
     let content = serde_json::to_string_pretty(document)?;
     tokio::fs::write(&doc_path, content).await?;
     Ok(())
 }
 
-async fn load_document(document_id: &str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-    let doc_path = get_document_path(document_id);
+async fn load_document(documentUUID: &str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    let doc_path = get_document_path(documentUUID);
     let content = tokio::fs::read_to_string(&doc_path).await?;
     let document: serde_json::Value = serde_json::from_str(&content)?;
     Ok(document)
@@ -179,15 +199,80 @@ pub struct SvgPocRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CanvasSvgRequest {
-    input_text: String,
-    notation_type: String,
+    // Request now only needs document/model context, not raw input text.
+    // Keeping selection fields for potential server-side highlighting.
     cursor_position: Option<usize>,
     selection_start: Option<usize>,
     selection_end: Option<usize>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct CanvasSvgResponse {
+    svg: String,
+    document: Document,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentWithFormatsResponse {
+    document: serde_json::Value,  // The document JSON
+    formats: DocumentFormats,     // All rendered formats
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentFormats {
+    vexflow_svg: Option<String>,
+    editor_svg: Option<String>,
+    lilypond_svg: Option<String>,
+    lilypond_src: Option<String>,
+    midi: Option<String>,
+}
+
 use crate::parse::Document;
 use crate::parse::actions::{TransformRequest, TransformResponse, apply_octave_transform, apply_slur_transform};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+
+// Generate PNG from LilyPond source
+async fn generate_lilypond_png(lilypond_src: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    use tokio::process::Command;
+    use std::io::Write;
+
+    // Create a temporary directory
+    let temp_dir = tempfile::tempdir()?;
+    let lily_file = temp_dir.path().join("music.ly");
+    let png_file = temp_dir.path().join("music.png");
+
+    // Write LilyPond source to file
+    let mut file = std::fs::File::create(&lily_file)?;
+    file.write_all(lilypond_src.as_bytes())?;
+
+    // Run LilyPond to generate PNG
+    let output = Command::new("lilypond")
+        .arg("--png")
+        .arg("-dno-gs-load-fonts")
+        .arg("-dinclude-eps-fonts")
+        .arg("-dbackend=eps")
+        .arg("-dresolution=150")
+        .arg("-o")
+        .arg(temp_dir.path().join("music"))
+        .arg(&lily_file)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("LilyPond failed: {}", error).into());
+    }
+
+    // Read the generated PNG
+    let png_data = tokio::fs::read(&png_file).await?;
+
+    // Encode as base64
+    let base64_data = BASE64.encode(&png_data);
+
+    // Return as data URL
+    Ok(format!("data:image/png;base64,{}", base64_data))
+}
+
 // Template rendering helper
 async fn render_retro_template(
     input: &str,
@@ -254,41 +339,28 @@ pub struct SplitLineResponse {
 }
 
 pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
-    // Preload and validate CSS file on server startup
+    // Preload CSS file on server startup
     match std::fs::read_to_string("assets/svg-styles.css") {
-        Ok(css_content) => {
-            println!("✅ Successfully loaded CSS file: {} characters", css_content.len());
-            if css_content.contains(".lower-octave") {
-                println!("✅ CSS contains expected lower-octave styles");
-            } else {
-                println!("⚠️  Warning: CSS doesn't contain expected lower-octave styles");
-            }
+        Ok(_css_content) => {
+            // CSS loaded successfully
         }
-        Err(e) => {
-            println!("⚠️  Warning: Could not load assets/svg-styles.css: {}", e);
-            println!("   SVG rendering will use fallback CSS");
+        Err(_e) => {
+            // CSS not found, will use fallback
         }
     }
 
     // SVG router removed - using canvas SVG instead
 
     let app = Router::new()
-        .route("/api/parse", get(parse_text))
-        .route("/api/render-svg-poc", post(render_svg_poc))
-        .route("/api/canvas-svg", post(render_canvas_svg))
-        .route("/api/render-from-model", post(render_from_model))
-        .route("/api/split-line", post(split_line_handler))
-        .route("/api/transform/octave", post(transform_octave_handler))
-        .route("/api/transform/slur", post(transform_slur_handler))
+        // RESTful Document API endpoints
         .route("/api/documents", post(create_document_handler))
+        .route("/api/documents/from-text", post(create_document_from_text_handler))
+        .route("/api/documents/:documentUUID", get(get_document_by_id_handler))
+        .route("/api/documents/:documentUUID", put(update_document_handler))
         .route("/api/documents/transform", post(transform_document_handler))
+        .route("/api/documents/:documentUUID/transform", post(transform_document_by_id_handler))
         .route("/api/documents/export", post(export_document_handler))
-        .route("/api/documents/:document_id/transform", post(transform_document_by_id_handler))
-        .route("/api/documents/:document_id/export", post(export_document_by_id_handler))
-        .route("/api/semantic-command", post(semantic_command_handler))
-        .route("/retro/load", post(retro_load))
-        .route("/retro", post(retro_parse).get(serve_retro_page))
-        .route("/retro/", get(serve_retro_page))
+        .route("/api/documents/:documentUUID/export", post(export_document_by_id_handler))
         .route("/health", get(health_endpoint))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/", ServeDir::new("webapp/public"))
@@ -312,10 +384,8 @@ async fn render_from_model(Json(request): Json<RenderFromModelRequest>) -> impl 
     // We can pass an empty string as a stand-in.
     let placeholder_text = "";
 
-    let svg_content = match crate::renderers::editor::render_canvas_svg(
+    let svg_content = match crate::renderers::editor::svg::render_editor_svg(
         &request.document,
-        &request.notation_type,
-        placeholder_text,
         request.cursor_position,
         request.selection_start,
         request.selection_end,
@@ -367,19 +437,57 @@ async fn transform_slur_handler(Json(request): Json<TransformRequest>) -> impl I
     Json(response)
 }
 
+// Duplicate removed; defined earlier
+
+#[derive(Debug, Deserialize)]
+struct CreateDocumentFromTextRequest {
+    music_text: String,
+    metadata: Option<serde_json::Value>,
+}
+
 // Document creation endpoint
 async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> impl IntoResponse {
-    let document_id = Uuid::new_v4().to_string();
+    let documentUUID = Uuid::new_v4().to_string();
     let timestamp = chrono::Utc::now().to_rfc3339();
 
-    // Create empty document model
-    let mut document = serde_json::json!({
-        "version": "1.0.0",
-        "timestamp": timestamp,
-        "elements": {},
-        "content": [],
-        "metadata": request.metadata.unwrap_or(serde_json::json!({})),
-        "ui_state": {
+    // Parse initial notation to get document with full parse tree structure
+    // Using "|SRG" creates a stave with a barline and some notes
+    let parsed_empty = match crate::pipeline::process_notation("|SRG") {
+        Ok(r) => r,
+        Err(_) => {
+            // Fallback to minimal structure if parsing fails
+            crate::pipeline::ProcessingResult {
+                original_input: String::new(),
+                document: crate::parse::Document {
+                    value: None,
+                    char_index: 0,
+                    title: None,
+                    author: None,
+                    directives: std::collections::HashMap::new(),
+                    elements: vec![],
+                },
+                lilypond: String::new(),
+                vexflow_svg: String::new(),
+                vexflow_data: serde_json::Value::Null,
+            }
+        }
+    };
+
+    // Create document model from parsed empty document
+    let mut document_value = serde_json::to_value(&parsed_empty.document).unwrap_or_else(|_| {
+        serde_json::json!({
+            "elements": [],
+            "content": []
+        })
+    });
+
+    // Add document metadata
+    if let serde_json::Value::Object(ref mut map) = document_value {
+        map.insert("documentUUID".to_string(), serde_json::Value::String(documentUUID.clone()));
+        map.insert("version".to_string(), serde_json::Value::String("1.0.0".to_string()));
+        map.insert("timestamp".to_string(), serde_json::Value::String(timestamp.clone()));
+        map.insert("metadata".to_string(), request.metadata.unwrap_or(serde_json::json!({})));
+        map.insert("ui_state".to_string(), serde_json::json!({
             "selection": {
                 "selected_uuids": [],
                 "cursor_uuid": null,
@@ -392,50 +500,132 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
             },
             "editor_mode": "text",
             "active_tab": "vexflow"
-        },
-        "format_cache": {
-            "music_text": request.music_text,
-            "lilypond": null,
-            "svg": null,
-            "midi": null
-        }
-    });
-
-    // If music_text was provided, parse it to populate elements with UUIDs
-    if let Some(ref music_text) = request.music_text {
-        if !music_text.trim().is_empty() {
-            match crate::parse::parse_document(music_text) {
-                Ok(parsed_doc) => {
-                    // Convert parsed document to JSON and merge into document
-                    if let Ok(parsed_json) = serde_json::to_value(&parsed_doc) {
-                        if let Some(elements) = parsed_json.get("elements") {
-                            document["elements"] = elements.clone();
-                        }
-                        // Update format cache with successful parse
-                        document["format_cache"]["music_text"] = serde_json::Value::String(music_text.clone());
-                    }
-                }
-                Err(parse_error) => {
-                    // Still create document but note parsing failed in metadata
-                    if let Some(metadata) = document.get_mut("metadata") {
-                        metadata["parse_error"] = serde_json::Value::String(format!("Failed to parse music_text: {}", parse_error));
-                    }
-                }
-            }
-        }
+        }));
     }
 
+    let document = document_value;
+
     // Save document to disk
-    if let Err(e) = save_document(&document_id, &document).await {
+    if let Err(e) = save_document(&documentUUID, &document).await {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))
         ).into_response();
     }
 
+    // Generate all formats from the parsed document
+    let editor_svg = crate::renderers::editor::svg::render_editor_svg(&parsed_empty.document, None, None, None).ok();
+    let lilypond_src = if !parsed_empty.lilypond.is_empty() {
+        Some(parsed_empty.lilypond.clone())
+    } else {
+        None
+    };
+    // VexFlow data contains the actual JS code in the "vexflow_js" field
+    let vexflow_svg = if let Some(vexflow_js) = parsed_empty.vexflow_data.get("vexflow_js") {
+        vexflow_js.as_str().map(|s| s.to_string())
+    } else if !parsed_empty.vexflow_svg.is_empty() {
+        Some(parsed_empty.vexflow_svg.clone())
+    } else {
+        None
+    };
+
+    let formats = DocumentFormats {
+        vexflow_svg,
+        editor_svg,
+        lilypond_svg: None,  // Would need to run lilypond command
+        lilypond_src,
+        midi: None,
+    };
+
     let response = CreateDocumentResponse {
-        document_id: document_id.clone(),
+        documentUUID: documentUUID.clone(),
         document: document,
+        formats,
+    };
+
+    Json(response).into_response()
+}
+
+// Create a new document from raw textual music notation (parse → save → render)
+async fn create_document_from_text_handler(Json(request): Json<CreateDocumentFromTextRequest>) -> impl IntoResponse {
+    // Parse textual notation using same pipeline as CLI
+    let parse_result = match crate::pipeline::process_notation(&request.music_text) {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "success": false,
+                    "error": format!("Parsing failed: {}", e),
+                }))
+            ).into_response();
+        }
+    };
+
+    // Build persisted document JSON mirroring existing schema
+    let documentUUID = Uuid::new_v4().to_string();
+    let timestamp = chrono::Utc::now().to_rfc3339();
+
+    let mut metadata = request.metadata.unwrap_or(serde_json::json!({}));
+    if let Some(obj) = metadata.as_object_mut() {
+        obj.entry("created_at").or_insert(serde_json::Value::String(chrono::Utc::now().to_rfc3339()));
+        obj.entry("created_by").or_insert(serde_json::Value::String("Web Interface".to_string()));
+    }
+
+    let document = serde_json::json!({
+        "documentUUID": documentUUID,
+        "version": "1.0.0",
+        "timestamp": timestamp,
+        "elements": [],
+        "content": [],
+        "metadata": metadata,
+        "ui_state": {
+            "selection": {
+                "selected_uuids": [],
+                "cursor_uuid": null,
+                "cursor_position": 0
+            },
+            "viewport": { "scroll_x": 0, "scroll_y": 0, "zoom_level": 1.0 },
+            "editor_mode": "text",
+            "active_tab": "vexflow"
+        }
+    });
+
+    // Save document to disk
+    if let Err(e) = save_document(&documentUUID, &document).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))
+        ).into_response();
+    }
+
+    // Generate all formats from the parsed document
+    let editor_svg = crate::renderers::editor::svg::render_editor_svg(&parse_result.document, None, None, None).ok();
+
+    // Use the already generated formats from the pipeline
+    let lilypond_src = if !parse_result.lilypond.is_empty() {
+        Some(parse_result.lilypond.clone())
+    } else {
+        None
+    };
+
+    // Extract VexFlow JavaScript from the pipeline result
+    let vexflow_svg = parse_result.vexflow_data.get("vexflow_js")
+        .and_then(|js| js.as_str())
+        .map(|s| s.to_string());
+
+    let formats = DocumentFormats {
+        vexflow_svg,  // Self-executing JavaScript
+        editor_svg,
+        lilypond_svg: None,  // Would need to run lilypond command
+        lilypond_src,
+        midi: None,
+    };
+
+    let response = CreateDocumentResponse {
+        documentUUID: documentUUID.clone(),
+        document,
+        formats,
     };
 
     Json(response).into_response()
@@ -559,11 +749,11 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
 
             // For SVG regeneration, we need to deserialize to Document struct just for rendering
             if let Ok(document) = serde_json::from_value::<crate::parse::Document>(updated_document.clone()) {
-                svg_content = crate::renderers::editor::svg::render_canvas_svg(
+                svg_content = crate::renderers::editor::svg::render_editor_svg(
                     &document,
-                    "number",
-                    "",
-                    None, None, None
+                    None,
+                    None,
+                    None,
                 ).ok();
             }
 
@@ -602,96 +792,79 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
 // Document export endpoint
 async fn export_document_handler(Json(request): Json<ExportDocumentRequest>) -> impl IntoResponse {
     match request.format.as_str() {
-        "lilypond" => {
-            // Extract music_text from document format_cache and convert to LilyPond
-            if let Some(format_cache) = request.document.get("format_cache") {
-                if let Some(music_text) = format_cache.get("music_text") {
-                    if let Some(text_str) = music_text.as_str() {
-                        if !text_str.is_empty() {
-                            match pipeline::process_notation(text_str) {
-                                Ok(result) => {
-                                    let minimal_lilypond = match renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, Some(text_str)) {
-                                        Ok(lily) => lily,
-                                        Err(e) => return Json(ExportDocumentResponse {
-                                            success: false,
-                                            format: request.format,
-                                            content: "".to_string(),
-                                            message: Some(format!("LilyPond conversion failed: {}", e)),
-                                        }),
-                                    };
-
-                                    return Json(ExportDocumentResponse {
-                                        success: true,
-                                        format: request.format,
-                                        content: minimal_lilypond,
-                                        message: Some("Exported to LilyPond successfully".to_string()),
-                                    });
-                                }
-                                Err(e) => return Json(ExportDocumentResponse {
+        "lilypond-png" => {
+            // Generate LilyPond PNG from document
+            if let Ok(doc) = serde_json::from_value::<Document>(request.document.clone()) {
+                // Generate LilyPond source
+                match crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None) {
+                    Ok(lilypond_src) => {
+                        // Run LilyPond to generate PNG
+                        match generate_lilypond_png(&lilypond_src).await {
+                            Ok(png_base64) => {
+                                Json(ExportDocumentResponse {
+                                    success: true,
+                                    format: request.format,
+                                    content: png_base64,
+                                    message: Some("LilyPond PNG generated successfully".to_string()),
+                                })
+                            }
+                            Err(e) => {
+                                Json(ExportDocumentResponse {
                                     success: false,
                                     format: request.format,
-                                    content: "".to_string(),
-                                    message: Some(format!("Parse failed: {}", e)),
-                                }),
+                                    content: String::new(),
+                                    message: Some(format!("Failed to generate PNG: {}", e)),
+                                })
                             }
                         }
                     }
+                    Err(e) => {
+                        Json(ExportDocumentResponse {
+                            success: false,
+                            format: request.format,
+                            content: String::new(),
+                            message: Some(format!("Failed to generate LilyPond source: {}", e)),
+                        })
+                    }
                 }
+            } else {
+                Json(ExportDocumentResponse {
+                    success: false,
+                    format: request.format,
+                    content: String::new(),
+                    message: Some("Invalid document format".to_string()),
+                })
             }
-
-            Json(ExportDocumentResponse {
-                success: false,
-                format: request.format,
-                content: "".to_string(),
-                message: Some("No music_text found in document format_cache".to_string()),
-            })
         }
-        "svg" => {
-            // Similar to LilyPond but export to SVG
-            if let Some(format_cache) = request.document.get("format_cache") {
-                if let Some(music_text) = format_cache.get("music_text") {
-                    if let Some(text_str) = music_text.as_str() {
-                        if !text_str.is_empty() {
-                            match pipeline::process_notation(text_str) {
-                                Ok(result) => {
-                                    match svg::render_canvas_svg(
-                                        &result.document,
-                                        "number", // notation type - could be extracted from document
-                                        text_str,
-                                        None, None, None // cursor/selection - could be extracted from ui_state
-                                    ) {
-                                        Ok(svg) => return Json(ExportDocumentResponse {
-                                            success: true,
-                                            format: request.format,
-                                            content: svg,
-                                            message: Some("Exported to SVG successfully".to_string()),
-                                        }),
-                                        Err(e) => return Json(ExportDocumentResponse {
-                                            success: false,
-                                            format: request.format,
-                                            content: "".to_string(),
-                                            message: Some(format!("SVG render failed: {}", e)),
-                                        }),
-                                    }
-                                }
-                                Err(e) => return Json(ExportDocumentResponse {
-                                    success: false,
-                                    format: request.format,
-                                    content: "".to_string(),
-                                    message: Some(format!("Parse failed: {}", e)),
-                                }),
-                            }
-                        }
+        "lilypond" => {
+            // Generate LilyPond source
+            if let Ok(doc) = serde_json::from_value::<Document>(request.document.clone()) {
+                match crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None) {
+                    Ok(lilypond_src) => {
+                        Json(ExportDocumentResponse {
+                            success: true,
+                            format: request.format,
+                            content: lilypond_src,
+                            message: Some("LilyPond source generated successfully".to_string()),
+                        })
+                    }
+                    Err(e) => {
+                        Json(ExportDocumentResponse {
+                            success: false,
+                            format: request.format,
+                            content: String::new(),
+                            message: Some(format!("Failed to generate LilyPond source: {}", e)),
+                        })
                     }
                 }
+            } else {
+                Json(ExportDocumentResponse {
+                    success: false,
+                    format: request.format,
+                    content: String::new(),
+                    message: Some("Invalid document format".to_string()),
+                })
             }
-
-            Json(ExportDocumentResponse {
-                success: false,
-                format: request.format,
-                content: "".to_string(),
-                message: Some("No music_text found in document format_cache".to_string()),
-            })
         }
         _ => {
             let format_str = request.format.clone();
@@ -705,13 +878,174 @@ async fn export_document_handler(Json(request): Json<ExportDocumentRequest>) -> 
     }
 }
 
+// PUT update document handler
+async fn update_document_handler(
+    Path(documentUUID): Path<String>,
+    Json(request): Json<UpdateDocumentRequest>
+) -> impl IntoResponse {
+    // Start with document from request
+    let mut document = request.document.clone();
+
+    let mut cursor_position = document["ui_state"]["selection"]["cursor_position"]
+        .as_u64()
+        .unwrap_or(0) as usize;
+
+    // Update timestamp
+    document["timestamp"] = serde_json::Value::String(chrono::Utc::now().to_rfc3339());
+
+    // Save updated document
+    if let Err(e) = save_document(&documentUUID, &document).await {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("Failed to save document: {}", e)
+            }))
+        ).into_response();
+    }
+
+    // Generate formats from the document
+    let formats = if let Ok(doc) = serde_json::from_value::<Document>(document.clone()) {
+        // Generate all formats from the Document struct
+        let editor_svg = crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok();
+
+        // Generate LilyPond source
+        let lilypond_src = crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None).ok();
+
+        // Generate VexFlow JavaScript
+        let vexflow_renderer = crate::renderers::vexflow::VexFlowRenderer::new();
+        let vexflow_data = vexflow_renderer.render_data_from_document(&doc);
+        let vexflow_svg = vexflow_data.get("vexflow_js")
+            .and_then(|js| js.as_str())
+            .map(|s| s.to_string());
+
+        DocumentFormats {
+            vexflow_svg,
+            editor_svg,
+            lilypond_svg: None,  // Would need to run lilypond command
+            lilypond_src,
+            midi: None,
+        }
+    } else {
+        // If we can't deserialize, return empty formats
+        DocumentFormats {
+            vexflow_svg: None,
+            editor_svg: None,
+            lilypond_svg: None,
+            lilypond_src: None,
+            midi: None,
+        }
+    };
+
+    Json(serde_json::json!({
+        "success": true,
+        "document": document,
+        "formats": formats,
+        "cursor_position": cursor_position
+    })).into_response()
+}
+
+// GET document by UUID handler
+async fn get_document_by_id_handler(
+    Path(documentUUID): Path<String>
+) -> impl IntoResponse {
+    // Load document from disk
+    match load_document(&documentUUID).await {
+        Ok(mut document_json) => {
+            // Ensure the document includes its own UUID
+            if !document_json.get("documentUUID").is_some() {
+                document_json["documentUUID"] = serde_json::Value::String(documentUUID.clone());
+            }
+            // Normalize JSON for older docs: ensure arrays are arrays
+            if let Some(elements_val) = document_json.get_mut("elements") {
+                if !elements_val.is_array() {
+                    *elements_val = serde_json::Value::Array(vec![]);
+                }
+            }
+
+    // If empty document, parse minimal notation to get proper document structure
+    let is_empty = document_json.get("elements").and_then(|v| v.as_array()).map(|a| a.is_empty()).unwrap_or(true);
+    let editor_svg = if is_empty {
+        // Parse initial notation through music-text parser to get proper document with structure
+        match crate::pipeline::process_notation("|SRG") {
+            Ok(parse_result) => {
+                crate::renderers::editor::svg::render_editor_svg(&parse_result.document, None, None, None).ok()
+            },
+            Err(_) => {
+                // Fallback if parsing empty string fails
+                match serde_json::from_value::<Document>(document_json.clone()) {
+                    Ok(doc) => crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok(),
+                    Err(_) => None
+                }
+            }
+        }
+    } else {
+        match serde_json::from_value::<Document>(document_json.clone()) {
+            Ok(doc) => crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok(),
+            Err(_) => {
+                // Try parsing initial notation as fallback
+                match crate::pipeline::process_notation("|SRG") {
+                    Ok(parse_result) => {
+                        crate::renderers::editor::svg::render_editor_svg(&parse_result.document, None, None, None).ok()
+                    },
+                    Err(_) => None
+                }
+            }
+        }
+    };
+
+            // Generate all formats from the document
+            let formats = if let Ok(doc) = serde_json::from_value::<Document>(document_json.clone()) {
+                // Generate LilyPond source
+                let lilypond_src = crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None).ok();
+
+                // Generate VexFlow JavaScript (self-executing)
+                let vexflow_renderer = crate::renderers::vexflow::VexFlowRenderer::new();
+                let vexflow_data = vexflow_renderer.render_data_from_document(&doc);
+                let vexflow_svg = vexflow_data.get("vexflow_js")
+                    .and_then(|js| js.as_str())
+                    .map(|s| s.to_string());
+
+                DocumentFormats {
+                    vexflow_svg,  // Contains self-executing JavaScript
+                    editor_svg,
+                    lilypond_svg: None,  // Would need to run lilypond command
+                    lilypond_src,
+                    midi: None,
+                }
+            } else {
+                // Fallback with just editor SVG
+                DocumentFormats {
+                    vexflow_svg: None,
+                    editor_svg,
+                    lilypond_svg: None,
+                    lilypond_src: None,
+                    midi: None,
+                }
+            };
+
+            let response = DocumentWithFormatsResponse {
+                document: document_json,
+                formats,
+            };
+
+            Json(response).into_response()
+        },
+        Err(e) => {
+            (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": format!("Document not found: {}", e)}))
+            ).into_response()
+        }
+    }
+}
+
 // UUID-based transform handler
 async fn transform_document_by_id_handler(
-    Path(document_id): Path<String>,
+    Path(documentUUID): Path<String>,
     Json(request): Json<TransformDocumentByIdRequest>
 ) -> impl IntoResponse {
     // Load document from disk
-    let mut document = match load_document(&document_id).await {
+    let mut document = match load_document(&documentUUID).await {
         Ok(doc) => doc,
         Err(e) => return (
             StatusCode::NOT_FOUND,
@@ -742,7 +1076,7 @@ async fn transform_document_by_id_handler(
     }
 
     // Save updated document back to disk
-    if let Err(e) = save_document(&document_id, &document).await {
+    if let Err(e) = save_document(&documentUUID, &document).await {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": format!("Failed to save document: {}", e)}))
@@ -760,11 +1094,11 @@ async fn transform_document_by_id_handler(
 
 // UUID-based export handler
 async fn export_document_by_id_handler(
-    Path(document_id): Path<String>,
+    Path(documentUUID): Path<String>,
     Json(request): Json<ExportDocumentByIdRequest>
 ) -> impl IntoResponse {
     // Load document from disk
-    let document = match load_document(&document_id).await {
+    let document = match load_document(&documentUUID).await {
         Ok(doc) => doc,
         Err(e) => return (
             StatusCode::NOT_FOUND,
@@ -782,93 +1116,6 @@ async fn export_document_by_id_handler(
     export_document_handler(Json(export_request)).await.into_response()
 }
 
-async fn parse_text(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
-    let input = params.get("input").cloned().unwrap_or_default();
-    let generate_svg = params.get("generate_svg").map(|s| s == "true").unwrap_or(false);
-    let notation_type = params.get("notation_type").cloned().unwrap_or_else(|| "number".to_string());
-    println!("Received input: '{}', generate_svg: {}, notation_type: {}", input, generate_svg, notation_type);
-
-    if input.trim().is_empty() {
-        println!("Input is empty, returning null AST");
-        return Json(ParseResponse {
-            success: true,
-            plain_text: Some(input.clone()),
-            document: None,
-            detected_notation_systems: None,
-            lilypond: None,
-            lilypond_minimal: None,
-            lilypond_svg: None,
-            vexflow: None,
-            vexflow_svg: None,
-            canvas_svg: None,
-            error: None,
-        });
-    }
-
-    // Use the complete pipeline like the working version
-    match crate::process_notation(&input) {
-        Ok(result) => {
-
-
-
-            // Extract beats from all ContentLine elements in staves
-
-            // Generate SVG if requested
-            let lilypond_svg = if generate_svg && !result.lilypond.is_empty() {
-                let temp_dir = std::env::temp_dir().join("music-text-svg");
-                let generator = crate::renderers::lilypond::LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
-
-                match generator.generate_svg(&result.lilypond).await {
-                    svg_result if svg_result.success => {
-                        println!("✅ SVG generation successful");
-                        svg_result.svg_content
-                    },
-                    svg_result => {
-                        println!("❌ SVG generation failed: {:?}", svg_result.error);
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-
-
-            // Generate canvas SVG for WYSIWYG editor using editor SVG renderer
-            let canvas_svg = crate::renderers::editor::render_canvas_svg(&result.document, &notation_type, &input, None, None, None).ok();
-
-            // Generate minimal lilypond before moving document
-            let lilypond_minimal = crate::renderers::lilypond::renderer::convert_processed_document_to_minimal_lilypond_src(&result.document, Some(&input)).ok();
-
-            Json(ParseResponse {
-                success: true,
-                plain_text: Some(input.clone()),
-                document: Some(result.document),
-                detected_notation_systems: None,
-                lilypond: Some(result.lilypond.clone()),
-                lilypond_minimal,
-                lilypond_svg,
-                vexflow: Some(result.vexflow_data),
-                vexflow_svg: Some(result.vexflow_svg),
-                canvas_svg,
-                error: None,
-            })
-        },
-        Err(e) => Json(ParseResponse {
-            success: false,
-            plain_text: Some(input.clone()),
-            document: None,
-            detected_notation_systems: None,
-            lilypond: None,
-            lilypond_minimal: None,
-            lilypond_svg: None,
-            vexflow: None,
-            vexflow_svg: None,
-            canvas_svg: None,
-            error: Some(e.to_string()),
-        }),
-    }
-}
-
 async fn health_endpoint() -> impl IntoResponse {
     Json(serde_json::json!({"status": "ok"}))
 }
@@ -882,7 +1129,7 @@ async fn render_svg_poc(Json(request): Json<SvgPocRequest>) -> impl IntoResponse
     match crate::pipeline::process_notation(&request.input) {
         Ok(result) => {
             // Step 2: Use the SVG renderer module to generate SVG
-            let svg_content = match crate::renderers::editor::render_canvas_svg(&result.document, &request.notation_type, &request.input, None, None, None) {
+            let svg_content = match crate::renderers::editor::svg::render_editor_svg(&result.document, None, None, None) {
                 Ok(svg) => svg,
                 Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("SVG generation failed: {}", err)).into_response()
             };
@@ -898,33 +1145,10 @@ async fn render_svg_poc(Json(request): Json<SvgPocRequest>) -> impl IntoResponse
 }
 
 // New API endpoint for canvas SVG with cursor position support
-async fn render_canvas_svg(Json(request): Json<CanvasSvgRequest>) -> impl IntoResponse {
-    println!("Canvas SVG request: input_len={}, notation_type={}, cursor_position={:?}",
-             request.input_text.len(), request.notation_type, request.cursor_position);
-
-    // Parse the input text to get a document
-    match crate::pipeline::process_notation(&request.input_text) {
-        Ok(result) => {
-            // Use the SVG renderer with cursor position and selection
-            let svg_content = match crate::renderers::editor::render_canvas_svg(
-                &result.document,
-                &request.notation_type,
-                &request.input_text,
-                request.cursor_position,
-                request.selection_start,
-                request.selection_end
-            ) {
-                Ok(svg) => svg,
-                Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Canvas SVG generation failed: {}", err)).into_response()
-            };
-            println!("✅ Canvas SVG generation successful, length: {}", svg_content.len());
-            Html(svg_content).into_response()
-        }
-        Err(err) => {
-            println!("❌ Parsing failed: {}", err);
-            (StatusCode::BAD_REQUEST, format!("Parsing failed: {}", err)).into_response()
-        }
-    }
+async fn render_editor_svg(Json(request): Json<CanvasSvgRequest>) -> impl IntoResponse {
+    // This endpoint now assumes the client provides or the server derives the Document elsewhere;
+    // for compatibility, keep it simple: return 400 since raw input_text is removed.
+    (StatusCode::BAD_REQUEST, "render_editor_svg requires a Document; raw input_text is not supported").into_response()
 }
 
 // Serve the retro page at /retro
@@ -1237,4 +1461,3 @@ async fn semantic_command_handler(Json(request): Json<SemanticCommandRequest>) -
         }
     }
 }
-

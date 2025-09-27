@@ -39,10 +39,10 @@ module.exports = defineConfig({
     },
   ],
 
-  /* Run your local dev server before starting the tests */
+  /* Use the Rust web server on port 3000 started via `make web` */
   webServer: {
-    command: 'cd webapp && node server.js',
+    command: 'CARGO_TARGET_DIR=/tmp/music-text-target make web',
     port: 3000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
   },
 });

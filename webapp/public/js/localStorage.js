@@ -1,52 +1,108 @@
 /**
- * LocalStorage Management Module
- * Handles all localStorage operations for the Music Text application
+ * UUID-based Document Storage Management
+ * Handles document persistence with UUID-based keys
  */
 
 export const LocalStorage = {
-    // Input text management
-    saveInputText(text) {
+    // Current document management
+    saveCurrentDocumentUUID(documentUUID) {
         try {
-            localStorage.setItem('musictext_input', text);
+            localStorage.setItem('musictext_current_document', documentUUID);
         } catch (e) {
-            console.warn('Failed to save input text to localStorage:', e);
+            console.warn('Failed to save current document UUID:', e);
         }
     },
 
-    loadInputText() {
+    loadCurrentDocumentUUID() {
         try {
-            return localStorage.getItem('musictext_input') || '';
+            return localStorage.getItem('musictext_current_document');
         } catch (e) {
-            console.warn('Failed to load input text from localStorage:', e);
-            return '';
+            console.warn('Failed to load current document UUID:', e);
+            return null;
         }
     },
 
-    // Cursor position management
-    saveCursorPosition(start, end) {
+    // Document storage by UUID
+    saveDocument(documentUUID, documentData) {
         try {
-            localStorage.setItem('musictext_cursor', JSON.stringify({start, end}));
+            const key = `musictext_document_${documentUUID}`;
+            localStorage.setItem(key, JSON.stringify(documentData));
+            // Also set as current document
+            this.saveCurrentDocumentUUID(documentUUID);
+            return true;
         } catch (e) {
-            console.warn('Failed to save cursor position to localStorage:', e);
+            console.warn('Failed to save document:', e);
+            return false;
         }
     },
 
-    loadCursorPosition() {
+    loadDocument(documentUUID) {
         try {
-            const stored = localStorage.getItem('musictext_cursor');
-            return stored ? JSON.parse(stored) : {start: 0, end: 0};
+            const key = `musictext_document_${documentUUID}`;
+            const data = localStorage.getItem(key);
+            return data ? JSON.parse(data) : null;
         } catch (e) {
-            console.warn('Failed to load cursor position from localStorage:', e);
-            return {start: 0, end: 0};
+            console.warn('Failed to load document:', e);
+            return null;
         }
     },
 
-    // Active tab management
+    // Load current document (without needing UUID)
+    loadCurrentDocument() {
+        const currentUUID = this.loadCurrentDocumentUUID();
+        if (!currentUUID) {
+            return null;
+        }
+        return this.loadDocument(currentUUID);
+    },
+
+    // Document management
+    deleteDocument(documentUUID) {
+        try {
+            const key = `musictext_document_${documentUUID}`;
+            localStorage.removeItem(key);
+
+            // If this was the current document, clear current pointer
+            const currentUUID = this.loadCurrentDocumentUUID();
+            if (currentUUID === documentUUID) {
+                localStorage.removeItem('musictext_current_document');
+            }
+            return true;
+        } catch (e) {
+            console.warn('Failed to delete document:', e);
+            return false;
+        }
+    },
+
+    // List all stored documents
+    listDocuments() {
+        try {
+            const documents = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('musictext_document_')) {
+                    const documentUUID = key.replace('musictext_document_', '');
+                    const data = JSON.parse(localStorage.getItem(key));
+                    documents.push({
+                        documentUUID,
+                        timestamp: data.timestamp,
+                        title: data.metadata?.title || 'Untitled'
+                    });
+                }
+            }
+            return documents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        } catch (e) {
+            console.warn('Failed to list documents:', e);
+            return [];
+        }
+    },
+
+    // Settings that are not document-specific
     saveActiveTab(tabName) {
         try {
             localStorage.setItem('musictext_active_tab', tabName);
         } catch (e) {
-            console.warn('Failed to save active tab to localStorage:', e);
+            console.warn('Failed to save active tab:', e);
         }
     },
 
@@ -54,17 +110,16 @@ export const LocalStorage = {
         try {
             return localStorage.getItem('musictext_active_tab') || 'vexflow';
         } catch (e) {
-            console.warn('Failed to load active tab from localStorage:', e);
+            console.warn('Failed to load active tab:', e);
             return 'vexflow';
         }
     },
 
-    // Font preference management
     saveFontPreference(fontClass) {
         try {
             localStorage.setItem('musictext_font', fontClass);
         } catch (e) {
-            console.warn('Failed to save font preference to localStorage:', e);
+            console.warn('Failed to save font preference:', e);
         }
     },
 
@@ -72,37 +127,56 @@ export const LocalStorage = {
         try {
             return localStorage.getItem('musictext_font') || 'font-default';
         } catch (e) {
-            console.warn('Failed to load font preference from localStorage:', e);
+            console.warn('Failed to load font preference:', e);
             return 'font-default';
         }
     },
 
-    // Notation type management
     saveNotationType(notationType) {
         try {
             localStorage.setItem('musictext_notation_type', notationType);
         } catch (e) {
-            console.warn('Failed to save notation type to localStorage:', e);
+            console.warn('Failed to save notation type:', e);
         }
     },
 
     loadNotationType() {
         try {
+            // Notation type is no longer used by the API; keep stored value for UI only
             return localStorage.getItem('musictext_notation_type') || 'number';
         } catch (e) {
-            console.warn('Failed to load notation type from localStorage:', e);
+            console.warn('Failed to load notation type:', e);
             return 'number';
         }
     },
 
-    // Clear all data
+    // Clear all document data (keep settings)
+    clearAllDocuments() {
+        try {
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.startsWith('musictext_document_') || key === 'musictext_current_document')) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+        } catch (e) {
+            console.warn('Failed to clear documents:', e);
+        }
+    },
+
+    // Clear everything
     clearAll() {
         try {
-            localStorage.removeItem('musictext_input');
-            localStorage.removeItem('musictext_cursor');
-            localStorage.removeItem('musictext_active_tab');
-            localStorage.removeItem('musictext_font');
-            localStorage.removeItem('musictext_notation_type');
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('musictext_')) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
         } catch (e) {
             console.warn('Failed to clear localStorage:', e);
         }

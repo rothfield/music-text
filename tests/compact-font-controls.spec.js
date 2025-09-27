@@ -6,7 +6,8 @@ test('Compact font controls should work in status bar', async ({ page }) => {
   page.on('pageerror', error => console.log('PAGE ERROR:', error.message));
   
   // Start by going to the HTTP server
-  await page.goto('http://localhost:8083');
+  // Use configured baseURL from Playwright config
+  await page.goto('/');
   
   // Wait for the page to load
   await page.waitForLoadState('networkidle');

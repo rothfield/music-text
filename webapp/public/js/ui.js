@@ -10,9 +10,38 @@ export const UI = {
     setStatus(message, type = 'loading') {
         const status = document.getElementById('status');
         status.className = `status ${type}`;
-        status.textContent = message;
+
+        // Add document UUID if available
+        let fullMessage = message;
+        if (window.musicApp && window.musicApp.canvasEditor && window.musicApp.canvasEditor.document && window.musicApp.canvasEditor.document.documentUUID) {
+            const docId = window.musicApp.canvasEditor.document.documentUUID.slice(0, 8);
+            fullMessage = `${message} | Doc: ${docId}`;
+        }
+
+        status.textContent = fullMessage;
         if (type === 'success' || type === 'error') {
-            setTimeout(() => status.textContent = '', 3000);
+            setTimeout(() => {
+                // Show just the document UUID after clearing the status message
+                if (window.musicApp && window.musicApp.canvasEditor && window.musicApp.canvasEditor.document && window.musicApp.canvasEditor.document.documentUUID) {
+                    const docId = window.musicApp.canvasEditor.document.documentUUID.slice(0, 8);
+                    status.textContent = `Doc: ${docId}`;
+                    status.className = 'status';
+                } else {
+                    status.textContent = '';
+                }
+            }, 3000);
+        }
+    },
+
+    // Update status to show current document UUID without a message
+    updateDocumentStatus() {
+        const status = document.getElementById('status');
+        if (window.musicApp && window.musicApp.canvasEditor && window.musicApp.canvasEditor.document && window.musicApp.canvasEditor.document.documentUUID) {
+            const docId = window.musicApp.canvasEditor.document.documentUUID.slice(0, 8);
+            status.textContent = `Doc: ${docId}`;
+            status.className = 'status';
+        } else {
+            status.textContent = '';
         }
     },
 
@@ -57,19 +86,19 @@ export const UI = {
         // Backing text input removed - no longer needed
 
         const elements = {
-            'lilypond-output': 'Enter music notation above to see LilyPond source',
-            'vexflow-output': '',
-            'svg-output': 'Click "LilyPond" to generate SVG',
+            'lilypond_src-output': 'Enter music notation to see LilyPond source',
+            'editor_svg-output': 'Editor SVG source will appear here',
+            'vexflow_svg-output': 'VexFlow SVG will appear here',
+            'lilypond_svg-output': 'Click "LilyPond" to generate SVG',
             'document-output': 'Enter music notation to see parsed document output',
             'source-output': 'Plain text will appear here after parsing',
-            'svg-source-output': 'SVG source code will appear here',
             'status': ''
         };
 
         Object.entries(elements).forEach(([id, content]) => {
             const element = document.getElementById(id);
             if (element) {
-                if (id === 'vexflow-output' || id === 'svg-output') {
+                if (id === 'editor_svg-output' || id === 'vexflow_svg-output' || id === 'lilypond_svg-output') {
                     element.innerHTML = content;
                 } else {
                     element.textContent = content;
@@ -84,21 +113,27 @@ export const UI = {
             // Document Output - structured document representation
             document.getElementById('document-output').textContent =
                 JSON.stringify(result.document || {}, null, 2);
-            
-            
-            
-            
+
+            // Editor SVG Output - show the SVG source code
+            const editorSvgOutput = document.getElementById('editor_svg-output');
+            if (result.editor_svg) {
+                editorSvgOutput.innerHTML = `<pre>${this.escapeHTML(result.editor_svg)}</pre>`;
+            } else {
+                editorSvgOutput.innerHTML = '<p>No editor SVG available</p>';
+            }
+
         } else {
             // Show error in all sections
             const errorMsg = `Parse error: ${result.error}`;
             document.getElementById('document-output').textContent = errorMsg;
+            document.getElementById('editor_svg-output').innerHTML = `<p>${errorMsg}</p>`;
         }
     },
 
     // Update LilyPond output
     updateLilyPondOutput(result) {
         // Update minimal LilyPond output
-        const minimalOutput = document.getElementById('lilypond-output');
+        const minimalOutput = document.getElementById('lilypond_src-output');
         if (result.success && result.lilypond_minimal) {
             minimalOutput.innerHTML = `<pre class="lilypond-source">${this.escapeHTML(result.lilypond_minimal)}</pre>`;
         } else if (result.success) {
@@ -123,9 +158,9 @@ export const UI = {
         if (result.success && result.vexflow) {
             await this.renderVexFlow(result.vexflow);
         } else if (result.success) {
-            document.getElementById('vexflow-output').innerHTML = '<p>Parsed successfully, but no VexFlow data available.</p>';
+            document.getElementById('vexflow_svg-output').innerHTML = '<p>Parsed successfully, but no VexFlow data available.</p>';
         } else {
-            document.getElementById('vexflow-output').innerHTML = `<p>Parse error: ${result.error}</p>`;
+            document.getElementById('vexflow_svg-output').innerHTML = `<p>Parse error: ${result.error}</p>`;
         }
     },
 
@@ -133,7 +168,7 @@ export const UI = {
 
     // Render VexFlow notation - execute self-generated JavaScript
     async renderVexFlow(vexflowData) {
-        const output = document.getElementById('vexflow-output');
+        const output = document.getElementById('vexflow_svg-output');
         output.innerHTML = ''; // Clear previous content
 
         try {
@@ -204,17 +239,17 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
     // Update SVG output
     updateSVGOutput(result) {
         if (result.success && result.lilypond_svg) {
-            document.getElementById('svg-output').innerHTML = result.lilypond_svg;
+            document.getElementById('lilypond_svg-output').innerHTML = result.lilypond_svg;
             return true;
         } else if (result.success) {
             let errorMsg = 'SVG generation failed - no SVG content returned. Check server console for LilyPond errors.';
             if (!result.lilypond) {
                 errorMsg = 'No LilyPond source available to generate SVG from.';
             }
-            document.getElementById('svg-output').innerHTML = `<p>${errorMsg}</p><details><summary>Debug Info</summary><pre>${JSON.stringify(result, null, 2)}</pre></details>`;
+            document.getElementById('lilypond_svg-output').innerHTML = `<p>${errorMsg}</p><details><summary>Debug Info</summary><pre>${JSON.stringify(result, null, 2)}</pre></details>`;
             return false;
         } else {
-            document.getElementById('svg-output').innerHTML = `<p>Parse error: ${result.error}</p>`;
+            document.getElementById('lilypond_svg-output').innerHTML = `<p>Parse error: ${result.error}</p>`;
             return false;
         }
     },
@@ -244,25 +279,79 @@ ${vexflowData.vexflow_js || JSON.stringify(vexflowData, null, 2)}</pre>`;
     },
 
 
-    // Clear empty inputs
-    clearEmptyInputs() {
-        document.getElementById('vexflow-output').innerHTML = '';
-        document.getElementById('lilypond-output').innerHTML = '<pre class="lilypond-source">Enter music notation above to see minimal LilyPond source</pre>';
-        document.getElementById('lilypond-full-output').innerHTML = '<pre class="lilypond-source">Enter music notation above to see full LilyPond source</pre>';
-        document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
-        document.getElementById('source-output').textContent = 'Plain text will appear here after parsing';
-    },
+    // Update all formats from backend response
+    updateFormatsFromBackend(formats) {
+        if (!formats) return;
 
-    // Update SVG source output
-    updateSVGSourceOutput(result) {
-        const svgSourceOutput = document.getElementById('svg-source-output');
+        // Update Editor SVG
+        if (formats.editor_svg) {
+            const editorOutput = document.getElementById('editor_svg-output');
+            if (editorOutput) {
+                editorOutput.innerHTML = `<pre>${this.escapeHTML(formats.editor_svg)}</pre>`;
+            }
+        }
 
-        if (result.success && result.canvas_svg) {
-            svgSourceOutput.innerHTML = `<pre>${this.escapeHTML(result.canvas_svg)}</pre>`;
-        } else {
-            svgSourceOutput.innerHTML = '<p>No SVG source available</p>';
+        // Update VexFlow SVG (actually self-executing JavaScript)
+        if (formats.vexflow_svg) {
+            const vexflowOutput = document.getElementById('vexflow_svg-output');
+            if (vexflowOutput) {
+                // Clear the output first
+                vexflowOutput.innerHTML = '';
+
+                // Load VexFlow library and execute the JavaScript
+                this.ensureVexFlowLoaded().then(() => {
+                    try {
+                        // Replace the target element ID in the JavaScript code
+                        const modifiedJS = formats.vexflow_svg.replace(/document\.getElementById\(['"]vexflow-output['"]\)/g,
+                                                                       "document.getElementById('vexflow_svg-output')");
+
+                        // Execute the VexFlow JavaScript code
+                        console.log('🎵 Executing VexFlow JavaScript from formats');
+                        eval(modifiedJS);
+                    } catch (error) {
+                        console.error('Error executing VexFlow JavaScript:', error);
+                        vexflowOutput.innerHTML = '<p>Error rendering VexFlow</p>';
+                    }
+                }).catch(error => {
+                    console.error('Failed to load VexFlow library:', error);
+                    vexflowOutput.innerHTML = '<p>Failed to load VexFlow library</p>';
+                });
+            }
+        }
+
+        // Update LilyPond SVG
+        if (formats.lilypond_svg) {
+            const lilypondSvgOutput = document.getElementById('lilypond_svg-output');
+            if (lilypondSvgOutput) {
+                lilypondSvgOutput.innerHTML = formats.lilypond_svg;
+            }
+        }
+
+        // Update LilyPond Source
+        if (formats.lilypond_src) {
+            const lilypondSrcOutput = document.getElementById('lilypond_src-output');
+            if (lilypondSrcOutput) {
+                lilypondSrcOutput.innerHTML = `<pre class="lilypond-source">${this.escapeHTML(formats.lilypond_src)}</pre>`;
+            }
+        }
+
+        // Update MIDI
+        if (formats.midi) {
+            const midiOutput = document.getElementById('midiOutput');
+            if (midiOutput) {
+                midiOutput.textContent = formats.midi;
+            }
         }
     },
+
+    // Clear empty inputs
+    clearEmptyInputs() {
+        document.getElementById('editor_svg-output').innerHTML = 'Editor SVG source will appear here';
+        document.getElementById('lilypond_src-output').innerHTML = '<pre class="lilypond-source">Enter music notation to see LilyPond source</pre>';
+        document.getElementById('lilypond-full-output').innerHTML = '<pre class="lilypond-source">Enter music notation above to see full LilyPond source</pre>';
+        document.getElementById('document-output').textContent = 'Enter music notation to see parsed document output';
+    },
+
 
     // Backing text display removed - no longer needed
     updateBackingTextOutput(text) {

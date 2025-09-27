@@ -5,43 +5,35 @@
 
 export class DocumentModel {
     constructor() {
+        this.documentUUID = null; // Document UUID
         this.version = "1.0.0";
         this.timestamp = new Date().toISOString();
 
-        // Core document structure
-        this.elements = new Map(); // UUID -> element data
-        this.content = []; // Ordered list of element UUIDs
-        this.metadata = {
-            title: null,
-            composer: null,
-            key_signature: null,
-            time_signature: null,
-            tempo: null
-        };
+        // Core document structure - matches server Document struct
+        this.elements = []; // Array of elements from server
+        this.content = []; // Content lines
+        this.metadata = {};
+        this.title = null;
+        this.author = null;
+        this.directives = {};
+        this.char_index = 0;
+        this.value = null;
 
         // UI state (not part of music data, but persisted for UX)
         this.ui_state = {
             selection: {
                 selected_uuids: [],
-                cursor_uuid: null,
-                cursor_position: 0 // Character position for fallback
+                cursor_position: 0 // Character position in text
             },
             viewport: {
                 scroll_x: 0,
                 scroll_y: 0,
                 zoom_level: 1.0
             },
-            editor_mode: 'text', // 'text' or 'visual'
-            active_tab: 'vexflow'
+            active_tab: 'editor_svg' // Which tab is currently visible
         };
 
-        // Format-specific representations (cached)
-        this.format_cache = {
-            music_text: null, // Original text format
-            lilypond: null,   // Generated LilyPond
-            svg: null,        // Rendered SVG
-            midi: null        // MIDI data
-        };
+        // Formats are generated on server - not stored in client model
     }
 
     // Add an element to the document
@@ -96,7 +88,6 @@ export class DocumentModel {
 
     // Update cursor position
     setCursor(uuid, position = 0) {
-        this.ui_state.selection.cursor_uuid = uuid;
         this.ui_state.selection.cursor_position = position;
         this.updateTimestamp();
     }
@@ -107,79 +98,68 @@ export class DocumentModel {
         this.updateTimestamp();
     }
 
-    // Cache format representations
-    cacheFormat(format, data) {
-        this.format_cache[format] = data;
-        this.updateTimestamp();
-    }
-
-    // Get cached format
-    getCachedFormat(format) {
-        return this.format_cache[format];
-    }
-
-    // Invalidate all cached formats (call after document changes)
-    invalidateCache() {
-        this.format_cache = {
-            music_text: null,
-            lilypond: null,
-            svg: null,
-            midi: null
-        };
-        this.updateTimestamp();
-    }
 
     // Update timestamp
     updateTimestamp() {
         this.timestamp = new Date().toISOString();
     }
 
-    // Export to JSON for persistence
+    // Export to JSON for persistence - return document as-is
     toJSON() {
         return {
+            documentUUID: this.documentUUID,
             version: this.version,
             timestamp: this.timestamp,
-            elements: Object.fromEntries(this.elements),
+            elements: this.elements,
             content: this.content,
             metadata: this.metadata,
-            ui_state: this.ui_state,
-            format_cache: this.format_cache
+            title: this.title,
+            author: this.author,
+            directives: this.directives,
+            char_index: this.char_index,
+            value: this.value,
+            ui_state: this.ui_state
         };
     }
 
-    // Import from JSON
+    // Import from JSON - store server document as-is
     fromJSON(data) {
+        this.documentUUID = data.documentUUID || null;
         this.version = data.version || "1.0.0";
         this.timestamp = data.timestamp || new Date().toISOString();
-        this.elements = new Map(Object.entries(data.elements || {}));
+        // Store elements array directly from server
+        this.elements = data.elements || [];
         this.content = data.content || [];
         this.metadata = data.metadata || {};
+        // Store other document fields from server
+        this.title = data.title || null;
+        this.author = data.author || null;
+        this.directives = data.directives || {};
+        this.char_index = data.char_index || 0;
+        this.value = data.value || null;
+        // Deep merge UI state with defaults
         this.ui_state = {
-            selection: { selected_uuids: [], cursor_uuid: null, cursor_position: 0 },
-            viewport: { scroll_x: 0, scroll_y: 0, zoom_level: 1.0 },
-            editor_mode: 'text',
-            active_tab: 'vexflow',
-            ...data.ui_state
-        };
-        this.format_cache = {
-            music_text: null,
-            lilypond: null,
-            svg: null,
-            midi: null,
-            ...data.format_cache
+            selection: {
+                selected_uuids: [],
+                cursor_position: 0,
+                ...(data.ui_state?.selection || {})
+            },
+            viewport: {
+                scroll_x: 0,
+                scroll_y: 0,
+                zoom_level: 1.0,
+                ...(data.ui_state?.viewport || {})
+            },
+            active_tab: data.ui_state?.active_tab || 'editor_svg'
         };
         return this;
     }
 
-    // Create a new document from music-text format
+    // Create a new document from text content
     static async fromMusicText(textContent) {
-        const doc = new DocumentModel();
-        doc.cacheFormat('music_text', textContent);
-
-        // Parse the text content into document structure
-        // This would normally call the server parser, but for now we'll create a minimal structure
+        // Server creates the document with UUIDs
         try {
-            const response = await fetch('/api/parse-music-text', {
+            const response = await fetch('/api/documents', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: textContent })
@@ -217,12 +197,15 @@ export class DocumentModel {
     // Get statistics about the document
     getStats() {
         const elementTypes = {};
-        for (const element of this.elements.values()) {
-            elementTypes[element.type] = (elementTypes[element.type] || 0) + 1;
+        if (Array.isArray(this.elements)) {
+            for (const element of this.elements) {
+                const type = Object.keys(element)[0] || 'unknown';
+                elementTypes[type] = (elementTypes[type] || 0) + 1;
+            }
         }
 
         return {
-            total_elements: this.elements.size,
+            total_elements: Array.isArray(this.elements) ? this.elements.length : 0,
             element_types: elementTypes,
             has_selection: this.ui_state.selection.selected_uuids.length > 0,
             last_modified: this.timestamp
@@ -232,33 +215,41 @@ export class DocumentModel {
 
 // Document persistence manager
 export class DocumentPersistence {
-    constructor(storageKey = 'musicTextDocument') {
-        this.storageKey = storageKey;
+    constructor() {
+        // No longer need storageKey - using UUID-based keys
     }
 
-    // Save document to localStorage
+    // Save document to localStorage using its UUID
     saveDocument(document) {
         try {
-            const jsonData = JSON.stringify(document.toJSON());
-            localStorage.setItem(this.storageKey, jsonData);
-            console.log('Document saved to localStorage:', document.getStats());
-            return true;
+            if (!document.documentUUID) {
+                console.error('Cannot save document without documentUUID');
+                return false;
+            }
+
+            const documentData = document.toJSON();
+            // Use LocalStorage's new UUID-based storage
+            const success = window.LocalStorage?.saveDocument(document.documentUUID, documentData);
+            if (success) {
+                console.log('Document saved to localStorage:', document.getStats());
+            }
+            return success;
         } catch (error) {
             console.error('Failed to save document to localStorage:', error);
             return false;
         }
     }
 
-    // Load document from localStorage
+    // Load current document from localStorage
     loadDocument() {
         try {
-            const jsonData = localStorage.getItem(this.storageKey);
-            if (!jsonData) {
+            // Load the current document (whatever is set as active)
+            const documentData = window.LocalStorage?.loadCurrentDocument();
+            if (!documentData) {
                 return null;
             }
 
-            const data = JSON.parse(jsonData);
-            const document = new DocumentModel().fromJSON(data);
+            const document = new DocumentModel().fromJSON(documentData);
             console.log('Document loaded from localStorage:', document.getStats());
             return document;
         } catch (error) {
@@ -267,11 +258,38 @@ export class DocumentPersistence {
         }
     }
 
-    // Clear document from localStorage
+    // Load specific document by UUID
+    loadDocumentByUUID(documentUUID) {
+        try {
+            const documentData = window.LocalStorage?.loadDocument(documentUUID);
+            if (!documentData) {
+                return null;
+            }
+
+            const document = new DocumentModel().fromJSON(documentData);
+            console.log('Document loaded from localStorage by UUID:', document.getStats());
+
+            // Set as current document
+            this.setCurrentDocumentUUID(documentUUID);
+
+            return document;
+        } catch (error) {
+            console.error('Failed to load document by UUID from localStorage:', error);
+            return null;
+        }
+    }
+
+    // Clear current document from localStorage
     clearDocument() {
         try {
-            localStorage.removeItem(this.storageKey);
-            console.log('Document cleared from localStorage');
+            const currentUUID = window.LocalStorage?.loadCurrentDocumentUUID();
+            if (currentUUID) {
+                const success = window.LocalStorage?.deleteDocument(currentUUID);
+                if (success) {
+                    console.log('Current document cleared from localStorage');
+                }
+                return success;
+            }
             return true;
         } catch (error) {
             console.error('Failed to clear document from localStorage:', error);
@@ -279,8 +297,24 @@ export class DocumentPersistence {
         }
     }
 
-    // Check if document exists in localStorage
+    // Check if current document exists in localStorage
     hasDocument() {
-        return localStorage.getItem(this.storageKey) !== null;
+        const currentUUID = window.LocalStorage?.loadCurrentDocumentUUID();
+        return currentUUID !== null;
+    }
+
+    // Get current document UUID
+    getCurrentDocumentUUID() {
+        return window.LocalStorage?.loadCurrentDocumentUUID();
+    }
+
+    // Set current document UUID (switch to different document)
+    setCurrentDocumentUUID(documentUUID) {
+        window.LocalStorage?.saveCurrentDocumentUUID(documentUUID);
+    }
+
+    // List all stored documents
+    listStoredDocuments() {
+        return window.LocalStorage?.listDocuments() || [];
     }
 }

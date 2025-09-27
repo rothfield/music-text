@@ -1,4 +1,4 @@
-/// Canvas WYSIWYG SVG Renderer
+/// Editor WYSIWYG SVG Renderer
 /// Specialized SVG renderer for the web canvas editor that provides real-time visual feedback
 use crate::parse::Document;
 use crate::models::{pitch_systems, Notation};
@@ -51,8 +51,8 @@ impl HasValue for crate::parse::model::StaveLine {
     }
 }
 
-/// Canvas-specific SVG configuration optimized for real-time rendering
-pub struct CanvasSvgConfig {
+/// Editor-specific SVG configuration optimized for real-time rendering
+pub struct EditorSvgConfig {
     pub width: f32,
     pub height: f32,
     pub font_size: f32,
@@ -63,7 +63,7 @@ pub struct CanvasSvgConfig {
     pub selection_end: usize,
 }
 
-impl Default for CanvasSvgConfig {
+impl Default for EditorSvgConfig {
     fn default() -> Self {
         Self {
             width: 800.0,
@@ -78,9 +78,9 @@ impl Default for CanvasSvgConfig {
     }
 }
 
-/// Canvas SVG renderer for WYSIWYG editing
-pub struct CanvasSvgRenderer {
-    config: CanvasSvgConfig,
+/// Editor SVG renderer for WYSIWYG editing
+pub struct EditorSvgRenderer {
+    config: EditorSvgConfig,
     current_x: f32,
     current_y: f32,
     char_positions: std::collections::HashMap<usize, (f32, f32)>,  // Maps character position to (x, y) coordinates
@@ -100,8 +100,8 @@ pub struct ElementCoordinate {
     pub element_type: String,
 }
 
-impl CanvasSvgRenderer {
-    pub fn new(config: CanvasSvgConfig) -> Self {
+impl EditorSvgRenderer {
+    pub fn new(config: EditorSvgConfig) -> Self {
         Self {
             config,
             current_x: 20.0,
@@ -147,227 +147,53 @@ impl CanvasSvgRenderer {
         // This is always at the start of the content area
         self.char_positions.insert(0, (0.0, 0.0));
 
-        // Render title at the top if it exists
-        if let Some(ref title) = document.title {
-            if !title.trim().is_empty() {
-                self.render_title_at_top(&mut svg, title)?;
-                self.current_y += 40.0; // Add space after title
-            }
-        }
+        // Title is now handled as part of normal document structure - no special rendering
 
-        // Render music elements or placeholder if no musical content
+        // Just render all characters from input text directly
         let mut char_position = 0;
-        let has_musical_content = !document.elements.is_empty();
-
-        // Track actual position in input text for proper bbox tracking
         let input_chars: Vec<char> = input_text.chars().collect();
 
-        if has_musical_content {
-            let mut elements_iter = document.elements.iter().peekable();
-            while let Some(element) = elements_iter.next() {
-                let is_last_element = elements_iter.peek().is_none();
+        for (char_idx, ch) in input_text.char_indices() {
+            let char_width = self.get_char_width(&ch.to_string());
 
-                match element {
-                    crate::parse::model::DocumentElement::Stave(stave) => {
-                        let mut lines_iter = stave.lines.iter().peekable();
-                        while let Some(line) = lines_iter.next() {
-                            let is_last_line_in_stave = lines_iter.peek().is_none();
-                            match line {
-                                crate::parse::model::StaveLine::ContentLine(content_line) => {
-                                    // Store Y coordinate at start of line for proper bbox tracking
-                                    let line_y = self.current_y;
+            // Each character gets its own unique UUID
+            let char_uuid = uuid::Uuid::new_v4().to_string();
 
-                                    for content_element in &content_line.elements {
-                                    if let crate::parse::model::ContentElement::Beat(beat) = content_element {
-                                        let (new_x, chars_consumed) = self.render_beat_with_cursor(
-                                            &mut svg, beat, notation_type, char_position
-                                        )?;
-                                        self.current_x = new_x;
-                                        char_position += chars_consumed;
-                                    } else if let crate::parse::model::ContentElement::Barline(barline) = content_element {
-                                        // Store character position for barline with line Y
-                                        self.char_positions.insert(char_position, (self.current_x, line_y));
+            // Store character position
+            self.char_positions.insert(char_idx, (self.current_x, self.current_y));
 
-                                        let barline_width = self.render_barline(&mut svg, barline, char_position)?;
-
-                                        // Store position AFTER the barline
-                                        self.char_positions.insert(char_position + 1, (self.current_x, line_y));
-
-                                        char_position += 1; // Barlines typically consume one character
-                                    }
-                                    // Handle other content elements (whitespace, unknown tokens, etc.)
-                                    else if let crate::parse::model::ContentElement::Whitespace(ws) = content_element {
-                                        let default_space = " ".to_string();
-                                        let ws_value = ws.value.as_ref().unwrap_or(&default_space);
-                                        // Track character positions for whitespace with line Y
-                                        for (char_idx, _) in ws_value.char_indices() {
-                                            let char_pos = char_position + char_idx;
-                                            let char_x = self.current_x + (char_idx as f32 * self.get_char_width(" "));
-                                            self.char_positions.insert(char_pos, (char_x, line_y));
-                                        }
-                                        self.current_x += self.get_char_width(ws_value);
-                                        char_position += ws_value.len();
-                                    }
-                                    else if let crate::parse::model::ContentElement::UnknownToken(token) = content_element {
-                                        // Track character positions for unknown tokens with line Y
-                                        for (char_idx, _) in token.token_value.char_indices() {
-                                            let char_pos = char_position + char_idx;
-                                            let char_x = self.current_x + (char_idx as f32 * self.get_char_width("1"));
-                                            self.char_positions.insert(char_pos, (char_x, line_y));
-                                        }
-                                        // Render unknown tokens with a different style
-                                        writeln!(svg, r#"    <text x="{:.1}" y="{}" class="canvas-unknown">{}</text>"#,
-                                                self.current_x, self.current_y, token.token_value).unwrap();
-                                        self.current_x += self.get_char_width(&token.token_value);
-                                        char_position += token.token_value.len();
-                                    }
-                                }
-                                // After rendering a content line, track the newline character position
-                                // The newline character itself should be at the end of the current line
-                                // before we move to the next line
-
-                                // Check if there's actually a newline in the input at this position
-                                if char_position < input_chars.len() && input_chars[char_position] == '\n' {
-                                    // Track the newline position at the end of the current line (same Y as line)
-                                    self.char_positions.insert(char_position, (self.current_x, line_y));
-                                    char_position += 1; // Account for the newline character
-
-                                    // Now move to next line
-                                    let next_line_y = self.current_y + 60.0; // Calculate next line Y before moving
-                                    self.emit_newline();
-
-                                    // Track position at start of new line (after the newline)
-                                    if char_position <= input_chars.len() {
-                                        self.char_positions.insert(char_position, (0.0, next_line_y));
-                                    }
-                                } else if !(is_last_element && is_last_line_in_stave) {
-                                    // No actual newline, but more lines or elements to render - move to next line for rendering
-                                    // Don't emit newline if this is the last line of the last element and there's no actual newline
-                                    self.emit_newline();
-                                }
-                            }
-                                crate::parse::model::StaveLine::Lyrics(lyrics_line) => {
-                                    // Render lyrics line below content
-                                    self.render_lyrics_line(&mut svg, lyrics_line)?;
-                                }
-                                crate::parse::model::StaveLine::Upper(upper_line) => {
-                                    // Render upper line token by token - octave markers as blanks
-                                    self.render_upper_line(&mut svg, upper_line, &mut char_position)?;
-                                }
-                                crate::parse::model::StaveLine::Lower(lower_line) => {
-                                    // Render lower line token by token - syllable separators as blanks
-                                    self.render_lower_line(&mut svg, lower_line, &mut char_position)?;
-                                }
-                                crate::parse::model::StaveLine::Text(text_line) => {
-                                    // Render text lines as regular text
-                                    self.render_text_line(&mut svg, text_line, &mut char_position)?;
-                                }
-                                crate::parse::model::StaveLine::Whitespace(whitespace_line) => {
-                                    // Track character positions for whitespace lines
-                                    if let Some(ref ws_value) = whitespace_line.value {
-                                        for (char_idx, _) in ws_value.char_indices() {
-                                            let char_pos = char_position + char_idx;
-                                            self.char_positions.insert(char_pos, (self.current_x, self.current_y));
-                                        }
-                                        char_position += ws_value.len();
-                                    }
-                                }
-                                crate::parse::model::StaveLine::BlankLines(blank_lines) => {
-                                    // Track character positions for blank lines (newlines)
-                                    if let Some(ref bl_value) = blank_lines.value {
-                                        // Each character in blank lines is typically a newline
-                                        for (char_idx, ch) in bl_value.char_indices() {
-                                            let char_pos = char_position + char_idx;
-                                            if ch == '\n' {
-                                                // Position at end of current line for the newline character (same Y)
-                                                let current_line_y = self.current_y;
-                                                self.char_positions.insert(char_pos, (self.current_x, current_line_y));
-
-                                                // Move to next line
-                                                self.emit_newline();
-
-                                                // Position at start of new line (after the newline)
-                                                if char_pos + 1 <= input_chars.len() {
-                                                    self.char_positions.insert(char_pos + 1, (0.0, self.current_y));
-                                                }
-                                            }
-                                        }
-                                        char_position += bl_value.len();
-                                    }
-                                }
-                                _ => {} // Handle other line types as needed
-                            }
-                        }
-
-                    }
-                                                                                crate::parse::model::DocumentElement::BlankLines(blank_lines) => {
-                        // Track character positions for blank lines outside staves, if a value exists
-                        if let Some(ref bl_value) = blank_lines.value {
-                            for (char_idx, _) in bl_value.char_indices() {
-                                let char_pos = char_position + char_idx;
-                                self.char_positions.insert(char_pos, (self.current_x, self.current_y));
-                            }
-                            char_position += bl_value.len();
-                        }
-
-                        // Trust the parser to give us the correct number of newlines.
-                        let newline_count = blank_lines.newline_count();
-                        for _ in 0..newline_count {
-                            self.emit_newline();
-                        }
-                    }
-                }
+            // Handle newlines
+            if ch == '\n' {
+                // Move to next line
+                self.current_y += 60.0;
+                self.current_x = 0.0;
+                char_position = char_idx + 1;
+                continue;
             }
-        } else {
-            // Render title or placeholder when no musical content
-            self.render_title_or_placeholder(&mut svg, document, input_text)?;
+
+            // Render character
+            writeln!(svg, r#"    <text id="char-{}" x="{:.1}" y="{}" class="char" data-source-uuid="{}" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                self.element_id_counter,
+                self.current_x, self.current_y,
+                char_uuid,
+                char_idx,
+                char_width,
+                ch
+            ).unwrap();
+
+            self.element_id_counter += 1;
+            self.current_x += char_width;
         }
 
-        // IMPORTANT: Ensure we track the EOF position
-        // char_position might be less than input_text.len() if we haven't tracked all characters
-        // This can happen if the parser doesn't capture trailing whitespace or other characters
-
-        // Always store the current position as it represents where we've tracked up to
-        self.char_positions.insert(char_position, (self.current_x, self.current_y));
-
-        // If we haven't tracked all the way to the end, fill in the gap
-        if char_position < input_text.len() {
-            // There are untracked characters at the end - this shouldn't normally happen
-            // but we'll track them at the current position
-            for pos in char_position..=input_text.len() {
-                self.char_positions.insert(pos, (self.current_x, self.current_y));
-            }
-        }
-
-        // Special handling for EOF position
-        // The EOF position is where the cursor goes when at the very end of the input
-        if !self.char_positions.contains_key(&input_text.len()) {
-            if input_text.ends_with('\n') {
-                // If ending with newline, EOF is at start of next line
-                self.char_positions.insert(input_text.len(), (0.0, self.current_y));
-            } else {
-                // Otherwise, EOF is right after the last character
-                self.char_positions.insert(input_text.len(), (self.current_x, self.current_y));
-            }
-        }
-
-        // Debug: Log position tracking info (disabled for production)
-        // eprintln!("Position tracking: tracked {} chars, input has {} chars, stored {} positions",
-        //          char_position, input_text.len(), self.char_positions.len());
+        // Store EOF position
+        self.char_positions.insert(input_text.len(), (self.current_x, self.current_y));
 
         // Show selection highlighting if enabled
         if self.config.show_selection {
             self.render_selection_highlighting(&mut svg);
         }
 
-        // Show cursor if enabled - now handles any character position
-        if self.config.show_cursor {
-            // Find the correct position for the cursor based on character positions
-            let (cursor_x, cursor_y) = self.char_positions.get(&self.config.cursor_position)
-                .copied()
-                .unwrap_or((self.current_x, self.current_y));
-            self.render_cursor_at_position(&mut svg, cursor_x, cursor_y);
-        }
+        // Cursor rendering removed - handled by client-side JavaScript
 
         writeln!(svg, "  </g>").unwrap();
 
@@ -445,6 +271,21 @@ impl CanvasSvgRenderer {
       font-family: monospace, 'Courier New', monospace;
     }}
 
+    .char {{
+      font-size: {}px;
+      fill: deepskyblue;
+      font-weight: normal;
+      font-family: monospace, 'Courier New', monospace;
+      cursor: pointer;
+    }}
+
+    .char.cursor {{
+      fill: white;
+      stroke: black;
+      stroke-width: 2px;
+      opacity: 0.9;
+    }}
+
     .canvas-octave-upper {{
       font-size: {}px;
       fill: red;
@@ -466,11 +307,7 @@ impl CanvasSvgRenderer {
       font-family: monospace, 'Courier New', monospace;
     }}
 
-    .canvas-cursor {{
-      stroke: #e74c3c;
-      stroke-width: 1;
-      animation: blink 1s infinite;
-    }}
+    /* Cursor CSS removed - handled by client-side JavaScript */
 
     .canvas-beat-arc {{
       stroke: orange;
@@ -529,10 +366,103 @@ impl CanvasSvgRenderer {
     /* Character replacement styles removed - handled in rendering logic */
     ]]>
   </style>
-"#, note_size, octave_size, octave_size, note_size, note_size * 0.9, note_size * 0.8, note_size * 1.5, note_size * 0.9, note_size)
+"#, note_size, note_size, octave_size, octave_size, note_size, note_size * 0.9, note_size * 0.8, note_size * 1.5, note_size * 0.9, note_size)
     }
 
-    /// Render a beat with cursor awareness
+    /// Render content line as individual characters using document element UUIDs
+    fn render_content_line_chars(
+        &mut self,
+        svg: &mut String,
+        content_line: &crate::parse::model::ContentLine,
+        line_text: &str,
+        start_char_position: usize
+    ) -> Result<(), String> {
+        // Extract character-to-UUID mapping from content line elements
+        let mut char_uuid_map = std::collections::HashMap::new();
+        let mut current_char_index = 0;
+
+        for content_element in &content_line.elements {
+            match content_element {
+                crate::parse::model::ContentElement::Beat(beat) => {
+                    for beat_element in &beat.elements {
+                        match beat_element {
+                            crate::parse::model::BeatElement::Note(note) => {
+                                if let Some(ref value) = note.value {
+                                    for _ in value.chars() {
+                                        char_uuid_map.insert(current_char_index, note.id.to_string());
+                                        current_char_index += 1;
+                                    }
+                                }
+                            }
+                            crate::parse::model::BeatElement::Dash(dash) => {
+                                if let Some(ref value) = dash.value {
+                                    for _ in value.chars() {
+                                        char_uuid_map.insert(current_char_index, dash.id.to_string());
+                                        current_char_index += 1;
+                                    }
+                                }
+                            }
+                            _ => {
+                                // Handle other beat elements
+                                current_char_index += 1;
+                            }
+                        }
+                    }
+                }
+                crate::parse::model::ContentElement::Whitespace(ws) => {
+                    if let Some(ref value) = ws.value {
+                        for _ in value.chars() {
+                            // Use a fallback UUID for whitespace
+                            char_uuid_map.insert(current_char_index, uuid::Uuid::new_v4().to_string());
+                            current_char_index += 1;
+                        }
+                    }
+                }
+                crate::parse::model::ContentElement::UnknownToken(token) => {
+                    for _ in token.token_value.chars() {
+                        // Use a fallback UUID for unknown tokens
+                        char_uuid_map.insert(current_char_index, uuid::Uuid::new_v4().to_string());
+                        current_char_index += 1;
+                    }
+                }
+                _ => {
+                    // Handle other content elements
+                    current_char_index += 1;
+                }
+            }
+        }
+
+        // Now render each character with its corresponding UUID
+        for (char_idx, ch) in line_text.char_indices() {
+            let char_pos = start_char_position + char_idx;
+            let char_width = self.get_char_width(&ch.to_string());
+
+            // Get the UUID for this character, or generate fallback
+            let char_uuid = char_uuid_map.get(&char_idx)
+                .cloned()
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+            // Store character position
+            self.char_positions.insert(char_pos, (self.current_x, self.current_y));
+
+            // Render character with document UUID
+            writeln!(svg, r#"    <text id="char-{}" x="{:.1}" y="{}" class="char" data-source-uuid="{}" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                self.element_id_counter,
+                self.current_x, self.current_y,
+                char_uuid,
+                char_idx,
+                char_width,
+                ch
+            ).unwrap();
+
+            self.element_id_counter += 1;
+            self.current_x += char_width;
+        }
+
+        Ok(())
+    }
+
+    /// Render a beat with cursor awareness (DEPRECATED - use render_content_line_chars)
     fn render_beat_with_cursor(
         &mut self,
         svg: &mut String,
@@ -722,10 +652,11 @@ impl CanvasSvgRenderer {
         Ok(width_adjustment)
     }
 
-    /// Render cursor at specific position
+    /// Render cursor at specific position (DISABLED)
     fn render_cursor_at_position(&self, svg: &mut String, x: f32, y: f32) {
-        writeln!(svg, r#"    <line x1="{:.1}" y1="{}" x2="{:.1}" y2="{}" class="canvas-cursor" id="svg-cursor"/>"#,
-                x, y - 20.0, x, y + 5.0).unwrap();
+        // Line cursor disabled - no cursor rendering
+        // writeln!(svg, r#"    <line x1="{:.1}" y1="{}" x2="{:.1}" y2="{}" class="canvas-cursor" id="svg-cursor"/>"#,
+        //         x, y - 20.0, x, y + 5.0).unwrap();
     }
 
     /// Render arc connecting beat elements
@@ -785,11 +716,7 @@ impl CanvasSvgRenderer {
         writeln!(svg, r#"    <text x="{:.1}" y="{:.1}" class="canvas-placeholder" text-anchor="middle">{}</text>"#,
                 text_x, text_y, display_text).unwrap();
 
-        // Show cursor if enabled and input matches cursor position
-        if self.config.show_cursor {
-            let cursor_x = text_x + self.get_char_width(display_text) / 2.0;
-            self.render_cursor_at_position(svg, cursor_x, text_y);
-        }
+        // Cursor rendering removed - handled by client-side JavaScript
 
         Ok(())
     }
@@ -1032,27 +959,22 @@ impl CanvasSvgRenderer {
     }
 }
 
-impl Default for CanvasSvgRenderer {
+impl Default for EditorSvgRenderer {
     fn default() -> Self {
-        Self::new(CanvasSvgConfig::default())
+        Self::new(EditorSvgConfig::default())
     }
 }
 
 /// Convenience function to render document for canvas display
-pub fn render_canvas_svg(
+pub fn render_editor_svg(
     document: &Document,
-    notation_type: &str,
-    input_text: &str,
     cursor_position: Option<usize>,
     selection_start: Option<usize>,
     selection_end: Option<usize>
 ) -> Result<String, String> {
-    let mut config = CanvasSvgConfig::default();
+    let mut config = EditorSvgConfig::default();
 
-    if let Some(pos) = cursor_position {
-        config.show_cursor = true;
-        config.cursor_position = pos;
-    }
+    // Cursor rendering is handled by client-side JavaScript
 
     if let (Some(start), Some(end)) = (selection_start, selection_end) {
         config.show_selection = true;
@@ -1060,8 +982,11 @@ pub fn render_canvas_svg(
         config.selection_end = end;
     }
 
-    let mut renderer = CanvasSvgRenderer::new(config);
-    renderer.render(document, notation_type, input_text)
+    let mut renderer = EditorSvgRenderer::new(config);
+    // Use the document's value field as the input text
+    let empty = String::new();
+    let input_text = document.value.as_ref().unwrap_or(&empty);
+    renderer.render(document, "", input_text)
 }
 
 #[cfg(test)]
@@ -1070,7 +995,7 @@ mod tests {
     use crate::parse::recursive_descent::parse_document;
 
     #[test]
-    fn test_canvas_svg_title_only() {
+    fn test_editor_svg_title_only() {
         let input = "11222x";
         let document = parse_document(input).expect("Should parse successfully");
 
@@ -1078,7 +1003,7 @@ mod tests {
         assert_eq!(document.elements.len(), 0);
         assert_eq!(document.title, Some("11222x".to_string()));
 
-        let svg = render_canvas_svg(&document, "number", input, None, None, None).expect("Should render SVG");
+        let svg = render_editor_svg(&document, "number", input, None, None, None).expect("Should render SVG");
 
         // Should contain SVG structure
         assert!(svg.contains("<svg"));
