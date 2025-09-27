@@ -140,12 +140,12 @@ impl EditorSvgRenderer {
 
         // Reset position for content
         self.current_x = 0.0;
-        self.current_y = 0.0;
+        self.current_y = 20.0;  // Start with baseline at y=20 so text is visible
 
         // IMPORTANT: Store the initial cursor position (position 0 - before any content)
         // Cursor position 0 means the cursor is BEFORE the first character
         // This is always at the start of the content area
-        self.char_positions.insert(0, (0.0, 0.0));
+        self.char_positions.insert(0, (0.0, 20.0));
 
         // Render document elements (hybrid approach: objects with character tracking)
         let mut global_char_position = 0;
@@ -177,6 +177,23 @@ impl EditorSvgRenderer {
                             global_char_position += 1;
                         }
 
+                        let line_class = match line {
+                            crate::models::StaveLine::ContentLine(_) => "content-line",
+                            crate::models::StaveLine::Text(_) => "text-line",
+                            crate::models::StaveLine::Lyrics(_) => "lyrics-line",
+                            crate::models::StaveLine::Upper(_) => "upper-line",
+                            crate::models::StaveLine::Lower(_) => "lower-line",
+                            crate::models::StaveLine::Whitespace(_) => "whitespace-line",
+                            crate::models::StaveLine::BlankLines(_) => "blank-line",
+                            _ => "unknown-line",
+                        };
+                        writeln!(svg, r##"<g class="{line_class}">"##).unwrap();
+                        writeln!(
+                            svg,
+                            r#"    <rect class="line-hitbox" x="-20" y="{}" width="{}" height="60" fill="transparent" />"#,
+                            self.current_y - 40.0, self.config.width
+                        ).unwrap();
+
                         match line {
                             crate::models::StaveLine::ContentLine(content_line) => {
                                 // Render content line elements
@@ -185,43 +202,85 @@ impl EditorSvgRenderer {
                             crate::models::StaveLine::Text(text_line) => {
                                 // Render text line
                                 if let Some(value) = &text_line.value {
-                                    self.render_text_content(&mut svg, value, &mut global_char_position);
+                                    if value.is_empty() {
+                                        // Empty line anchor: emit invisible anchor and optional pilcrow
+                                        self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
+                                    } else {
+                                        self.render_text_content(&mut svg, value, &mut global_char_position);
+                                    }
+                                } else {
+                                    // No value -> treat as empty line
+                                    self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
                                 }
                             }
                             crate::models::StaveLine::Lyrics(lyrics_line) => {
                                 // Render lyrics with special styling
                                 if let Some(value) = &lyrics_line.value {
-                                    self.render_lyrics_content(&mut svg, value, &mut global_char_position);
+                                    if value.is_empty() {
+                                        self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
+                                    } else {
+                                        self.render_lyrics_content(&mut svg, value, &mut global_char_position);
+                                    }
+                                } else {
+                                    self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
                                 }
                             }
                             crate::models::StaveLine::Upper(upper_line) => {
                                 // Render upper annotation line
                                 if let Some(value) = &upper_line.value {
-                                    self.render_annotation_content(&mut svg, value, &mut global_char_position, "upper");
+                                    if value.is_empty() {
+                                        self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
+                                    } else {
+                                        self.render_annotation_content(&mut svg, value, &mut global_char_position, "upper");
+                                    }
+                                } else {
+                                    self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
                                 }
                             }
                             crate::models::StaveLine::Lower(lower_line) => {
                                 // Render lower annotation line
                                 if let Some(value) = &lower_line.value {
-                                    self.render_annotation_content(&mut svg, value, &mut global_char_position, "lower");
+                                    if value.is_empty() {
+                                        self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
+                                    } else {
+                                        self.render_annotation_content(&mut svg, value, &mut global_char_position, "lower");
+                                    }
+                                } else {
+                                    self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
                                 }
                             }
                             crate::models::StaveLine::Whitespace(ws_line) => {
                                 // Render whitespace line
                                 if let Some(value) = &ws_line.value {
-                                    self.render_whitespace_content(&mut svg, value, &mut global_char_position);
+                                    if value.is_empty() {
+                                        self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
+                                    } else {
+                                        self.render_whitespace_content(&mut svg, value, &mut global_char_position);
+                                    }
+                                } else {
+                                    self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
                                 }
                             }
                             crate::models::StaveLine::BlankLines(blank) => {
-                                // Render blank lines within stave
                                 if let Some(value) = &blank.value {
-                                    for ch in value.chars() {
-                                        if ch == '\n' {
+                                    let num_lines = value.chars().filter(|&c| c == '\n').count();
+                                    for i in 0..num_lines {
+                                        self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
+
+                                        if i < num_lines - 1 {
+                                            writeln!(svg, "</g>").unwrap();
                                             self.char_positions.insert(global_char_position, (self.current_x, self.current_y));
                                             self.current_y += 60.0;
                                             self.current_x = 0.0;
+                                            global_char_position += 1;
+
+                                            writeln!(svg, r##"<g class="blank-line">"##).unwrap();
+                                            writeln!(
+                                                svg,
+                                                r#"    <rect class="line-hitbox" x="-20" y="{}" width="{}" height="60" fill="transparent" />"#,
+                                                self.current_y - 40.0, self.config.width
+                                            ).unwrap();
                                         }
-                                        global_char_position += 1;
                                     }
                                 }
                             }
@@ -229,6 +288,7 @@ impl EditorSvgRenderer {
                                 // Skip other line types for now
                             }
                         }
+                        writeln!(svg, "</g>").unwrap();
                     }
                 }
             }
@@ -367,7 +427,7 @@ impl EditorSvgRenderer {
                 self.char_positions.insert(*char_position, (self.current_x, self.current_y));
 
                 // Render the character
-                writeln!(svg, r#"        <text x="{:.1}" y="{}" class="note-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                writeln!(svg, r#"        <text x="{:.1}" y="{:.1}" class="note-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                     self.current_x, self.current_y, char_position, char_width, ch).unwrap();
 
                 self.current_x += char_width;
@@ -398,7 +458,7 @@ impl EditorSvgRenderer {
                 let char_width = self.get_char_width(&ch.to_string());
                 self.char_positions.insert(*char_position, (self.current_x, self.current_y));
 
-                writeln!(svg, r#"        <text x="{:.1}" y="{}" class="rest-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                writeln!(svg, r#"        <text x="{:.1}" y="{:.1}" class="rest-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                     self.current_x, self.current_y, char_position, char_width, ch).unwrap();
 
                 self.current_x += char_width;
@@ -422,7 +482,7 @@ impl EditorSvgRenderer {
                 let char_width = self.get_char_width(&ch.to_string());
                 self.char_positions.insert(*char_position, (self.current_x, self.current_y));
 
-                writeln!(svg, r#"        <text x="{:.1}" y="{}" class="dash-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                writeln!(svg, r#"        <text x="{:.1}" y="{:.1}" class="dash-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                     self.current_x, self.current_y, char_position, char_width, ch).unwrap();
 
                 self.current_x += char_width;
@@ -444,7 +504,7 @@ impl EditorSvgRenderer {
                 let char_width = self.get_char_width(&ch.to_string());
                 self.char_positions.insert(*char_position, (self.current_x, self.current_y));
 
-                writeln!(svg, r#"        <text x="{:.1}" y="{}" class="breath-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                writeln!(svg, r#"        <text x="{:.1}" y="{:.1}" class="breath-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                     self.current_x, self.current_y, char_position, char_width, ch).unwrap();
 
                 self.current_x += char_width;
@@ -476,7 +536,7 @@ impl EditorSvgRenderer {
             let char_width = self.get_char_width(&ch.to_string());
             self.char_positions.insert(*char_position, (self.current_x, self.current_y));
 
-            writeln!(svg, r#"      <text x="{:.1}" y="{}" class="barline-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+            writeln!(svg, r#"      <text x="{:.1}" y="{:.1}" class="barline-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                 self.current_x, self.current_y, char_position, char_width, ch).unwrap();
 
             self.current_x += char_width;
@@ -501,7 +561,7 @@ impl EditorSvgRenderer {
 
                 // Don't render visible text for spaces, just track position
                 if ch != ' ' {
-                    writeln!(svg, r#"    <text x="{:.1}" y="{}" class="whitespace-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                    writeln!(svg, r#"    <text x="{:.1}" y="{:.1}" class="whitespace-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                         self.current_x, self.current_y, char_position, char_width, ch).unwrap();
                 }
 
@@ -525,7 +585,7 @@ impl EditorSvgRenderer {
             let char_width = self.get_char_width(&ch.to_string());
             self.char_positions.insert(*char_position, (self.current_x, self.current_y));
 
-            writeln!(svg, r#"      <text x="{:.1}" y="{}" class="unknown-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+            writeln!(svg, r#"      <text x="{:.1}" y="{:.1}" class="unknown-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                 self.current_x, self.current_y, char_position, char_width, ch).unwrap();
 
             self.current_x += char_width;
@@ -551,7 +611,7 @@ impl EditorSvgRenderer {
                 self.current_y += 60.0;
                 self.current_x = 0.0;
             } else {
-                writeln!(svg, r#"    <text x="{:.1}" y="{}" class="text-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                writeln!(svg, r#"    <text x="{:.1}" y="{:.1}" class="text-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                     self.current_x, self.current_y, char_position, char_width, ch).unwrap();
                 self.current_x += char_width;
             }
@@ -577,7 +637,7 @@ impl EditorSvgRenderer {
                 self.current_y += 60.0;
                 self.current_x = 0.0;
             } else {
-                writeln!(svg, r#"      <text x="{:.1}" y="{}" class="lyrics-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                writeln!(svg, r#"      <text x="{:.1}" y="{:.1}" class="lyrics-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                     self.current_x, self.current_y, char_position, char_width, ch).unwrap();
                 self.current_x += char_width;
             }
@@ -606,7 +666,7 @@ impl EditorSvgRenderer {
                 self.current_y += 60.0;
                 self.current_x = 0.0;
             } else {
-                writeln!(svg, r#"      <text x="{:.1}" y="{}" class="{}-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
+                writeln!(svg, r#"      <text x="{:.1}" y="{:.1}" class="{}-char" data-char-index="{}" data-width="{:.1}">{}</text>"#,
                     self.current_x, self.current_y, annotation_type, char_position, char_width, ch).unwrap();
                 self.current_x += char_width;
             }
@@ -1461,6 +1521,26 @@ impl EditorSvgRenderer {
             crate::parse::model::UpperElement::Newline { value, .. } => value.clone(),
         }
     }
+    /// Emit an invisible anchor for an empty line so the client can place a caret reliably.
+    /// Also emits a faint pilcrow as a visual hint.
+    fn emit_empty_line_anchor(
+        &mut self,
+        svg: &mut String,
+        char_position: &mut usize,
+    ) {
+        // Record a character position even for empty lines
+        self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+        // Visible pilcrow as a clickable anchor for empty lines.
+        let _ = writeln!(
+            svg,
+            r#"    <text x="{:.1}" y="{:.1}" class="empty-line-server" data-char-index="{}">¶</text>"#,
+            self.current_x, self.current_y, char_position
+        );
+
+        // Advance global char position by one to keep indices monotonic
+        *char_position += 1;
+    }
 }
 
 impl Default for EditorSvgRenderer {
@@ -1507,7 +1587,7 @@ mod tests {
         assert_eq!(document.elements.len(), 0);
         assert_eq!(document.title, Some("11222x".to_string()));
 
-        let svg = render_editor_svg(&document, "number", input, None, None, None).expect("Should render SVG");
+        let svg = render_editor_svg(&document, None, None, None).expect("Should render SVG");
 
         // Should contain SVG structure
         assert!(svg.contains("<svg"));
