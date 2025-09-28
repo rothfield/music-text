@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use uuid::Uuid;
 use crate::models::ui_state::UIState;
 
 // Core document structure models
@@ -24,6 +25,8 @@ impl DocumentElement {
 pub struct Document {
     #[serde(rename = "documentUUID")]
     pub document_uuid: Option<String>,  // Document's unique identifier
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,                      // Internal UUID for document structure
     pub value: Option<String>,
     pub char_index: usize,
     pub title: Option<String>,
@@ -65,6 +68,8 @@ impl Document {
 // Blank lines structure (newline (whitespace* newline)+)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlankLines {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>, // The complete blank lines content
     pub char_index: usize, // Converted from line/column for consistency
     pub line: usize,
@@ -75,6 +80,8 @@ pub struct BlankLines {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stave {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize, // Converted from line/column for consistency
     pub notation_system: super::notation::NotationSystem,
@@ -89,10 +96,8 @@ pub struct Stave {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StaveLine {
     Text(TextLine),
-    Upper(super::elements::UpperLine),
     Content(Vec<crate::rhythm::types::ParsedElement>), // Keep for backward compat
     ContentLine(super::elements::ContentLine),  // New: elements parsed directly
-    Lower(super::elements::LowerLine),
     Lyrics(super::elements::LyricsLine),
     Whitespace(super::elements::WhitespaceLine),
     BlankLines(BlankLines),
@@ -109,6 +114,8 @@ impl StaveLine {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextLine {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>, // The text content
     pub char_index: usize,
 }

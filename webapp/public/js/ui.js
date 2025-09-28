@@ -116,8 +116,9 @@ export const UI = {
 
             // Editor SVG Output - show the SVG source code
             const editorSvgOutput = document.getElementById('editor_svg-output');
-            if (result.editor_svg) {
-                editorSvgOutput.innerHTML = `<pre>${this.escapeHTML(result.editor_svg)}</pre>`;
+            const editorSvg = result.editor_svg || (result.formats && result.formats.editor_svg);
+            if (editorSvg) {
+                editorSvgOutput.innerHTML = `<pre>${this.escapeHTML(editorSvg)}</pre>`;
             } else {
                 editorSvgOutput.innerHTML = '<p>No editor SVG available</p>';
             }

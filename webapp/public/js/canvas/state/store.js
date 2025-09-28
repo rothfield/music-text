@@ -61,6 +61,7 @@ export const selectors = {
   document: (s) => s.document,
   uiState: (s) => s.uiState,
   cursorPosition: (s) => s.uiState?.selection?.cursor_position ?? 0,
+  cursorUuid: (s) => s.uiState?.selection?.cursor_uuid ?? null,
   selectionUuids: (s) => s.uiState?.selection?.selected_uuids || [],
   mode: (s) => s.mode,
 };

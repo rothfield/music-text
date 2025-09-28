@@ -51,6 +51,7 @@ pub struct ParseResponse {
 pub struct CreateDocumentRequest {
     pub metadata: Option<serde_json::Value>,
     pub content: Option<String>,  // Music text content (optional)
+    pub ui_state: Option<serde_json::Value>,  // UI state to preserve in new document
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,26 +76,6 @@ pub struct DocumentModel {
     pub ui_state: serde_json::Value,
 }
 
-// TODO: DELETE - Document update structure for PUT requests (unused by frontend)
-#[derive(Debug, Deserialize)]
-pub struct UpdateDocumentRequest {
-    pub document: serde_json::Value,
-    pub edit_command: Option<EditCommand>,
-    pub notation_type: Option<String>,
-}
-
-// TODO: DELETE - Edit command structure (unused by frontend)
-#[derive(Debug, Deserialize)]
-pub struct EditCommand {
-    #[serde(rename = "type")]
-    pub command_type: String,
-    pub position: Option<usize>,  // Made optional since not all commands need it
-    pub text: Option<String>,
-    pub direction: Option<String>,
-    pub selection_start: Option<usize>,
-    pub selection_end: Option<usize>,
-    pub selected_uuids: Option<Vec<String>>, // For delete operations
-}
 
 // Document transformation structures
 #[derive(Debug, Deserialize)]
@@ -112,6 +93,7 @@ pub struct TransformDocumentResponse {
     pub updated_elements: Vec<String>,
     pub message: Option<String>,
     pub svg: Option<String>,
+    pub formats: Option<DocumentFormats>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -133,19 +115,6 @@ pub struct ExportDocumentResponse {
 // Document storage - on-disk for durability
 type DocumentStore = std::path::PathBuf;
 
-// UUID-based API structures
-#[derive(Debug, Deserialize)]
-pub struct TransformDocumentByIdRequest {
-    pub command_type: String,
-    pub target_uuids: Vec<String>,
-    pub parameters: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ExportDocumentByIdRequest {
-    pub format: String,
-    pub options: Option<serde_json::Value>,
-}
 
 // Semantic command structures (for fallback)
 #[derive(Debug, Deserialize)]
@@ -189,11 +158,6 @@ async fn load_document(documentUUID: &str) -> Result<serde_json::Value, Box<dyn 
 
 // Removed PestDebugRequest and PestDebugResponse - no longer using pest
 
-#[derive(Debug, Deserialize)]
-pub struct RetroParseRequest {
-    input: String,
-    action: String,
-}
 
 
 #[derive(Debug, Deserialize)]
@@ -278,7 +242,7 @@ async fn generate_lilypond_png(lilypond_src: &str) -> Result<String, Box<dyn std
     Ok(format!("data:image/png;base64,{}", base64_data))
 }
 
-// Template rendering helper
+// ARCHIVED: Template rendering helper - kept for reference
 async fn render_retro_template(
     input: &str,
     svg_content: Option<&str>,
@@ -371,17 +335,10 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
         // RESTful Document API endpoints
         .route("/api/documents", post(create_document_handler))
         .route("/api/documents/:documentUUID", get(get_document_by_id_handler))
-        // TODO: DELETE THESE UNUSED ENDPOINTS - not used by frontend JS
-        // .route("/api/documents/from-text", post(create_document_from_text_handler))
-        // .route("/api/documents/:documentUUID", put(update_document_handler))
-        // .route("/documents/:documentUUID/edit", get(edit_document_handler))
         // Rails-style document processing endpoints
         .route("/api/documents/render", post(render_document_handler))
         .route("/api/documents/transform", post(transform_document_handler))
         .route("/api/documents/export", post(export_document_handler))
-        // Legacy UUID-based endpoints (deprecated)
-        .route("/api/documents/:documentUUID/transform", post(transform_document_by_id_handler))
-        .route("/api/documents/:documentUUID/export", post(export_document_by_id_handler))
         .route("/health", get(health_endpoint))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/", ServeDir::new("webapp/public"))
@@ -471,12 +428,6 @@ async fn import_musicxml_handler(Json(payload): Json<MusicXmlImportRequest>) -> 
 
 // Duplicate removed; defined earlier
 
-// TODO: DELETE - unused by frontend JS
-#[derive(Debug, Deserialize)]
-struct CreateDocumentFromTextRequest {
-    music_text: String,
-    metadata: Option<serde_json::Value>,
-}
 
 // Document creation endpoint
 async fn create_document_handler(
@@ -487,6 +438,7 @@ async fn create_document_handler(
     let timestamp = chrono::Utc::now().to_rfc3339();
 
     // Check if content is provided - if yes, parse it; if no, create empty document
+    println!("Document creation request content: {:?}", request.content);
     let parse_result = if let Some(content) = &request.content {
         // Parse the provided content
         match crate::pipeline::process_notation(content) {
@@ -500,6 +452,7 @@ async fn create_document_handler(
 
                 let minimal_doc = crate::parse::Document {
                     document_uuid: Some(documentUUID.clone()),
+                    id: Uuid::new_v4(),
                     value: Some(content.clone()),
                     char_index: 0,
                     title: None,
@@ -507,6 +460,7 @@ async fn create_document_handler(
                     directives: std::collections::HashMap::new(),
                     elements: vec![
                         crate::models::DocumentElement::Stave(crate::models::Stave {
+                            id: Uuid::new_v4(),
                             value: Some(content.clone()),
                             char_index: 0,
                             notation_system: crate::models::NotationSystem::Number,
@@ -516,6 +470,7 @@ async fn create_document_handler(
                             index_in_line: 0,
                             lines: vec![
                                 crate::models::StaveLine::ContentLine(crate::models::ContentLine {
+                                    id: Uuid::new_v4(),
                                     value: Some(content.clone()),
                                     char_index: 0,
                                     elements: vec![],
@@ -538,19 +493,41 @@ async fn create_document_handler(
             }
         }
     } else {
-        // Create empty document
+        // Create empty document with empty stave for insertion
+        println!("Creating empty document with UUID-enabled stave");
         crate::pipeline::ProcessingResult {
             original_input: String::new(),
             document: crate::parse::Document {
                 document_uuid: Some(documentUUID.clone()),
-                value: None,
+                id: Uuid::new_v4(),
+                value: Some(String::new()),
                 char_index: 0,
                 title: None,
                 author: None,
                 directives: std::collections::HashMap::new(),
-                elements: vec![],  // Empty elements - no content
+                elements: vec![
+                    crate::models::DocumentElement::Stave(crate::models::Stave {
+                        id: Uuid::new_v4(),
+                        value: Some(String::new()),
+                        char_index: 0,
+                        notation_system: crate::models::NotationSystem::Number,
+                        line: 1,
+                        column: 1,
+                        index_in_doc: 0,
+                        index_in_line: 0,
+                        lines: vec![
+                            crate::models::StaveLine::ContentLine(crate::models::ContentLine {
+                                id: Uuid::new_v4(),
+                                value: Some(String::new()),
+                                char_index: 0,
+                                elements: vec![],  // Empty - will accept insertion
+                                consumed_elements: vec![],
+                            })
+                        ],
+                    })
+                ],
                 ui_state: crate::models::UIState::default(),
-                timestamp: String::new(),
+                timestamp: timestamp.clone(),
             },
             lilypond: String::new(),
             vexflow_svg: String::new(),
@@ -571,20 +548,37 @@ async fn create_document_handler(
         map.insert("version".to_string(), serde_json::Value::String("1.0.0".to_string()));
         map.insert("timestamp".to_string(), serde_json::Value::String(timestamp.clone()));
         map.insert("metadata".to_string(), request.metadata.unwrap_or(serde_json::json!({})));
-        map.insert("ui_state".to_string(), serde_json::json!({
-            "selection": {
-                "selected_uuids": [],
-                "cursor_uuid": null,
-                "cursor_position": request.content.as_ref().map(|c| c.len()).unwrap_or(0)
-            },
-            "viewport": {
-                "scroll_x": 0,
-                "scroll_y": 0,
-                "zoom_level": 1.0
-            },
-            "editor_mode": "text",
-            "active_tab": "vexflow"
-        }));
+        // Use provided UI state or create default with preserved cursor position
+        let ui_state = if let Some(provided_ui_state) = request.ui_state {
+            // Use the provided UI state but ensure cursor position is updated for content length
+            let mut ui_state_value = provided_ui_state;
+            if let serde_json::Value::Object(ref mut ui_map) = ui_state_value {
+                if let Some(serde_json::Value::Object(ref mut selection)) = ui_map.get_mut("selection") {
+                    selection.insert("cursor_position".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(
+                            request.content.as_ref().map(|c| c.len()).unwrap_or(0)
+                        )));
+                }
+            }
+            ui_state_value
+        } else {
+            // Create default UI state
+            serde_json::json!({
+                "selection": {
+                    "selected_uuids": [],
+                    "cursor_uuid": null,
+                    "cursor_position": request.content.as_ref().map(|c| c.len()).unwrap_or(0)
+                },
+                "viewport": {
+                    "scroll_x": 0,
+                    "scroll_y": 0,
+                    "zoom_level": 1.0
+                },
+                "editor_mode": "text",
+                "active_tab": "vexflow"
+            })
+        };
+        map.insert("ui_state".to_string(), ui_state);
     }
 
     let document = document_value;
@@ -645,133 +639,6 @@ async fn create_document_handler(
     Json(response).into_response()
 }
 
-// TODO: DELETE - Create a new document from raw textual music notation (parse → save → render)
-// UNUSED by frontend JS - marked for deletion
-async fn create_document_from_text_handler(Json(request): Json<CreateDocumentFromTextRequest>) -> impl IntoResponse {
-    // Generate UUID and timestamp first
-    let documentUUID = Uuid::new_v4().to_string();
-    let timestamp = chrono::Utc::now().to_rfc3339();
-
-    // Parse the input text (even if it's just one character) through the full parser
-    // This creates a proper document structure with staves and lines
-    let mut parse_result = match crate::pipeline::process_notation(&request.music_text) {
-        Ok(r) => r,
-        Err(e) => {
-            // If parsing fails (e.g., empty string), create minimal valid structure
-            eprintln!("Parse failed for '{}': {}", request.music_text, e);
-
-            // Create a minimal document with one stave containing the input text
-            let minimal_doc = crate::parse::Document {
-                document_uuid: Some(documentUUID.clone()),
-                value: Some(request.music_text.clone()),
-                char_index: 0,
-                title: None,
-                author: None,
-                directives: std::collections::HashMap::new(),
-                elements: vec![
-                    crate::models::DocumentElement::Stave(crate::models::Stave {
-                        value: Some(request.music_text.clone()),
-                        char_index: 0,
-                        notation_system: crate::models::NotationSystem::Number,
-                        line: 0,
-                        column: 0,
-                        index_in_doc: 0,
-                        index_in_line: 0,
-                        lines: vec![
-                            crate::models::StaveLine::ContentLine(crate::models::ContentLine {
-                                value: Some(request.music_text.clone()),
-                                char_index: 0,
-                                elements: vec![],
-                                consumed_elements: vec![],
-                            })
-                        ],
-                    })
-                ],
-                ui_state: crate::models::UIState::default(),
-                timestamp: chrono::Utc::now().to_rfc3339(),
-            };
-
-            crate::pipeline::ProcessingResult {
-                original_input: request.music_text.clone(),
-                document: minimal_doc,
-                lilypond: String::new(),
-                vexflow_svg: String::new(),
-                vexflow_data: serde_json::Value::Null,
-            }
-        }
-    };
-
-    // Set the UUID in the document
-    parse_result.document.document_uuid = Some(documentUUID.clone());
-
-    let mut metadata = request.metadata.unwrap_or(serde_json::json!({}));
-    if let Some(obj) = metadata.as_object_mut() {
-        obj.entry("created_at").or_insert(serde_json::Value::String(chrono::Utc::now().to_rfc3339()));
-        obj.entry("created_by").or_insert(serde_json::Value::String("Web Interface".to_string()));
-    }
-
-    // Convert the parsed document to JSON, preserving its structure
-    let mut document = serde_json::to_value(&parse_result.document).unwrap_or(serde_json::json!({}));
-
-    // Add/update required fields (UUID already in document)
-    document["version"] = serde_json::Value::String("1.0.0".to_string());
-    document["timestamp"] = serde_json::Value::String(timestamp.clone());
-    document["metadata"] = metadata;
-
-    // Ensure UI state exists
-    if !document.get("ui_state").is_some() {
-        document["ui_state"] = serde_json::json!({
-            "selection": {
-                "selected_uuids": [],
-                "cursor_uuid": null,
-                "cursor_position": request.music_text.len()  // Position after all text
-            },
-            "viewport": { "scroll_x": 0, "scroll_y": 0, "zoom_level": 1.0 },
-            "editor_mode": "text",
-            "active_tab": "vexflow"
-        });
-    }
-
-    // Log the new document to filesystem for backup/history
-    // (In local-first architecture, browser owns the document, server logs for backup)
-    if let Err(e) = save_document(&documentUUID, &document).await {
-        // Log error but don't fail - logging is not critical for document creation
-        eprintln!("Warning: Failed to log new document {} to disk: {}", documentUUID, e);
-    } else {
-        println!("Created and logged new document {} to disk (backup)", documentUUID);
-    }
-
-    // Generate all formats from the parsed document
-    let editor_svg = crate::renderers::editor::svg::render_editor_svg(&parse_result.document, None, None, None).ok();
-
-    // Use the already generated formats from the pipeline
-    let lilypond_src = if !parse_result.lilypond.is_empty() {
-        Some(parse_result.lilypond.clone())
-    } else {
-        None
-    };
-
-    // Extract VexFlow JavaScript from the pipeline result
-    let vexflow_svg = parse_result.vexflow_data.get("vexflow_js")
-        .and_then(|js| js.as_str())
-        .map(|s| s.to_string());
-
-    let formats = DocumentFormats {
-        vexflow_svg,  // Self-executing JavaScript
-        editor_svg,
-        lilypond_svg: None,  // Would need to run lilypond command
-        lilypond_src,
-        midi: None,
-    };
-
-    // Return success response with document (UUID is already in document)
-    Json(serde_json::json!({
-        "success": true,
-        "document": document,
-        "formats": formats,
-        "cursor_position": 1  // After first character
-    })).into_response()
-}
 
 // Document transformation endpoint
 async fn transform_document_handler(Json(request): Json<TransformDocumentRequest>) -> impl IntoResponse {
@@ -784,6 +651,263 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
     let mut svg_content: Option<String> = None;
 
     match request.command_type.as_str() {
+        "insert_text" => {
+            // Text editing command - deserialize document to Document model for editing
+            let mut doc: Document = match serde_json::from_value(request.document.clone()) {
+                Ok(d) => d,
+                Err(e) => {
+                    return Json(TransformDocumentResponse {
+                        success: false,
+                        document: request.document,
+                        updated_elements: vec![],
+                        message: Some(format!("Failed to deserialize document for text editing: {}", e)),
+                        svg: None,
+                        formats: None,
+                    });
+                }
+            };
+
+            let mut new_cursor_pos = doc.ui_state.selection.cursor_position;
+
+            // Extract parameters for text editing
+            let text = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("text"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            let target_uuid = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("target_uuid"))
+                .and_then(|v| v.as_str());
+
+            let element_position = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("element_position"))
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize)
+                .unwrap_or(0);
+
+            let selection_start = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("selection_start"))
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
+
+            let selection_end = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("selection_end"))
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
+
+            // Handle selection deletion before insertion (standard editor behavior)
+            if let (Some(start), Some(end)) = (selection_start, selection_end) {
+                if start < end {
+                    match crate::document::edit::structural::delete_selection(&mut doc, start, end) {
+                        Ok(pos) => new_cursor_pos = pos,
+                        Err(e) => {
+                            return Json(TransformDocumentResponse {
+                                success: false,
+                                document: request.document,
+                                updated_elements: vec![],
+                                message: Some(format!("Failed to delete selection: {}", e)),
+                                svg: None,
+                        formats: None,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Parse the input text to get musical elements
+            let parsed_elements = if !text.is_empty() {
+                match crate::document::line_parser::content_line_parser::unused_parse_content_line(
+                    text,
+                    0,
+                    doc.get_detected_notation_systems().first().cloned().unwrap_or(crate::models::NotationSystem::Number),
+                    0,
+                ) {
+                    Ok(content_line) => content_line.elements,
+                    Err(e) => {
+                        return Json(TransformDocumentResponse {
+                            success: false,
+                            document: request.document,
+                            updated_elements: vec![],
+                            message: Some(format!("Failed to parse input text '{}': {}", text, e)),
+                            svg: None,
+                        formats: None,
+                        });
+                    }
+                }
+            } else {
+                vec![]
+            };
+
+            // Insert parsed elements at the target location
+            let result = if let Some(uuid_str) = target_uuid {
+                // UUID-based insertion (preferred)
+                insert_elements_at_uuid(&mut doc, uuid_str, element_position, parsed_elements)
+            } else {
+                // Fallback to character position-based insertion
+                // Insert each character individually at the specified position
+                let mut current_position = element_position;
+                for ch in text.chars() {
+                    match crate::document::edit::structural::insert_char(&mut doc, current_position, ch) {
+                        Ok(new_pos) => current_position = new_pos,
+                        Err(e) => return Json(TransformDocumentResponse {
+                            success: false,
+                            document: request.document,
+                            updated_elements: vec![],
+                            message: Some(format!("Character insertion failed: {}", e)),
+                            svg: None,
+                        formats: None,
+                        }),
+                    }
+                }
+                Ok(current_position)
+            };
+
+            match result {
+                Ok(cursor_pos) => {
+                    new_cursor_pos = cursor_pos;
+
+                    // Reconstruct document value from elements after edit
+                    crate::document::edit::structural::reconstruct_document_value(&mut doc);
+
+                    // Analyze rhythm patterns
+                    println!("Running rhythm analysis on document...");
+                    match crate::rhythm::analyzer::analyze_rhythm_into_document(&mut doc) {
+                        Ok(()) => {
+                            println!("Rhythm analysis completed successfully");
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: Rhythm analysis failed: {}", e);
+                            // Continue anyway - rhythm analysis failure shouldn't break the operation
+                        }
+                    }
+
+                    // Update UI state and timestamp
+                    doc.ui_state.selection.cursor_position = new_cursor_pos;
+                    doc.timestamp = chrono::Utc::now().to_rfc3339();
+
+                    // Convert back to JSON
+                    updated_document = serde_json::to_value(&doc).unwrap_or(request.document);
+
+                    // Generate SVG
+                    svg_content = crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok();
+                }
+                Err(e) => {
+                    return Json(TransformDocumentResponse {
+                        success: false,
+                        document: request.document,
+                        updated_elements: vec![],
+                        message: Some(format!("Failed to insert text: {}", e)),
+                        svg: None,
+                        formats: None,
+                    });
+                }
+            }
+        }
+        "delete_text" => {
+            // Text deletion command
+            let mut doc: Document = match serde_json::from_value(request.document.clone()) {
+                Ok(d) => d,
+                Err(e) => {
+                    return Json(TransformDocumentResponse {
+                        success: false,
+                        document: request.document,
+                        updated_elements: vec![],
+                        message: Some(format!("Failed to deserialize document for text deletion: {}", e)),
+                        svg: None,
+                        formats: None,
+                    });
+                }
+            };
+
+            let mut new_cursor_pos = doc.ui_state.selection.cursor_position;
+
+            // Extract parameters
+            let position = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("position"))
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize)
+                .unwrap_or(new_cursor_pos);
+
+            let direction = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("direction"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("backward");
+
+            let selection_start = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("selection_start"))
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
+
+            let selection_end = request.parameters
+                .as_ref()
+                .and_then(|p| p.get("selection_end"))
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
+
+            // Handle deletion
+            let result = if let (Some(start), Some(end)) = (selection_start, selection_end) {
+                if start < end {
+                    crate::document::edit::structural::delete_selection(&mut doc, start, end)
+                } else if direction == "backward" {
+                    crate::document::edit::structural::delete_char_left(&mut doc, position)
+                } else {
+                    crate::document::edit::structural::delete_char_right(&mut doc, position)
+                }
+            } else if direction == "backward" {
+                crate::document::edit::structural::delete_char_left(&mut doc, position)
+            } else {
+                crate::document::edit::structural::delete_char_right(&mut doc, position)
+            };
+
+            match result {
+                Ok(cursor_pos) => {
+                    new_cursor_pos = cursor_pos;
+
+                    // Reconstruct document value from elements after edit
+                    crate::document::edit::structural::reconstruct_document_value(&mut doc);
+
+                    // Analyze rhythm patterns
+                    println!("Running rhythm analysis on document...");
+                    match crate::rhythm::analyzer::analyze_rhythm_into_document(&mut doc) {
+                        Ok(()) => {
+                            println!("Rhythm analysis completed successfully");
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: Rhythm analysis failed: {}", e);
+                            // Continue anyway - rhythm analysis failure shouldn't break the operation
+                        }
+                    }
+
+                    // Update UI state and timestamp
+                    doc.ui_state.selection.cursor_position = new_cursor_pos;
+                    doc.timestamp = chrono::Utc::now().to_rfc3339();
+
+                    // Convert back to JSON
+                    updated_document = serde_json::to_value(&doc).unwrap_or(request.document);
+
+                    // Generate SVG
+                    svg_content = crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok();
+                }
+                Err(e) => {
+                    return Json(TransformDocumentResponse {
+                        success: false,
+                        document: request.document,
+                        updated_elements: vec![],
+                        message: Some(format!("Failed to delete text: {}", e)),
+                        svg: None,
+                        formats: None,
+                    });
+                }
+            }
+        }
         "apply_slur" => {
             // For demonstration, just add slur metadata to the document
             if let Some(metadata) = updated_document.get_mut("metadata") {
@@ -884,6 +1008,7 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
                     updated_elements: vec![],
                     message: Some(format!("No notes found with the provided UUIDs. Searched for {} UUIDs in JSON document.", request.target_uuids.len())),
                     svg: None,
+                        formats: None,
                 });
             }
 
@@ -913,6 +1038,7 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
                 updated_elements: vec![],
                 message: Some(format!("Unknown command type: {}", request.command_type)),
                 svg: None,
+                        formats: None,
             });
         }
     }
@@ -922,12 +1048,32 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
         *timestamp_field = serde_json::Value::String(chrono::Utc::now().to_rfc3339());
     }
 
+    // Generate all formats for tab updates
+    let formats = if let Ok(doc) = serde_json::from_value::<crate::parse::Document>(updated_document.clone()) {
+        let editor_svg = crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok();
+        let lilypond_src = crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None).ok();
+        let vexflow_renderer = crate::renderers::vexflow::VexFlowRenderer::new();
+        let vexflow_data = vexflow_renderer.render_data_from_document(&doc);
+        let vexflow_svg = vexflow_data.get("vexflow_js").and_then(|js| js.as_str()).map(|s| s.to_string());
+
+        Some(DocumentFormats {
+            vexflow_svg,
+            editor_svg: editor_svg.clone(),
+            lilypond_svg: None,  // Would need to run lilypond command
+            lilypond_src,
+            midi: None,
+        })
+    } else {
+        None
+    };
+
     Json(TransformDocumentResponse {
         success: true,
         document: updated_document,
         updated_elements,
         message: Some(format!("Applied {} to {} elements", request.command_type, request.target_uuids.len())),
         svg: svg_content,
+        formats,
     })
 }
 
@@ -1085,167 +1231,6 @@ async fn export_document_handler(Json(request): Json<ExportDocumentRequest>) -> 
 }
 
 
-// TODO: DELETE - PUT update document handler
-// UNUSED by frontend JS - marked for deletion
-async fn update_document_handler(
-    Path(documentUUID): Path<String>,
-    Json(request): Json<UpdateDocumentRequest>
-) -> impl IntoResponse {
-    // Deserialize the incoming JSON to our Document model.
-    let mut doc: Document = match serde_json::from_value(request.document.clone()) {
-        Ok(d) => d,
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({ "error": format!("Failed to deserialize document: {}", e) }))
-            ).into_response();
-        }
-    };
-
-    let mut new_cursor_pos = doc.ui_state.selection.cursor_position;
-
-    // If there's an edit command, apply it directly to the Document model.
-    if let Some(edit_command) = request.edit_command {
-        let result = match edit_command.command_type.as_str() {
-            "insert_text" => {
-                // Standard editor behavior: if there's a selection, delete it before inserting.
-                if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
-                    if start < end {
-                        match crate::document::edit::structural::delete_selection(&mut doc, start, end) {
-                            Ok(pos) => new_cursor_pos = pos,
-                            Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
-                        }
-                    }
-                }
-                let text = edit_command.text.unwrap_or_default();
-                println!("Insert text '{}' at position {}, doc has {} elements", text, new_cursor_pos, doc.elements.len());
-                // Debug document structure
-                for (i, elem) in doc.elements.iter().enumerate() {
-                    if let crate::models::DocumentElement::Stave(stave) = elem {
-                        println!("  Stave {}: {} lines", i, stave.lines.len());
-                    }
-                }
-                if text == "\n" {
-                    crate::document::edit::structural::insert_newline(&mut doc, new_cursor_pos)
-                } else if let Some(char_to_insert) = text.chars().next() {
-                    crate::document::edit::structural::insert_char(&mut doc, new_cursor_pos, char_to_insert)
-                } else {
-                    Ok(new_cursor_pos) // No text to insert
-                }
-            }
-            "delete_text" => {
-                if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
-                    if start < end {
-                        crate::document::edit::structural::delete_selection(&mut doc, start, end)
-                    } else if let Some(direction) = edit_command.direction {
-                        let pos = edit_command.position.unwrap_or(new_cursor_pos);
-                        if direction == "backward" {
-                            crate::document::edit::structural::delete_char_left(&mut doc, pos)
-                        } else {
-                            crate::document::edit::structural::delete_char_right(&mut doc, pos)
-                        }
-                    } else {
-                        Ok(edit_command.position.unwrap_or(new_cursor_pos))
-                    }
-                } else if let Some(direction) = edit_command.direction {
-                    let pos = edit_command.position.unwrap_or(new_cursor_pos);
-                    if direction == "backward" {
-                        crate::document::edit::structural::delete_char_left(&mut doc, pos)
-                    } else {
-                        crate::document::edit::structural::delete_char_right(&mut doc, pos)
-                    }
-                } else {
-                    Ok(edit_command.position.unwrap_or(new_cursor_pos))
-                }
-            }
-            "copy_selection" => {
-                if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
-                    if start < end {
-                        match crate::document::edit::structural::copy_selection(&doc, start, end) {
-                            Ok(clipboard_content) => {
-                                doc.ui_state.clipboard_content = Some(clipboard_content.content);
-                            }
-                            Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
-                        }
-                    }
-                }
-                Ok(new_cursor_pos) // Copy doesn't move the cursor
-            }
-            "paste" => {
-                if let Some(clipboard_content) = doc.ui_state.clipboard_content.clone() {
-                    // First, delete any existing selection
-                    if let (Some(start), Some(end)) = (edit_command.selection_start, edit_command.selection_end) {
-                        if start < end {
-                           match crate::document::edit::structural::delete_selection(&mut doc, start, end) {
-                            Ok(pos) => new_cursor_pos = pos,
-                            Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
-                        }
-                        }
-                    }
-                    // Then, paste
-                    let clipboard = crate::document::edit::structural::Clipboard { content: clipboard_content };
-                    crate::document::edit::structural::paste(&mut doc, new_cursor_pos, &clipboard)
-                } else {
-                    Ok(new_cursor_pos) // Nothing to paste
-                }
-            }
-            _ => Err(format!("Unknown edit command type: {}", edit_command.command_type)),
-        };
-
-        match result {
-            Ok(cursor) => new_cursor_pos = cursor,
-            Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
-        }
-    }
-    
-    // Reconstruct document value from elements after edit
-    crate::document::edit::structural::reconstruct_document_value(&mut doc);
-
-    // Update UI state and timestamp in the model
-    doc.ui_state.selection.cursor_position = new_cursor_pos;
-    doc.timestamp = chrono::Utc::now().to_rfc3339();
-
-    // Convert the modified Document model back to JSON.
-    let document_json = match serde_json::to_value(&doc) {
-        Ok(json) => json,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("Failed to re-serialize document: {}", e)}))).into_response(),
-    };
-
-    // Log the updated document to filesystem for backup/history
-    // (In local-first architecture, browser owns the document, server logs for backup)
-    if let Err(e) = save_document(&documentUUID, &document_json).await {
-        // Log error but don't fail - logging is not critical for the operation
-        eprintln!("Warning: Failed to log document {} to disk: {}", documentUUID, e);
-    } else {
-        println!("Logged document {} to disk (backup)", documentUUID);
-    }
-
-    // Generate all formats from the modified document.
-    let formats = {
-        let editor_svg = match crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None) {
-            Ok(svg) => {
-                eprintln!("✅ Generated editor SVG ({} chars)", svg.len());
-                Some(svg)
-            },
-            Err(e) => {
-                eprintln!("❌ Failed to generate editor SVG: {}", e);
-                None
-            }
-        };
-        let lilypond_src = crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None).ok();
-        let vexflow_renderer = crate::renderers::vexflow::VexFlowRenderer::new();
-        let vexflow_data = vexflow_renderer.render_data_from_document(&doc);
-        let vexflow_svg = vexflow_data.get("vexflow_js").and_then(|js| js.as_str()).map(|s| s.to_string());
-        DocumentFormats { vexflow_svg, editor_svg, lilypond_svg: None, lilypond_src, midi: None }
-    };
-
-    Json(serde_json::json!({
-        "success": true,
-        "document": document_json,
-        "formats": formats,
-        "cursor_position": new_cursor_pos
-    })).into_response()
-}
 
 
 
@@ -1267,105 +1252,109 @@ async fn get_document_by_id_handler(
     ).into_response()
 }
 
-// TODO: DELETE - Edit document handler - loads a document from backup and opens editor
-// UNUSED by frontend JS - marked for deletion
-async fn edit_document_handler(
-    Path(documentUUID): Path<String>
-) -> impl IntoResponse {
-    // Load document from backup (for editing/recovery purposes)
-    match load_document(&documentUUID).await {
-        Ok(document_json) => {
-            // Return HTML page that loads this document into the editor
-            let html = format!(r#"
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Edit Document - {}</title>
-    <meta charset="UTF-8">
-    <script>
-        // Load document into localStorage and redirect to main editor
-        window.addEventListener('DOMContentLoaded', function() {{
-            const document = {};
 
-            // Store document in localStorage
-            const documentUUID = '{}';
-            localStorage.setItem('musictext_document_' + documentUUID, JSON.stringify(document));
-            localStorage.setItem('musictext_current_document', documentUUID);
-
-            // Redirect to main editor
-            window.location.href = '/';
-        }});
-    </script>
-</head>
-<body>
-    <p>Loading document {}...</p>
-</body>
-</html>
-"#, documentUUID, serde_json::to_string(&document_json).unwrap_or_default(), documentUUID, documentUUID);
-
-            Html(html).into_response()
-        },
-        Err(e) => {
-            // Document not found in backup
-            let html = format!(r#"
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Document Not Found</title>
-    <meta charset="UTF-8">
-</head>
-<body>
-    <h1>Document Not Found</h1>
-    <p>Document {} not found in backup storage.</p>
-    <p>Error: {}</p>
-    <a href="/">Return to Editor</a>
-</body>
-</html>
-"#, documentUUID, e);
-
-            Html(html).into_response()
-        }
-    }
-}
-
-// UUID-based transform handler
-async fn transform_document_by_id_handler(
-    Path(documentUUID): Path<String>,
-    Json(request): Json<TransformDocumentByIdRequest>
-) -> impl IntoResponse {
-    // In local-first architecture, this endpoint shouldn't be used
-    // Document should be sent in the request body
-    println!("Transform request for document UUID: {} (deprecated endpoint)", documentUUID);
-
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        Json(serde_json::json!({
-            "error": "This endpoint is deprecated. Use /api/documents/transform with document in request body.",
-            "documentUUID": documentUUID
-        }))
-    ).into_response()
-}
-
-// UUID-based export handler
-async fn export_document_by_id_handler(
-    Path(documentUUID): Path<String>,
-    Json(request): Json<ExportDocumentByIdRequest>
-) -> impl IntoResponse {
-    // In local-first architecture, this endpoint shouldn't be used
-    // Document should be sent in the request body
-    println!("Export request for document UUID: {} (deprecated endpoint)", documentUUID);
-
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        Json(serde_json::json!({
-            "error": "This endpoint is deprecated. Use /api/documents/export with document in request body.",
-            "documentUUID": documentUUID
-        }))
-    ).into_response()
-}
 
 async fn health_endpoint() -> impl IntoResponse {
     Json(serde_json::json!({"status": "ok"}))
+}
+
+/// Insert parsed elements into the document at the specified UUID location
+fn insert_elements_at_uuid(
+    doc: &mut Document,
+    target_uuid: &str,
+    element_position: usize,
+    elements: Vec<crate::models::ContentElement>,
+) -> Result<usize, String> {
+    use uuid::Uuid;
+
+    // Parse the target UUID
+    let target_uuid = match Uuid::parse_str(target_uuid) {
+        Ok(uuid) => uuid,
+        Err(_) => return Err(format!("Invalid UUID format: {}", target_uuid)),
+    };
+
+    // Find the target element in the document tree
+    for stave in &mut doc.elements {
+        if let crate::models::DocumentElement::Stave(stave) = stave {
+            for line in &mut stave.lines {
+                if let crate::models::StaveLine::ContentLine(content_line) = line {
+                    // Check if the target UUID matches the content line itself
+                    if content_line.id == target_uuid {
+                        // Insert elements at the beginning of this content line
+                        for (i, element) in elements.into_iter().enumerate() {
+                            content_line.elements.insert(i, element);
+                        }
+                        return Ok(0); // Return cursor position at beginning
+                    }
+
+                    // Check individual elements within the content line
+                    for (content_idx, content_element) in content_line.elements.iter_mut().enumerate() {
+                        match content_element {
+                            crate::models::ContentElement::Beat(beat) => {
+                                // Check if this is the target beat
+                                if beat.id == target_uuid {
+                                    // Insert elements into this beat
+                                    let insert_position = element_position.min(beat.elements.len());
+
+                                    // Convert ContentElements to BeatElements
+                                    for element in elements {
+                                        match element {
+                                            crate::models::ContentElement::Beat(source_beat) => {
+                                                // Insert all elements from the source beat
+                                                for (i, beat_element) in source_beat.elements.into_iter().enumerate() {
+                                                    beat.elements.insert(insert_position + i, beat_element);
+                                                }
+                                            }
+                                            _ => {
+                                                // For non-beat elements, we'd need additional logic
+                                                return Err("Cannot insert non-beat content into a beat".to_string());
+                                            }
+                                        }
+                                    }
+
+                                    // Return new cursor position (for now, just return current position)
+                                    return Ok(0); // TODO: Calculate proper cursor position
+                                }
+
+                                // Also check individual elements within the beat
+                                for (beat_element_idx, beat_element) in beat.elements.iter().enumerate() {
+                                    let element_uuid = match beat_element {
+                                        crate::models::BeatElement::Note(note) => note.id,
+                                        crate::models::BeatElement::Dash(dash) => dash.id,
+                                        crate::models::BeatElement::BreathMark(breath) => breath.id,
+                                        crate::models::BeatElement::Rest(rest) => rest.id,
+                                    };
+
+                                    if element_uuid == target_uuid {
+                                        // Insert at this specific element position
+                                        // For now, insert after this element
+                                        for element in elements {
+                                            match element {
+                                                crate::models::ContentElement::Beat(source_beat) => {
+                                                    for (i, new_beat_element) in source_beat.elements.into_iter().enumerate() {
+                                                        beat.elements.insert(beat_element_idx + 1 + i, new_beat_element);
+                                                    }
+                                                }
+                                                _ => {
+                                                    return Err("Cannot insert non-beat content into beat element".to_string());
+                                                }
+                                            }
+                                        }
+                                        return Ok(0); // TODO: Calculate proper cursor position
+                                    }
+                                }
+                            }
+                            _ => {
+                                // Handle other content element types if needed
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Err(format!("Element with UUID {} not found in document", target_uuid))
 }
 
 
@@ -1376,293 +1365,8 @@ async fn render_editor_svg(Json(request): Json<CanvasSvgRequest>) -> impl IntoRe
     (StatusCode::BAD_REQUEST, "render_editor_svg requires a Document; raw input_text is not supported").into_response()
 }
 
-// Serve the retro page at /retro
-async fn serve_retro_page() -> impl IntoResponse {
-    match fs::read_to_string("webapp/public/retro.html").await {
-        Ok(content) => Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "text/html")
-            .body(Body::from(content))
-            .unwrap(),
-        Err(_) => Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .header(header::CONTENT_TYPE, "text/plain")
-            .body(Body::from("Retro page not found"))
-            .unwrap()
-    }
-}
 
-// Retro mode form handling
-async fn retro_parse(Form(form_data): Form<RetroParseRequest>) -> impl IntoResponse {
-    let input = form_data.input;
-    let action = form_data.action;
 
-    println!("Retro parse request: action={}, input_len={}", action, input.len());
-
-    match action.as_str() {
-        "preview" => {
-            // Generate preview with SVG
-            match crate::process_notation(&input) {
-                Ok(result) => {
-                    let lilypond_svg = if !result.lilypond.is_empty() {
-                        let temp_dir = std::env::temp_dir().join("music-text-svg");
-                        let generator = crate::renderers::lilypond::LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
-
-                        match generator.generate_svg(&result.lilypond).await {
-                            svg_result if svg_result.success => svg_result.svg_content,
-                            _ => None
-                        }
-                    } else {
-                        None
-                    };
-
-                    let html = render_retro_template(
-                        &input,
-                        lilypond_svg.as_deref(),
-                        Some(&result.lilypond),
-                        None,
-                        Some("Notation parsed successfully!")
-                    ).await;
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, "text/html")
-                        .body(Body::from(html))
-                        .unwrap()
-                }
-                Err(e) => {
-                    let html = render_retro_template(
-                        &input,
-                        None,
-                        None,
-                        Some(&e.to_string()),
-                        None
-                    ).await;
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, "text/html")
-                        .body(Body::from(html))
-                        .unwrap()
-                }
-            }
-        }
-        "save_pdf" => {
-            // Generate PDF and return as download
-            match crate::process_notation(&input) {
-                Ok(result) if !result.lilypond.is_empty() => {
-                    let temp_dir = std::env::temp_dir().join("music-text-pdf");
-                    let generator = crate::renderers::lilypond::LilyPondGenerator::new(temp_dir.to_string_lossy().to_string());
-
-                    match generator.generate_pdf(&result.lilypond).await {
-                        pdf_result if pdf_result.success => {
-                            if let Some(pdf_data) = pdf_result.pdf_data {
-                                return Response::builder()
-                                    .status(StatusCode::OK)
-                                    .header(header::CONTENT_TYPE, "application/pdf")
-                                    .header(header::CONTENT_DISPOSITION, "attachment; filename=\"score.pdf\"")
-                                    .body(Body::from(pdf_data))
-                                    .unwrap();
-                            }
-                        }
-                        _ => {}
-                    }
-
-                    // If PDF generation failed, show error
-                    let html = render_retro_template(
-                        &input,
-                        None,
-                        None,
-                        Some("PDF generation failed. Please ensure LilyPond is installed and accessible."),
-                        None
-                    ).await;
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, "text/html")
-                        .body(Body::from(html))
-                        .unwrap()
-                }
-                Ok(_) => {
-                    let html = render_retro_template(
-                        &input,
-                        None,
-                        None,
-                        Some("No valid notation found for PDF generation."),
-                        None
-                    ).await;
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, "text/html")
-                        .body(Body::from(html))
-                        .unwrap()
-                }
-                Err(e) => {
-                    let html = render_retro_template(
-                        &input,
-                        None,
-                        None,
-                        Some(&e.to_string()),
-                        None
-                    ).await;
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, "text/html")
-                        .body(Body::from(html))
-                        .unwrap()
-                }
-            }
-        }
-        "save_lily" => {
-            // Return LilyPond source as download
-            match crate::process_notation(&input) {
-                Ok(result) if !result.lilypond.is_empty() => {
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, "text/plain")
-                        .header(header::CONTENT_DISPOSITION, "attachment; filename=\"score.ly\"")
-                        .body(Body::from(result.lilypond))
-                        .unwrap()
-                }
-                Ok(_) => {
-                    let html = render_retro_template(
-                        &input,
-                        None,
-                        None,
-                        Some("No valid notation found for LilyPond generation."),
-                        None
-                    ).await;
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, "text/html")
-                        .body(Body::from(html))
-                        .unwrap()
-                }
-                Err(e) => {
-                    let html = render_retro_template(
-                        &input,
-                        None,
-                        None,
-                        Some(&e.to_string()),
-                        None
-                    ).await;
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, "text/html")
-                        .body(Body::from(html))
-                        .unwrap()
-                }
-            }
-        }
-        "save_mt" => {
-            // Return original input as .mt file
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "text/plain")
-                .header(header::CONTENT_DISPOSITION, "attachment; filename=\"notation.mt\"")
-                .body(Body::from(input))
-                .unwrap()
-        }
-        _ => {
-            let html = render_retro_template(
-                &input,
-                None,
-                None,
-                Some("Unknown action requested."),
-                None
-            ).await;
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "text/html")
-                .body(Body::from(html))
-                .unwrap()
-        }
-    }
-}
-
-// Retro mode file upload handling
-async fn retro_load(mut multipart: Multipart) -> impl IntoResponse {
-    
-
-    match multipart.next_field().await {
-        Ok(Some(field)) => {
-            let name = field.name().unwrap_or("").to_string();
-            
-
-            if name == "musicfile" {
-                let filename = field.file_name().unwrap_or("unknown").to_string();
-                
-
-                match field.bytes().await {
-                    Ok(data) => {
-                        let content = String::from_utf8_lossy(&data);
-                        
-
-                        let html = render_retro_template(
-                            &content,
-                            None,
-                            None,
-                            None,
-                            Some(&format!("File '{}' loaded successfully! ({} characters)", filename, content.len()))
-                        ).await;
-
-                        return Response::builder()
-                            .status(StatusCode::OK)
-                            .header(header::CONTENT_TYPE, "text/html")
-                            .body(Body::from(html))
-                            .unwrap();
-                    },
-                    Err(e) => {
-                        
-                        let html = render_retro_template(
-                            "",
-                            None,
-                            None,
-                            Some(&format!("Error reading file: {}", e)),
-                            None
-                        ).await;
-                        return Response::builder()
-                            .status(StatusCode::OK)
-                            .header(header::CONTENT_TYPE, "text/html")
-                            .body(Body::from(html))
-                            .unwrap();
-                    }
-                }
-            } else {
-                
-            }
-        },
-        Ok(None) => {
-            
-        },
-        Err(e) => {
-            
-            let html = render_retro_template(
-                "",
-                None,
-                None,
-                Some(&format!("Error processing upload: {}", e)),
-                None
-            ).await;
-            return Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "text/html")
-                .body(Body::from(html))
-                .unwrap();
-        }
-    }
-
-    
-    let html = render_retro_template(
-        "",
-        None,
-        None,
-        Some("No file uploaded or file could not be read."),
-        None
-    ).await;
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, "text/html")
-        .body(Body::from(html))
-        .unwrap()
-}
 
 // Semantic command handler - fallback for simple transformations without full document
 async fn semantic_command_handler(Json(request): Json<SemanticCommandRequest>) -> impl IntoResponse {

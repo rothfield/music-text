@@ -18,7 +18,7 @@ fn index_in_line_from_pos(input: &str, pos: usize, _line_num: usize) -> usize {
 /// Parse content line according to grammar:
 /// content_line = line_number? non-beat-element* beat (non-beat-element | beat)* newline
 /// non-beat-element = barline | whitespace
-pub fn parse_content_line(
+pub fn unused_parse_content_line(
     input: &str,
     line_num: usize,
     notation_system: NotationSystem,

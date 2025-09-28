@@ -1,0 +1,70 @@
+{
+    "success": true,
+    "document": {
+        "author": null,
+        "char_index": 0,
+        "directives": {},
+        "documentUUID": "e712b244-133a-4cce-873e-f1fd597fe131",
+        "elements": [
+            {
+                "Stave": {
+                    "char_index": 0,
+                    "column": 1,
+                    "id": "76657b3b-cd89-4e7a-ae80-3bf1e42c0892",
+                    "index_in_doc": 0,
+                    "index_in_line": 0,
+                    "line": 1,
+                    "lines": [
+                        {
+                            "ContentLine": {
+                                "char_index": 0,
+                                "consumed_elements": [],
+                                "elements": [
+                                    {
+                                        "Whitespace": {
+                                            "char_index": 0,
+                                            "consumed_elements": [],
+                                            "id": "6046dcf6-e552-43b2-b8ca-106c2d65ca4d",
+                                            "value": " "
+                                        }
+                                    }
+                                ],
+                                "id": "c559200f-91a0-4e82-b83e-6f1ff4840c56",
+                                "value": " "
+                            }
+                        }
+                    ],
+                    "notation_system": "Number",
+                    "value": ""
+                }
+            }
+        ],
+        "id": "3a0b239a-3f83-4f78-8f70-ce3eaa024759",
+        "timestamp": "2025-09-28T23:11:03.699198153+00:00",
+        "title": null,
+        "ui_state": {
+            "active_tab": "editor_svg",
+            "clipboard_content": null,
+            "selection": {
+                "cursor_position": 1,
+                "selected_uuids": []
+            },
+            "viewport": {
+                "scroll_x": 0.0,
+                "scroll_y": 0.0,
+                "zoom_level": 1.0
+            }
+        },
+        "value": " "
+    },
+    "updated_elements": [],
+    "message": "Applied insert_text to 0 elements",
+    "svg": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\"\n     width=\"800\" height=\"340\"\n     viewBox=\"0 0 800 340\">\n\n  <style>\n    <![CDATA[\n    @font-face {\n      font-family: 'Bravura';\n      src: url('/fonts/Bravura.woff2') format('woff2'),\n           url('/fonts/Bravura.woff') format('woff');\n      font-weight: normal;\n      font-style: normal;\n    }\n\n    .canvas-content {\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-note {\n      font-size: 20px;\n      fill: deepskyblue;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .char {\n      font-size: 20px;\n      fill: deepskyblue;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .char.cursor {\n      fill: white;\n      stroke: black;\n      stroke-width: 2px;\n      opacity: 0.9;\n    }\n\n    /* Semantic element styles */\n    .note-char {\n      font-size: 20px;\n      fill: #1e90ff;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .rest-char {\n      font-size: 20px;\n      fill: #808080;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .barline-char {\n      font-size: 20px;\n      fill: #8b008b;\n      font-weight: bold;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .dash-char {\n      font-size: 20px;\n      fill: #4682b4;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .breath-char {\n      font-size: 20px;\n      fill: #ff6347;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .lyrics-char {\n      font-size: 18px;\n      fill: #666666;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .text-char {\n      font-size: 20px;\n      fill: #333333;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .unknown-char {\n      font-size: 18px;\n      fill: #999999;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n\n    .octave-dot {\n      fill: #ff0000;\n    }\n\n    .canvas-octave-upper {\n      font-size: 12px;\n      fill: red;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-octave-lower {\n      font-size: 12px;\n      fill: red;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-barline {\n      font-size: 20px;\n      fill: mediumorchid;\n      font-weight: bold;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    /* Cursor CSS removed - handled by client-side JavaScript */\n\n    .canvas-beat-arc {\n      stroke: orange;\n      stroke-width: 2;\n      fill: none;\n      opacity: 0.8;\n    }\n\n    .canvas-selection {\n      fill: rgba(65, 105, 225, 0.4);\n      stroke: none;\n    }\n\n    .line-hitbox.highlighted {\n        fill: rgba(0, 0, 0, 0.1);\n    }\n\n    .canvas-placeholder {\n      font-size: 18px;\n      fill: gray;\n      font-style: italic;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-unknown {\n      font-size: 16px;\n      fill: gray;\n      font-weight: normal;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-title {\n      font-size: 30px;\n      fill: black;\n      font-weight: bold;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-lyrics {\n      font-size: 18px;\n      fill: #666;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-text {\n      font-size: 20px;\n      fill: #333;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    @keyframes blink {\n      0%, 50% { opacity: 1; }\n      51%, 100% { opacity: 0; }\n    }\n\n    /* Character replacement styles removed - handled in rendering logic */\n    ]]>\n  </style>\n  <rect width=\"800\" height=\"340\" fill=\"#fafafa\" stroke=\"#dddddd\" stroke-width=\"1\"/>\n  <g class=\"canvas-content\" transform=\"translate(20, 20)\">\n<g class=\"content-line\">\n    <rect class=\"line-hitbox\" x=\"-20\" y=\"-20\" width=\"800\" height=\"60\" fill=\"transparent\" />\n</g>\n  </g>\n  <metadata id=\"coordinate-data\">\n    <![CDATA[\n    {\n      \"elements\": [\n      ],\n      \"characterPositions\": {\n        \"0\": {\"x\": 0.0, \"y\": 20.0},\n        \"1\": {\"x\": 5.6, \"y\": 20.0}\n      }\n    }\n    ]]>\n  </metadata>\n</svg>\n",
+    "formats": {
+        "vexflow_svg": "(function() {\n  const container = document.getElementById('vexflow_svg-output');\n  if (!container) return;\n  container.innerHTML = '';\n\n  const { Renderer, Stave, StaveNote, Voice, Formatter, Tuplet, Beam } = Vex.Flow;\n\n  const renderer = new Renderer(container, Renderer.Backends.SVG);\n  const canvasWidth = 800;\n  const canvasHeight = 200;\n  renderer.resize(canvasWidth, canvasHeight);\n  const context = renderer.getContext();\n  context.scale(0.9, 0.9);\n\n  const stave = new Stave(10, 40, 700);\n  stave.addClef('treble');\n  stave.setContext(context);\n  stave.draw();\n\n})();\n",
+        "editor_svg": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\"\n     width=\"800\" height=\"340\"\n     viewBox=\"0 0 800 340\">\n\n  <style>\n    <![CDATA[\n    @font-face {\n      font-family: 'Bravura';\n      src: url('/fonts/Bravura.woff2') format('woff2'),\n           url('/fonts/Bravura.woff') format('woff');\n      font-weight: normal;\n      font-style: normal;\n    }\n\n    .canvas-content {\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-note {\n      font-size: 20px;\n      fill: deepskyblue;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .char {\n      font-size: 20px;\n      fill: deepskyblue;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .char.cursor {\n      fill: white;\n      stroke: black;\n      stroke-width: 2px;\n      opacity: 0.9;\n    }\n\n    /* Semantic element styles */\n    .note-char {\n      font-size: 20px;\n      fill: #1e90ff;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .rest-char {\n      font-size: 20px;\n      fill: #808080;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .barline-char {\n      font-size: 20px;\n      fill: #8b008b;\n      font-weight: bold;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .dash-char {\n      font-size: 20px;\n      fill: #4682b4;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .breath-char {\n      font-size: 20px;\n      fill: #ff6347;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .lyrics-char {\n      font-size: 18px;\n      fill: #666666;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .text-char {\n      font-size: 20px;\n      fill: #333333;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n    .unknown-char {\n      font-size: 18px;\n      fill: #999999;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n      cursor: text;\n    }\n\n\n    .octave-dot {\n      fill: #ff0000;\n    }\n\n    .canvas-octave-upper {\n      font-size: 12px;\n      fill: red;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-octave-lower {\n      font-size: 12px;\n      fill: red;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-barline {\n      font-size: 20px;\n      fill: mediumorchid;\n      font-weight: bold;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    /* Cursor CSS removed - handled by client-side JavaScript */\n\n    .canvas-beat-arc {\n      stroke: orange;\n      stroke-width: 2;\n      fill: none;\n      opacity: 0.8;\n    }\n\n    .canvas-selection {\n      fill: rgba(65, 105, 225, 0.4);\n      stroke: none;\n    }\n\n    .line-hitbox.highlighted {\n        fill: rgba(0, 0, 0, 0.1);\n    }\n\n    .canvas-placeholder {\n      font-size: 18px;\n      fill: gray;\n      font-style: italic;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-unknown {\n      font-size: 16px;\n      fill: gray;\n      font-weight: normal;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-title {\n      font-size: 30px;\n      fill: black;\n      font-weight: bold;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-lyrics {\n      font-size: 18px;\n      fill: #666;\n      font-style: italic;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    .canvas-text {\n      font-size: 20px;\n      fill: #333;\n      font-weight: normal;\n      font-family: monospace, 'Courier New', monospace;\n    }\n\n    @keyframes blink {\n      0%, 50% { opacity: 1; }\n      51%, 100% { opacity: 0; }\n    }\n\n    /* Character replacement styles removed - handled in rendering logic */\n    ]]>\n  </style>\n  <rect width=\"800\" height=\"340\" fill=\"#fafafa\" stroke=\"#dddddd\" stroke-width=\"1\"/>\n  <g class=\"canvas-content\" transform=\"translate(20, 20)\">\n<g class=\"content-line\">\n    <rect class=\"line-hitbox\" x=\"-20\" y=\"-20\" width=\"800\" height=\"60\" fill=\"transparent\" />\n</g>\n  </g>\n  <metadata id=\"coordinate-data\">\n    <![CDATA[\n    {\n      \"elements\": [\n      ],\n      \"characterPositions\": {\n        \"0\": {\"x\": 0.0, \"y\": 20.0},\n        \"1\": {\"x\": 5.6, \"y\": 20.0}\n      }\n    }\n    ]]>\n  </metadata>\n</svg>\n",
+        "lilypond_svg": null,
+        "lilypond_src": "\\version \"2.24.0\"\n\\score {\n  <<\n    \\new Staff { \\fixed c' {  } }\n  >>\n}",
+        "midi": null
+    }
+}

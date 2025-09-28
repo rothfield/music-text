@@ -2,3 +2,4 @@
 // Following Modern Rust practices
 
 pub mod edit;
+pub mod line_parser;

@@ -313,8 +313,7 @@ class MusicTextApp {
 
         // Document clearing is now handled by DocumentPersistence
 
-        // Switch back to Editor SVG tab and restore focus
-        UI.switchTab('editor_svg');
+        // Note: Don't force tab switch here - let document creation preserve the current tab
     }
 
     // Clear localStorage completely
@@ -351,12 +350,16 @@ class MusicTextApp {
             UI.setStatus('Creating new document...', 'loading');
 
             // Create a blank document immediately without dialog
+            // Capture current UI state to preserve tab selection
+            const currentUiState = this.canvasEditor.getCurrentUiState();
+
             const requestBody = {
                 metadata: {
                     title: 'Untitled Document',
                     created_at: new Date().toISOString(),
                     created_by: 'Web Interface'
-                }
+                },
+                ui_state: currentUiState  // Include current UI state in new document
             };
 
             const response = await fetch('/api/documents?representations=editor_svg,vexflow,lilypond', {
@@ -484,6 +487,15 @@ class MusicTextApp {
                         if (UI.updatePipelineData) {
                             UI.updatePipelineData(uiResult);
                         }
+                    }
+                }
+
+                // Restore the active tab from the document's UI state
+                if (result.document && result.document.ui_state && result.document.ui_state.active_tab) {
+                    const targetTab = result.document.ui_state.active_tab;
+                    console.log('App: Restoring active tab after document creation:', targetTab);
+                    if (window.UI && window.UI.switchTab) {
+                        window.UI.switchTab(targetTab);
                     }
                 }
 

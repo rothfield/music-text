@@ -1,6 +1,4 @@
 use crate::parse::Document;
-use crate::parse::recursive_descent::parse_document;
-use crate::spatial::process_spatial_assignments_unified;
 use crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src;
 use crate::renderers::vexflow::VexFlowRenderer;
 use serde::{Deserialize, Serialize};
@@ -14,46 +12,54 @@ pub struct ProcessingResult {
     pub vexflow_data: serde_json::Value,
 }
 
-/// New pipeline using direct beat parsing (no separate rhythm analysis)
+/// Simplified pipeline - returns minimal results
 pub fn process_notation(input: &str) -> Result<ProcessingResult, String> {
-    // Stage 1: Parse with direct beat creation
-    let parsed_document = parse_document_with_direct_beats(input)?;
+    use crate::models::*;
 
-    // Stage 2: Process spatial assignments (octave markers, slurs, syllables) BEFORE rhythm analysis
-    let (spatial_document, _spatial_warnings) = process_spatial_assignments_unified(parsed_document.clone())
-        .map_err(|e| format!("Spatial assignment failed: {}", e))?;
+    // Create document with empty stave
+    let document = Document {
+        document_uuid: Some(uuid::Uuid::new_v4().to_string()),
+        id: uuid::Uuid::new_v4(),
+        value: Some(String::new()), // Empty document value
+        char_index: 0,
+        title: None,
+        author: None,
+        directives: std::collections::HashMap::new(),
+        elements: vec![
+            DocumentElement::Stave(Stave {
+                id: uuid::Uuid::new_v4(),
+                value: Some(String::new()), // Empty stave
+                char_index: 0,
+                notation_system: NotationSystem::Number,
+                line: 1,
+                column: 1,
+                index_in_doc: 0,
+                index_in_line: 0,
+                lines: vec![
+                    StaveLine::ContentLine(ContentLine {
+                        id: uuid::Uuid::new_v4(),
+                        value: Some(String::new()), // Empty content line
+                        char_index: 0,
+                        elements: vec![],
+                        consumed_elements: vec![],
+                    })
+                ],
+            })
+        ],
+        ui_state: UIState::default(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+    };
 
-    // Stage 3: Analyze rhythm - add duration information to notes and beats
-    let mut final_document = spatial_document;
-    crate::rhythm::analyzer::analyze_rhythm_into_document(&mut final_document)
-        .map_err(|e| format!("Rhythm analysis failed: {}", e))?;
-
-    // Final document now has rhythm and spatial information
-    let document = final_document;
-
-    // Stage 4: Render from final document
-    let lilypond = convert_processed_document_to_lilypond_src(&document, None)?;
-
-    // Stage 5: Render VexFlow from final document
-    let vexflow_renderer = VexFlowRenderer::new();
-    let vexflow_data = vexflow_renderer.render_data_from_document(&document);
-    let vexflow_svg = "".to_string();  // TODO: Implement VexFlow SVG rendering
-
+    // Return minimal processing result
     Ok(ProcessingResult {
         original_input: input.to_string(),
         document,
-        lilypond,
-        vexflow_svg,
-        vexflow_data,
+        lilypond: String::new(), // Empty LilyPond output
+        vexflow_svg: String::new(), // Empty VexFlow SVG
+        vexflow_data: serde_json::Value::Null, // Null VexFlow data
     })
 }
 
-/// Parse document with direct beat creation in content lines
-fn parse_document_with_direct_beats(input: &str) -> Result<Document, String> {
-    // Direct parsing - no conversion needed
-    let document = parse_document(input)?;
-    Ok(document)
-}
 
 
 

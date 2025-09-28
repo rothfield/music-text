@@ -11,6 +11,7 @@ pub fn analyze_rhythm_into_document(document: &mut Document) -> Result<(), Strin
         if let DocumentElement::Stave(stave) = element {
             for line in &mut stave.lines {
                 if let StaveLine::ContentLine(content_line) = line {
+                    // Analyze rhythm directly with existing elements (no re-parsing)
                     analyze_content_line_rhythm(&mut content_line.elements)?;
                 }
             }
@@ -18,6 +19,7 @@ pub fn analyze_rhythm_into_document(document: &mut Document) -> Result<(), Strin
     }
     Ok(())
 }
+
 
 /// Analyze rhythm for a content line (sequence of beats and other elements)
 pub fn analyze_content_line_rhythm(elements: &mut Vec<ContentElement>) -> Result<(), String> {
@@ -317,8 +319,8 @@ mod tests {
         let mut beat = Beat {
             elements: vec![
                 BeatElement::Note(Note::new(Some("1".to_string()), 0, PitchCode::N1, NotationSystem::Number)),
-                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 1, consumed_elements: vec![], numerator: None, denominator: None }),
-                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 2, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 1, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 2, consumed_elements: vec![], numerator: None, denominator: None }),
                 BeatElement::Note(Note::new(Some("2".to_string()), 3, PitchCode::N2, NotationSystem::Number)),
             ],
             value: Some("1--2".to_string()),
@@ -354,8 +356,8 @@ mod tests {
         // Beat 1: "--" should have first dash as rest, second as extender
         let mut beat1 = Beat {
             elements: vec![
-                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 0, consumed_elements: vec![], numerator: None, denominator: None }),
-                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 1, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 0, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 1, consumed_elements: vec![], numerator: None, denominator: None }),
             ],
             value: Some("--".to_string()),
             char_index: 0,
@@ -386,7 +388,7 @@ mod tests {
         // Beat 2: "-1" should have dash as rest, note gets rhythm data
         let mut beat2 = Beat {
             elements: vec![
-                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 3, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 3, consumed_elements: vec![], numerator: None, denominator: None }),
                 BeatElement::Note(Note::new(Some("1".to_string()), 4, PitchCode::N1, NotationSystem::Number)),
             ],
             value: Some("-1".to_string()),
@@ -422,7 +424,7 @@ mod tests {
         // Beat 1: "-547" should have dash as rest, notes get rhythm data
         let mut beat1 = Beat {
             elements: vec![
-                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 0, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 0, consumed_elements: vec![], numerator: None, denominator: None }),
                 BeatElement::Note(Note::new(Some("5".to_string()), 1, PitchCode::N5, NotationSystem::Number)),
                 BeatElement::Note(Note::new(Some("4".to_string()), 2, PitchCode::N4, NotationSystem::Number)),
                 BeatElement::Note(Note::new(Some("7".to_string()), 3, PitchCode::N7, NotationSystem::Number)),
@@ -458,7 +460,7 @@ mod tests {
         // Beat 2: "-5" tied to previous - dash should NOT get rhythm data
         let mut beat2 = Beat {
             elements: vec![
-                BeatElement::Dash(Dash { value: Some("-".to_string()), char_index: 5, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 5, consumed_elements: vec![], numerator: None, denominator: None }),
                 BeatElement::Note(Note::new(Some("5".to_string()), 6, PitchCode::N5, NotationSystem::Number)),
             ],
             value: Some("-5".to_string()),

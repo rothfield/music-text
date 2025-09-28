@@ -4,14 +4,10 @@ pub mod rhythm;
 pub mod renderers;
 pub mod pipeline;
 pub mod models;
-pub mod spatial;
 pub mod document;
 pub mod import;
 pub mod font_metrics;
 
-pub fn parse(input: &str, _system: Option<&str>) -> Result<parse::Document, parse::ParseError> {
-    parse::parse_document(input)
-}
 
 // Re-export the pipeline function for the web server
 pub use pipeline::process_notation;

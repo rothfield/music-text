@@ -80,53 +80,6 @@ impl HasPosition for BeatElement {
     }
 }
 
-impl HasPosition for UpperElement {
-    fn char_index(&self) -> usize {
-        match self {
-            UpperElement::UpperOctaveMarker { char_index, .. } => *char_index,
-            UpperElement::SlurIndicator { char_index, .. } => *char_index,
-            UpperElement::UpperHashes { char_index, .. } => *char_index,
-            UpperElement::Ornament { char_index, .. } => *char_index,
-            UpperElement::Chord { char_index, .. } => *char_index,
-            UpperElement::Mordent { char_index, .. } => *char_index,
-            UpperElement::Space { char_index, .. } => *char_index,
-            UpperElement::Unknown { char_index, .. } => *char_index,
-            UpperElement::Newline { char_index, .. } => *char_index,
-        }
-    }
-
-    fn value(&self) -> Option<&String> {
-        match self {
-            UpperElement::UpperOctaveMarker { value, .. } => value.as_ref(),
-            UpperElement::SlurIndicator { value, .. } => value.as_ref(),
-            UpperElement::UpperHashes { value, .. } => value.as_ref(),
-            UpperElement::Ornament { value, .. } => value.as_ref(),
-            UpperElement::Chord { value, .. } => value.as_ref(),
-            UpperElement::Mordent { value, .. } => value.as_ref(),
-            UpperElement::Space { value, .. } => value.as_ref(),
-            UpperElement::Unknown { value, .. } => value.as_ref(),
-            UpperElement::Newline { value, .. } => value.as_ref(),
-        }
-    }
-
-    fn consumed_elements(&self) -> &[ConsumedElement] {
-        &[] // UpperElements don't have consumed elements (they get consumed by others)
-    }
-
-    fn type_name(&self) -> &'static str {
-        match self {
-            UpperElement::UpperOctaveMarker { .. } => "UpperOctaveMarker",
-            UpperElement::SlurIndicator { .. } => "UpperSlurIndicator",
-            UpperElement::UpperHashes { .. } => "UpperHashes",
-            UpperElement::Ornament { .. } => "Ornament",
-            UpperElement::Chord { .. } => "Chord",
-            UpperElement::Mordent { .. } => "Mordent",
-            UpperElement::Space { .. } => "UpperSpace",
-            UpperElement::Unknown { .. } => "UpperUnknown",
-            UpperElement::Newline { .. } => "UpperNewline",
-        }
-    }
-}
 
 impl HasPosition for Barline {
     fn char_index(&self) -> usize {
@@ -192,44 +145,3 @@ impl HasPosition for Beat {
     }
 }
 
-impl HasPosition for LowerElement {
-    fn char_index(&self) -> usize {
-        match self {
-            LowerElement::LowerOctaveMarker { char_index, .. } => *char_index,
-            LowerElement::BeatGroupIndicator { char_index, .. } => *char_index,
-            LowerElement::Syllable { char_index, .. } => *char_index,
-            LowerElement::Space { char_index, .. } => *char_index,
-            LowerElement::Unknown { char_index, .. } => *char_index,
-            LowerElement::Newline { char_index, .. } => *char_index,
-            LowerElement::EndOfInput { char_index, .. } => *char_index,
-        }
-    }
-
-    fn value(&self) -> Option<&String> {
-        match self {
-            LowerElement::LowerOctaveMarker { value, .. } => value.as_ref(),
-            LowerElement::BeatGroupIndicator { value, .. } => value.as_ref(),
-            LowerElement::Syllable { value, .. } => value.as_ref(),
-            LowerElement::Space { value, .. } => value.as_ref(),
-            LowerElement::Unknown { value, .. } => value.as_ref(),
-            LowerElement::Newline { value, .. } => value.as_ref(),
-            LowerElement::EndOfInput { value, .. } => value.as_ref(),
-        }
-    }
-
-    fn consumed_elements(&self) -> &[ConsumedElement] {
-        &[] // LowerElements don't have consumed elements
-    }
-
-    fn type_name(&self) -> &'static str {
-        match self {
-            LowerElement::LowerOctaveMarker { .. } => "LowerOctaveMarker",
-            LowerElement::BeatGroupIndicator { .. } => "BeatGroupIndicator",
-            LowerElement::Syllable { .. } => "Syllable",
-            LowerElement::Space { .. } => "LowerSpace",
-            LowerElement::Unknown { .. } => "LowerUnknown",
-            LowerElement::Newline { .. } => "LowerNewline",
-            LowerElement::EndOfInput { .. } => "EndOfInput",
-        }
-    }
-}

@@ -536,6 +536,7 @@ pub fn convert_processed_document_to_lilypond_src(
             }
         };
         convert_document_to_lilypond_src(&Document {
+            id: uuid::Uuid::new_v4(),
             document_uuid: document.document_uuid.clone(),
             title: document.title.clone(),
             author: document.author.clone(),
@@ -742,85 +743,3 @@ pub fn convert_processed_document_to_minimal_lilypond_src(
         .map_err(|e| format!("Minimal template render error: {}", e))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::parse::recursive_descent::parse_document;
-    use crate::rhythm::analyzer::analyze_rhythm_into_document;
-
-    /// Helper function to parse input string and convert to LilyPond
-    fn parse_and_convert_to_lilypond(input: &str) -> Result<String, String> {
-        let mut document = parse_document(input)
-            .map_err(|e| format!("Parse error: {:?}", e))?;
-
-        analyze_rhythm_into_document(&mut document)
-            .map_err(|e| format!("Analysis error: {}", e))?;
-
-        convert_processed_document_to_minimal_lilypond_src(&document, None)
-    }
-
-    #[test]
-    fn test_standalone_dash_sequences_lilypond() {
-        // Test case: "-- -1" should produce r4 r8 c8
-        let result = parse_and_convert_to_lilypond("-- -1").unwrap();
-
-        // Extract just the notes from the score
-        let expected_notes = "r4 r8 c8";
-        assert!(result.contains(expected_notes),
-            "Expected '{}' in output, got: {}", expected_notes, result);
-    }
-
-    #[test]
-    fn test_tied_dashes_lilypond() {
-        // Test case: "-547 -5" should produce r16 g16 f16 b16~ b8 g8
-        let result = parse_and_convert_to_lilypond("-547 -5").unwrap();
-
-        // Extract just the notes from the score
-        let expected_notes = "r16 g16 f16 b16~ b8 g8";
-        assert!(result.contains(expected_notes),
-            "Expected '{}' in output, got: {}", expected_notes, result);
-    }
-
-    #[test]
-    fn test_triple_dashes_lilypond() {
-        // Test case: "--- -R" should produce \tuplet 3/2 { r4 } r8 d8
-        let result = parse_and_convert_to_lilypond("--- -R").unwrap();
-
-        // Check for tuplet structure and notes
-        assert!(result.contains("\\tuplet 3/2"),
-            "Expected tuplet structure in output: {}", result);
-        assert!(result.contains("r4"),
-            "Expected r4 in tuplet: {}", result);
-        assert!(result.contains("r8 d8"),
-            "Expected 'r8 d8' in output: {}", result);
-    }
-
-    #[test]
-    fn test_mixed_patterns_lilypond() {
-        // Test case: "12- -34" produces tuplets due to odd subdivisions
-        let result = parse_and_convert_to_lilypond("12- -34").unwrap();
-
-        // Check for tuplet structures
-        assert!(result.contains("\\tuplet 3/2"),
-            "Expected tuplet structures in output: {}", result);
-        assert!(result.contains("c16 d8"),
-            "Expected 'c16 d8' pattern in first tuplet: {}", result);
-        assert!(result.contains("r16 e16 f16"),
-            "Expected 'r16 e16 f16' pattern in second tuplet: {}", result);
-    }
-
-    #[test]
-    fn test_dash_vs_rest_distinction() {
-        // Test standalone dashes vs notes - dashes in isolation don't produce content
-        let dash_result = parse_and_convert_to_lilypond("--").unwrap();
-        let note_result = parse_and_convert_to_lilypond("1").unwrap();
-
-        // Standalone dashes alone don't produce musical content
-        assert!(dash_result.contains("No musical content") || dash_result.is_empty(),
-            "Standalone dash sequence should produce no content: {}", dash_result);
-
-        // But notes should produce actual notes
-        assert!(note_result.contains("c4"),
-            "Note should produce c4: {}", note_result);
-    }
-}

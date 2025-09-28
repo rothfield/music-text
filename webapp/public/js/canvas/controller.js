@@ -119,7 +119,8 @@ export class CanvasController {
           this.onTextInput({
             type: 'insert',
             value: cmd.value,
-            position: selectors.cursorPosition(this.store.getState())
+            position: selectors.cursorPosition(this.store.getState()),
+            target_uuid: selectors.cursorUuid(this.store.getState())
           });
         }
         break;

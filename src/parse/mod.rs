@@ -5,30 +5,42 @@
 
 use uuid::Uuid;
 
-pub mod recursive_descent;
 pub mod model;
-pub mod lower_line_parser;
-pub mod upper_line_parser;
 pub mod content_line_parser_v3;
 pub mod actions;
 
 // Grammar rule modules
-pub mod title_line;
-pub mod directive_line;
-pub mod text_line;
-pub mod header_line;
-pub mod document_header;
 pub mod line_classifier;
 pub mod pitch;
 pub mod beat;
+pub mod html;
 
 // Re-export key types and functions for convenience
-pub use model::{Document, Directive, Stave, ContentLine, ContentElement, TextLine, PitchCode, NotationSystem, LowerLine, LowerElement, UpperLine, UpperElement, WhitespaceLine, Beat, BeatElement, Note, Dash, BreathMark};
-pub use recursive_descent::{parse_document, ParseError};
-pub use lower_line_parser::parse_lower_line;
-pub use upper_line_parser::parse_upper_line;
+pub use model::{Document, Directive, Stave, ContentLine, ContentElement, TextLine, PitchCode, NotationSystem, WhitespaceLine, Beat, BeatElement, Note, Dash, BreathMark};
 pub use pitch::{parse_pitch, is_pitch_start};
 pub use beat::parse_beat;
+
+// ParseError is defined below
+#[derive(Debug)]
+pub struct ParseError {
+    pub message: String,
+    pub line: usize,
+    pub column: usize,
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Parse error at line {}, column {}: {}", self.line, self.column, self.message)
+    }
+}
+
+impl std::error::Error for ParseError {}
+
+impl From<ParseError> for String {
+    fn from(error: ParseError) -> Self {
+        error.to_string()
+    }
+}
 
 /// Trait for elements that have a unique identifier
 pub trait HasId {

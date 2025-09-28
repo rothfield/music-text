@@ -41,38 +41,14 @@ export class CanvasEditor {
     return this;
   }
 
-  // Load document from localStorage
+  // Load document from localStorage (DISABLED - always create new)
   async loadFromLocalStorage() {
     try {
-      console.log('CanvasEditor: Loading document from localStorage...');
-      if (!window.LocalStorage) {
-        console.error('CanvasEditor: LocalStorage not available');
-        return;
-      }
-
-      const currentDoc = window.LocalStorage.loadCurrentDocument();
-      if (currentDoc) {
-        console.log('CanvasEditor: Found document in localStorage:', currentDoc.documentUUID || 'no UUID');
-        this.document.fromJSON(currentDoc);
-        this.content = this.document.content || '';
-        console.log('CanvasEditor: Document loaded from localStorage successfully');
-
-        // Document-first architecture: Send to server for processing
-        if (this.document.documentUUID) {
-          console.log('CanvasEditor: Document has UUID, will sync with server:', this.document.documentUUID);
-          console.log('CanvasEditor: Document content before sync:', this.document.content);
-          console.log('CanvasEditor: Full document before sync:', this.document);
-          this.syncWithServer();
-        } else {
-          console.warn('CanvasEditor: Document has no UUID, cannot sync with server');
-        }
-      } else {
-        console.log('CanvasEditor: No document found in localStorage, creating new document via API');
-        // Create a new document via API if none exists
-        await this.createNewDocument();
-      }
+      console.log('CanvasEditor: localStorage disabled, creating new document via API');
+      // Always create a new document via API (localStorage disabled)
+      await this.createNewDocument();
     } catch (error) {
-      console.error('CanvasEditor: Failed to load document from localStorage:', error);
+      console.error('CanvasEditor: Failed to create new document:', error);
       this.document = new DocumentModel();
       this.content = '';
     }
@@ -201,34 +177,8 @@ export class CanvasEditor {
 
   // Save to localStorage
   saveToLocalStorage() {
-    try {
-      if (!this.document) {
-        console.warn('CanvasEditor: No document to save');
-        return;
-      }
-
-      if (!window.LocalStorage) {
-        console.error('CanvasEditor: LocalStorage not available');
-        return;
-      }
-
-      const documentUUID = this.document.documentUUID;
-      if (!documentUUID) {
-        console.warn('CanvasEditor: Document has no UUID, cannot save to localStorage');
-        return;
-      }
-
-      const documentData = this.document.toJSON();
-      const success = window.LocalStorage.saveDocument(documentUUID, documentData);
-
-      if (success) {
-        console.log('CanvasEditor: Document saved to localStorage successfully:', documentUUID);
-      } else {
-        console.error('CanvasEditor: Failed to save document to localStorage');
-      }
-    } catch (error) {
-      console.error('CanvasEditor: Error saving to localStorage:', error);
-    }
+    // localStorage disabled - no-op
+    console.log('CanvasEditor: localStorage disabled, skipping save');
   }
 
   // Execute a transform operation
@@ -264,16 +214,8 @@ export class CanvasEditor {
 
       const result = await response.json();
 
-      if (result.success && result.document) {
-        // Replace document with server response
-        this.document = DocumentModel.fromJSON(result.document);
-        this.saveToLocalStorage();
-
-        // Update UI with any SVG from transform
-        if (result.svg && this.renderEditorSvg) {
-          this.renderEditorSvg(result.svg);
-        }
-
+      // Use unified response handler
+      if (this.handleServerResponse(result, 'transform')) {
         return result;
       } else {
         throw new Error(result.message || 'Transform failed');
@@ -300,17 +242,50 @@ export class CanvasEditor {
     }
   }
 
+  // Capture current UI state from browser
+  getCurrentUiState() {
+    // Get currently active tab
+    const activeTabElement = document.querySelector('.tab.active');
+    const activeTab = activeTabElement ? activeTabElement.id : 'editor_svg';
+
+    // Get current viewport state (could be extended to read from CSS transforms, scroll positions, etc.)
+    const viewport = {
+      scroll_x: 0,
+      scroll_y: 0,
+      zoom_level: 1.0
+    };
+
+    // Get current selection state (preserve from existing document if available)
+    const currentSelection = this.document?.ui_state?.selection || {
+      cursor_position: 0,
+      cursor_uuid: null,
+      selected_uuids: []
+    };
+
+    return {
+      active_tab: activeTab,
+      editor_mode: 'text',
+      selection: currentSelection,
+      viewport: viewport
+    };
+  }
+
   // Create a new document via the API (document-first architecture)
   async createNewDocument() {
     try {
       console.log('CanvasEditor: Creating new document via API...');
+
+      // Capture current UI state to preserve user's tab selection and other preferences
+      const currentUiState = this.getCurrentUiState();
+      console.log('CanvasEditor: Preserving UI state:', currentUiState);
 
       const requestBody = {
         metadata: {
           title: 'Untitled Document',
           created_at: new Date().toISOString(),
           created_by: 'Web Interface'
-        }
+        },
+        ui_state: currentUiState  // Include current UI state in new document
       };
 
       const response = await fetch('/api/documents?representations=editor_svg,vexflow,lilypond', {
@@ -329,30 +304,15 @@ export class CanvasEditor {
 
       if (result.document && result.document.documentUUID) {
         console.log('CanvasEditor: New document created:', result.document.documentUUID);
-        console.log('CanvasEditor: Document data:', result.document);
 
-        // Update local document with server response
-        this.document.fromJSON(result.document);
-        this.content = this.document.content || '';
+        // Set document creation success flag for unified handler
+        result.success = true;
 
-        // Save to localStorage
-        this.saveToLocalStorage();
-
-        // Update UI with any formats from server
-        if (result.formats && window.UI) {
-          if (window.UI.updateFormatsFromBackend) {
-            window.UI.updateFormatsFromBackend(result.formats);
-          }
-
-          // Render editor SVG in main canvas area
-          if (result.formats.editor_svg && this.renderEditorSvg) {
-            this.renderEditorSvg(result.formats.editor_svg);
-          } else {
-            console.log('CanvasEditor: No editor_svg to render or method missing');
-          }
+        // Use unified response handler
+        if (this.handleServerResponse(result, 'document_creation')) {
+          this.content = this.document.content || '';
+          console.log('CanvasEditor: New document setup completed');
         }
-
-        console.log('CanvasEditor: New document setup completed');
       } else {
         throw new Error('Invalid response from document creation API');
       }
@@ -403,7 +363,9 @@ export class CanvasEditor {
           command_type: commandType, // insert_text, delete_backward, etc.
           target_uuids: [], // Empty for text operations
           parameters: {
-            position: inputCmd.position || 0,
+            position: inputCmd.position || 0, // Keep for backward compatibility
+            target_uuid: inputCmd.target_uuid || this.determineTargetUuid(), // Determine target UUID automatically
+            element_position: inputCmd.element_position || 0, // Position within the target element
             text: inputCmd.value || '',
             direction: inputCmd.type === 'deleteBackward' ? 'backward' :
                       inputCmd.type === 'deleteForward' ? 'forward' : undefined
@@ -418,36 +380,10 @@ export class CanvasEditor {
 
       const result = await response.json();
 
-      if (result.success && result.document) {
-        // Replace document with server response (mutated document)
-        this.document = DocumentModel.fromJSON(result.document);
-        this.saveToLocalStorage();
-
-        // MOST IMPORTANT: Render editor SVG first
-        if (result.formats && result.formats.editor_svg && this.renderEditorSvg) {
-          console.log('CanvasEditor: Rendering editor SVG after text input, length:', result.formats.editor_svg.length);
-          this.renderEditorSvg(result.formats.editor_svg);
-        }
-
-        // Update UI with server response formats
-        if (result.formats && window.UI) {
-          if (window.UI.updateFormatsFromBackend) {
-            window.UI.updateFormatsFromBackend(result.formats);
-          }
-
-          // Update document tab with mutated document
-          if (window.UI.updatePipelineData) {
-            window.UI.updatePipelineData({
-              success: true,
-              document: result.document
-            });
-          }
-        }
-
+      // Use unified response handler
+      if (this.handleServerResponse(result, 'text_input')) {
         console.log('CanvasEditor: Text input transform completed successfully');
         console.log('CanvasEditor: Updated elements:', result.updated_elements);
-      } else {
-        console.error('CanvasEditor: Transform returned error:', result.message);
       }
 
     } catch (error) {
@@ -492,48 +428,106 @@ export class CanvasEditor {
 
       const result = await response.json();
 
-      if (result.success) {
-        console.log('CanvasEditor: Server sync successful');
-
-        // Replace document with server response (e.g., timestamp updates)
-        if (result.document) {
-          this.document = DocumentModel.fromJSON(result.document);
-          console.log('CanvasEditor: Document replaced from server');
-        }
-
-        // Save updated document to localStorage
-        this.saveToLocalStorage();
-
-        // Update UI with any format data from server
-        if (result.formats && window.UI) {
-          if (window.UI.updateFormatsFromBackend) {
-            window.UI.updateFormatsFromBackend(result.formats);
-          }
-
-          // Update document tab with current document data
-          if (window.UI.updatePipelineData) {
-            const uiResult = {
-              success: true,
-              document: this.document.toJSON()
-            };
-            window.UI.updatePipelineData(uiResult);
-          }
-
-          // Render editor SVG in main canvas area
-          if (result.formats.editor_svg) {
-            this.renderEditorSvg(result.formats.editor_svg);
-          } else {
-            console.log('CanvasEditor: No editor_svg in sync response');
-          }
-        }
-
+      // Use unified response handler
+      if (this.handleServerResponse(result, 'sync')) {
         console.log('CanvasEditor: Document sync completed successfully');
-      } else {
-        console.error('CanvasEditor: Server returned error:', result.message);
       }
 
     } catch (error) {
       console.error('CanvasEditor: Error syncing with server:', error);
+    }
+  }
+
+  // Unified method to handle server responses and update UI
+  handleServerResponse(result, context = 'general') {
+    if (!result.success || !result.document) {
+      console.error(`CanvasEditor: Server response failed in ${context}:`, result.message);
+      return false;
+    }
+
+    console.log(`CanvasEditor: Processing successful server response from ${context}`);
+
+    // Update document model
+    this.document = DocumentModel.fromJSON(result.document);
+    this.saveToLocalStorage();
+
+    // Render editor SVG in main canvas (prioritize result.svg, fallback to formats)
+    const editorSvg = result.svg || (result.formats && result.formats.editor_svg);
+    if (editorSvg && this.renderEditorSvg) {
+      console.log(`CanvasEditor: Rendering editor SVG from ${context}, length:`, editorSvg.length);
+      this.renderEditorSvg(editorSvg);
+    } else {
+      console.log(`CanvasEditor: No editor SVG to render from ${context}`);
+    }
+
+    // Restore UI state from document (especially tab selection)
+    if (result.document.ui_state && result.document.ui_state.active_tab) {
+      const targetTab = result.document.ui_state.active_tab;
+      console.log(`CanvasEditor: Restoring active tab from ${context}:`, targetTab);
+      console.log(`CanvasEditor: window.UI available:`, !!window.UI);
+      console.log(`CanvasEditor: window.UI.switchTab available:`, !!(window.UI && window.UI.switchTab));
+
+      // Switch to the tab specified in the document's UI state
+      if (window.UI && window.UI.switchTab) {
+        console.log(`CanvasEditor: Calling switchTab(${targetTab})`);
+        window.UI.switchTab(targetTab);
+        console.log(`CanvasEditor: switchTab call completed`);
+      } else {
+        console.warn(`CanvasEditor: Unable to switch tab - UI or switchTab not available`);
+      }
+    } else {
+      console.log(`CanvasEditor: No active tab to restore from ${context} - ui_state:`, result.document.ui_state);
+    }
+
+    // Update UI tabs and formats
+    if (window.UI) {
+      // Update formats in all tabs
+      if (result.formats && window.UI.updateFormatsFromBackend) {
+        console.log(`CanvasEditor: Updating formats from ${context}:`, Object.keys(result.formats));
+        window.UI.updateFormatsFromBackend(result.formats);
+      }
+
+      // Update document tab
+      if (window.UI.updatePipelineData) {
+        console.log(`CanvasEditor: Updating pipeline data from ${context}`);
+        window.UI.updatePipelineData({
+          success: true,
+          document: result.document,
+          formats: result.formats  // Always include formats for tabs
+        });
+      }
+    }
+
+    console.log(`CanvasEditor: Server response handling completed for ${context}`);
+    return true;
+  }
+
+  // Determine the target UUID for text insertion
+  // Find the first available ContentLine UUID from the document
+  determineTargetUuid() {
+    try {
+      if (!this.document || !this.document.elements || this.document.elements.length === 0) {
+        console.warn('CanvasEditor: No document elements for UUID determination');
+        return null;
+      }
+
+      // Look for the first Stave with ContentLine
+      for (const element of this.document.elements) {
+        if (element.Stave && element.Stave.lines) {
+          for (const line of element.Stave.lines) {
+            if (line.ContentLine && line.ContentLine.id) {
+              console.log('CanvasEditor: Using ContentLine UUID for insertion:', line.ContentLine.id);
+              return line.ContentLine.id;
+            }
+          }
+        }
+      }
+
+      console.warn('CanvasEditor: No ContentLine found for UUID targeting');
+      return null;
+    } catch (error) {
+      console.error('CanvasEditor: Error determining target UUID:', error);
+      return null;
     }
   }
 }

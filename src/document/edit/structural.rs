@@ -51,16 +51,6 @@ pub fn reconstruct_document_value(doc: &mut Document) {
                             }
                         }
                         StaveLine::Content(_) => {} // Legacy, skip
-                        StaveLine::Upper(ul) => {
-                            if let Some(value) = &ul.value {
-                                text.push_str(value);
-                            }
-                        }
-                        StaveLine::Lower(ll) => {
-                            if let Some(value) = &ll.value {
-                                text.push_str(value);
-                            }
-                        }
                         StaveLine::Lyrics(ll) => {
                             if let Some(value) = &ll.value {
                                 text.push_str(value);
@@ -121,7 +111,7 @@ fn find_structural_position<'a>(
 /// Re-parses a ContentLine from its string value.
 fn reparse_content_line(line: &mut ContentLine, notation_system: NotationSystem) -> Result<(), String> {
     let text = line.value.as_ref().cloned().unwrap_or_default();
-    let new_line = crate::parse::content_line_parser_v3::parse_content_line(
+    let new_line = crate::document::line_parser::content_line_parser::unused_parse_content_line(
         &text,
         0, // Line number is not critical for re-parse
         notation_system,
@@ -149,14 +139,155 @@ pub fn delete_selection(doc: &mut Document, start: usize, end: usize) -> Result<
     Err("Could not perform selection deletion.".to_string())
 }
 
+/// Parse a single character into the appropriate object
+/// Returns: parse_pitch | parse_note | parse_dash | parse_barline | parse_whitespace | parse_unknown
+pub fn parse_single_char(notation_system: &NotationSystem, ch: char, position: usize) -> Result<crate::models::ContentElement, String> {
+    use crate::models::*;
+
+    let obj = match ch {
+        // Space - parse whitespace
+        ' ' => parse_whitespace(ch, position),
+
+        // Single barline
+        '|' => parse_single_barline(ch, position),
+
+        // Numbers 1-7 - parse note (grouped into beat)
+        '1'..='7' => parse_note(notation_system, ch, position),
+
+        // Dash - parse dash
+        '-' => parse_dash(ch, position),
+
+        // Breath marks - parse breath
+        '^' | '~' => parse_breath(ch, position),
+
+        // Everything else - parse unknown
+        _ => parse_unknown(ch, position),
+    };
+
+    obj
+}
+
+fn parse_whitespace(ch: char, position: usize) -> Result<crate::models::ContentElement, String> {
+    Ok(crate::models::ContentElement::Whitespace(crate::models::Whitespace {
+        id: uuid::Uuid::new_v4(),
+        value: Some(ch.to_string()),
+        char_index: position,
+        consumed_elements: Vec::new(),
+    }))
+}
+
+fn parse_single_barline(ch: char, position: usize) -> Result<crate::models::ContentElement, String> {
+    use crate::models::barlines::*;
+    Ok(crate::models::ContentElement::Barline(Barline::Single(SingleBarline {
+        id: uuid::Uuid::new_v4(),
+        value: Some(ch.to_string()),
+        char_index: position,
+        consumed_elements: Vec::new(),
+    })))
+}
+
+fn parse_note(notation_system: &NotationSystem, ch: char, position: usize) -> Result<crate::models::ContentElement, String> {
+    // Use pitch_systems to parse the note
+    let degree_opt = match notation_system {
+        NotationSystem::Number => crate::models::pitch_systems::number::lookup(&ch.to_string()),
+        NotationSystem::Western => None, // TODO: implement western note parsing
+        NotationSystem::Sargam => None,   // TODO: implement sargam parsing
+        NotationSystem::Bhatkhande => None, // TODO: implement bhatkhande parsing
+        NotationSystem::Tabla => None,    // TODO: implement tabla parsing
+    };
+
+    if let Some(degree) = degree_opt {
+        let pitch_code = crate::models::pitch_systems::degree_to_pitch_code(degree);
+
+        // Create a Beat containing a single Note (following grammar: notes are grouped into beats)
+        Ok(crate::models::ContentElement::Beat(crate::models::Beat {
+            id: uuid::Uuid::new_v4(),
+            char_index: position,
+            elements: vec![crate::models::BeatElement::Note(crate::models::Note {
+                id: uuid::Uuid::new_v4(),
+                char_index: position,
+                pitch_code,
+                octave: 0,
+                value: Some(ch.to_string()),
+                consumed_elements: Vec::new(),
+                denominator: None,
+                numerator: None,
+                notation_system: notation_system.clone(),
+            })],
+            value: Some(ch.to_string()),
+            consumed_elements: Vec::new(),
+            tied_to_previous: None,
+            total_duration: None,
+            divisions: None,
+            is_tuplet: None,
+            tuplet_ratio: None,
+        }))
+    } else {
+        parse_unknown(ch, position)
+    }
+}
+
+fn parse_dash(ch: char, position: usize) -> Result<crate::models::ContentElement, String> {
+    // Create a Beat containing a single Dash (following grammar: dashes are grouped into beats)
+    Ok(crate::models::ContentElement::Beat(crate::models::Beat {
+        id: uuid::Uuid::new_v4(),
+        char_index: position,
+        elements: vec![crate::models::BeatElement::Dash(crate::models::Dash {
+            id: uuid::Uuid::new_v4(),
+            char_index: position,
+            value: Some(ch.to_string()),
+            consumed_elements: Vec::new(),
+            denominator: None,
+            numerator: None,
+        })],
+        value: Some(ch.to_string()),
+        consumed_elements: Vec::new(),
+        tied_to_previous: None,
+        total_duration: None,
+        divisions: None,
+        is_tuplet: None,
+        tuplet_ratio: None,
+    }))
+}
+
+fn parse_breath(ch: char, position: usize) -> Result<crate::models::ContentElement, String> {
+    // TODO: Create proper breath element
+    // For now, return unknown
+    parse_unknown(ch, position)
+}
+
+fn parse_unknown(ch: char, position: usize) -> Result<crate::models::ContentElement, String> {
+    Ok(crate::models::ContentElement::UnknownToken(crate::models::UnknownToken {
+        id: uuid::Uuid::new_v4(),
+        value: Some(ch.to_string()),
+        char_index: position,
+        consumed_elements: Vec::new(),
+        token_value: ch.to_string(),
+    }))
+}
+
 pub fn insert_char(doc: &mut Document, position: usize, ch: char) -> Result<usize, String> {
     let notation_system = doc.get_detected_notation_systems().first().cloned().unwrap_or(NotationSystem::Number);
+
+    // Parse the character into a ContentElement
+    let element = parse_single_char(&notation_system, ch, position)?;
+    println!("INSERT_CHAR: char='{}' position={} element={:?}", ch, position, element);
+
+    // Find the target content line and insert the element
     if let Some((stave_idx, line_idx, relative_pos, _)) = find_structural_position(doc, position) {
         if let Some(StaveLine::ContentLine(line)) = doc.elements[stave_idx].as_stave_mut().unwrap().lines.get_mut(line_idx) {
+            println!("INSERT_CHAR: before - text={:?} elements.len={}", line.value, line.elements.len());
+
+            // Update the line's text value
             let mut text = line.value.as_ref().cloned().unwrap_or_default();
             text.insert(relative_pos, ch);
             line.value = Some(text);
-            reparse_content_line(line, notation_system)?;
+
+            // Insert the parsed element at the correct position
+            // For now, append to elements - TODO: insert at proper index based on char_index
+            line.elements.push(element);
+
+            println!("INSERT_CHAR: after - text={:?} elements.len={}", line.value, line.elements.len());
             return Ok(position + 1);
         }
     }
@@ -234,6 +365,7 @@ pub fn insert_newline(doc: &mut Document, position: usize) -> Result<usize, Stri
 
             // Create and insert new line
             let mut new_content_line = ContentLine {
+                id: uuid::Uuid::new_v4(),
                 elements: vec![],
                 value: Some(second_half.to_string()),
                 char_index: line.char_index + first_half.len() + 1,

@@ -137,6 +137,8 @@ pub struct Beat {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnknownToken {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
     pub token_value: String,
@@ -153,30 +155,20 @@ pub enum ContentElement {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentLine {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub elements: Vec<ContentElement>,  // Mixed elements: barlines, whitespace, beats
     pub value: Option<String>,
     pub char_index: usize,
     pub consumed_elements: Vec<super::position::ConsumedElement>,
 }
 
-// Spatial annotation lines per MUSIC_TEXT_SPECIFICATION.md
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpperLine {
-    pub value: Option<String>,
-    pub char_index: usize,
-    pub elements: Vec<UpperElement>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LowerLine {
-    pub elements: Vec<LowerElement>,
-    pub value: Option<String>,
-    pub char_index: usize,
-}
+// Non-spatial annotation lines
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LyricsLine {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
     pub syllables: Vec<Syllable>,
@@ -184,102 +176,18 @@ pub struct LyricsLine {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhitespaceLine {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub char_index: usize,
     pub elements: Vec<crate::rhythm::types::ParsedElement>, // Whitespace elements and optional newline
     pub value: Option<String>,
 }
 
-// UpperLine elements from specification
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum UpperElement {
-    UpperOctaveMarker {
-        marker: String,  // "." or ":"
-        value: Option<String>,
-        char_index: usize,
-    },
-    SlurIndicator {
-        indicator_value: String,  // "_____" for slurs
-        value: Option<String>,
-        char_index: usize,
-    },
-    UpperHashes {
-        value: Option<String>,
-        char_index: usize,
-        hash_value: String,  // "###" for multi-stave markers
-    },
-    Ornament {
-        value: Option<String>,
-        char_index: usize,
-        pitches: Vec<String>,  // 123, <456> grace notes/melismas (🚧 planned)
-    },
-    Chord {
-        value: Option<String>,
-        chord: String,  // [Am] chord symbols (🚧 planned)
-        char_index: usize,
-    },
-    Mordent {
-        value: Option<String>,
-        char_index: usize,
-    },
-    Space {
-        char_index: usize,
-        count: usize,
-        value: Option<String>,
-    },
-    Unknown {
-        unknown_value: String,
-        value: Option<String>,
-        char_index: usize,
-    },
-    /// Newline token - explicit line terminator (upper lines cannot have EOI)
-    Newline {
-        value: Option<String>,
-        char_index: usize,
-        newline_value: String,
-    },
-}
-
-// LowerLine elements from specification
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum LowerElement {
-    LowerOctaveMarker {
-        value: Option<String>,
-        char_index: usize,
-        marker: String,  // "." or ":"
-    },
-    BeatGroupIndicator {
-        value: Option<String>,
-        char_index: usize,
-        indicator_value: String,  // "___" for beat grouping
-    },
-    Syllable {
-        value: Option<String>,
-        char_index: usize,
-        content: String,  // syllables like "dha", "he-llo"
-    },
-    Space {
-        value: Option<String>,
-        char_index: usize,
-        count: usize,
-    },
-    Unknown {
-        unknown_value: String,
-        value: Option<String>,
-        char_index: usize,
-    },
-    Newline {
-        value: Option<String>,
-        char_index: usize,
-        newline_value: String,
-    },
-    EndOfInput {
-        value: Option<String>,
-        char_index: usize,
-    },
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Syllable {
+    #[serde(default = "Uuid::new_v4")]
+    pub id: Uuid,
     pub value: Option<String>,
     pub char_index: usize,
     pub content: String,

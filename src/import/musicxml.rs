@@ -237,6 +237,7 @@ pub fn import_musicxml_to_document(xml: &str, opts: Option<ImportOptions>) -> an
     let content_line = if beats_out.is_empty() { "".to_string() } else { beats_out.join(" ") };
 
     let stave = Stave {
+        id: uuid::Uuid::new_v4(),
         value: None,
         char_index: 0,
         notation_system: NotationSystem::Number,
@@ -245,11 +246,12 @@ pub fn import_musicxml_to_document(xml: &str, opts: Option<ImportOptions>) -> an
         index_in_line: 0,
         index_in_doc: 0,
         lines: vec![
-            StaveLine::Text(TextLine{ value: Some(content_line), char_index: 0 })
+            StaveLine::Text(TextLine{ id: uuid::Uuid::new_v4(), value: Some(content_line), char_index: 0 })
         ],
     };
 
     let document = Document {
+        id: uuid::Uuid::new_v4(),
         document_uuid: None,
         value: None,
         char_index: 0,

@@ -1,0 +1,1 @@
+{"success":false,"document":{"documentUUID":"test-doc","elements":[{"Stave":{"lines":[{"ContentLine":{"elements":[],"id":"1acf93e9-1acf-45c5-8846-9d5aa87984e2"}}],"notation_system":"Number"}}],"ui_state":{"selection":{"cursor_position":0}}},"updated_elements":[],"message":"Failed to deserialize document for text editing: missing field `char_index`","svg":null,"formats":null}

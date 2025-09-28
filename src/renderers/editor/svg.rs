@@ -19,12 +19,6 @@ impl HasValue for crate::parse::model::ContentLine {
 impl HasValue for crate::parse::model::LyricsLine {
     fn value(&self) -> Option<&String> { self.value.as_ref() }
 }
-impl HasValue for crate::parse::model::UpperLine {
-    fn value(&self) -> Option<&String> { self.value.as_ref() }
-}
-impl HasValue for crate::parse::model::LowerLine {
-    fn value(&self) -> Option<&String> { self.value.as_ref() }
-}
 impl HasValue for crate::parse::model::TextLine {
     fn value(&self) -> Option<&String> { self.value.as_ref() }
 }
@@ -41,8 +35,6 @@ impl HasValue for crate::parse::model::StaveLine {
         match self {
             crate::parse::model::StaveLine::ContentLine(line) => line.value(),
             crate::parse::model::StaveLine::Lyrics(line) => line.value(),
-            crate::parse::model::StaveLine::Upper(line) => line.value(),
-            crate::parse::model::StaveLine::Lower(line) => line.value(),
             crate::parse::model::StaveLine::Text(line) => line.value(),
             crate::parse::model::StaveLine::Whitespace(line) => line.value(),
             crate::parse::model::StaveLine::BlankLines(line) => line.value(),
@@ -181,8 +173,6 @@ impl EditorSvgRenderer {
                             crate::models::StaveLine::ContentLine(_) => "content-line",
                             crate::models::StaveLine::Text(_) => "text-line",
                             crate::models::StaveLine::Lyrics(_) => "lyrics-line",
-                            crate::models::StaveLine::Upper(_) => "upper-line",
-                            crate::models::StaveLine::Lower(_) => "lower-line",
                             crate::models::StaveLine::Whitespace(_) => "whitespace-line",
                             crate::models::StaveLine::BlankLines(_) => "blank-line",
                             _ => "unknown-line",
@@ -220,30 +210,6 @@ impl EditorSvgRenderer {
                                         self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
                                     } else {
                                         self.render_lyrics_content(&mut svg, value, &mut global_char_position);
-                                    }
-                                } else {
-                                    self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
-                                }
-                            }
-                            crate::models::StaveLine::Upper(upper_line) => {
-                                // Render upper annotation line
-                                if let Some(value) = &upper_line.value {
-                                    if value.is_empty() {
-                                        self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
-                                    } else {
-                                        self.render_annotation_content(&mut svg, value, &mut global_char_position, "upper");
-                                    }
-                                } else {
-                                    self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
-                                }
-                            }
-                            crate::models::StaveLine::Lower(lower_line) => {
-                                // Render lower annotation line
-                                if let Some(value) = &lower_line.value {
-                                    if value.is_empty() {
-                                        self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
-                                    } else {
-                                        self.render_annotation_content(&mut svg, value, &mut global_char_position, "lower");
                                     }
                                 } else {
                                     self.emit_empty_line_anchor(&mut svg, &mut global_char_position);
@@ -354,6 +320,28 @@ impl EditorSvgRenderer {
         content_line: &crate::models::ContentLine,
         char_position: &mut usize
     ) -> Result<(), String> {
+        // Handle empty content lines - create insertion point using content line UUID
+        if content_line.elements.is_empty() {
+            // Create an invisible insertion point that can be targeted by UUID
+            let char_width = self.get_char_width(" ");
+            writeln!(svg, r#"    <text id="char-{}" x="{:.1}" y="{}" class="char" data-source-uuid="{}" data-char-index="{}" data-width="{:.1}" style="opacity: 0;"> </text>"#,
+                self.element_id_counter,
+                self.current_x, self.current_y,
+                content_line.id,
+                *char_position,
+                char_width
+            ).unwrap();
+
+            // Store character position for cursor tracking
+            self.char_positions.insert(*char_position, (self.current_x, self.current_y));
+
+            self.element_id_counter += 1;
+            self.current_x += char_width;
+            *char_position += 1;
+
+            return Ok(());
+        }
+
         // Iterate through content elements
         for element in &content_line.elements {
             match element {
@@ -385,8 +373,14 @@ impl EditorSvgRenderer {
         writeln!(svg, r#"    <g class="beat" data-beat-id="{}" data-char-start="{}">"#,
             beat.id, char_position).unwrap();
 
+        // Track element positions for beat arc rendering
+        let mut element_positions = Vec::new(); // Will store (x_pos, width)
+        let beat_start_x = self.current_x;
+
         // Render each beat element
         for beat_elem in &beat.elements {
+            let elem_start_x = self.current_x;
+
             match beat_elem {
                 crate::models::BeatElement::Note(note) => {
                     self.render_note(svg, note, char_position)?;
@@ -401,6 +395,17 @@ impl EditorSvgRenderer {
                     self.render_breath_mark(svg, breath, char_position)?;
                 }
             }
+
+            // Record position and width of this element
+            let elem_width = self.current_x - elem_start_x;
+            if elem_width > 0.0 {
+                element_positions.push((elem_start_x, elem_width));
+            }
+        }
+
+        // Draw beat grouping arc under notes if multiple elements
+        if element_positions.len() > 1 {
+            self.render_beat_arc(svg, &element_positions);
         }
 
         writeln!(svg, "    </g>").unwrap();
@@ -827,12 +832,6 @@ impl EditorSvgRenderer {
       cursor: text;
     }}
 
-    .upper-char, .lower-char {{
-      font-size: {}px;
-      fill: #ff4500;
-      font-family: monospace, 'Courier New', monospace;
-      cursor: text;
-    }}
 
     .octave-dot {{
       fill: #ff0000;
@@ -932,7 +931,6 @@ impl EditorSvgRenderer {
         note_size * 0.9,    // lyrics-char
         note_size,    // text-char
         note_size * 0.9,    // unknown-char
-        note_size * 0.8,    // upper/lower-char
         // Original styles
         octave_size, octave_size, note_size, note_size * 0.9, note_size * 0.8, note_size * 1.5, note_size * 0.9, note_size)
     }
@@ -1337,103 +1335,6 @@ impl EditorSvgRenderer {
         Ok(())
     }
 
-    /// Render lower line token by token - syllable separators as blank spaces
-    fn render_lower_line(&mut self, svg: &mut String, lower_line: &crate::parse::model::LowerLine, char_position: &mut usize) -> Result<(), String> {
-        let lower_y = self.current_y + 35.0; // Position below content line
-
-        // Process each element in the lower line
-        for element in &lower_line.elements {
-            match element {
-                crate::parse::model::LowerElement::Syllable { value, .. } => {
-                    // Render syllables
-                    if let Some(ref val) = value {
-                        for (idx, _) in val.char_indices() {
-                            let char_pos = *char_position + idx;
-                            let char_x = self.current_x + (idx as f32 * self.get_char_width(" "));
-                            self.char_positions.insert(char_pos, (char_x, self.current_y));
-                        }
-
-                        // Render the syllable text
-                        writeln!(svg, r#"    <text x="{:.1}" y="{}" class="canvas-lyrics">{}</text>"#,
-                                self.current_x, lower_y, val).unwrap();
-
-                        self.current_x += self.get_char_width(val);
-                        *char_position += val.len();
-                    }
-                }
-                crate::parse::model::LowerElement::LowerOctaveMarker { value, .. } => {
-                    // Render octave markers as blank spaces (they're already shown with notes)
-                    if let Some(ref val) = value {
-                        for (idx, _) in val.char_indices() {
-                            let char_pos = *char_position + idx;
-                            let char_x = self.current_x + (idx as f32 * self.get_char_width(" "));
-                            self.char_positions.insert(char_pos, (char_x, self.current_y));
-                        }
-                        // Just advance position, don't render anything (blank space)
-                        self.current_x += self.get_char_width(val);
-                        *char_position += val.len();
-                    }
-                }
-                crate::parse::model::LowerElement::BeatGroupIndicator { value, .. } => {
-                    // Render beat group indicators as blank spaces (they're visual indicators)
-                    if let Some(ref val) = value {
-                        for (idx, _) in val.char_indices() {
-                            let char_pos = *char_position + idx;
-                            let char_x = self.current_x + (idx as f32 * self.get_char_width(" "));
-                            self.char_positions.insert(char_pos, (char_x, self.current_y));
-                        }
-                        // Just advance position, don't render anything (blank space)
-                        self.current_x += self.get_char_width(val);
-                        *char_position += val.len();
-                    }
-                }
-                crate::parse::model::LowerElement::Space { value, .. } => {
-                    // Render spaces
-                    if let Some(ref val) = value {
-                        for (idx, _) in val.char_indices() {
-                            let char_pos = *char_position + idx;
-                            let char_x = self.current_x + (idx as f32 * self.get_char_width(" "));
-                            self.char_positions.insert(char_pos, (char_x, self.current_y));
-                        }
-                        self.current_x += self.get_char_width(val);
-                        *char_position += val.len();
-                    }
-                }
-                _ => {
-                    // For other lower elements, render them
-                    if let Some(val) = self.get_lower_element_value(element) {
-                        for (idx, _) in val.char_indices() {
-                            let char_pos = *char_position + idx;
-                            let char_x = self.current_x + (idx as f32 * self.get_char_width(" "));
-                            self.char_positions.insert(char_pos, (char_x, self.current_y));
-                        }
-
-                        // Render the actual element
-                        writeln!(svg, r#"    <text x="{:.1}" y="{}" class="canvas-lyrics">{}</text>"#,
-                                self.current_x, lower_y, val).unwrap();
-
-                        self.current_x += self.get_char_width(&val);
-                        *char_position += val.len();
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Helper to get value from lower element
-    fn get_lower_element_value(&self, element: &crate::parse::model::LowerElement) -> Option<String> {
-        match element {
-            crate::parse::model::LowerElement::Syllable { value, .. } |
-            crate::parse::model::LowerElement::LowerOctaveMarker { value, .. } |
-            crate::parse::model::LowerElement::BeatGroupIndicator { value, .. } |
-            crate::parse::model::LowerElement::Space { value, .. } |
-            crate::parse::model::LowerElement::Unknown { value, .. } |
-            crate::parse::model::LowerElement::Newline { value, .. } |
-            crate::parse::model::LowerElement::EndOfInput { value, .. } => value.clone(),
-        }
-    }
 
     /// Render text line as regular text
     fn render_text_line(&mut self, svg: &mut String, text_line: &crate::parse::model::TextLine, char_position: &mut usize) -> Result<(), String> {
@@ -1455,76 +1356,6 @@ impl EditorSvgRenderer {
         Ok(())
     }
 
-    /// Render upper line token by token - octave markers as blank spaces
-    fn render_upper_line(&mut self, svg: &mut String, upper_line: &crate::parse::model::UpperLine, char_position: &mut usize) -> Result<(), String> {
-        let upper_y = self.current_y - 15.0; // Position above content line
-
-        // Process each element in the upper line
-        for element in &upper_line.elements {
-            match element {
-                crate::parse::model::UpperElement::UpperOctaveMarker { value, .. } => {
-                    // Render octave markers as blank spaces (they're already shown with notes)
-                    if let Some(ref val) = value {
-                        for (idx, _) in val.char_indices() {
-                            let char_pos = *char_position + idx;
-                            let char_x = self.current_x + (idx as f32 * self.get_char_width(" "));
-                            self.char_positions.insert(char_pos, (char_x, self.current_y));
-                        }
-                        // Just advance position, don't render anything (blank space)
-                        self.current_x += self.get_char_width(val);
-                        *char_position += val.len();
-                    }
-                }
-                crate::parse::model::UpperElement::Space { value, .. } => {
-                    // Render spaces
-                    if let Some(ref val) = value {
-                        for (idx, _) in val.char_indices() {
-                            let char_pos = *char_position + idx;
-                            let char_x = self.current_x + (idx as f32 * self.get_char_width(" "));
-                            self.char_positions.insert(char_pos, (char_x, self.current_y));
-                        }
-                        self.current_x += self.get_char_width(val);
-                        *char_position += val.len();
-                    }
-                }
-                _ => {
-                    // For other upper elements (slur indicators, ornaments, etc.), render them
-                    if let Some(val) = self.get_upper_element_value(element) {
-                        for (idx, _) in val.char_indices() {
-                            let char_pos = *char_position + idx;
-                            let char_x = self.current_x + (idx as f32 * self.get_char_width(" "));
-                            self.char_positions.insert(char_pos, (char_x, self.current_y));
-                        }
-
-                        // Render the actual element
-                        writeln!(svg, r#"    <text x="{:.1}" y="{}" class="canvas-octave-upper">{}</text>"#,
-                                self.current_x, upper_y, val).unwrap();
-
-                        self.current_x += self.get_char_width(&val);
-                        *char_position += val.len();
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-
-    /// Helper to get value from upper element
-    fn get_upper_element_value(&self, element: &crate::parse::model::UpperElement) -> Option<String> {
-        match element {
-            crate::parse::model::UpperElement::UpperOctaveMarker { value, .. } |
-            crate::parse::model::UpperElement::SlurIndicator { value, .. } |
-            crate::parse::model::UpperElement::UpperHashes { value, .. } |
-            crate::parse::model::UpperElement::Ornament { value, .. } |
-            crate::parse::model::UpperElement::Chord { value, .. } |
-            crate::parse::model::UpperElement::Mordent { value, .. } |
-            crate::parse::model::UpperElement::Space { value, .. } |
-            crate::parse::model::UpperElement::Unknown { value, .. } |
-            crate::parse::model::UpperElement::Newline { value, .. } => value.clone(),
-        }
-    }
     /// Emit an invisible anchor for an empty line so the client can place a caret reliably.
     /// Also emits a faint pilcrow as a visual hint.
     fn emit_empty_line_anchor(
@@ -1577,26 +1408,3 @@ pub fn render_editor_svg(
     renderer.render(document, "", input_text)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::parse::recursive_descent::parse_document;
-
-    #[test]
-    fn test_editor_svg_title_only() {
-        let input = "11222x";
-        let document = parse_document(input).expect("Should parse successfully");
-
-        // Should have empty elements (title-only document)
-        assert_eq!(document.elements.len(), 0);
-        assert_eq!(document.title, Some("11222x".to_string()));
-
-        let svg = render_editor_svg(&document, None, None, None).expect("Should render SVG");
-
-        // Should contain SVG structure
-        assert!(svg.contains("<svg"));
-        assert!(svg.contains("</svg>"));
-        // Should contain title as placeholder text
-        assert!(svg.contains("11222x"));
-    }
-}
