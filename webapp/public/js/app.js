@@ -25,35 +25,59 @@ class MusicTextApp {
     // Initialize the application
     async init() {
         try {
+            console.log('🎵 Starting Music Text App initialization...');
             await this.setupUI();
+            console.log('✅ UI setup complete');
+
             // Don't initialize MIDI until needed
             this.midiInitialized = false;
+            console.log('✅ MIDI initialization deferred');
+
             this.setupEventListeners();
-            // this.restoreState(); // Disabled localStorage restoration
+            console.log('✅ Event listeners setup complete');
+
+            this.restoreState();
+            console.log('✅ State restoration complete');
+
             console.log('✅ Music Text App initialized with modular architecture');
         } catch (error) {
-            console.error('Failed to initialize app:', error);
+            console.error('❌ Failed to initialize app:', error);
             UI.setStatus('Failed to initialize application', 'error');
         }
     }
 
     // Setup UI components
     async setupUI() {
-        // Initialize canvas editor
-        this.canvasEditor.init('canvasEditor');
+        try {
+            // Initialize canvas editor
+            console.log('🎨 Initializing canvas editor...');
+            await this.canvasEditor.init('canvasEditor');
+            console.log('✅ Canvas editor initialized');
 
-        // Initialize font manager
-        FontManager.init();
+            // Initialize font manager
+            console.log('🔤 Initializing font manager...');
+            FontManager.init();
+            console.log('✅ Font manager initialized');
 
-        // Load and set notation type from localStorage (if dropdown exists)
-        const savedNotationType = LocalStorage.loadNotationType();
-        const notationSelect = document.getElementById('notationTypeSelect');
-        if (notationSelect) {
-            notationSelect.value = savedNotationType;
+            // Load and set notation type from localStorage (if dropdown exists)
+            const savedNotationType = LocalStorage.loadNotationType();
+            const notationSelect = document.getElementById('notationTypeSelect');
+            if (notationSelect) {
+                notationSelect.value = savedNotationType;
+                console.log('✅ Notation type restored:', savedNotationType);
+            } else {
+                console.log('⚠️ Notation type select not found');
+            }
+
+            // Setup initial UI state
+            console.log('🎯 Setting up initial tab state...');
+            this.setupInitialTabState();
+            console.log('✅ Initial tab state set');
+
+        } catch (error) {
+            console.error('❌ Error in setupUI:', error);
+            throw error;
         }
-
-        // Setup initial UI state
-        this.setupInitialTabState();
     }
 
     // Setup initial tab state - always default to vexflow
@@ -119,9 +143,6 @@ class MusicTextApp {
 
         // Set up canvas editor event listeners
         this.canvasEditor.onContentChange = (content) => {
-            // Update the backing text tab
-            UI.updateBackingTextOutput(content);
-
             // Debounced parsing for real-time updates
             clearTimeout(this.inputTimer);
             this.inputTimer = setTimeout(() => {
@@ -132,46 +153,18 @@ class MusicTextApp {
         };
 
         this.canvasEditor.onSelectionChange = (selection) => {
-            this.saveCursorPosition();
             this.updateOctaveButtonStates();
-
-            // Backing text display removed - no longer needed
         };
-    }
-
-    // Handle input events
-    handleInput(event) {
-        
-        const textarea = event.target;
-
-        // Debounced parsing for real-time updates
-        clearTimeout(this.inputTimer);
-        this.inputTimer = setTimeout(() => {
-            if (textarea.value.trim()) {
-                this.parseAndUpdatePreview();
-            } else {
-                UI.clearEmptyInputs();
-            }
-        }, 300);
-    }
-
-    // Save current cursor position
-    saveCursorPosition() {
-        // Cursor position is now saved automatically with document state
     }
 
     // Restore application state from localStorage
     restoreState() {
-        
-        // Document state is now restored automatically by CanvasEditor.loadFromLocalStorage()
-        
-        // Restore active tab
+        // Document state is restored automatically by CanvasEditor.
+        // Restore active tab.
         const activeTab = LocalStorage.loadActiveTab();
-        if (activeTab !== 'vexflow') {
+        if (activeTab && activeTab !== 'vexflow') {
             UI.switchTab(activeTab);
         }
-        
-        musicInput.focus();
     }
 
     // Parse and update preview (real-time, no status messages)
@@ -205,16 +198,12 @@ class MusicTextApp {
 
     // Manual parse (triggered by Parse button)
     async parseMusic() {
-        // Save cursor position before processing
-        this.saveCursorPosition();
-        
         const input = this.canvasEditor.getValue();
         
         // Validate input
         const validation = API.validateInput(input);
         if (!validation.valid) {
             UI.setStatus(validation.error, 'error');
-            UI.restoreFocusAndCursor();
             return;
         }
         
@@ -246,58 +235,9 @@ class MusicTextApp {
         } catch (error) {
             UI.setStatus(`Error: ${error.message}`, 'error');
             document.getElementById('vexflow-output').innerHTML = `<p>Error: ${error.message}</p>`;
-            UI.restoreFocusAndCursor();
         }
     }
 
-    // Generate SVG POC (triggered by SVG POC button)
-    async generateSVGPOC() {
-        // Save cursor position before processing
-        this.saveCursorPosition();
-
-        const input = this.canvasEditor.getValue();
-        const notationType = document.getElementById('notationTypeSelect')?.value || 'auto';
-
-        // Validate input
-        const validation = API.validateInput(input);
-        if (!validation.valid) {
-            UI.setStatus(validation.error, 'error');
-            UI.restoreFocusAndCursor();
-            return;
-        }
-
-        UI.setStatus('Generating SVG POC...', 'loading');
-
-        try {
-            // Send text and notation type directly to server for SVG POC generation
-            const svgResponse = await fetch('/api/render-svg-poc', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    input: input,
-                    notation_type: notationType
-                })
-            });
-
-            if (!svgResponse.ok) {
-                throw new Error(`SVG POC API error: ${svgResponse.status}`);
-            }
-
-            const svgContent = await svgResponse.text();
-
-            // Display the SVG
-            document.getElementById('svgpoc-output').innerHTML = svgContent;
-            UI.setStatus('SVG POC generated successfully!', 'success');
-            UI.switchTab('svgpoc');
-
-        } catch (error) {
-            document.getElementById('svgpoc-output').innerHTML = `<p>Error: ${error.message}</p>`;
-            UI.setStatus(`Error: ${error.message}`, 'error');
-            UI.restoreFocusAndCursor();
-        }
-    }
 
 
     // Generate LilyPond PNG (triggered by LilyPond button)
@@ -313,12 +253,13 @@ class MusicTextApp {
 
         try {
             // Call the RESTful API to export as LilyPond PNG
-            const response = await fetch(`/api/documents/${documentUUID}/export`, {
+            const response = await fetch('/api/documents/export', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
+                    document: this.canvasEditor.document.toJSON(),
                     format: 'lilypond-png'
                 })
             });
@@ -411,7 +352,7 @@ class MusicTextApp {
                 }
             };
 
-            const response = await fetch('/api/documents', {
+            const response = await fetch('/api/documents?representations=editor_svg,vexflow,lilypond', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -446,7 +387,11 @@ class MusicTextApp {
 
                 // Fetch the complete document data by UUID for proper server-authoritative data
                 try {
-                    const docResponse = await fetch(`/api/documents/${result.document.documentUUID}`);
+                    const docResponse = await fetch('/api/documents/render?representations=editor_svg,vexflow,lilypond', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ document: result.document })
+                    });
                     if (docResponse.ok) {
                         const docData = await docResponse.json();
 
@@ -574,7 +519,6 @@ class MusicTextApp {
     async applyOctaveAdjustment(octaveType) {
         const selectedUuids = this.canvasEditor.getSelectedUuids();
 
-        // Check if there are selected elements
         if (selectedUuids.length === 0) {
             UI.setStatus('Please select some notes first', 'error');
             return;
@@ -593,275 +537,7 @@ class MusicTextApp {
         } catch (error) {
             console.error('Octave adjustment error:', error);
             UI.setStatus('Failed to apply octave adjustment: ' + error.message, 'error');
-
-            // Fallback to semantic command if transform not available
-            console.log('Falling back to semantic command...');
-            try {
-                await this.canvasEditor.executeSemanticCommand('set_octave', {
-                    octave_type: octaveType
-                });
-                UI.setStatus(`Applied ${octaveType} octave (semantic command)`, 'success');
-            } catch (fallbackError) {
-                console.error('Semantic command fallback also failed:', fallbackError);
-
-                // Last fallback to legacy text-based transform
-                console.log('Falling back to legacy octave transform...');
-                try {
-                    await this.canvasEditor.applyTransformation('/api/transform/octave', {
-                        action: 'octave',
-                        octave_type: octaveType
-                    });
-                    UI.setStatus(`Applied ${octaveType} octave (legacy mode)`, 'success');
-                } catch (legacyError) {
-                    console.error('All fallbacks failed:', legacyError);
-                    UI.setStatus('Failed to apply octave adjustment', 'error');
-                }
-            }
         }
-    }
-
-    // Check if text contains musical notes
-    containsMusicalNotes(text) {
-        // Match Sargam (S R G M P D N), Numbers (1-7), Western (A-G), with accidentals
-        const notePattern = /[SRGMPDNsrgmpdn1-7A-Ga-g][#b♯♭♮]*/;
-        return notePattern.test(text);
-    }
-
-    // Process octave adjustment using full document context for proper column alignment
-    processOctaveAdjustmentWithColumns(fullText, selectionStart, selectionEnd, octaveType) {
-        const lines = fullText.split('\n');
-        const marker = this.getOctaveMarker(octaveType);
-        let upperLineWasAdded = false;
-
-        // Find which lines and columns contain the selected notes
-        const selectedNotePositions = this.findSelectedNotePositions(fullText, selectionStart, selectionEnd);
-
-        if (selectedNotePositions.length === 0) {
-            return { modifiedText: fullText, upperLineWasAdded: false }; // No notes found
-        }
-
-        // Group note positions by line
-        const notesByLine = new Map();
-        for (const pos of selectedNotePositions) {
-            if (!notesByLine.has(pos.lineIndex)) {
-                notesByLine.set(pos.lineIndex, []);
-            }
-            notesByLine.get(pos.lineIndex).push(pos.column);
-        }
-
-        // Create a list of line indices to process, sorted, to handle multiple line selections
-        const sortedLineIndices = Array.from(notesByLine.keys()).sort((a, b) => a - b);
-        let linesAdded = 0; // Track how many lines we've added to adjust indices
-
-        for (const lineIndex of sortedLineIndices) {
-            const columns = notesByLine.get(lineIndex);
-            const adjustedLineIndex = lineIndex + linesAdded;
-
-            if (octaveType === 'middle') {
-                // Remove octave markers at these columns
-                const upperLineIndex = adjustedLineIndex - 1;
-                const lowerLineIndex = adjustedLineIndex + 1;
-
-                // Remove from upper line if it exists
-                if (upperLineIndex >= 0 && this.isUpperLine(lines[upperLineIndex])) {
-                    lines[upperLineIndex] = this.removeMarkersAtColumns(lines[upperLineIndex], columns);
-                }
-
-                // Remove from lower line if it exists
-                if (lowerLineIndex < lines.length && this.isLowerLine(lines[lowerLineIndex])) {
-                    lines[lowerLineIndex] = this.removeMarkersAtColumns(lines[lowerLineIndex], columns);
-                }
-            } else if (this.isUpperOctave(octaveType)) {
-                const upperLineIndex = adjustedLineIndex - 1;
-                // Check if there's already an upper line
-                if (upperLineIndex >= 0 && this.isUpperLine(lines[upperLineIndex])) {
-                    lines[upperLineIndex] = this.addMarkersAtColumns(lines[upperLineIndex], columns, marker);
-                } else {
-                    const newUpperLine = this.createLineWithMarkersAtColumns(columns, marker);
-                    lines.splice(adjustedLineIndex, 0, newUpperLine);
-                    linesAdded++;
-                    upperLineWasAdded = true;
-                }
-            } else { // Lower Octave
-                const lowerLineIndex = adjustedLineIndex + 1;
-                // Check if there's already a lower line
-                if (lowerLineIndex < lines.length && this.isLowerLine(lines[lowerLineIndex])) {
-                    lines[lowerLineIndex] = this.addMarkersAtColumns(lines[lowerLineIndex], columns, marker);
-                } else {
-                    const newLowerLine = this.createLineWithMarkersAtColumns(columns, marker);
-                    lines.splice(lowerLineIndex, 0, newLowerLine);
-                    linesAdded++;
-                }
-            }
-        }
-
-        return { modifiedText: lines.join('\n'), upperLineWasAdded };
-    }
-
-    // Add markers to upper line at specific columns
-    addToUpperLineWithColumns(lines, contentLineIndex, columns, marker) {
-        const upperLineIndex = contentLineIndex - 1;
-
-        // Check if there's already an upper line
-        if (upperLineIndex >= 0 && this.isUpperLine(lines[upperLineIndex])) {
-            // Add markers to existing upper line at specified columns
-            lines[upperLineIndex] = this.addMarkersAtColumns(lines[upperLineIndex], columns, marker);
-        } else {
-            // Create new upper line with markers at specified columns
-            const newUpperLine = this.createLineWithMarkersAtColumns(columns, marker);
-            lines.splice(contentLineIndex, 0, newUpperLine);
-        }
-    }
-
-    // Add markers to lower line at specific columns
-    addToLowerLineWithColumns(lines, contentLineIndex, columns, marker) {
-        const lowerLineIndex = contentLineIndex + 1;
-
-        // Check if there's already a lower line
-        if (lowerLineIndex < lines.length && this.isLowerLine(lines[lowerLineIndex])) {
-            // Add markers to existing lower line at specified columns
-            lines[lowerLineIndex] = this.addMarkersAtColumns(lines[lowerLineIndex], columns, marker);
-        } else {
-            // Create new lower line with markers at specified columns
-            const newLowerLine = this.createLineWithMarkersAtColumns(columns, marker);
-            lines.splice(contentLineIndex + 1, 0, newLowerLine);
-        }
-    }
-
-    // Check if a line looks like an upper line (contains dots, colons, asterisks)
-    isUpperLine(line) {
-        const upperMarkers = /[.:*]/;
-        const hasMarkers = upperMarkers.test(line);
-        const hasNotes = this.containsMusicalNotes(line);
-        return hasMarkers && !hasNotes;
-    }
-
-    // Check if a line looks like a lower line (contains dots, colons)
-    isLowerLine(line) {
-        const lowerMarkers = /[.:]/;
-        const hasMarkers = lowerMarkers.test(line);
-        const hasNotes = this.containsMusicalNotes(line);
-        return hasMarkers && !hasNotes;
-    }
-
-    // Add markers to existing line at specific columns
-    addMarkersAtColumns(existingLine, columns, marker) {
-        let result = existingLine;
-        const markerLength = marker.length;
-
-        for (const column of columns) {
-            // Ensure the line is long enough for the marker
-            while (result.length < column + markerLength) {
-                result += ' ';
-            }
-            // Replace spaces with the marker at the specified column
-            result = result.substring(0, column) + marker + result.substring(column + markerLength);
-        }
-
-        return result;
-    }
-
-    // Remove markers at specified columns
-    removeMarkersAtColumns(existingLine, columns) {
-        let result = existingLine;
-
-        for (const column of columns) {
-            if (column < result.length) {
-                // Replace marker with space
-                result = result.substring(0, column) + ' ' + result.substring(column + 1);
-            }
-        }
-
-        // Trim trailing spaces
-        return result.replace(/\s+$/, '');
-    }
-
-    // Create new line with markers at specific columns
-    createLineWithMarkersAtColumns(columns, marker) {
-        if (columns.length === 0) {
-            return '';
-        }
-
-        const maxColumn = Math.max(...columns);
-        // For two-dot markers, ensure we have enough space
-        const lineLength = marker === '..' ? maxColumn + 2 : maxColumn + 1;
-        let line = ' '.repeat(lineLength);
-
-        // Handle two-dot markers specially
-        if (marker === '..') {
-            for (const column of columns) {
-                line = line.substring(0, column) + '..' + line.substring(column + 2);
-            }
-        } else {
-            for (const column of columns) {
-                line = line.substring(0, column) + marker + line.substring(column + marker.length);
-            }
-        }
-
-        // Remove trailing spaces to keep spatial lines clean
-        return line.trimEnd();
-    }
-
-    // Find the line containing musical content
-    findContentLineIndex(lines) {
-        for (let i = 0; i < lines.length; i++) {
-            if (this.containsMusicalNotes(lines[i])) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    // Check if octave type is for upper octaves
-    isUpperOctave(octaveType) {
-        return ['higher', 'highish', 'highest'].includes(octaveType);
-    }
-
-
-
-    // Find positions of selected notes with line and column information
-    findSelectedNotePositions(fullText, selectionStart, selectionEnd) {
-        const positions = [];
-        let currentPos = 0;
-        let lineIndex = 0;
-        let columnInLine = 0;
-
-        for (let i = 0; i < fullText.length; i++) {
-            if (i >= selectionStart && i < selectionEnd) {
-                const char = fullText[i];
-                if (this.containsMusicalNotes(char)) {
-                    positions.push({
-                        globalPos: i,
-                        lineIndex: lineIndex,
-                        column: columnInLine
-                    });
-                }
-            }
-
-            if (fullText[i] === '\n') {
-                lineIndex++;
-                columnInLine = 0;
-            } else {
-                columnInLine++;
-            }
-        }
-
-        return positions;
-    }
-
-    // Get the appropriate octave marker for the octave type
-    getOctaveMarker(octaveType) {
-        const markerMap = {
-            'lowest': ':',    // LL - Lowest octave (: below)
-            'lowish': '.',    // L - Lower octave (. below)
-            'lower': '.',     // L - Lower octave (. below)
-            'middle': '',     // M - Middle octave (no markers)
-            'higher': '.',    // U - Upper octave (. above)
-            'highish': ':',   // HH - Higher octave (: above)
-            'highest': ':'    // HH - Highest octave (: above)
-        };
-
-        return markerMap[octaveType] || '.';
     }
 
     // MIDI Control Methods
@@ -972,18 +648,6 @@ window.toggleSlur = async () => {
     } catch (error) {
         console.error('Slur application error:', error);
         UI.setStatus('Failed to apply slur', 'error');
-
-        // Fallback to legacy text-based transform if semantic command not available
-        console.log('Falling back to legacy text transform...');
-        try {
-            await app.canvasEditor.applyTransformation('/api/transform/slur', {
-                action: 'slur'
-            });
-            UI.setStatus('Applied slur (legacy mode)', 'success');
-        } catch (fallbackError) {
-            console.error('Legacy fallback also failed:', fallbackError);
-            UI.setStatus('Failed to apply slur', 'error');
-        }
     }
 };
 window.applyOctaveAdjustment = (octaveType) => app.applyOctaveAdjustment(octaveType);

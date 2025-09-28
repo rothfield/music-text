@@ -7,21 +7,53 @@ import { InputEvents } from './events/input.js';
 
 export class CanvasController {
   constructor(containerId = 'svg-container') {
-    this.container = document.getElementById(containerId);
-    if (!this.container) throw new Error(`Container ${containerId} not found`);
-    this.store = new EditorStore();
-    this.io = new Persistence('musicTextDocument');
-    this.renderer = new SvgRenderer(this.container);
-    this.overlay = new SelectionOverlay(this.renderer);
-    this.hitTest = new HitTester(this.container);
-    this.input = new InputEvents(this.container, (cmd) => this.handleCommand(cmd));
-    this.unsubscribe = this.store.subscribe(() => this.onStateChange());
+    try {
+      console.log('CanvasController: Initializing with container:', containerId);
+
+      this.container = document.getElementById(containerId);
+      if (!this.container) {
+        console.error('CanvasController: Container not found:', containerId);
+        throw new Error(`Container ${containerId} not found`);
+      } else {
+        console.log('CanvasController: Container found successfully');
+      }
+
+      console.log('CanvasController: Creating EditorStore...');
+      this.store = new EditorStore();
+
+      console.log('CanvasController: Creating Persistence...');
+      this.io = new Persistence('musicTextDocument');
+
+      console.log('CanvasController: Creating SvgRenderer...');
+      this.renderer = new SvgRenderer(this.container);
+
+      console.log('CanvasController: Creating SelectionOverlay...');
+      this.overlay = new SelectionOverlay(this.renderer);
+
+      console.log('CanvasController: Creating HitTester...');
+      this.hitTest = new HitTester(this.container);
+
+      console.log('CanvasController: Creating InputEvents...');
+      console.log('CanvasController: Container for InputEvents:', this.container);
+      this.input = new InputEvents(this.container, (cmd) => this.handleCommand(cmd));
+
+      console.log('CanvasController: Subscribing to store changes...');
+      this.unsubscribe = this.store.subscribe(() => this.onStateChange());
+
+      console.log('CanvasController: Constructor completed successfully');
+    } catch (error) {
+      console.error('CanvasController: Constructor failed:', error);
+      throw error;
+    }
   }
 
   init() {
+    console.log('CanvasController: Calling input.bind()...');
     this.input.bind();
+    console.log('CanvasController: input.bind() completed');
     const doc = this.io.loadLocal();
     if (doc) this.store.dispatch({ type: 'setDocument', document: doc });
+    console.log('CanvasController: init() completed successfully');
     return this;
   }
 
@@ -44,6 +76,11 @@ export class CanvasController {
     this.io.saveLocal(state.document);
     // re-render content when document/ui changes
     this.render();
+
+    // Notify CanvasEditor of content changes
+    if (this.onContentChange && state.document && typeof state.document.content === 'string') {
+      this.onContentChange(state.document.content);
+    }
   }
 
   // High-level command handling
@@ -74,39 +111,42 @@ export class CanvasController {
         break;
       }
       case 'InsertText': {
-        // Minimal local mutation to document text content if present
-        const state = this.store.getState();
-        const doc = state.document;
-        if (doc && typeof doc.text_content === 'string') {
-          const pos = selectors.cursorPosition(state);
-          const before = doc.text_content.slice(0, pos);
-          const after = doc.text_content.slice(pos);
-          doc.text_content = before + cmd.value + after;
-          this.store.dispatch({ type: 'setDocument', document: doc });
-          this.store.dispatch({ type: 'setCursor', position: pos + cmd.value.length });
+        // Don't mutate content locally - send to server for processing
+        console.log('CanvasController: InsertText command:', cmd.value);
+
+        // Notify parent (CanvasEditor) to handle server communication
+        if (this.onTextInput) {
+          this.onTextInput({
+            type: 'insert',
+            value: cmd.value,
+            position: selectors.cursorPosition(this.store.getState())
+          });
         }
         break;
       }
       case 'DeleteBackward': {
-        const state = this.store.getState();
-        const doc = state.document;
-        if (doc && typeof doc.text_content === 'string') {
-          const pos = selectors.cursorPosition(state);
-          if (pos > 0) {
-            doc.text_content = doc.text_content.slice(0, pos - 1) + doc.text_content.slice(pos);
-            this.store.dispatch({ type: 'setDocument', document: doc });
-            this.store.dispatch({ type: 'setCursor', position: pos - 1 });
-          }
+        // Don't mutate content locally - send to server for processing
+        console.log('CanvasController: DeleteBackward command');
+
+        // Notify parent (CanvasEditor) to handle server communication
+        if (this.onTextInput) {
+          this.onTextInput({
+            type: 'deleteBackward',
+            position: selectors.cursorPosition(this.store.getState())
+          });
         }
         break;
       }
       case 'DeleteForward': {
-        const state = this.store.getState();
-        const doc = state.document;
-        if (doc && typeof doc.text_content === 'string') {
-          const pos = selectors.cursorPosition(state);
-          doc.text_content = doc.text_content.slice(0, pos) + doc.text_content.slice(pos + 1);
-          this.store.dispatch({ type: 'setDocument', document: doc });
+        // Don't mutate content locally - send to server for processing
+        console.log('CanvasController: DeleteForward command');
+
+        // Notify parent (CanvasEditor) to handle server communication
+        if (this.onTextInput) {
+          this.onTextInput({
+            type: 'deleteForward',
+            position: selectors.cursorPosition(this.store.getState())
+          });
         }
         break;
       }

@@ -18,11 +18,6 @@ export const API = {
         if (generateSVG) {
             url.searchParams.set('generate_svg', 'true');
         }
-        // Get notation type from selector if not passed
-        if (!notationType) {
-            const selector = document.getElementById('notationTypeSelect');
-            notationType = selector ? selector.value : 'number';
-        }
         // notation_type removed from API
 
         const response = await fetch(url);

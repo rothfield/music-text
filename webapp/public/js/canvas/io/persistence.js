@@ -8,18 +8,49 @@ export class Persistence {
 
   loadLocal() {
     try {
+      console.log('Persistence: Loading from localStorage key:', this.storageKey);
+
+      // Try the legacy single key first
       const raw = localStorage.getItem(this.storageKey);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
+      if (raw) {
+        console.log('Persistence: Found legacy document data');
+        return JSON.parse(raw);
+      }
+
+      // Try the new UUID-based system
+      if (window.LocalStorage) {
+        const currentDoc = window.LocalStorage.loadCurrentDocument();
+        if (currentDoc) {
+          console.log('Persistence: Found UUID-based document:', currentDoc.documentUUID || 'no UUID');
+          return currentDoc;
+        }
+      }
+
+      console.log('Persistence: No document found in localStorage');
+      return null;
+    } catch (error) {
+      console.error('Persistence: Error loading from localStorage:', error);
       return null;
     }
   }
 
   saveLocal(document) {
     try {
+      console.log('Persistence: Saving document to localStorage');
+
+      // Save to legacy key for compatibility
       localStorage.setItem(this.storageKey, JSON.stringify(document));
+
+      // Also save to UUID-based system if document has UUID
+      if (document && document.documentUUID && window.LocalStorage) {
+        window.LocalStorage.saveDocument(document.documentUUID, document);
+        console.log('Persistence: Saved to UUID-based storage:', document.documentUUID);
+      }
+
+      console.log('Persistence: Document saved successfully');
       return true;
-    } catch {
+    } catch (error) {
+      console.error('Persistence: Error saving to localStorage:', error);
       return false;
     }
   }
@@ -32,20 +63,9 @@ export class Persistence {
   }
 
   async renderSvg(document, ui_state) {
-    // Expect existing endpoint `/api/render/canvas-svg` or similar; fallback no-op
-    try {
-      const res = await fetch('/api/render/canvas-svg', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document, ui_state }),
-      });
-      if (!res.ok) throw new Error('render failed');
-      const data = await res.json();
-      return data; // { svg, metrics? }
-    } catch (e) {
-      console.warn('renderSvg failed or endpoint missing', e);
-      return { svg: '' };
-    }
+    // Nuke this - it's brain dead
+    console.log('Persistence: renderSvg called but disabled');
+    return { svg: '' };
   }
 }
 

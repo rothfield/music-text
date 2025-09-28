@@ -166,10 +166,13 @@ export class DocumentModel {
     static async fromMusicText(textContent) {
         // Server creates the document with UUIDs
         try {
-            const response = await fetch('/api/documents', {
+            const response = await fetch('/api/documents?representations=editor_svg,vexflow,lilypond', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: textContent })
+                body: JSON.stringify({
+                    content: textContent,
+                    metadata: { title: 'Document from Text' }
+                })
             });
 
             if (response.ok) {

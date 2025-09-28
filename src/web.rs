@@ -1,6 +1,6 @@
 // Web server for live notation parsing
 use axum::{
-    extract::{Multipart, Form, Path},
+    extract::{Multipart, Form, Path, Query},
     response::{IntoResponse, Html, Response},
     routing::{get, post, put},
     Json, Router,
@@ -50,6 +50,12 @@ pub struct ParseResponse {
 #[derive(Debug, Deserialize)]
 pub struct CreateDocumentRequest {
     pub metadata: Option<serde_json::Value>,
+    pub content: Option<String>,  // Music text content (optional)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateDocumentQuery {
+    pub representations: Option<String>,  // Comma-separated list of formats to include
 }
 
 #[derive(Debug, Serialize)]
@@ -69,7 +75,7 @@ pub struct DocumentModel {
     pub ui_state: serde_json::Value,
 }
 
-// Document update structure for PUT requests
+// TODO: DELETE - Document update structure for PUT requests (unused by frontend)
 #[derive(Debug, Deserialize)]
 pub struct UpdateDocumentRequest {
     pub document: serde_json::Value,
@@ -77,7 +83,7 @@ pub struct UpdateDocumentRequest {
     pub notation_type: Option<String>,
 }
 
-// Edit command structure
+// TODO: DELETE - Edit command structure (unused by frontend)
 #[derive(Debug, Deserialize)]
 pub struct EditCommand {
     #[serde(rename = "type")]
@@ -188,11 +194,6 @@ pub struct RetroParseRequest {
     action: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct SvgPocRequest {
-    input: String,
-    notation_type: String,
-}
 
 #[derive(Debug, Deserialize)]
 pub struct CanvasSvgRequest {
@@ -368,14 +369,17 @@ pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/import/musicxml", post(import_musicxml_handler))
         // RESTful Document API endpoints
         .route("/api/documents", post(create_document_handler))
-        .route("/api/documents/from-text", post(create_document_from_text_handler))
         .route("/api/documents/:documentUUID", get(get_document_by_id_handler))
-        .route("/api/documents/:documentUUID", put(update_document_handler))
-        // Edit route - loads document from backup into editor
-        .route("/documents/:documentUUID/edit", get(edit_document_handler))
+        // TODO: DELETE THESE UNUSED ENDPOINTS - not used by frontend JS
+        // .route("/api/documents/from-text", post(create_document_from_text_handler))
+        // .route("/api/documents/:documentUUID", put(update_document_handler))
+        // .route("/documents/:documentUUID/edit", get(edit_document_handler))
+        // Rails-style document processing endpoints
+        .route("/api/documents/render", post(render_document_handler))
         .route("/api/documents/transform", post(transform_document_handler))
-        .route("/api/documents/:documentUUID/transform", post(transform_document_by_id_handler))
         .route("/api/documents/export", post(export_document_handler))
+        // Legacy UUID-based endpoints (deprecated)
+        .route("/api/documents/:documentUUID/transform", post(transform_document_by_id_handler))
         .route("/api/documents/:documentUUID/export", post(export_document_by_id_handler))
         .route("/health", get(health_endpoint))
         .nest_service("/assets", ServeDir::new("assets"))
@@ -466,6 +470,7 @@ async fn import_musicxml_handler(Json(payload): Json<MusicXmlImportRequest>) -> 
 
 // Duplicate removed; defined earlier
 
+// TODO: DELETE - unused by frontend JS
 #[derive(Debug, Deserialize)]
 struct CreateDocumentFromTextRequest {
     music_text: String,
@@ -473,31 +478,87 @@ struct CreateDocumentFromTextRequest {
 }
 
 // Document creation endpoint
-async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> impl IntoResponse {
+async fn create_document_handler(
+    Query(query): Query<CreateDocumentQuery>,
+    Json(request): Json<CreateDocumentRequest>
+) -> impl IntoResponse {
     let documentUUID = Uuid::new_v4().to_string();
     let timestamp = chrono::Utc::now().to_rfc3339();
 
-    // Create a truly empty document
-    let parsed_empty = crate::pipeline::ProcessingResult {
-        original_input: String::new(),
-        document: crate::parse::Document {
-            document_uuid: Some(documentUUID.clone()),
-            value: None,
-            char_index: 0,
-            title: None,
-            author: None,
-            directives: std::collections::HashMap::new(),
-            elements: vec![],  // Empty elements - no content
-            ui_state: crate::models::UIState::default(),
-            timestamp: String::new(),
-        },
-        lilypond: String::new(),
-        vexflow_svg: String::new(),
-        vexflow_data: serde_json::Value::Null,
+    // Check if content is provided - if yes, parse it; if no, create empty document
+    let parse_result = if let Some(content) = &request.content {
+        // Parse the provided content
+        match crate::pipeline::process_notation(content) {
+            Ok(mut result) => {
+                result.document.document_uuid = Some(documentUUID.clone());
+                result
+            }
+            Err(e) => {
+                // If parsing fails, create minimal valid structure
+                eprintln!("Parse failed for '{}': {}", content, e);
+
+                let minimal_doc = crate::parse::Document {
+                    document_uuid: Some(documentUUID.clone()),
+                    value: Some(content.clone()),
+                    char_index: 0,
+                    title: None,
+                    author: None,
+                    directives: std::collections::HashMap::new(),
+                    elements: vec![
+                        crate::models::DocumentElement::Stave(crate::models::Stave {
+                            value: Some(content.clone()),
+                            char_index: 0,
+                            notation_system: crate::models::NotationSystem::Number,
+                            line: 0,
+                            column: 0,
+                            index_in_doc: 0,
+                            index_in_line: 0,
+                            lines: vec![
+                                crate::models::StaveLine::ContentLine(crate::models::ContentLine {
+                                    value: Some(content.clone()),
+                                    char_index: 0,
+                                    elements: vec![],
+                                    consumed_elements: vec![],
+                                })
+                            ],
+                        })
+                    ],
+                    ui_state: crate::models::UIState::default(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                };
+
+                crate::pipeline::ProcessingResult {
+                    original_input: content.clone(),
+                    document: minimal_doc,
+                    lilypond: String::new(),
+                    vexflow_svg: String::new(),
+                    vexflow_data: serde_json::Value::Null,
+                }
+            }
+        }
+    } else {
+        // Create empty document
+        crate::pipeline::ProcessingResult {
+            original_input: String::new(),
+            document: crate::parse::Document {
+                document_uuid: Some(documentUUID.clone()),
+                value: None,
+                char_index: 0,
+                title: None,
+                author: None,
+                directives: std::collections::HashMap::new(),
+                elements: vec![],  // Empty elements - no content
+                ui_state: crate::models::UIState::default(),
+                timestamp: String::new(),
+            },
+            lilypond: String::new(),
+            vexflow_svg: String::new(),
+            vexflow_data: serde_json::Value::Null,
+        }
     };
 
-    // Create document model from parsed empty document
-    let mut document_value = serde_json::to_value(&parsed_empty.document).unwrap_or_else(|_| {
+    // Convert the document to JSON
+    let mut document_value = serde_json::to_value(&parse_result.document).unwrap_or_else(|_| {
         serde_json::json!({
             "elements": [],
             "content": []
@@ -513,7 +574,7 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
             "selection": {
                 "selected_uuids": [],
                 "cursor_uuid": null,
-                "cursor_position": 0
+                "cursor_position": request.content.as_ref().map(|c| c.len()).unwrap_or(0)
             },
             "viewport": {
                 "scroll_x": 0,
@@ -527,30 +588,41 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
 
     let document = document_value;
 
-    // Debug: Log the documentUUID being sent
-    println!("Created document with UUID: {}", documentUUID);
-
     // Log the new document to filesystem for backup/history
-    // (In local-first architecture, browser owns the document, server logs for backup)
     if let Err(e) = save_document(&documentUUID, &document).await {
-        // Log error but don't fail - logging is not critical for document creation
         eprintln!("Warning: Failed to log new document {} to disk: {}", documentUUID, e);
     } else {
         println!("Created and logged new document {} to disk (backup)", documentUUID);
     }
 
-    // Generate all formats from the parsed document
-    let editor_svg = crate::renderers::editor::svg::render_editor_svg(&parsed_empty.document, None, None, None).ok();
-    let lilypond_src = if !parsed_empty.lilypond.is_empty() {
-        Some(parsed_empty.lilypond.clone())
+    // Generate formats only if requested in query parameters
+    let requested_formats = query.representations.as_deref().unwrap_or("");
+    let generate_all = requested_formats.is_empty(); // If no specific formats requested, generate all
+
+    let editor_svg = if generate_all || requested_formats.contains("editor_svg") {
+        crate::renderers::editor::svg::render_editor_svg(&parse_result.document, None, None, None).ok()
     } else {
         None
     };
-    // VexFlow data contains the actual JS code in the "vexflow_js" field
-    let vexflow_svg = if let Some(vexflow_js) = parsed_empty.vexflow_data.get("vexflow_js") {
-        vexflow_js.as_str().map(|s| s.to_string())
-    } else if !parsed_empty.vexflow_svg.is_empty() {
-        Some(parsed_empty.vexflow_svg.clone())
+
+    let lilypond_src = if generate_all || requested_formats.contains("lilypond") {
+        if !parse_result.lilypond.is_empty() {
+            Some(parse_result.lilypond.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let vexflow_svg = if generate_all || requested_formats.contains("vexflow") {
+        if let Some(vexflow_js) = parse_result.vexflow_data.get("vexflow_js") {
+            vexflow_js.as_str().map(|s| s.to_string())
+        } else if !parse_result.vexflow_svg.is_empty() {
+            Some(parse_result.vexflow_svg.clone())
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -572,7 +644,8 @@ async fn create_document_handler(Json(request): Json<CreateDocumentRequest>) -> 
     Json(response).into_response()
 }
 
-// Create a new document from raw textual music notation (parse → save → render)
+// TODO: DELETE - Create a new document from raw textual music notation (parse → save → render)
+// UNUSED by frontend JS - marked for deletion
 async fn create_document_from_text_handler(Json(request): Json<CreateDocumentFromTextRequest>) -> impl IntoResponse {
     // Generate UUID and timestamp first
     let documentUUID = Uuid::new_v4().to_string();
@@ -857,6 +930,55 @@ async fn transform_document_handler(Json(request): Json<TransformDocumentRequest
     })
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RenderDocumentRequest {
+    pub document: serde_json::Value,
+    pub render_options: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RenderDocumentResponse {
+    pub success: bool,
+    pub formats: DocumentFormats,
+    pub message: Option<String>,
+}
+
+// Document render endpoint - generates all formats from document
+async fn render_document_handler(Json(request): Json<RenderDocumentRequest>) -> impl IntoResponse {
+    // Deserialize document to our Document model for rendering
+    let doc: Document = match serde_json::from_value(request.document.clone()) {
+        Ok(d) => d,
+        Err(e) => {
+            return Json(RenderDocumentResponse {
+                success: false,
+                formats: DocumentFormats { vexflow_svg: None, editor_svg: None, lilypond_svg: None, lilypond_src: None, midi: None },
+                message: Some(format!("Failed to deserialize document: {}", e)),
+            }).into_response();
+        }
+    };
+
+    // Generate all formats from the document
+    let editor_svg = crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok();
+    let lilypond_src = crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None).ok();
+    let vexflow_renderer = crate::renderers::vexflow::VexFlowRenderer::new();
+    let vexflow_data = vexflow_renderer.render_data_from_document(&doc);
+    let vexflow_svg = vexflow_data.get("vexflow_js").and_then(|js| js.as_str()).map(|s| s.to_string());
+
+    let formats = DocumentFormats {
+        vexflow_svg,
+        editor_svg,
+        lilypond_svg: None,  // Would need to run lilypond command
+        lilypond_src,
+        midi: None,
+    };
+
+    Json(RenderDocumentResponse {
+        success: true,
+        formats,
+        message: Some("Document rendered successfully".to_string()),
+    }).into_response()
+}
+
 // Document export endpoint
 async fn export_document_handler(Json(request): Json<ExportDocumentRequest>) -> impl IntoResponse {
     match request.format.as_str() {
@@ -947,7 +1069,8 @@ async fn export_document_handler(Json(request): Json<ExportDocumentRequest>) -> 
 }
 
 
-// PUT update document handler
+// TODO: DELETE - PUT update document handler
+// UNUSED by frontend JS - marked for deletion
 async fn update_document_handler(
     Path(documentUUID): Path<String>,
     Json(request): Json<UpdateDocumentRequest>
@@ -1128,7 +1251,8 @@ async fn get_document_by_id_handler(
     ).into_response()
 }
 
-// Edit document handler - loads a document from backup and opens editor
+// TODO: DELETE - Edit document handler - loads a document from backup and opens editor
+// UNUSED by frontend JS - marked for deletion
 async fn edit_document_handler(
     Path(documentUUID): Path<String>
 ) -> impl IntoResponse {
@@ -1228,29 +1352,6 @@ async fn health_endpoint() -> impl IntoResponse {
     Json(serde_json::json!({"status": "ok"}))
 }
 
-/// SVG POC rendering endpoint - converts text to SVG via document conversion
-async fn render_svg_poc(Json(request): Json<SvgPocRequest>) -> impl IntoResponse {
-    println!("SVG POC request: input_len={}, notation_type={}",
-             request.input.len(), request.notation_type);
-
-    // Step 1: Parse the input text to get a document
-    match crate::pipeline::process_notation(&request.input) {
-        Ok(result) => {
-            // Step 2: Use the SVG renderer module to generate SVG
-            let svg_content = match crate::renderers::editor::svg::render_editor_svg(&result.document, None, None, None) {
-                Ok(svg) => svg,
-                Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("SVG generation failed: {}", err)).into_response()
-            };
-
-            println!("✅ SVG POC generation successful, length: {}", svg_content.len());
-            Html(svg_content).into_response()
-        }
-        Err(err) => {
-            println!("❌ Parsing failed: {}", err);
-            (StatusCode::BAD_REQUEST, format!("Parsing failed: {}", err)).into_response()
-        }
-    }
-}
 
 // New API endpoint for canvas SVG with cursor position support
 async fn render_editor_svg(Json(request): Json<CanvasSvgRequest>) -> impl IntoResponse {
