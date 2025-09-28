@@ -471,56 +471,77 @@ export class CanvasEditor {
     handleSvgMouseDown(e) {
         if (!this.document) return;
 
+        const rect = this.svgContainer.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
         if (e.target.classList.contains('line-hitbox')) {
             const lineGroup = e.target.parentElement;
-            const chars = Array.from(lineGroup.querySelectorAll('[data-char-index]'));
+            const chars = Array.from(lineGroup.querySelectorAll('[data-char-index]')).map(c => {
+                const bbox = c.getBBox();
+                return {
+                    el: c,
+                    index: parseInt(c.getAttribute('data-char-index'), 10),
+                    x: bbox.x,
+                    width: bbox.width
+                };
+            }).sort((a, b) => a.index - b.index);
+
             if (chars.length > 0) {
+                const firstChar = chars[0];
                 const lastChar = chars[chars.length - 1];
-                const lastIndex = parseInt(lastChar.getAttribute('data-char-index'), 10);
-                this.document.ui_state.selection.cursor_position = lastIndex + 1;
+                const clickX = x - (this.svgTransformX || 0);
+
+                if (clickX < firstChar.x) {
+                    this.document.ui_state.selection.cursor_position = firstChar.index;
+                } else if (clickX > lastChar.x + lastChar.width) {
+                    this.document.ui_state.selection.cursor_position = lastChar.index + 1;
+                } else {
+                    // Find the nearest character to snap to
+                    let closest = null;
+                    let minDistance = Infinity;
+                    for (const char of chars) {
+                        const midPoint = char.x + char.width / 2;
+                        const distance = Math.abs(clickX - midPoint);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closest = char;
+                        }
+                    }
+                    if (closest) {
+                        const midPoint = closest.x + closest.width / 2;
+                        this.document.ui_state.selection.cursor_position = clickX < midPoint ? closest.index : closest.index + 1;
+                    }
+                }
             } else {
-                // Empty line, find its anchor if it exists
                 const anchor = lineGroup.querySelector('[data-char-index]');
                 if (anchor) {
                     this.document.ui_state.selection.cursor_position = parseInt(anchor.getAttribute('data-char-index'), 10);
                 }
             }
-            this.postRenderCaret();
-            e.preventDefault();
-            return;
-        }
-
-        const rect = this.svgContainer.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        const clickedChar = this.findCharacterAtPoint(x, y);
-        let foundValidClick = false;
-
-        if (clickedChar) {
-            const charIndex = parseInt(clickedChar.getAttribute('data-char-index') || '0', 10);
-            this.setCursorPosition(charIndex);
-            foundValidClick = true;
         } else {
-            const calculatedPosition = this.calculateCursorPositionFromClick(x, y);
-            if (calculatedPosition !== null) {
-                this.setCursorPosition(calculatedPosition);
-                foundValidClick = true;
+            const clickedChar = this.findCharacterAtPoint(x, y);
+            if (clickedChar) {
+                const charIndex = parseInt(clickedChar.getAttribute('data-char-index') || '0', 10);
+                this.setCursorPosition(charIndex);
+            } else {
+                const calculatedPosition = this.calculateCursorPositionFromClick(x, y);
+                if (calculatedPosition !== null) {
+                    this.setCursorPosition(calculatedPosition);
+                }
             }
         }
 
-        if (foundValidClick) {
-            this.isSelecting = true;
-            this.selectionStart = this.document?.ui_state.selection.cursor_position || 0;
-            this.selectedUuids.clear();
-            if (this.document?.ui_state?.selection) {
-                this.document.ui_state.selection.selected_uuids = [];
-                this.document.ui_state.selection.cursor_uuid = null;
-            }
-            this.updateClientSideSelection();
-            this.updateCaretFromDocument();
-            this.postRenderCaret();
+        this.isSelecting = true;
+        this.selectionStart = this.document?.ui_state.selection.cursor_position || 0;
+        this.selectedUuids.clear();
+        if (this.document?.ui_state?.selection) {
+            this.document.ui_state.selection.selected_uuids = [];
+            this.document.ui_state.selection.cursor_uuid = null;
         }
+        this.updateClientSideSelection();
+        this.updateCaretFromDocument();
+        this.postRenderCaret();
         e.preventDefault();
     }
 
@@ -543,7 +564,7 @@ export class CanvasEditor {
                 characterSelection: {
                     // UUID-based selection
                 },
-                selectedText: `"${selectedText}"`,
+                selectedText: `"${selectedText}"`, 
                 uuidSelection: {
                     count: this.selectedUuids.size,
                     uuids: Array.from(this.selectedUuids)
@@ -777,7 +798,7 @@ export class CanvasEditor {
                     console.log('🔄 Dragging Selection:', {
                         from: this.selectionStart,
                         to: dragPosition,
-                        selection: { uuids: Array.from(this.selectedUuids) },
+                        selection: {uuids: Array.from(this.selectedUuids)},
                         selectedText: `"${selectedText}"`
                     });
                 }
@@ -1679,8 +1700,8 @@ export class CanvasEditor {
         const charElements = this.currentSvg.querySelectorAll(selector);
         for (const char of charElements) {
             // Get element position directly from attributes
-            const elemX = parseFloat(char.getAttribute('x')) || 0;
-            const elemY = parseFloat(char.getAttribute('y')) || 0;
+            const elemX = parseFloat(char.getAttribute('x') || '0');
+            const elemY = parseFloat(char.getAttribute('y') || '0');
             const elemWidth = parseFloat(char.getAttribute('data-width')) || 12;
             const elemHeight = 20; // Default font size
 
@@ -2925,11 +2946,11 @@ export class CanvasEditor {
     updateLineHighlight() {
         if (!this.currentSvg) return;
         const svg = this.currentSvg;
+        const contentGroup = svg.querySelector('.canvas-content') || svg;
 
-        // Remove existing highlights
-        svg.querySelectorAll('.line-hitbox.highlighted').forEach(el => {
-            el.classList.remove('highlighted');
-        });
+        // Remove previous highlight box
+        const prevHighlight = contentGroup.querySelector('#current-line-highlight');
+        if (prevHighlight) prevHighlight.remove();
 
         const caretIndex = this.document?.ui_state?.selection?.cursor_position ?? 0;
         let targetChar;
@@ -2943,9 +2964,29 @@ export class CanvasEditor {
         if (targetChar) {
             const lineGroup = targetChar.closest('g[class$="-line"]');
             if (lineGroup) {
-                const hitbox = lineGroup.querySelector('.line-hitbox');
-                if (hitbox) {
-                    hitbox.classList.add('highlighted');
+                const chars = lineGroup.querySelectorAll('[data-char-index]');
+                if (chars.length > 0) {
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                    chars.forEach(c => {
+                        const bbox = c.getBBox();
+                        minX = Math.min(minX, bbox.x);
+                        minY = Math.min(minY, bbox.y);
+                        maxX = Math.max(maxX, bbox.x + bbox.width);
+                        maxY = Math.max(maxY, bbox.y + bbox.height);
+                    });
+
+                    const highlightRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    highlightRect.setAttribute('id', 'current-line-highlight');
+                    highlightRect.setAttribute('x', minX - 5);
+                    highlightRect.setAttribute('y', minY - 5);
+                    highlightRect.setAttribute('width', (maxX - minX) + 10);
+                    highlightRect.setAttribute('height', (maxY - minY) + 10);
+                    highlightRect.setAttribute('fill', 'none');
+                    highlightRect.setAttribute('stroke', 'black');
+                    highlightRect.setAttribute('stroke-width', '1');
+                    highlightRect.setAttribute('stroke-dasharray', '2,2');
+                    highlightRect.setAttribute('pointer-events', 'none');
+                    contentGroup.insertBefore(highlightRect, contentGroup.firstChild);
                 }
             }
         }

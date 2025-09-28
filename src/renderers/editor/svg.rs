@@ -873,6 +873,10 @@ impl EditorSvgRenderer {
       stroke: none;
     }}
 
+    .line-hitbox.highlighted {{
+        fill: rgba(0, 0, 0, 0.1);
+    }}
+
     .canvas-placeholder {{
       font-size: {}px;
       fill: gray;
