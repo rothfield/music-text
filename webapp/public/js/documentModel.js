@@ -162,6 +162,7 @@ export class DocumentModel {
         return this;
     }
 
+
     // Create a new document from text content
     static async fromMusicText(textContent) {
         // Server creates the document with UUIDs

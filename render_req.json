@@ -1,0 +1,263 @@
+{"document":
+{
+  "author": null,
+  "char_index": 0,
+  "directives": {},
+  "documentUUID": "b2197af2-0ff2-4267-bc5d-8ea2d0341aa6",
+  "elements": [
+    {
+      "Stave": {
+        "char_index": 0,
+        "column": 1,
+        "index_in_doc": 0,
+        "index_in_line": 0,
+        "line": 1,
+        "lines": [
+          {
+            "ContentLine": {
+              "char_index": 0,
+              "consumed_elements": [],
+              "elements": [
+                {
+                  "Beat": {
+                    "char_index": 0,
+                    "consumed_elements": [],
+                    "divisions": 1,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 0,
+                          "consumed_elements": [],
+                          "denominator": 4,
+                          "id": "7591041d-0fa3-4e5a-a340-674717d71a64",
+                          "notation_system": "Number",
+                          "numerator": 1,
+                          "octave": 0,
+                          "pitch_code": "N1",
+                          "value": "1"
+                        }
+                      }
+                    ],
+                    "id": "37dba3d8-40ce-4ecf-90bf-5253a6ae86ec",
+                    "is_tuplet": false,
+                    "tied_to_previous": false,
+                    "total_duration": {
+                      "Rational": [
+                        "Plus",
+                        [
+                          1,
+                          4
+                        ]
+                      ]
+                    },
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 1,
+                    "consumed_elements": [],
+                    "id": "9b9096b2-70ec-414e-91e3-4bdd0353be7c",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 2,
+                    "consumed_elements": [],
+                    "divisions": 1,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 2,
+                          "consumed_elements": [],
+                          "denominator": 4,
+                          "id": "7095bb98-59e4-49d2-be02-e2f5196087d8",
+                          "notation_system": "Number",
+                          "numerator": 1,
+                          "octave": 0,
+                          "pitch_code": "N2",
+                          "value": "2"
+                        }
+                      }
+                    ],
+                    "id": "2a2f9878-5708-4ef3-b259-35c4b9411092",
+                    "is_tuplet": false,
+                    "tied_to_previous": false,
+                    "total_duration": {
+                      "Rational": [
+                        "Plus",
+                        [
+                          1,
+                          4
+                        ]
+                      ]
+                    },
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 3,
+                    "consumed_elements": [],
+                    "id": "1c025e5d-6738-4081-980e-ed767af4b880",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 4,
+                    "consumed_elements": [],
+                    "divisions": 1,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 4,
+                          "consumed_elements": [],
+                          "denominator": 4,
+                          "id": "c4f0f4bd-464c-4293-b164-9259c658cbd2",
+                          "notation_system": "Number",
+                          "numerator": 1,
+                          "octave": 0,
+                          "pitch_code": "N3",
+                          "value": "3"
+                        }
+                      }
+                    ],
+                    "id": "394dbb1e-2a6c-4a61-aa34-ca9cb9f45d26",
+                    "is_tuplet": false,
+                    "tied_to_previous": false,
+                    "total_duration": {
+                      "Rational": [
+                        "Plus",
+                        [
+                          1,
+                          4
+                        ]
+                      ]
+                    },
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 5,
+                    "consumed_elements": [],
+                    "id": "855eb0ee-4e3c-44a5-ad77-7acb4a0f6fe1",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 6,
+                    "consumed_elements": [],
+                    "divisions": 1,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 6,
+                          "consumed_elements": [],
+                          "denominator": 4,
+                          "id": "58e4cf8b-62b0-4319-aed1-1a08505a58b2",
+                          "notation_system": "Number",
+                          "numerator": 1,
+                          "octave": 0,
+                          "pitch_code": "N4",
+                          "value": "4"
+                        }
+                      }
+                    ],
+                    "id": "88d74e90-7d28-4dc4-a09e-a3be1fd6949c",
+                    "is_tuplet": false,
+                    "tied_to_previous": false,
+                    "total_duration": {
+                      "Rational": [
+                        "Plus",
+                        [
+                          1,
+                          4
+                        ]
+                      ]
+                    },
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                },
+                {
+                  "Whitespace": {
+                    "char_index": 7,
+                    "consumed_elements": [],
+                    "id": "542ec18b-aa1b-477d-bea3-e6dd3c32474d",
+                    "value": " "
+                  }
+                },
+                {
+                  "Beat": {
+                    "char_index": 8,
+                    "consumed_elements": [],
+                    "divisions": 1,
+                    "elements": [
+                      {
+                        "Note": {
+                          "char_index": 8,
+                          "consumed_elements": [],
+                          "denominator": 4,
+                          "id": "1d23fce8-282e-4ae3-98b5-f8278ac31d45",
+                          "notation_system": "Number",
+                          "numerator": 1,
+                          "octave": 0,
+                          "pitch_code": "N5",
+                          "value": "5"
+                        }
+                      }
+                    ],
+                    "id": "532e0679-7b20-4915-ac55-b5f96c27451c",
+                    "is_tuplet": false,
+                    "tied_to_previous": false,
+                    "total_duration": {
+                      "Rational": [
+                        "Plus",
+                        [
+                          1,
+                          4
+                        ]
+                      ]
+                    },
+                    "tuplet_ratio": null,
+                    "value": null
+                  }
+                }
+              ],
+              "value": "1 2 3 4 5"
+            }
+          }
+        ],
+        "notation_system": "Number",
+        "value": "1 2 3 4 5"
+      }
+    }
+  ],
+  "metadata": {},
+  "timestamp": "2025-09-28T14:35:09.892293891+00:00",
+  "title": null,
+  "ui_state": {
+    "active_tab": "vexflow",
+    "editor_mode": "text",
+    "selection": {
+      "cursor_position": 9,
+      "cursor_uuid": null,
+      "selected_uuids": []
+    },
+    "viewport": {
+      "scroll_x": 0,
+      "scroll_y": 0,
+      "zoom_level": 1.0
+    }
+  },
+  "value": "1 2 3 4 5",
+  "version": "1.0.0"
+}
+}

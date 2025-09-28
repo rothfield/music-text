@@ -157,7 +157,7 @@ export class CanvasEditor {
   updateParseResult(result) {
     if (result && result.success && result.document) {
       try {
-        this.document.fromJSON(result.document);
+        this.document = DocumentModel.fromJSON(result.document);
         this.saveToLocalStorage();
 
         // Update document tab with the new document data
@@ -243,17 +243,17 @@ export class CanvasEditor {
     }
 
     try {
-      // POST to transform endpoint (saves changes)
-      const response = await fetch('/api/documents/transform?type=' + transformType, {
+      // POST to transform endpoint using new document-first API
+      const response = await fetch('/api/documents/transform', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          ...this.document.toJSON(),
-          transform_type: transformType,
+          document: this.document.toJSON(),
+          command_type: transformType,
           target_uuids: selectedUuids,
-          ...params
+          parameters: params
         })
       });
 
@@ -265,9 +265,15 @@ export class CanvasEditor {
       const result = await response.json();
 
       if (result.success && result.document) {
-        this.document.fromJSON(result.document);
-        const content = this.document.content || '';
-        this.setValue(content);
+        // Replace document with server response
+        this.document = DocumentModel.fromJSON(result.document);
+        this.saveToLocalStorage();
+
+        // Update UI with any SVG from transform
+        if (result.svg && this.renderEditorSvg) {
+          this.renderEditorSvg(result.svg);
+        }
+
         return result;
       } else {
         throw new Error(result.message || 'Transform failed');
@@ -386,24 +392,21 @@ export class CanvasEditor {
           return;
       }
 
-      // Send to transform endpoint with formats using edit_command structure
-      const response = await fetch('/api/documents/transform?representations=editor_svg,vexflow,lilypond', {
+      // Send to transform endpoint using new document-first API
+      const response = await fetch('/api/documents/transform', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           document: this.document.toJSON(),
-          command_type: '', // Empty for edit commands
+          command_type: commandType, // insert_text, delete_backward, etc.
           target_uuids: [], // Empty for text operations
-          edit_command: {
-            type: commandType,
+          parameters: {
             position: inputCmd.position || 0,
             text: inputCmd.value || '',
             direction: inputCmd.type === 'deleteBackward' ? 'backward' :
-                      inputCmd.type === 'deleteForward' ? 'forward' : undefined,
-            selection_start: null,
-            selection_end: null
+                      inputCmd.type === 'deleteForward' ? 'forward' : undefined
           }
         })
       });
@@ -416,8 +419,8 @@ export class CanvasEditor {
       const result = await response.json();
 
       if (result.success && result.document) {
-        // Update document from server response (mutated document)
-        this.document.fromJSON(result.document);
+        // Replace document with server response (mutated document)
+        this.document = DocumentModel.fromJSON(result.document);
         this.saveToLocalStorage();
 
         // MOST IMPORTANT: Render editor SVG first
@@ -492,8 +495,13 @@ export class CanvasEditor {
       if (result.success) {
         console.log('CanvasEditor: Server sync successful');
 
-        // For render endpoint, we don't get a document back, just formats
-        // The document we sent is still valid, just save it
+        // Replace document with server response (e.g., timestamp updates)
+        if (result.document) {
+          this.document = DocumentModel.fromJSON(result.document);
+          console.log('CanvasEditor: Document replaced from server');
+        }
+
+        // Save updated document to localStorage
         this.saveToLocalStorage();
 
         // Update UI with any format data from server

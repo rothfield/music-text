@@ -124,6 +124,7 @@ pub struct ExportDocumentRequest {
 #[derive(Debug, Serialize)]
 pub struct ExportDocumentResponse {
     pub success: bool,
+    pub document: serde_json::Value,
     pub format: String,
     pub content: String,
     pub message: Option<String>,
@@ -939,6 +940,7 @@ pub struct RenderDocumentRequest {
 #[derive(Debug, Serialize)]
 pub struct RenderDocumentResponse {
     pub success: bool,
+    pub document: serde_json::Value,
     pub formats: DocumentFormats,
     pub message: Option<String>,
 }
@@ -946,16 +948,20 @@ pub struct RenderDocumentResponse {
 // Document render endpoint - generates all formats from document
 async fn render_document_handler(Json(request): Json<RenderDocumentRequest>) -> impl IntoResponse {
     // Deserialize document to our Document model for rendering
-    let doc: Document = match serde_json::from_value(request.document.clone()) {
+    let mut doc: Document = match serde_json::from_value(request.document.clone()) {
         Ok(d) => d,
         Err(e) => {
             return Json(RenderDocumentResponse {
                 success: false,
+                document: request.document,
                 formats: DocumentFormats { vexflow_svg: None, editor_svg: None, lilypond_svg: None, lilypond_src: None, midi: None },
                 message: Some(format!("Failed to deserialize document: {}", e)),
             }).into_response();
         }
     };
+
+    // Update timestamp to indicate rendering occurred
+    doc.timestamp = chrono::Utc::now().to_rfc3339();
 
     // Generate all formats from the document
     let editor_svg = crate::renderers::editor::svg::render_editor_svg(&doc, None, None, None).ok();
@@ -972,8 +978,12 @@ async fn render_document_handler(Json(request): Json<RenderDocumentRequest>) -> 
         midi: None,
     };
 
+    // Convert updated document back to JSON
+    let updated_document = serde_json::to_value(&doc).unwrap_or(request.document);
+
     Json(RenderDocumentResponse {
         success: true,
+        document: updated_document,
         formats,
         message: Some("Document rendered successfully".to_string()),
     }).into_response()
@@ -981,89 +991,95 @@ async fn render_document_handler(Json(request): Json<RenderDocumentRequest>) -> 
 
 // Document export endpoint
 async fn export_document_handler(Json(request): Json<ExportDocumentRequest>) -> impl IntoResponse {
+    // Deserialize document and update metadata for export tracking
+    let mut doc: Document = match serde_json::from_value(request.document.clone()) {
+        Ok(d) => d,
+        Err(e) => {
+            return Json(ExportDocumentResponse {
+                success: false,
+                document: request.document,
+                format: request.format,
+                content: String::new(),
+                message: Some(format!("Failed to deserialize document: {}", e)),
+            }).into_response();
+        }
+    };
+
+    // Update timestamp and export metadata
+    doc.timestamp = chrono::Utc::now().to_rfc3339();
+
     match request.format.as_str() {
         "lilypond-png" => {
-            // Generate LilyPond PNG from document
-            if let Ok(doc) = serde_json::from_value::<Document>(request.document.clone()) {
-                // Generate LilyPond source
-                match crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None) {
-                    Ok(lilypond_src) => {
-                        // Run LilyPond to generate PNG
-                        match generate_lilypond_png(&lilypond_src).await {
-                            Ok(png_base64) => {
-                                Json(ExportDocumentResponse {
-                                    success: true,
-                                    format: request.format,
-                                    content: png_base64,
-                                    message: Some("LilyPond PNG generated successfully".to_string()),
-                                })
-                            }
-                            Err(e) => {
-                                Json(ExportDocumentResponse {
-                                    success: false,
-                                    format: request.format,
-                                    content: String::new(),
-                                    message: Some(format!("Failed to generate PNG: {}", e)),
-                                })
-                            }
+            // Generate LilyPond source
+            match crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None) {
+                Ok(lilypond_src) => {
+                    // Run LilyPond to generate PNG
+                    match generate_lilypond_png(&lilypond_src).await {
+                        Ok(png_base64) => {
+                            let updated_document = serde_json::to_value(&doc).unwrap_or(request.document);
+                            Json(ExportDocumentResponse {
+                                success: true,
+                                document: updated_document,
+                                format: request.format,
+                                content: png_base64,
+                                message: Some("LilyPond PNG generated successfully".to_string()),
+                            }).into_response()
+                        }
+                        Err(e) => {
+                            Json(ExportDocumentResponse {
+                                success: false,
+                                document: request.document,
+                                format: request.format,
+                                content: String::new(),
+                                message: Some(format!("Failed to generate PNG: {}", e)),
+                            }).into_response()
                         }
                     }
-                    Err(e) => {
-                        Json(ExportDocumentResponse {
-                            success: false,
-                            format: request.format,
-                            content: String::new(),
-                            message: Some(format!("Failed to generate LilyPond source: {}", e)),
-                        })
-                    }
                 }
-            } else {
-                Json(ExportDocumentResponse {
-                    success: false,
-                    format: request.format,
-                    content: String::new(),
-                    message: Some("Invalid document format".to_string()),
-                })
+                Err(e) => {
+                    Json(ExportDocumentResponse {
+                        success: false,
+                        document: request.document,
+                        format: request.format,
+                        content: String::new(),
+                        message: Some(format!("Failed to generate LilyPond source: {}", e)),
+                    }).into_response()
+                }
             }
         }
         "lilypond" => {
             // Generate LilyPond source
-            if let Ok(doc) = serde_json::from_value::<Document>(request.document.clone()) {
-                match crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None) {
-                    Ok(lilypond_src) => {
-                        Json(ExportDocumentResponse {
-                            success: true,
-                            format: request.format,
-                            content: lilypond_src,
-                            message: Some("LilyPond source generated successfully".to_string()),
-                        })
-                    }
-                    Err(e) => {
-                        Json(ExportDocumentResponse {
-                            success: false,
-                            format: request.format,
-                            content: String::new(),
-                            message: Some(format!("Failed to generate LilyPond source: {}", e)),
-                        })
-                    }
+            match crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&doc, None) {
+                Ok(lilypond_src) => {
+                    let updated_document = serde_json::to_value(&doc).unwrap_or(request.document);
+                    Json(ExportDocumentResponse {
+                        success: true,
+                        document: updated_document,
+                        format: request.format,
+                        content: lilypond_src,
+                        message: Some("LilyPond source generated successfully".to_string()),
+                    }).into_response()
                 }
-            } else {
-                Json(ExportDocumentResponse {
-                    success: false,
-                    format: request.format,
-                    content: String::new(),
-                    message: Some("Invalid document format".to_string()),
-                })
+                Err(e) => {
+                    Json(ExportDocumentResponse {
+                        success: false,
+                        document: request.document,
+                        format: request.format,
+                        content: String::new(),
+                        message: Some(format!("Failed to generate LilyPond source: {}", e)),
+                    }).into_response()
+                }
             }
         }
         _ => {
             let format_str = request.format.clone();
             Json(ExportDocumentResponse {
                 success: false,
+                document: request.document,
                 format: request.format,
                 content: "".to_string(),
                 message: Some(format!("Unsupported export format: {}", format_str)),
-            })
+            }).into_response()
         }
     }
 }

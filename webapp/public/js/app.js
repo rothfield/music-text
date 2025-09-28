@@ -272,6 +272,13 @@ class MusicTextApp {
             const result = await response.json();
 
             if (result.success && result.content) {
+                // Replace document with server response (e.g., export timestamp)
+                if (result.document && this.canvasEditor && this.canvasEditor.document) {
+                    this.canvasEditor.document = DocumentModel.fromJSON(result.document);
+                    this.canvasEditor.saveToLocalStorage();
+                    console.log('App: Document updated after export');
+                }
+
                 // Display the PNG in the LilyPond SVG tab
                 const lilypondSvgOutput = document.getElementById('lilypond_svg-output');
                 if (lilypondSvgOutput) {
@@ -395,9 +402,10 @@ class MusicTextApp {
                     if (docResponse.ok) {
                         const docData = await docResponse.json();
 
-                        // Update the document model with server data
+                        // Replace document model with server data (including any timestamp updates)
                         if (docData.document) {
-                            this.canvasEditor.document.fromJSON(docData.document);
+                            this.canvasEditor.document = DocumentModel.fromJSON(docData.document);
+                            console.log('App: Document updated from render response after creation');
                         }
 
                         // Update UI tabs with complete server-side document data
@@ -430,7 +438,7 @@ class MusicTextApp {
                     } else {
                         // Fallback to creation response data if GET fails
                         if (result.document) {
-                            this.canvasEditor.document.fromJSON(result.document);
+                            this.canvasEditor.document = DocumentModel.fromJSON(result.document);
                         }
 
                         if (result.formats) {
@@ -453,7 +461,7 @@ class MusicTextApp {
                     console.warn('Failed to fetch document by UUID, using creation response:', fetchError);
                     // Fallback to creation response data
                     if (result.document) {
-                        this.canvasEditor.document.fromJSON(result.document);
+                        this.canvasEditor.document = DocumentModel.fromJSON(result.document);
                     }
 
                     // Update all format tabs from creation response

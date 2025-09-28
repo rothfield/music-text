@@ -69,23 +69,15 @@
         
         <div id="canvasEditor" class="canvas-editor">
             <div id="svg-container" class="svg-container" tabindex="0"></div>
-            <div id="canvasToolbar" class="canvas-toolbar">
-                <button id="textMode" class="toolbar-btn active">Text Mode</button>
-                <button id="visualMode" class="toolbar-btn">Visual Mode</button>
-                <div class="toolbar-separator"></div>
-                <button id="insertNote" class="toolbar-btn">Insert Note</button>
-                <button id="insertBarline" class="toolbar-btn">Insert Barline</button>
-                <button id="insertGraceNote" class="toolbar-btn">Grace Note</button>
-            </div>
         </div>
         
         <div class="tabs">
-            <div class="tab active" onclick="switchTab('editor_svg', this)">Editor</div>
-            <div class="tab" onclick="switchTab('vexflow_svg', this)">VexFlow</div>
-            <div class="tab" onclick="switchTab('lilypond_svg', this)">LilyPond SVG</div>
-            <div class="tab" onclick="switchTab('lilypond_src', this)">LilyPond Source</div>
-            <div class="tab" onclick="switchTab('document', this)">Document</div>
-            <div class="tab" onclick="switchTab('midi', this)">MIDI</div>
+            <div class="tab active" id="editor_svg" onclick="switchTab('editor_svg', this)">Editor</div>
+            <div class="tab" id="vexflow_svg" onclick="switchTab('vexflow_svg', this)">VexFlow</div>
+            <div class="tab" id="lilypond_svg" onclick="switchTab('lilypond_svg', this)">LilyPond SVG</div>
+            <div class="tab" id="lilypond_src" onclick="switchTab('lilypond_src', this)">LilyPond Source</div>
+            <div class="tab" id="document" onclick="switchTab('document', this)">Document</div>
+            <div class="tab" id="midi" onclick="switchTab('midi', this)">MIDI</div>
         </div>
         
         <div id="editor_svg-tab" class="tab-content active">
