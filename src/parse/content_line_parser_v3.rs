@@ -94,8 +94,6 @@ pub fn parse_content_line(
                 elements.push(ContentElement::Whitespace(crate::parse::model::Whitespace {
                     id: uuid::Uuid::new_v4(),
                     value: Some(whitespace_content),
-                    char_index: line_start_doc_index + start_pos,
-                    consumed_elements: Vec::new(),
                 }));
             }
 
@@ -144,9 +142,7 @@ pub fn parse_content_line(
                     let unknown_token = crate::parse::model::UnknownToken {
                         id: uuid::Uuid::new_v4(),
                         value: Some(token.clone()),
-                        char_index: line_start_doc_index + start_pos,
-                        token_value: token,
-                        consumed_elements: Vec::new(),
+                            token_value: token,
                     };
 
                     elements.push(ContentElement::UnknownToken(unknown_token));
@@ -159,8 +155,6 @@ pub fn parse_content_line(
         id: uuid::Uuid::new_v4(),
         elements,
         value: Some(input.to_string()),
-        char_index: line_start_doc_index,
-        consumed_elements: Vec::new(),
     })
 }
 
@@ -232,17 +226,10 @@ fn parse_barline(
         }
     }
 
-    let char_index = line_start_doc_index + start_pos;
     let value = Some(barline_str.clone());
 
     // Create specific barline object based on pattern
     let barline = match barline_str.as_str() {
-        "|" => Barline::Single(SingleBarline { id: uuid::Uuid::new_v4(), value: value.clone(), char_index, consumed_elements: Vec::new() }),
-        "||" => Barline::Double(DoubleBarline { id: uuid::Uuid::new_v4(), value: value.clone(), char_index, consumed_elements: Vec::new() }),
-        "|." => Barline::Final(FinalBarline { id: uuid::Uuid::new_v4(), value: value.clone(), char_index, consumed_elements: Vec::new() }),
-        "|:" => Barline::RepeatStart(RepeatStartBarline { id: uuid::Uuid::new_v4(), value: value.clone(), char_index, consumed_elements: Vec::new() }),
-        ":|" => Barline::RepeatEnd(RepeatEndBarline { id: uuid::Uuid::new_v4(), value: value.clone(), char_index, consumed_elements: Vec::new() }),
-        "|:|" | ":|:" => Barline::RepeatBoth(RepeatBothBarline { id: uuid::Uuid::new_v4(), value: value.clone(), char_index, consumed_elements: Vec::new() }),
         _ => {
             return Err(ParseError {
                 message: format!("Invalid barline pattern: {}", barline_str),

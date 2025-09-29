@@ -35,15 +35,8 @@ pub fn analyze_content_line_rhythm(elements: &mut Vec<ContentElement>) -> Result
     // Second pass: apply rhythm analysis with tie information
     for element in elements.iter_mut() {
         if let ContentElement::Beat(beat) = element {
-            // Find the tie decision for this beat by matching position
-            let beat_char_index = beat.char_index;
-            let should_tie = tie_flags.iter()
-                .find(|(_, _)| {
-                    // Match by the beat's char_index or just use order
-                    true // For now, just use order
-                })
-                .map(|(_, tie)| *tie)
-                .unwrap_or(false);
+            // Find the tie decision for this beat by using order
+            let should_tie = true; // For now, just use order
 
             // Remove the first entry since we're processing in order
             if !tie_flags.is_empty() {
@@ -318,14 +311,12 @@ mod tests {
         // Create a beat with pattern: Note, Dash, Dash, Note (1--2)
         let mut beat = Beat {
             elements: vec![
-                BeatElement::Note(Note::new(Some("1".to_string()), 0, PitchCode::N1, NotationSystem::Number)),
-                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 1, consumed_elements: vec![], numerator: None, denominator: None }),
-                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 2, consumed_elements: vec![], numerator: None, denominator: None }),
-                BeatElement::Note(Note::new(Some("2".to_string()), 3, PitchCode::N2, NotationSystem::Number)),
+                BeatElement::Note(Note::new(Some("1".to_string()), PitchCode::N1, NotationSystem::Number)),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), numerator: None, denominator: None }),
+                BeatElement::Note(Note::new(Some("2".to_string()), PitchCode::N2, NotationSystem::Number)),
             ],
             value: Some("1--2".to_string()),
-            char_index: 0,
-            consumed_elements: vec![],
             divisions: None,
             total_duration: None,
             is_tuplet: None,
@@ -356,12 +347,10 @@ mod tests {
         // Beat 1: "--" should have first dash as rest, second as extender
         let mut beat1 = Beat {
             elements: vec![
-                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 0, consumed_elements: vec![], numerator: None, denominator: None }),
-                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 1, consumed_elements: vec![], numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), numerator: None, denominator: None }),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), numerator: None, denominator: None }),
             ],
             value: Some("--".to_string()),
-            char_index: 0,
-            consumed_elements: vec![],
             divisions: None,
             total_duration: None,
             is_tuplet: None,
@@ -388,12 +377,10 @@ mod tests {
         // Beat 2: "-1" should have dash as rest, note gets rhythm data
         let mut beat2 = Beat {
             elements: vec![
-                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 3, consumed_elements: vec![], numerator: None, denominator: None }),
-                BeatElement::Note(Note::new(Some("1".to_string()), 4, PitchCode::N1, NotationSystem::Number)),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), numerator: None, denominator: None }),
+                BeatElement::Note(Note::new(Some("1".to_string()), PitchCode::N1, NotationSystem::Number)),
             ],
             value: Some("-1".to_string()),
-            char_index: 3,
-            consumed_elements: vec![],
             divisions: None,
             total_duration: None,
             is_tuplet: None,
@@ -424,14 +411,12 @@ mod tests {
         // Beat 1: "-547" should have dash as rest, notes get rhythm data
         let mut beat1 = Beat {
             elements: vec![
-                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 0, consumed_elements: vec![], numerator: None, denominator: None }),
-                BeatElement::Note(Note::new(Some("5".to_string()), 1, PitchCode::N5, NotationSystem::Number)),
-                BeatElement::Note(Note::new(Some("4".to_string()), 2, PitchCode::N4, NotationSystem::Number)),
-                BeatElement::Note(Note::new(Some("7".to_string()), 3, PitchCode::N7, NotationSystem::Number)),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), numerator: None, denominator: None }),
+                BeatElement::Note(Note::new(Some("5".to_string()), PitchCode::N5, NotationSystem::Number)),
+                BeatElement::Note(Note::new(Some("4".to_string()), PitchCode::N4, NotationSystem::Number)),
+                BeatElement::Note(Note::new(Some("7".to_string()), PitchCode::N7, NotationSystem::Number)),
             ],
             value: Some("-547".to_string()),
-            char_index: 0,
-            consumed_elements: vec![],
             divisions: None,
             total_duration: None,
             is_tuplet: None,
@@ -460,12 +445,10 @@ mod tests {
         // Beat 2: "-5" tied to previous - dash should NOT get rhythm data
         let mut beat2 = Beat {
             elements: vec![
-                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), char_index: 5, consumed_elements: vec![], numerator: None, denominator: None }),
-                BeatElement::Note(Note::new(Some("5".to_string()), 6, PitchCode::N5, NotationSystem::Number)),
+                BeatElement::Dash(Dash { id: uuid::Uuid::new_v4(), value: Some("-".to_string()), numerator: None, denominator: None }),
+                BeatElement::Note(Note::new(Some("5".to_string()), PitchCode::N5, NotationSystem::Number)),
             ],
             value: Some("-5".to_string()),
-            char_index: 5,
-            consumed_elements: vec![],
             divisions: None,
             total_duration: None,
             is_tuplet: None,

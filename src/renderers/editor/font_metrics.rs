@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::RwLock;
 
 /// Default monospace font to use for measurements
-static DEFAULT_FONT_DATA: &[u8] = include_bytes!("../webapp/public/fonts/Inter.ttc");
+static DEFAULT_FONT_DATA: &[u8] = include_bytes!("../../../webapp/public/fonts/Inter.ttc");
 
 /// Global font instance for measurements
 static FONT: Lazy<Font> = Lazy::new(|| {

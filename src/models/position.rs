@@ -25,19 +25,3 @@ pub struct Attributes {
     pub position: Position,
 }
 
-// Consumed elements that have been moved to notes (follows ContentElement pattern)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ConsumedElement {
-    UpperOctaveMarker {
-        value: Option<String>,
-        char_index: usize,
-    },
-    LowerOctaveMarker {
-        value: Option<String>,
-        char_index: usize,
-    },
-    SlurIndicator {
-        value: Option<String>,
-        char_index: usize,
-    },
-}

@@ -439,104 +439,71 @@ async fn create_document_handler(
 
     // Check if content is provided - if yes, parse it; if no, create empty document
     println!("Document creation request content: {:?}", request.content);
-    let parse_result = if let Some(content) = &request.content {
-        // Parse the provided content
-        match crate::pipeline::process_notation(content) {
-            Ok(mut result) => {
-                result.document.document_uuid = Some(documentUUID.clone());
-                result
-            }
-            Err(e) => {
-                // If parsing fails, create minimal valid structure
-                eprintln!("Parse failed for '{}': {}", content, e);
-
-                let minimal_doc = crate::parse::Document {
-                    document_uuid: Some(documentUUID.clone()),
+    let document = if let Some(content) = &request.content {
+        // Create minimal valid structure with provided content
+        crate::parse::Document {
+            document_uuid: Some(documentUUID.clone()),
+            id: Uuid::new_v4(),
+            value: Some(content.clone()),
+            title: None,
+            author: None,
+            directives: std::collections::HashMap::new(),
+            elements: vec![
+                crate::models::DocumentElement::Stave(crate::models::Stave {
                     id: Uuid::new_v4(),
                     value: Some(content.clone()),
-                    char_index: 0,
-                    title: None,
-                    author: None,
-                    directives: std::collections::HashMap::new(),
-                    elements: vec![
-                        crate::models::DocumentElement::Stave(crate::models::Stave {
+                    notation_system: crate::models::NotationSystem::Number,
+                    line: 0,
+                    column: 0,
+                    index_in_doc: 0,
+                    index_in_line: 0,
+                    lines: vec![
+                        crate::models::StaveLine::ContentLine(crate::models::ContentLine {
                             id: Uuid::new_v4(),
                             value: Some(content.clone()),
-                            char_index: 0,
-                            notation_system: crate::models::NotationSystem::Number,
-                            line: 0,
-                            column: 0,
-                            index_in_doc: 0,
-                            index_in_line: 0,
-                            lines: vec![
-                                crate::models::StaveLine::ContentLine(crate::models::ContentLine {
-                                    id: Uuid::new_v4(),
-                                    value: Some(content.clone()),
-                                    char_index: 0,
-                                    elements: vec![],
-                                    consumed_elements: vec![],
-                                })
-                            ],
+                            elements: vec![],
                         })
                     ],
-                    ui_state: crate::models::UIState::default(),
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                };
-
-                crate::pipeline::ProcessingResult {
-                    original_input: content.clone(),
-                    document: minimal_doc,
-                    lilypond: String::new(),
-                    vexflow_svg: String::new(),
-                    vexflow_data: serde_json::Value::Null,
-                }
-            }
+                })
+            ],
+            ui_state: crate::models::UIState::default(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
         }
     } else {
         // Create empty document with empty stave for insertion
         println!("Creating empty document with UUID-enabled stave");
-        crate::pipeline::ProcessingResult {
-            original_input: String::new(),
-            document: crate::parse::Document {
-                document_uuid: Some(documentUUID.clone()),
-                id: Uuid::new_v4(),
-                value: Some(String::new()),
-                char_index: 0,
-                title: None,
-                author: None,
-                directives: std::collections::HashMap::new(),
-                elements: vec![
-                    crate::models::DocumentElement::Stave(crate::models::Stave {
-                        id: Uuid::new_v4(),
-                        value: Some(String::new()),
-                        char_index: 0,
-                        notation_system: crate::models::NotationSystem::Number,
-                        line: 1,
-                        column: 1,
-                        index_in_doc: 0,
-                        index_in_line: 0,
-                        lines: vec![
-                            crate::models::StaveLine::ContentLine(crate::models::ContentLine {
-                                id: Uuid::new_v4(),
-                                value: Some(String::new()),
-                                char_index: 0,
-                                elements: vec![],  // Empty - will accept insertion
-                                consumed_elements: vec![],
-                            })
-                        ],
-                    })
-                ],
-                ui_state: crate::models::UIState::default(),
-                timestamp: timestamp.clone(),
-            },
-            lilypond: String::new(),
-            vexflow_svg: String::new(),
-            vexflow_data: serde_json::Value::Null,
+        crate::parse::Document {
+            document_uuid: Some(documentUUID.clone()),
+            id: Uuid::new_v4(),
+            value: Some(String::new()),
+            title: None,
+            author: None,
+            directives: std::collections::HashMap::new(),
+            elements: vec![
+                crate::models::DocumentElement::Stave(crate::models::Stave {
+                    id: Uuid::new_v4(),
+                    value: Some(String::new()),
+                    notation_system: crate::models::NotationSystem::Number,
+                    line: 1,
+                    column: 1,
+                    index_in_doc: 0,
+                    index_in_line: 0,
+                    lines: vec![
+                        crate::models::StaveLine::ContentLine(crate::models::ContentLine {
+                            id: Uuid::new_v4(),
+                            value: Some(String::new()),
+                            elements: vec![],  // Empty - will accept insertion
+                        })
+                    ],
+                })
+            ],
+            ui_state: crate::models::UIState::default(),
+            timestamp: timestamp.clone(),
         }
     };
 
     // Convert the document to JSON
-    let mut document_value = serde_json::to_value(&parse_result.document).unwrap_or_else(|_| {
+    let mut document_value = serde_json::to_value(&document).unwrap_or_else(|_| {
         serde_json::json!({
             "elements": [],
             "content": []
@@ -581,10 +548,10 @@ async fn create_document_handler(
         map.insert("ui_state".to_string(), ui_state);
     }
 
-    let document = document_value;
+    let final_document = document_value;
 
     // Log the new document to filesystem for backup/history
-    if let Err(e) = save_document(&documentUUID, &document).await {
+    if let Err(e) = save_document(&documentUUID, &final_document).await {
         eprintln!("Warning: Failed to log new document {} to disk: {}", documentUUID, e);
     } else {
         println!("Created and logged new document {} to disk (backup)", documentUUID);
@@ -595,29 +562,21 @@ async fn create_document_handler(
     let generate_all = requested_formats.is_empty(); // If no specific formats requested, generate all
 
     let editor_svg = if generate_all || requested_formats.contains("editor_svg") {
-        crate::renderers::editor::svg::render_editor_svg(&parse_result.document, None, None, None).ok()
+        crate::renderers::editor::svg::render_editor_svg(&document, None, None, None).ok()
     } else {
         None
     };
 
     let lilypond_src = if generate_all || requested_formats.contains("lilypond") {
-        if !parse_result.lilypond.is_empty() {
-            Some(parse_result.lilypond.clone())
-        } else {
-            None
-        }
+        crate::renderers::lilypond::renderer::convert_processed_document_to_lilypond_src(&document, None).ok()
     } else {
         None
     };
 
     let vexflow_svg = if generate_all || requested_formats.contains("vexflow") {
-        if let Some(vexflow_js) = parse_result.vexflow_data.get("vexflow_js") {
-            vexflow_js.as_str().map(|s| s.to_string())
-        } else if !parse_result.vexflow_svg.is_empty() {
-            Some(parse_result.vexflow_svg.clone())
-        } else {
-            None
-        }
+        let vexflow_renderer = crate::renderers::vexflow::VexFlowRenderer::new();
+        let vexflow_data = vexflow_renderer.render_data_from_document(&document);
+        vexflow_data.get("vexflow_js").and_then(|js| js.as_str()).map(|s| s.to_string())
     } else {
         None
     };
@@ -632,7 +591,7 @@ async fn create_document_handler(
 
     let response = CreateDocumentResponse {
         success: true,
-        document: document,
+        document: final_document,
         formats,
     };
 

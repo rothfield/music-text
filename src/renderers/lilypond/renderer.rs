@@ -542,7 +542,6 @@ pub fn convert_processed_document_to_lilypond_src(
             author: document.author.clone(),
             directives: document.directives.clone(),
             value: document.value.clone(),
-            char_index: document.char_index,
             elements: vec![DocumentElement::Stave(stave.clone())],
             ui_state: document.ui_state.clone(),
             timestamp: document.timestamp.clone(),

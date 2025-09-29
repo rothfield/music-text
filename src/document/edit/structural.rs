@@ -108,18 +108,6 @@ fn find_structural_position<'a>(
     None
 }
 
-/// Re-parses a ContentLine from its string value.
-fn reparse_content_line(line: &mut ContentLine, notation_system: NotationSystem) -> Result<(), String> {
-    let text = line.value.as_ref().cloned().unwrap_or_default();
-    let new_line = crate::document::line_parser::content_line_parser::unused_parse_content_line(
-        &text,
-        0, // Line number is not critical for re-parse
-        notation_system,
-        line.char_index,
-    )?;
-    line.elements = new_line.elements;
-    Ok(())
-}
 
 pub fn delete_selection(doc: &mut Document, start: usize, end: usize) -> Result<usize, String> {
     // This is a simplified implementation that only handles single-line selections.
@@ -131,7 +119,6 @@ pub fn delete_selection(doc: &mut Document, start: usize, end: usize) -> Result<
             if relative_end <= text.len() {
                 text.replace_range(relative_start..relative_end, "");
                 line.value = Some(text);
-                reparse_content_line(line, notation_system)?;
                 return Ok(start);
             }
         }
@@ -171,8 +158,6 @@ fn parse_whitespace(ch: char, position: usize) -> Result<crate::models::ContentE
     Ok(crate::models::ContentElement::Whitespace(crate::models::Whitespace {
         id: uuid::Uuid::new_v4(),
         value: Some(ch.to_string()),
-        char_index: position,
-        consumed_elements: Vec::new(),
     }))
 }
 
@@ -181,8 +166,6 @@ fn parse_single_barline(ch: char, position: usize) -> Result<crate::models::Cont
     Ok(crate::models::ContentElement::Barline(Barline::Single(SingleBarline {
         id: uuid::Uuid::new_v4(),
         value: Some(ch.to_string()),
-        char_index: position,
-        consumed_elements: Vec::new(),
     })))
 }
 
@@ -202,20 +185,16 @@ fn parse_note(notation_system: &NotationSystem, ch: char, position: usize) -> Re
         // Create a Beat containing a single Note (following grammar: notes are grouped into beats)
         Ok(crate::models::ContentElement::Beat(crate::models::Beat {
             id: uuid::Uuid::new_v4(),
-            char_index: position,
-            elements: vec![crate::models::BeatElement::Note(crate::models::Note {
+                elements: vec![crate::models::BeatElement::Note(crate::models::Note {
                 id: uuid::Uuid::new_v4(),
-                char_index: position,
-                pitch_code,
+                        pitch_code,
                 octave: 0,
                 value: Some(ch.to_string()),
-                consumed_elements: Vec::new(),
                 denominator: None,
                 numerator: None,
                 notation_system: notation_system.clone(),
             })],
             value: Some(ch.to_string()),
-            consumed_elements: Vec::new(),
             tied_to_previous: None,
             total_duration: None,
             divisions: None,
@@ -231,17 +210,13 @@ fn parse_dash(ch: char, position: usize) -> Result<crate::models::ContentElement
     // Create a Beat containing a single Dash (following grammar: dashes are grouped into beats)
     Ok(crate::models::ContentElement::Beat(crate::models::Beat {
         id: uuid::Uuid::new_v4(),
-        char_index: position,
         elements: vec![crate::models::BeatElement::Dash(crate::models::Dash {
             id: uuid::Uuid::new_v4(),
-            char_index: position,
-            value: Some(ch.to_string()),
-            consumed_elements: Vec::new(),
+                value: Some(ch.to_string()),
             denominator: None,
             numerator: None,
         })],
         value: Some(ch.to_string()),
-        consumed_elements: Vec::new(),
         tied_to_previous: None,
         total_duration: None,
         divisions: None,
@@ -260,8 +235,6 @@ fn parse_unknown(ch: char, position: usize) -> Result<crate::models::ContentElem
     Ok(crate::models::ContentElement::UnknownToken(crate::models::UnknownToken {
         id: uuid::Uuid::new_v4(),
         value: Some(ch.to_string()),
-        char_index: position,
-        consumed_elements: Vec::new(),
         token_value: ch.to_string(),
     }))
 }
@@ -284,7 +257,7 @@ pub fn insert_char(doc: &mut Document, position: usize, ch: char) -> Result<usiz
             line.value = Some(text);
 
             // Insert the parsed element at the correct position
-            // For now, append to elements - TODO: insert at proper index based on char_index
+            // For now, append to elements
             line.elements.push(element);
 
             println!("INSERT_CHAR: after - text={:?} elements.len={}", line.value, line.elements.len());
@@ -311,7 +284,6 @@ pub fn delete_char_left(doc: &mut Document, position: usize) -> Result<usize, St
                          
                          let prev_line_mut = stave.lines.get_mut(line_idx - 1).unwrap().as_content_line_mut().unwrap();
                          prev_line_mut.value = Some(prev_text);
-                         reparse_content_line(prev_line_mut, notation_system)?;
                          
                          stave.lines.remove(line_idx);
                          return Ok(position - 1);
@@ -325,7 +297,6 @@ pub fn delete_char_left(doc: &mut Document, position: usize) -> Result<usize, St
                 if relative_pos > 0 && relative_pos <= text.len() {
                     text.remove(relative_pos - 1);
                     line.value = Some(text);
-                    reparse_content_line(line, notation_system)?;
                     return Ok(position - 1);
                 }
             }
@@ -344,7 +315,6 @@ pub fn delete_char_right(doc: &mut Document, position: usize) -> Result<usize, S
             if relative_pos < text.len() {
                 text.remove(relative_pos);
                 line.value = Some(text);
-                reparse_content_line(line, notation_system)?;
             }
         }
     }
@@ -361,17 +331,13 @@ pub fn insert_newline(doc: &mut Document, position: usize) -> Result<usize, Stri
 
             // Update current line
             line.value = Some(first_half.to_string());
-            reparse_content_line(line, notation_system)?;
 
             // Create and insert new line
             let mut new_content_line = ContentLine {
                 id: uuid::Uuid::new_v4(),
                 elements: vec![],
                 value: Some(second_half.to_string()),
-                char_index: line.char_index + first_half.len() + 1,
-                consumed_elements: vec![],
             };
-            reparse_content_line(&mut new_content_line, notation_system)?;
             
             stave.lines.insert(line_idx + 1, StaveLine::ContentLine(new_content_line));
             return Ok(position + 1);
@@ -411,7 +377,6 @@ pub fn paste(doc: &mut Document, position: usize, clipboard: &Clipboard) -> Resu
             let mut text = line.value.as_ref().cloned().unwrap_or_default();
             text.insert_str(relative_pos, &clipboard.content);
             line.value = Some(text);
-            reparse_content_line(line, notation_system)?;
             return Ok(position + clipboard.content.len());
         }
     }

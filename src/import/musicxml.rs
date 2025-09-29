@@ -239,14 +239,13 @@ pub fn import_musicxml_to_document(xml: &str, opts: Option<ImportOptions>) -> an
     let stave = Stave {
         id: uuid::Uuid::new_v4(),
         value: None,
-        char_index: 0,
         notation_system: NotationSystem::Number,
         line: 0,
         column: 0,
         index_in_line: 0,
         index_in_doc: 0,
         lines: vec![
-            StaveLine::Text(TextLine{ id: uuid::Uuid::new_v4(), value: Some(content_line), char_index: 0 })
+            StaveLine::Text(TextLine{ id: uuid::Uuid::new_v4(), value: Some(content_line) })
         ],
     };
 
@@ -254,7 +253,6 @@ pub fn import_musicxml_to_document(xml: &str, opts: Option<ImportOptions>) -> an
         id: uuid::Uuid::new_v4(),
         document_uuid: None,
         value: None,
-        char_index: 0,
         title: None,
         author: None,
         directives: Default::default(),

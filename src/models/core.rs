@@ -28,7 +28,6 @@ pub struct Document {
     #[serde(default = "Uuid::new_v4")]
     pub id: Uuid,                      // Internal UUID for document structure
     pub value: Option<String>,
-    pub char_index: usize,
     pub title: Option<String>,
     pub author: Option<String>,
     #[serde(default)]
@@ -71,7 +70,6 @@ pub struct BlankLines {
     #[serde(default = "Uuid::new_v4")]
     pub id: Uuid,
     pub value: Option<String>, // The complete blank lines content
-    pub char_index: usize, // Converted from line/column for consistency
     pub line: usize,
     pub column: usize,
     pub index_in_line: usize,
@@ -83,7 +81,6 @@ pub struct Stave {
     #[serde(default = "Uuid::new_v4")]
     pub id: Uuid,
     pub value: Option<String>,
-    pub char_index: usize, // Converted from line/column for consistency
     pub notation_system: super::notation::NotationSystem,
     pub line: usize,
     pub column: usize,
@@ -117,5 +114,4 @@ pub struct TextLine {
     #[serde(default = "Uuid::new_v4")]
     pub id: Uuid,
     pub value: Option<String>, // The text content
-    pub char_index: usize,
 }

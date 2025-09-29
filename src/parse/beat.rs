@@ -36,8 +36,6 @@ pub fn parse_beat(
             elements.push(BeatElement::Dash(Dash {
                 id: uuid::Uuid::new_v4(),
                 value: Some("-".to_string()),
-                char_index: line_start_doc_index + pos,
-                consumed_elements: Vec::new(),
                 numerator: None,
                 denominator: None,
             }));
@@ -48,11 +46,9 @@ pub fn parse_beat(
             elements.push(BeatElement::Note(Note {
                 id: uuid::Uuid::new_v4(),
                 value: Some(pitch_str),
-                char_index: line_start_doc_index + pos,
                 pitch_code,
                 octave: 0, // Default octave, will be adjusted by spatial annotations
                 notation_system,
-                consumed_elements: Vec::new(), // Will be populated during spatial analysis
                 numerator: None, // Will be populated by rhythm analysis
                 denominator: None, // Will be populated by rhythm analysis
             }));
@@ -85,8 +81,6 @@ pub fn parse_beat(
                 elements.push(BeatElement::Dash(Dash {
                     id: uuid::Uuid::new_v4(),
                     value: Some("-".to_string()),
-                    char_index: line_start_doc_index + pos,
-                    consumed_elements: Vec::new(),
                     numerator: None,
                     denominator: None,
                 }));
@@ -98,8 +92,6 @@ pub fn parse_beat(
                 elements.push(BeatElement::BreathMark(BreathMark {
                     id: uuid::Uuid::new_v4(),
                     value: Some("'".to_string()),
-                    char_index: line_start_doc_index + pos,
-                    consumed_elements: Vec::new(),
                 }));
             }
 
@@ -110,11 +102,9 @@ pub fn parse_beat(
                 elements.push(BeatElement::Note(Note {
                     id: uuid::Uuid::new_v4(),
                     value: Some(pitch_str),
-                    char_index: line_start_doc_index + pos,
-                    pitch_code,
+                        pitch_code,
                     octave: 0,
                     notation_system,
-                    consumed_elements: Vec::new(), // Will be populated during spatial analysis
                     numerator: None, // Will be populated by rhythm analysis
                     denominator: None // Will be populated by rhythm analysis
                 }));
@@ -129,8 +119,6 @@ pub fn parse_beat(
         id: uuid::Uuid::new_v4(),
         elements,
         value: None, // Will be filled by caller if needed
-        char_index: line_start_doc_index + beat_start_pos,
-        consumed_elements: Vec::new(),
         divisions: None,        // Will be populated by rhythm analysis
         total_duration: None,   // Will be populated by rhythm analysis
         is_tuplet: None,        // Will be populated by rhythm analysis

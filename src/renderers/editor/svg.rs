@@ -1317,7 +1317,7 @@ impl EditorSvgRenderer {
     /// Get accurate character width using font metrics
     fn get_char_width(&self, text: &str) -> f32 {
         // Use real font metrics for accurate width calculation
-        crate::font_metrics::get_string_width(text, self.config.font_size)
+        super::font_metrics::get_string_width(text, self.config.font_size)
     }
 
     /// Render lyrics line below the current content line
